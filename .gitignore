@@ -104,6 +104,10 @@ yarn-error.log*
 # Windows NUL file
 nul
 
+# Native research runtime and local agent references
+.agent-native/
+research_data/
+
 # Personal workspace: your own indicators, research, backtests and notes.
 # Only the readme is tracked -- everything else is yours and stays local.
 # NOTE: gitignore is not a secrecy boundary. `git add -f` bypasses it, and

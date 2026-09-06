@@ -40,6 +40,7 @@ need → drill into the specific file. Don't load everything at once.
 
 | Feature | Entry point |
 |---|---|
+| Native Scanner Research development | [research/BRIEF.md](research/BRIEF.md) · [research/STATUS.md](research/STATUS.md) |
 | Scalping Terminal (`/scalping`) | [scalping/PRD.md](scalping/PRD.md) |
 | Scanner architecture | [scanner-architecture.md](scanner-architecture.md) |
 | WhatsApp alerts | [whatsapp.md](whatsapp.md) |

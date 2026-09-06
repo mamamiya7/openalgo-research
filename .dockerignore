@@ -72,3 +72,5 @@ frontend/docs/
 # Project docs (EXPLICITLY INCLUDED)
 !docs/
 !frontend/dist/
+.agent-native/
+research_data/
