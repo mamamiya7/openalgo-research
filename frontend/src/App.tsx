@@ -4,6 +4,7 @@ import { Providers } from '@/app/providers'
 import { AuthSync } from '@/components/auth/AuthSync'
 import { FullWidthLayout } from '@/components/layout/FullWidthLayout'
 import { Layout } from '@/components/layout/Layout'
+import { ResearchLayout } from '@/components/layout/ResearchLayout'
 import { PageLoader } from '@/components/ui/page-loader'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { useBrokerStore } from '@/stores/brokerStore'
@@ -63,6 +64,7 @@ const HistorifyCharts = lazy(() => import('@/pages/HistorifyCharts'))
 
 // Tools & Option Chain
 const Tools = lazy(() => import('@/pages/Tools'))
+const ScannerResearch = lazy(() => import('@/pages/ResearchEntry'))
 const OptionChain = lazy(() => import('@/pages/OptionChain'))
 const IVChart = lazy(() => import('@/pages/IVChart'))
 const Scalping = lazy(() => import('@/pages/Scalping'))
@@ -181,6 +183,11 @@ function App() {
               {/* Dynamic broker TOTP routes for all supported brokers */}
               <Route path="/:broker/auth" element={<BrokerTOTP />} />
 
+              <Route element={<ResearchLayout />}>
+                <Route path="/scanner-research" element={<ScannerResearch />} />
+                <Route path="/tools" element={<Tools />} />
+              </Route>
+
               {/* Protected routes - requires broker auth */}
               <Route element={<Layout />}>
                 <Route path="/dashboard" element={<Dashboard />} />
@@ -216,7 +223,6 @@ function App() {
                 <Route path="/sandbox" element={<Sandbox />} />
                 <Route path="/sandbox/mypnl" element={<SandboxPnL />} />
                 <Route path="/analyzer" element={<Analyzer />} />
-                <Route path="/tools" element={<Tools />} />
                 <Route path="/scalping" element={<Scalping />} />
                 <Route path="/optionchain" element={<OptionChain />} />
                 <Route path="/ivchart" element={<IVChart />} />

@@ -36,6 +36,9 @@ tmp/
 *.duckdb
 *.duckdb.wal
 *.sqlite
+*.sqlite3
+*.parquet
+*.feather
 *.log
 *.jsonl
 *.tmp

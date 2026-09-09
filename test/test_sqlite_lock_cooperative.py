@@ -101,6 +101,45 @@ def run(body: str) -> subprocess.CompletedProcess:
     )
 
 
+def test_scanner_research_admission_yields_while_worker_holds_write_lock():
+    """Research admission shares the existing cooperative SQLite policy."""
+    result = run(
+        """
+        os.environ["LOG_FORMAT"] = "%(levelname)s %(message)s"
+        os.environ["LOG_DIR"] = tempfile.mkdtemp()
+        from sqlalchemy import update
+        from database.research_db import ResearchStore, ResearchWorker
+        from services.scanner_research_service import create_source, submit
+
+        with tempfile.TemporaryDirectory() as root:
+            store = ResearchStore(root)
+            store.initialize()
+            try:
+                source = create_source(store, "isolated", b"Date,Symbol\\n2026-01-05,TEST\\n", "fixture")
+
+                def hold_research_write():
+                    with store.sessions.begin() as db:
+                        db.execute(update(ResearchWorker).where(ResearchWorker.id == 1).values(id=1))
+                        eventlet.sleep(0.5)
+
+                beat = eventlet.spawn(_beat)
+                holder = eventlet.spawn(hold_research_write)
+                eventlet.sleep(0.1)
+                before, began = len(ticks), time.monotonic()
+                job = submit(store, "isolated", source["id"], {})
+                took, during = time.monotonic() - began, len(ticks) - before
+                holder.wait()
+                beat.kill()
+                assert job["status"] == "queued"
+                assert took < 3, took
+                assert during >= 2, during
+            finally:
+                store.close()
+        """
+    )
+    assert result.returncode == 0, result.stderr
+
+
 def test_the_in_sqlite_wait_is_short():
     """The C-level wait is the one that cannot be interrupted, so it bounds how
     long a single attempt can freeze the hub."""

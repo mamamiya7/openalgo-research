@@ -1,17 +1,21 @@
 # ------------------------------ Python Builder Stage ----------------------- #
-FROM python:3.12-bullseye AS python-builder
+FROM python:3.12-bookworm AS python-builder
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl build-essential && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY pyproject.toml .
+COPY pyproject.toml uv.lock ./
 # create isolated virtual-env with uv, then add gunicorn and eventlet with compatible versions
 RUN pip install --no-cache-dir uv && \
     uv venv .venv && \
     uv pip install --upgrade pip && \
-    uv sync && \
-    uv pip install "gunicorn>=25.0,<26" "eventlet==0.41.2" && \
+    uv sync --frozen --extra research && \
+    uv pip install "gunicorn==25.3.0" "eventlet==0.41.2" && \
     rm -rf /root/.cache
+
+# Nautilus uses its own locked Arrow/runtime versions, independent of OpenAlgo.
+COPY research/runtimes/nautilus/pyproject.toml research/runtimes/nautilus/uv.lock ./research/runtimes/nautilus/
+RUN uv sync --project research/runtimes/nautilus --python 3.12 --frozen --no-dev && rm -rf /root/.cache
 
 # ------------------------------ Frontend Builder Stage --------------------- #
 FROM node:22-bullseye-slim AS frontend-builder
@@ -23,7 +27,7 @@ RUN cd frontend && npm run build
 
 # --------------------------------------------------------------------------- #
 # ------------------------------ Production Stage --------------------------- #
-FROM python:3.12-slim-bullseye AS production
+FROM python:3.12-slim-bookworm AS production
 # 0 – set timezone to IST (Asia/Kolkata) & install runtime dependencies
 #     chromium + fonts-liberation are required by Kaleido 1.x (plotly static
 #     image export) which drives a real headless Chromium via choreographer.
@@ -31,6 +35,7 @@ FROM python:3.12-slim-bullseye AS production
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tzdata \
     curl \
+    tini \
     libopenblas0 \
     libgomp1 \
     libgfortran5 \
@@ -52,6 +57,7 @@ RUN groupadd --gid 1000 appuser && \
 WORKDIR /app
 # 2 – copy the ready-made venv and source with correct ownership
 COPY --from=python-builder --chown=appuser:appuser /app/.venv /app/.venv
+COPY --from=python-builder --chown=appuser:appuser /app/research/runtimes/nautilus/.venv /app/research/runtimes/nautilus/.venv
 COPY --chown=appuser:appuser . .
 # 3 - copy built frontend from frontend-builder
 COPY --from=frontend-builder --chown=appuser:appuser /app/frontend/dist /app/frontend/dist
@@ -65,9 +71,9 @@ COPY --from=frontend-builder --chown=appuser:appuser /app/frontend/dist /app/fro
 #     there — which breaks any atomic-write helper that needs to put a
 #     temp file in /app (e.g. utils/env_check.py rotating FERNET_SALT in
 #     /app/.env). See marketcalls/openalgo#1394.
-RUN mkdir -p /app/log /app/log/strategies /app/db /app/tmp /app/tmp/numba_cache /app/tmp/matplotlib /app/strategies /app/strategies/scripts /app/strategies/examples /app/keys && \
+RUN mkdir -p /app/log /app/log/strategies /app/db /app/research_data /app/tmp /app/tmp/numba_cache /app/tmp/matplotlib /app/strategies /app/strategies/scripts /app/strategies/examples /app/keys && \
     chown appuser:appuser /app && \
-    chown -R appuser:appuser /app/log /app/db /app/tmp /app/strategies /app/keys && \
+    chown -R appuser:appuser /app/log /app/db /app/research_data /app/tmp /app/strategies /app/keys && \
     chmod -R 755 /app/strategies /app/log /app/tmp && \
     chmod 700 /app/keys && \
     touch /app/.env && chown appuser:appuser /app/.env && chmod 666 /app/.env
@@ -82,6 +88,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     TZ=Asia/Kolkata \
     APP_MODE=standalone \
+    RESEARCH_DATA_DIR=/app/research_data \
     TMPDIR=/app/tmp \
     NUMBA_CACHE_DIR=/app/tmp/numba_cache \
     LLVMLITE_TMPDIR=/app/tmp \
@@ -96,4 +103,5 @@ ENV PATH="/app/.venv/bin:$PATH" \
 # --------------------------------------------------------------------------- #
 USER appuser
 EXPOSE 5000
+ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["/app/start.sh"]

@@ -288,6 +288,12 @@ fi
 # ============================================
 # DATABASE MIGRATIONS
 # ============================================
+# Check the tested host/connector combination before changing any database.
+if ! /app/.venv/bin/python /app/tools/research_check.py; then
+    echo "[OpenAlgo] Research compatibility check failed; startup aborted."
+    exit 1
+fi
+
 # Run migrations automatically on startup (idempotent - safe to run multiple times)
 if [ -f "/app/upgrade/migrate_all.py" ]; then
     echo "[OpenAlgo] Running database migrations..."
@@ -300,45 +306,9 @@ else
 fi
 
 # ============================================
-# WEBSOCKET PROXY SERVER
+# NATIVE APP AND RESEARCH WORKER
 # ============================================
-echo "[OpenAlgo] Starting WebSocket proxy server on port 8765..."
-/app/.venv/bin/python -m websocket_proxy.server &
-WEBSOCKET_PID=$!
-echo "[OpenAlgo] WebSocket proxy server started with PID $WEBSOCKET_PID"
-
-# ============================================
-# CLEANUP HANDLER
-# ============================================
-cleanup() {
-    echo "[OpenAlgo] Shutting down..."
-    if [ ! -z "$WEBSOCKET_PID" ]; then
-        kill $WEBSOCKET_PID 2>/dev/null
-    fi
-    exit 0
-}
-
-# Set up signal handlers
-trap cleanup SIGTERM SIGINT
-
-# ============================================
-# START MAIN APPLICATION
-# ============================================
-# Use PORT env var if set (Railway/cloud), otherwise default to 5000
-APP_PORT="${PORT:-5000}"
-
-echo "[OpenAlgo] Starting application on port ${APP_PORT} with eventlet..."
-
-# Create gunicorn worker temp directory (must be inside container, not mounted volume)
-mkdir -p /tmp/gunicorn_workers
-
-exec /app/.venv/bin/gunicorn \
-    --worker-class eventlet \
-    --workers 1 \
-    --bind 0.0.0.0:${APP_PORT} \
-    --timeout 300 \
-    --graceful-timeout 30 \
-    --worker-tmp-dir /tmp/gunicorn_workers \
-    --no-control-socket \
-    --log-level warning \
-    app:app
+# This foreground supervisor owns all three children. tini forwards container
+# signals and reaps orphan descendants; the supervisor checkpoints the research
+# worker and shuts down the complete service if any child stops.
+exec /app/.venv/bin/python /app/tools/research_runtime.py

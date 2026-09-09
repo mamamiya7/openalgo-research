@@ -486,6 +486,62 @@ Align two symbols on common timestamps and return rolling correlation, rolling b
 
 ---
 
+## Historical Portfolio Research
+
+Research uses the same saved inputs, native Historify/broker prices, worker and
+results as the Research screen. OAuth reads require `read:research`; uploading
+or controlling jobs requires `write:research`. Neither scope grants trading
+orders. Existing clients must consent to these new scopes. See the
+[research MCP guide](research/MCP.md) for account handling, limits and examples.
+
+### `research_capabilities`
+
+Read installed portfolio engines, supported inputs and calculation limits.
+
+### `research_list_sources`
+
+List this account's saved signal CSVs, including inputs awaiting price preparation.
+
+### `research_list_runs`
+
+Find saved research runs with search, status filtering and bounded pagination.
+
+### `research_preview_portfolio`
+
+Validate a portfolio referencing saved source IDs. Does not download or queue work.
+
+### `research_upload_csv`
+
+Save CSV text provided by the user, up to 8 MiB. Missing strategies must not be invented.
+
+### `research_run_portfolio`
+
+Queue the validated portfolio with a stable request ID. Reuse that ID when retrying.
+
+### `research_get_run`
+
+Read progress or combined and per-strategy results, with a bounded equity curve.
+
+### `research_get_trades`
+
+Page through a saved trade ledger, optionally filtered by strategy or trade status.
+
+### `research_cancel_run`
+
+Cancel a research job through its worker. Does not cancel broker orders.
+
+### `research_resume_run`
+
+Resume a saved research job that has a compatible resumable checkpoint.
+
+### `research_rerun_trial`
+
+Replay a completed portfolio or saved trial with its frozen prices and recorded settings.
+
+### `research_export_strategy`
+
+Return a saved strategy's exact research definition and evidence references, with execution disabled.
+
 ## Worked Multi-Tool Workflows
 
 Real strength shows when the assistant chains tools on its own. Example prompts:

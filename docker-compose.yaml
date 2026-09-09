@@ -10,9 +10,10 @@ services:
       - "${FLASK_PORT:-5000}:5000"
       - "${WEBSOCKET_PORT:-8765}:8765"
 
-    # persistent DB, strategies, logs + mount the host .env read-only so dotenv can read it
+    # Persist account/history data, research evidence, strategies and logs.
     volumes:
       - openalgo_db:/app/db
+      - openalgo_research:/app/research_data
       - openalgo_log:/app/log            # Application logs (named volume)
       - openalgo_strategies:/app/strategies  # Python strategies (named volume)
       - openalgo_keys:/app/keys          # API keys/certificates (named volume)
@@ -24,6 +25,7 @@ services:
       - FLASK_ENV=${FLASK_ENV:-production}
       - FLASK_DEBUG=${FLASK_DEBUG:-0}
       - TZ=Asia/Kolkata
+      - RESEARCH_DATA_DIR=/app/research_data
       # Limit OpenBLAS/NumPy threads to prevent RLIMIT_NPROC exhaustion
       # See: https://github.com/marketcalls/openalgo/issues/822
       - OPENBLAS_NUM_THREADS=${OPENBLAS_NUM_THREADS:-2}
@@ -49,10 +51,14 @@ services:
       start_period: 40s
 
     restart: unless-stopped
+    # The worker checkpoints before the supervisor escalates shutdown.
+    stop_grace_period: 60s
 
 # Define named volumes for persistence
 volumes:
   openalgo_db:
+    driver: local
+  openalgo_research:
     driver: local
   openalgo_log:
     driver: local

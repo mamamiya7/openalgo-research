@@ -25,6 +25,7 @@ need → drill into the specific file. Don't load everything at once.
 | Writing your own chart indicators for `/trading` | [custom-indicators.md](custom-indicators.md) |
 | Step-by-step user guide (setup → first order → integrations) | [userguide/README.md](userguide/README.md) |
 | MCP tool reference (Claude Desktop / Cursor / Windsurf) | [mcp-tool-reference.md](mcp-tool-reference.md) |
+| Scanner Research: dated CSV, historical execution, search, later tests and retained evidence | [research/STATUS.md](research/STATUS.md) · [research/DEVELOPMENT.md](research/DEVELOPMENT.md) |
 
 ## Install, deploy & operate
 
@@ -32,6 +33,7 @@ need → drill into the specific file. Don't load everything at once.
 |---|---|
 | Ubuntu server install | [installation-guidelines/getting-started/ubuntu-server-installation.md](installation-guidelines/getting-started/ubuntu-server-installation.md) |
 | Docker | [docker/README.md](docker/README.md) |
+| OpenAlgo Research distribution: install, update and compatibility | [research/DISTRIBUTION.md](research/DISTRIBUTION.md) · [research/RUNTIME.md](research/RUNTIME.md) |
 | Upgrade / SMTP / TOTP / forgot-password | https://docs.openalgo.in/installation-guidelines/getting-started/ |
 | Broker integration (36 plugins) | [broker-integration-guide.md](broker-integration-guide.md) |
 | Release notes & changelog | [releases/](releases/) · [CHANGELOG.md](CHANGELOG.md) |
@@ -40,7 +42,7 @@ need → drill into the specific file. Don't load everything at once.
 
 | Feature | Entry point |
 |---|---|
-| Native Scanner Research development | [research/BRIEF.md](research/BRIEF.md) · [research/STATUS.md](research/STATUS.md) |
+| Native Scanner Research development | [research/BRIEF.md](research/BRIEF.md) · [research/STATUS.md](research/STATUS.md) · [research/SYSTEM_MAP.md](research/SYSTEM_MAP.md) · [research/CONNECTORS.md](research/CONNECTORS.md) |
 | Scalping Terminal (`/scalping`) | [scalping/PRD.md](scalping/PRD.md) |
 | Scanner architecture | [scanner-architecture.md](scanner-architecture.md) |
 | WhatsApp alerts | [whatsapp.md](whatsapp.md) |

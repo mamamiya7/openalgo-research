@@ -1,5 +1,6 @@
 import importlib
 import time
+from datetime import date
 from typing import Any
 
 import pandas as pd
@@ -74,6 +75,106 @@ def import_broker_module(broker_name: str) -> Any | None:
         return None
 
 
+def _check_history_control(control):
+    """Cooperative checks; ordinary adapters cannot interrupt in-flight transport."""
+    control = control or {}
+    control.get("check", lambda: None)()
+    if control.get("clock", time.monotonic)() >= control.get("deadline", float("inf")):
+        raise TimeoutError("History request deadline reached")
+
+
+def _native_history_evidence(handler, broker, symbol, exchange, interval, start, end, control):
+    """Capture the native adapter's returned table, never invent transport evidence.
+
+    Adapter-internal retries, chunking, errors swallowed into empty/partial tables,
+    and transport deadlines remain the adapter's responsibility. No thread or client
+    is created here; data is bounded and retained only for this request.
+    """
+    evidence = {
+        "version": "openalgo-native-history-evidence-v1",
+        "evidence_level": "native_adapter",
+        "native_adapter": f"broker.{broker}.api.data.BrokerData.get_history",
+        "broker": broker,
+        "raw_transport_captured": False,
+        "chunks": [],
+        "limitations": [
+            "Evidence captures the normalized native adapter result, not raw broker transport or its internal attempts.",
+            "Some adapters discard failures or return partial tables; empty results cannot distinguish no trading from an unreported failure, and completeness requires coverage review.",
+            "Cancellation and deadlines are checked before and after the adapter call; its in-flight requests and internal retries cannot be interrupted here.",
+        ],
+    }
+
+    def response(outcome, status, message, rows=None):
+        rows = rows or []
+        evidence["chunks"] = [
+            {"start": start, "end": end, "outcome": outcome, "observed_rows": len(rows)}
+        ]
+        return (
+            status == 200,
+            {
+                "status": "success" if status == 200 else "error",
+                "message": message,
+                "data": rows,
+                "history_evidence": evidence,
+            },
+            status,
+        )
+
+    _check_history_control(control)
+    try:
+        first, last = date.fromisoformat(start), date.fromisoformat(end)
+        if first > last or (last - first).days > 3700:
+            raise ValueError
+    except (TypeError, ValueError):
+        return response(
+            "invalid_request", 400, "Supply an ordered ISO date window of at most 3700 days"
+        )
+    mapping = getattr(handler, "timeframe_map", None)
+    if isinstance(mapping, dict) and interval not in mapping:
+        return response(
+            "unsupported_interval", 501, "Native broker adapter does not offer this interval"
+        )
+    if not callable(getattr(handler, "get_history", None)):
+        return response("unsupported_history", 501, "Native broker adapter does not offer history")
+    try:
+        frame = handler.get_history(symbol, exchange, interval, start, end)
+    except (InterruptedError, TimeoutError):
+        raise
+    except NotImplementedError:
+        return response(
+            "unsupported_history", 501, "Native broker adapter does not implement history"
+        )
+    except Exception:
+        # Broker exceptions can contain request URLs or credentials. Do not export them.
+        _check_history_control(control)
+        return response("adapter_failed", 502, "Native broker history adapter failed")
+    _check_history_control(control)
+    if not isinstance(frame, pd.DataFrame):
+        return response("malformed_response", 502, "Native broker history did not return a table")
+    if frame.empty:
+        return response(
+            "empty_or_unreported_failure",
+            404,
+            "Native broker history returned no candles; availability or an unreported adapter failure must be checked",
+        )
+    columns = ["timestamp", "open", "high", "low", "close", "volume"]
+    if (
+        len(frame) > 200000
+        or not set(columns).issubset(frame.columns)
+        or not frame.columns.is_unique
+    ):
+        return response(
+            "malformed_response",
+            502,
+            "Native broker history table is missing required columns or exceeds 200000 rows",
+        )
+    # Restrict output to the native candle contract, excluding arbitrary adapter columns.
+    frame = frame[columns + (["oi"] if "oi" in frame else [])].copy()
+    if "oi" not in frame:
+        frame["oi"] = 0
+    return response("success", 200, "", frame.to_dict(orient="records"))
+
+
 def get_history_with_auth(
     auth_token: str,
     feed_token: str | None,
@@ -83,6 +184,9 @@ def get_history_with_auth(
     interval: str,
     start_date: str,
     end_date: str,
+    *,
+    evidence_mode: bool = False,
+    request_control: dict | None = None,
 ) -> tuple[bool, dict[str, Any], int]:
     """
     Get historical data for a symbol using provided auth tokens.
@@ -106,7 +210,12 @@ def get_history_with_auth(
     # Validate symbol and exchange before making broker API call
     is_valid, error_msg = validate_symbol_exchange(symbol, exchange)
     if not is_valid:
-        return False, {"status": "error", "message": error_msg}, 400
+        error_code = (
+            "symbol_unavailable"
+            if error_msg.startswith(f"Symbol '{symbol}' not found for exchange")
+            else "invalid_request"
+        )
+        return False, {"status": "error", "message": error_msg, "error_code": error_code}, 400
 
     broker_module = import_broker_module(broker)
     if broker_module is None:
@@ -125,6 +234,33 @@ def get_history_with_auth(
             # Fallback to just auth token if we can't inspect
             data_handler = broker_module.BrokerData(auth_token)
 
+        if evidence_mode:
+            try:
+                if not callable(
+                    getattr(data_handler, "get_history_evidence", None)
+                ) or interval not in getattr(data_handler, "history_evidence_intervals", ("D",)):
+                    return _native_history_evidence(
+                        data_handler,
+                        broker,
+                        symbol,
+                        exchange,
+                        interval,
+                        start_date,
+                        end_date,
+                        request_control,
+                    )
+                return data_handler.get_history_evidence(
+                    symbol,
+                    exchange,
+                    interval,
+                    start_date,
+                    end_date,
+                    request_control=request_control,
+                )
+            finally:
+                close = getattr(data_handler, "close", None)
+                if callable(close):
+                    close()
         # Call the broker's get_history method
         df = data_handler.get_history(symbol, exchange, interval, start_date, end_date)
 
@@ -136,7 +272,13 @@ def get_history_with_auth(
             df["oi"] = 0
 
         return True, {"status": "success", "data": df.to_dict(orient="records")}, 200
+    except (InterruptedError, TimeoutError):
+        if evidence_mode:
+            raise
+        return False, {"status": "error", "message": "History request interrupted"}, 500
     except Exception as e:
+        if evidence_mode:
+            raise
         logger.exception(f"Error in broker_module.get_history: {e}")
         return False, {"status": "error", "message": str(e)}, 500
 
@@ -227,6 +369,9 @@ def get_history(
     feed_token: str | None = None,
     broker: str | None = None,
     source: str = "api",
+    *,
+    evidence_mode: bool = False,
+    request_control: dict | None = None,
 ) -> tuple[bool, dict[str, Any], int]:
     """
     Get historical data for a symbol.
@@ -272,7 +417,14 @@ def get_history(
 
     # Source: 'api' (default) - Fetch from broker API
     # Enforce 3 requests/second rate limit for broker history calls
+    if evidence_mode:
+        _check_history_control(request_control)
     _enforce_rate_limit()
+    if evidence_mode:
+        _check_history_control(request_control)
+    evidence_options = (
+        {"evidence_mode": True, "request_control": request_control} if evidence_mode else {}
+    )
 
     # Case 1: API-based authentication
     if api_key and not (auth_token and broker):
@@ -282,13 +434,29 @@ def get_history(
         if AUTH_TOKEN is None:
             return False, {"status": "error", "message": "Invalid openalgo apikey"}, 403
         return get_history_with_auth(
-            AUTH_TOKEN, FEED_TOKEN, broker_name, symbol, exchange, interval, start_date, end_date
+            AUTH_TOKEN,
+            FEED_TOKEN,
+            broker_name,
+            symbol,
+            exchange,
+            interval,
+            start_date,
+            end_date,
+            **evidence_options,
         )
 
     # Case 2: Direct internal call with auth_token and broker
     elif auth_token and broker:
         return get_history_with_auth(
-            auth_token, feed_token, broker, symbol, exchange, interval, start_date, end_date
+            auth_token,
+            feed_token,
+            broker,
+            symbol,
+            exchange,
+            interval,
+            start_date,
+            end_date,
+            **evidence_options,
         )
 
     # Case 3: Invalid parameters

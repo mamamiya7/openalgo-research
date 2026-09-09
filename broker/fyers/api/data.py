@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import time
@@ -16,7 +17,9 @@ from utils.logging import get_logger
 logger = get_logger(__name__)
 
 
-def get_api_response(endpoint, auth, method="GET", payload="", _retry_count=0):
+def get_api_response(
+    endpoint, auth, method="GET", payload="", _retry_count=0, *, request_control=None
+):
     """
     Make API requests to Fyers API using shared connection pooling.
 
@@ -35,6 +38,8 @@ def get_api_response(endpoint, auth, method="GET", payload="", _retry_count=0):
     Returns:
         dict: Parsed JSON response from the API
     """
+    if request_control is not None:
+        return _history_api_response(endpoint, auth, request_control)
     try:
         # Get the shared httpx client with connection pooling
         client = get_httpx_client()
@@ -97,6 +102,99 @@ def get_api_response(endpoint, auth, method="GET", payload="", _retry_count=0):
     except Exception as e:
         logger.exception("An unexpected error occurred during API request")
         return {"s": "error", "message": f"General error: {str(e)}"}
+
+
+def _history_api_response(endpoint, auth, control):
+    """Opt-in evidence transport: bounded retries, original outcomes, no token logs."""
+    check = control.get("check", lambda: None)
+    clock = control.get("clock", time.monotonic)
+    deadline = control.get("deadline", clock() + 60)
+    sleeper = control.get("sleep", time.sleep)
+    attempts = min(3, max(1, control.get("max_attempts", 3)))
+    receipts = []
+    for attempt in range(attempts):
+        check()
+        if clock() >= deadline:
+            raise TimeoutError("History request deadline reached")
+        apply_rate_limit()
+        check()
+        if clock() >= deadline:
+            raise TimeoutError("History request deadline reached")
+        try:
+            with get_httpx_client().stream(
+                "GET",
+                "https://api-t1.fyers.in" + endpoint,
+                headers={"Authorization": f"{os.getenv('BROKER_API_KEY')}:{auth}"},
+                timeout=max(0.001, min(15.0, deadline - clock())),
+            ) as response:
+                content, size = [], 0
+                for chunk in response.iter_bytes():
+                    check()
+                    size += len(chunk)
+                    if size > 2 * 1024 * 1024:
+                        raise ValueError("History response exceeds bounded size")
+                    content.append(chunk)
+                encoded = b"".join(content)
+                status = response.status_code
+                payload = json.loads(encoded)
+            if not isinstance(payload, dict):
+                payload = {"s": "error"}
+            digest = hashlib.sha256(encoded).hexdigest()
+            message = str(payload.get("message", "")).lower()
+            expired = (
+                status in (401, 403)
+                or payload.get("code") in (-16, -17)
+                or any(
+                    term in message for term in ("expired", "invalid token", "invalid access token")
+                )
+            )
+            outcome = (
+                "auth_expired"
+                if expired
+                else "rate_limited"
+                if status == 429 or payload.get("code") == 429
+                else "success"
+                if 200 <= status < 300 and payload.get("s") == "ok"
+                else "download_failed"
+            )
+            wait = min(5.0, retry_delay_from_headers(response.headers, attempt))
+        except (httpx.HTTPError, ValueError):
+            expired = False
+            status, payload, digest, outcome, wait = (
+                502,
+                {"s": "error"},
+                None,
+                "download_failed",
+                2**attempt,
+            )
+        receipts.append(
+            {
+                "attempt": attempt + 1,
+                "http_status": status,
+                "outcome": outcome,
+                "response_sha256": digest,
+            }
+        )
+        if control.get("on_attempt"):
+            control["on_attempt"](receipts[-1])
+        if outcome in ("success", "auth_expired") or attempt + 1 == attempts:
+            payload["_history_receipt"] = {
+                "outcome": outcome,
+                "http_status": 401
+                if expired
+                else 429
+                if outcome == "rate_limited"
+                else status
+                if outcome == "success"
+                else 502,
+                "attempts": receipts,
+            }
+            return payload
+        until = min(deadline, clock() + wait)
+        while clock() < until:
+            check()
+            sleeper(min(0.1, until - clock()))
+    raise RuntimeError("Unreachable history retry state")
 
 
 class BrokerData:
@@ -257,9 +355,7 @@ class BrokerData:
         response = get_api_response(f"/data/depth?symbol={encoded}&ohlcv_flag=1", self.auth_token)
 
         if response.get("s") != "ok":
-            logger.debug(
-                f"Depth fetch for OI failed for {br_symbol}: {response.get('message')}"
-            )
+            logger.debug(f"Depth fetch for OI failed for {br_symbol}: {response.get('message')}")
             return 0
 
         depth_data = response.get("d", {}).get(br_symbol, {})
@@ -500,6 +596,17 @@ class BrokerData:
                     logger.debug(f"Making request to endpoint: {endpoint}")
                     response = get_api_response(endpoint, self.auth_token)
 
+                    # Fyers explicitly distinguishes a successful empty window
+                    # from an API failure. Do not retry this terminal response.
+                    if (
+                        response.get("s") == "no_data"
+                        and response.get("code") == 200
+                        and response.get("candles") == []
+                    ):
+                        retry_count = 0
+                        current_start = current_end + pd.Timedelta(days=1)
+                        continue
+
                     if response.get("s") != "ok":
                         error_msg = response.get("message", "Unknown error")
                         logger.error(f"Error for chunk {chunk_start} to {chunk_end}: {error_msg}")
@@ -510,17 +617,13 @@ class BrokerData:
                             time.sleep(2 * retry_count)  # Exponential backoff
                             continue
 
-                        # If max retries reached, move to next chunk
-                        retry_count = 0
-                        current_start = current_end + pd.Timedelta(days=1)
-                        time.sleep(1)
-                        continue
-
-                    # Reset retry count on success
-                    retry_count = 0
+                        # A failed chunk cannot become an empty/partial success.
+                        raise RuntimeError("Fyers history request failed for the requested window")
 
                     # Get candles from response
-                    candles = response.get("candles", [])
+                    candles = response.get("candles")
+                    if not isinstance(candles, list):
+                        raise ValueError("Fyers history returned malformed candles")
                     if candles:
                         # Handle dynamic column count based on whether OI is enabled
                         if enable_oi and len(candles[0]) == 7:
@@ -553,6 +656,9 @@ class BrokerData:
                     else:
                         logger.debug(f"No data available for period {chunk_start} to {chunk_end}")
 
+                    # Reset only after a valid chunk has been handled.
+                    retry_count = 0
+
                     # No inter-chunk sleep here: get_api_response already paces
                     # every Fyers call through the process-wide apply_rate_limit
                     # (125ms spacing) and honours Retry-After on 429s. The old
@@ -572,11 +678,9 @@ class BrokerData:
                         time.sleep(2 * retry_count)
                         continue
 
-                    # If max retries reached, move to next chunk
-                    retry_count = 0
-                    current_start = current_end + pd.Timedelta(days=1)
-                    time.sleep(1)
-                    continue
+                    raise RuntimeError(
+                        "Fyers history request failed for the requested window"
+                    ) from None
 
             # If no data was found, return empty DataFrame
             if not dfs:
@@ -599,9 +703,99 @@ class BrokerData:
             logger.exception(error_msg)
             raise Exception(f"{error_msg}: {e}")
 
-    def get_option_chain(
-        self, symbol: str, strikecount: int, timestamp: str | None = None
-    ) -> dict:
+    def get_history_evidence(
+        self, symbol, exchange, interval, start_date, end_date, *, request_control=None
+    ):
+        """Research-only structured daily contract; ordinary get_history stays unchanged."""
+        if exchange != "NSE" or interval != "D":
+            raise ValueError("Evidence history supports NSE daily candles")
+        control = request_control or {}
+        check = control.get("check", lambda: None)
+        first, end = pd.Timestamp(start_date), pd.Timestamp(end_date)
+        if first > end or (end - first).days > 3700:
+            raise ValueError("Invalid bounded history window")
+        mapping = get_br_symbol(symbol, exchange)
+        rows, chunks = [], []
+        while first <= end:
+            check()
+            last = min(first + pd.Timedelta(days=299), end)
+            endpoint = (
+                f"/data/history?symbol={urllib.parse.quote(mapping)}&resolution=1D&date_format=1"
+                f"&range_from={first.date()}&range_to={last.date()}&cont_flag=1"
+            )
+            payload = get_api_response(endpoint, self.auth_token, request_control=control)
+            details = payload.get("_history_receipt", {})
+            message = str(payload.get("message", "")).lower()
+            outcome = details.get("outcome") or (
+                "success"
+                if payload.get("s") == "ok"
+                else "auth_expired"
+                if payload.get("code") in (-16, -17) or "expired" in message
+                else "download_failed"
+            )
+            candles = payload.get("candles", []) if outcome == "success" else []
+            if not isinstance(candles, list) or len(candles) > 1000:
+                candles, outcome = [], "malformed_response"
+            for candle in candles:
+                if not isinstance(candle, (list, tuple)) or len(candle) not in (6, 7):
+                    outcome = "malformed_response"
+                    continue
+                rows.append(
+                    dict(
+                        zip(
+                            ("timestamp", "open", "high", "low", "close", "volume", "oi"),
+                            list(candle) + ([0] if len(candle) == 6 else []),
+                            strict=True,
+                        )
+                    )
+                )
+            chunks.append(
+                {
+                    "start": str(first.date()),
+                    "end": str(last.date()),
+                    "outcome": outcome,
+                    "http_status": details.get(
+                        "http_status",
+                        401 if outcome == "auth_expired" else 200 if outcome == "success" else 502,
+                    ),
+                    "attempts": details.get("attempts", []),
+                    "observed_rows": len(candles),
+                    "response_sha256": hashlib.sha256(
+                        json.dumps(payload, sort_keys=True, default=str).encode()
+                    ).hexdigest(),
+                }
+            )
+            if outcome == "auth_expired":
+                break
+            first = last + pd.Timedelta(days=1)
+        failures = [chunk for chunk in chunks if chunk["outcome"] != "success"]
+        status = (
+            401
+            if any(chunk["outcome"] == "auth_expired" for chunk in failures)
+            else failures[0]["http_status"]
+            if failures
+            else 200
+        )
+        return (
+            not failures,
+            {
+                "status": "partial" if failures and rows else "error" if failures else "success",
+                "message": "auth_expired"
+                if status == 401
+                else "One or more chunks failed"
+                if failures
+                else "",
+                "data": rows,
+                "history_evidence": {
+                    "version": "fyers-history-evidence-v1",
+                    "broker_mapping": mapping,
+                    "chunks": chunks,
+                },
+            },
+            status,
+        )
+
+    def get_option_chain(self, symbol: str, strikecount: int, timestamp: str | None = None) -> dict:
         """
         Fetch strikes around ATM for `symbol` in a single call via Fyers'
         native /data/options-chain-v3 endpoint (see

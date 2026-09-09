@@ -1,0 +1,139 @@
+name: Research distribution compatibility
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: research-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  supported-runtime:
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      PYTHON_DOTENV_DISABLED: '1'
+      PYTHONUTF8: '1'
+      OPENBLAS_NUM_THREADS: '2'
+      NUMBA_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+          enable-cache: true
+      - run: uv sync --frozen --extra research
+      - run: uv run --no-sync python tools/research_check.py
+      - name: Engine, native data, saved evidence and lifecycle regressions
+        run: uv run --no-sync pytest test/research test/test_history_service_source_validation.py -q
+      - name: Production eventlet boundary
+        if: runner.os == 'Linux'
+        run: |
+          uv pip install "gunicorn==25.3.0" "eventlet==0.41.2"
+          uv run --no-sync pytest test/test_sqlite_lock_cooperative.py test/test_eventlet_cross_thread_locks.py -q
+      - name: Install and probe the locked Nautilus side runtime
+        if: runner.os == 'Linux'
+        run: uv run --no-project python tools/research_install_nautilus.py
+      - name: Add locked side-runtime test dependencies
+        if: runner.os == 'Linux'
+        run: uv sync --project research/runtimes/nautilus --python 3.12 --frozen --no-dev --group test
+      - name: Real native fills and owned Linux process cleanup
+        if: runner.os == 'Linux'
+        run: |
+          PYTHONPATH=. research/runtimes/nautilus/.venv/bin/python -m pytest \
+            --confcutdir=test/research test/research/test_nautilus_portfolio.py \
+            test/research/test_nautilus_runtime.py -q
+      - name: Core environment to real Nautilus side-runtime calculation
+        if: runner.os == 'Linux'
+        run: |
+          uv run --no-sync python - <<'PY'
+          import json
+          import sys
+          from importlib import metadata
+          from pathlib import Path
+
+          sys.path.insert(0, str(Path('test/research').resolve()))
+          from test_nautilus_portfolio import assert_reconciles, snapshot
+          from test_vectorbt_portfolio import DAYS, candle, strategy
+          from research.connectors.nautilus_runtime import evaluate
+
+          assert metadata.version('pyarrow') == '23.0.1'
+          prices = snapshot()
+          prices['bars']['AAA'][DAYS[1]] = candle(100, 112, 99, 108)
+          prices['bars']['AAA'][DAYS[2]] = candle(108, 109, 104, 105)
+          strategies = [strategy('a', target_pct=10), strategy('b', target_pct=30)]
+          for _ in range(2):
+              result = evaluate(strategies, prices, 1000)
+              assert_reconciles(result)
+              assert result['execution']['engine'] == 'nautilus'
+              assert result['execution']['engine_version'] == '1.231.0'
+              assert result['execution']['shared_cash'] is True
+              assert result['summary']['final_equity'] == 1075
+              assert result['summary']['closed_trades'] == 2
+          assert not list(Path('.agent-native/runtime-jobs').iterdir())
+          assert metadata.version('pyarrow') == '23.0.1'
+          print(json.dumps({'bridge': 'passed', 'summary': result['summary']}))
+          PY
+
+  package:
+    needs: supported-runtime
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    env:
+      PYTHON_DOTENV_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - run: uv sync --frozen --extra research
+      - working-directory: frontend
+        run: npm ci
+      - name: Portfolio and preserved scanner consumer workflows
+        working-directory: frontend
+        run: >-
+          npm run test:run --
+          src/components/research/PortfolioJourney.test.tsx
+          src/components/research/ConnectorSettings.test.tsx
+          src/components/research/PreflightReview.test.tsx
+          src/components/layout/ResearchLayout.test.tsx
+          src/lib/researchDraft.test.ts
+          src/pages/ScannerResearch.test.tsx
+      - run: uv run --no-sync python tools/research_release.py --output .agent-native/release/ci
+      - name: Retain the installable source distribution and checksums
+        uses: actions/upload-artifact@v6
+        with:
+          name: openalgo-research-preview
+          path: |
+            .agent-native/release/ci/*.zip
+            .agent-native/release/ci/manifest.json
+            .agent-native/release/ci/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
+      - name: Build the actual distribution image
+        run: docker build --tag openalgo-research:ci .
+      - name: Verify installed image core dependencies without starting the app
+        run: docker run --rm --entrypoint python openalgo-research:ci tools/research_check.py
+      - name: Probe the image's separate native Nautilus runtime
+        run: >-
+          docker run --rm
+          --entrypoint /app/research/runtimes/nautilus/.venv/bin/python
+          openalgo-research:ci -I -c
+          "from importlib import metadata; from nautilus_trader.backtest.engine import BacktestEngine;
+          assert metadata.version('nautilus-trader') == '1.231.0';
+          assert metadata.version('numpy') == '2.4.4';
+          assert metadata.version('pandas') == '2.3.3';
+          assert metadata.version('pyarrow') == '25.0.1'"

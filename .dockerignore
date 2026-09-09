@@ -17,6 +17,7 @@ __pycache__/
 env/
 venv/
 .venv/
+**/.venv/
 .Python
 
 # Environment and secrets

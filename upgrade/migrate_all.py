@@ -56,6 +56,7 @@ PROJECT_ROOT = os.path.dirname(UPGRADE_DIR)
 #   cd upgrade && uv run migrate_drop_legacy_strategy.py --status
 #   cd upgrade && uv run migrate_drop_legacy_strategy.py
 MIGRATIONS = [
+    ("migrate_scanner_research.py", "Scanner Research Metadata"),
     # Legacy migrations (for users upgrading from older versions)
     ("add_feed_token.py", "Feed Token Support"),
     ("add_user_id.py", "User ID Column"),
@@ -77,7 +78,9 @@ MIGRATIONS = [
     ("migrate_health_process_details.py", "Health Metrics Process Details"),
     ("migrate_master_contract_stats.py", "Master Contract Smart Download"),
     ("migrate_contract_value.py", "Contract Value Column for Crypto"),
-    ("migrate_market_holidays.py", "2026 Market Holiday Calendar Update"),
+    # The old holiday migration resets every exchange and overwrites custom
+    # calendar entries. Keep it out of unattended research upgrades.
+    ("migrate_research_nse_calendar.py", "Research NSE Calendar Coverage"),
     ("migrate_leverage.py", "Leverage Configuration for Crypto"),
     ("migrate_samco_auth.py", "Samco 2FA Authentication"),
     ("migrate_zerodha_new_exchanges.py", "Zerodha NCO/GLOBAL_INDEX & GIFTNIFTY Cleanup"),
@@ -94,7 +97,13 @@ MIGRATIONS = [
 # required schema migrations are listed explicitly: their failure must reach
 # this runner's summary and process exit code instead of being reported as a
 # successful warning.
-REQUIRED_MIGRATIONS = frozenset({"migrate_strategy_module.py", "migrate_strategy_universe_tab.py"})
+REQUIRED_MIGRATIONS = frozenset(
+    {
+        "migrate_strategy_module.py",
+        "migrate_strategy_universe_tab.py",
+        "migrate_research_nse_calendar.py",
+    }
+)
 
 
 def run_migration(script_name, description):

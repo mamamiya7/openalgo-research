@@ -2544,6 +2544,110 @@ def correlation_beta(
         return _fail("calculating correlation/beta", e)
 
 
+def _research_call(name: str, arguments: dict) -> str:
+    """HTTP dispatch binds an authenticated owner; stdio uses native API auth."""
+    if os.environ.get("OPENALGO_MCP_HTTP_BOOT") == "1":
+        from flask import current_app, g
+
+        from services.research_mcp import dispatch
+
+        owner = getattr(g, "_research_mcp_owner", None)
+        if not owner:
+            raise PermissionError("Research requires a verified OpenAlgo account")
+        return json.dumps(dispatch(current_app.extensions["research_store"], owner, name, arguments), default=str)
+    if not host or not api_key:
+        return _error("Configure the native OpenAlgo host and API key")
+    try:
+        # Stdio is also distributed as a standalone script with the OpenAlgo SDK;
+        # it does not require Flask or server-side database modules locally.
+        with httpx.Client(timeout=30.0) as http:
+            with http.stream("POST", f"{host.rstrip('/')}/api/v1/research/tool",
+                             json={"apikey": api_key, "name": name, "arguments": arguments}) as response:
+                raw = bytearray()
+                for chunk in response.iter_bytes(chunk_size=65536):
+                    if len(raw) + len(chunk) > 1024 * 1024:
+                        return _error("Research response is too large; request a smaller page")
+                    raw.extend(chunk)
+                payload = json.loads(raw)
+                if response.is_error:
+                    return _error(payload.get("message", "Research request failed"))
+                return json.dumps(payload, default=str)
+    except (httpx.HTTPError, ValueError):
+        return _error("Research request failed. Check OpenAlgo and reuse the same request_id when retrying a submission.")
+
+
+@openalgo_tool("research", title="Research Capabilities", risk=RISK_EXTERNAL_TEXT, open_world=False)
+def research_capabilities() -> str:
+    """Read supported historical research engines and portfolio input requirements."""
+    return _research_call("research_capabilities", {})
+
+
+@openalgo_tool("research", title="Saved Research Inputs", risk=RISK_EXTERNAL_TEXT, open_world=False)
+def research_list_sources(limit: int = 25, offset: int = 0) -> str:
+    """List this account's saved signal inputs, including CSVs awaiting price preparation."""
+    return _research_call("research_list_sources", {"limit": limit, "offset": offset})
+
+
+@openalgo_tool("research", title="Saved Research Runs", risk=RISK_EXTERNAL_TEXT, open_world=False)
+def research_list_runs(limit: int = 25, cursor: str | None = None, query: str = "", status: str | None = None) -> str:
+    """Find this account's saved backtests and optimization runs, with bounded pagination."""
+    return _research_call("research_list_runs", {"limit": limit, "cursor": cursor, "query": query, "status": status})
+
+
+@openalgo_tool("research", title="Preview Portfolio Research", risk=RISK_EXTERNAL_TEXT, open_world=False)
+def research_preview_portfolio(portfolio: dict) -> str:
+    """Validate a portfolio referencing existing saved source_ids; never invent strategies or CSV contents. No downloads or queued job."""
+    return _research_call("research_preview_portfolio", {"portfolio": portfolio})
+
+
+@openalgo_tool("research", title="Run Portfolio Research", write=True, risk=RISK_EXTERNAL_TEXT)
+def research_run_portfolio(portfolio: dict, request_id: str) -> str:
+    """Queue a historical portfolio from saved source_ids. Automatically prepares required broker prices; places no trading orders. Reuse request_id on retries."""
+    return _research_call("research_run_portfolio", {"portfolio": portfolio, "request_id": request_id})
+
+
+@openalgo_tool("research", title="Upload Research Signals", write=True, risk=RISK_EXTERNAL_TEXT, open_world=False)
+def research_upload_csv(csv_text: str) -> str:
+    """Save dated signal CSV text supplied by the user (maximum 8 MiB). Never invent missing input; prices are prepared when a run is queued."""
+    return _research_call("research_upload_csv", {"csv_text": csv_text})
+
+
+@openalgo_tool("research", title="Research Run Summary", risk=RISK_EXTERNAL_TEXT, open_world=False)
+def research_get_run(job_id: str, curve_points: int = 100) -> str:
+    """Read a saved run's progress or result, including combined and per-strategy summaries and at most 300 equity points."""
+    return _research_call("research_get_run", {"job_id": job_id, "curve_points": curve_points})
+
+
+@openalgo_tool("research", title="Research Trade Ledger", risk=RISK_EXTERNAL_TEXT, open_world=False)
+def research_get_trades(job_id: str, limit: int = 50, offset: int = 0, strategy_id: str | None = None, status: str | None = None) -> str:
+    """Read up to 200 trades from a completed research run, optionally filtered by strategy or outcome status."""
+    return _research_call("research_get_trades", {"job_id": job_id, "limit": limit, "offset": offset, "strategy_id": strategy_id, "status": status})
+
+
+@openalgo_tool("research", title="Cancel Research Run", write=True, destructive=True, risk=RISK_EXTERNAL_TEXT, open_world=False)
+def research_cancel_run(job_id: str) -> str:
+    """Cancel a historical calculation or download job. Does not cancel any broker order."""
+    return _research_call("research_cancel_run", {"job_id": job_id})
+
+
+@openalgo_tool("research", title="Resume Research Run", write=True, risk=RISK_EXTERNAL_TEXT)
+def research_resume_run(job_id: str) -> str:
+    """Resume a saved resumable research job through the native calculation worker."""
+    return _research_call("research_resume_run", {"job_id": job_id})
+
+
+@openalgo_tool("research", title="Replay Saved Research Trial", write=True, risk=RISK_EXTERNAL_TEXT, open_world=False)
+def research_rerun_trial(job_id: str, request_id: str, trial_id: str | None = None) -> str:
+    """Queue an exact saved portfolio/trial replay with its frozen prices and recorded versions. Reuse request_id on retries."""
+    return _research_call("research_rerun_trial", {"job_id": job_id, "request_id": request_id, "trial_id": trial_id})
+
+
+@openalgo_tool("research", title="Export Research Strategy", risk=RISK_EXTERNAL_TEXT, open_world=False)
+def research_export_strategy(job_id: str, strategy_id: str, trial_id: str | None = None) -> str:
+    """Return one saved strategy's exact research definition and evidence references; execution remains disabled."""
+    return _research_call("research_export_strategy", {"job_id": job_id, "strategy_id": strategy_id, "trial_id": trial_id})
+
+
 _finalize_registry()
 
 

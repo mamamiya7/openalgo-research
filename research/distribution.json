@@ -1,0 +1,51 @@
+{
+  "name": "OpenAlgo Research",
+  "version": "0.1.0-preview.4",
+  "format": "openalgo-research-distribution-v1",
+  "delivery": "native-openalgo-distribution",
+  "openalgo_version": "2.0.2.2",
+  "upstream_baseline": "c6a431401872691f3d46e0bb840a3637e18b0591",
+  "python": "3.12",
+  "packages": {
+    "vectorbt": "0.28.5",
+    "optuna": "5.0.0",
+    "numpy": "2.4.4",
+    "pandas": "2.3.3"
+  },
+  "connector_contract": "openalgo-research-connectors-v1",
+  "adapters": {
+    "vectorbt": "vectorbt-scanner-adapter-v1",
+    "optuna": "openalgo-optuna-grid-v1"
+  },
+  "portfolio_contract": "research-portfolio-v1",
+  "portfolio_adapters": {
+    "vectorbt": "vectorbt-portfolio-adapter-v1",
+    "optuna": "openalgo-optuna-portfolio-v1",
+    "nautilus": "nautilus-portfolio-adapter-v2"
+  },
+  "side_runtime": {
+    "path": "research/runtimes/nautilus",
+    "python": ">=3.12,<3.13",
+    "platform": "Linux glibc >=2.35 (WSL on Windows)",
+    "packages": {
+      "nautilus-trader": "1.231.0",
+      "numpy": "2.4.4",
+      "pandas": "2.3.3",
+      "pyarrow": "25.0.1"
+    }
+  },
+  "host_calls": {
+    "services/history_service.py": {
+      "get_history": ["symbol", "exchange", "interval", "start_date", "end_date", "auth_token", "feed_token", "broker", "source", "evidence_mode", "request_control"]
+    },
+    "database/historify_db.py": {
+      "get_db_path": [],
+      "get_connection": [],
+      "init_database": [],
+      "upsert_market_data": ["df", "symbol", "exchange", "interval"]
+    },
+    "database/engine_factory.py": {
+      "create_db_engine": ["database_url"]
+    }
+  }
+}

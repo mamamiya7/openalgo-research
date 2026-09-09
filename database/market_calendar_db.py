@@ -135,6 +135,9 @@ def init_db():
             logger.debug("Market Calendar DB: Seeding holiday data")
             seed_holidays_2025()
             seed_holidays_2026()
+            from database.research_calendar import repair_nse_calendar
+
+            repair_nse_calendar()
             logger.debug("Market Calendar DB: Holiday data seeded successfully")
     except Exception as e:
         db_session.rollback()
@@ -937,6 +940,8 @@ def is_market_holiday(query_date: date, exchange: str = None) -> bool:
 
         # Special sessions are not holidays - markets are open with special timings
         if holiday and holiday.holiday_type == "SPECIAL_SESSION":
+            if exchange:
+                return get_effective_session_window(query_date, exchange) is None
             return False
 
         # Weekend check (only if no special session)

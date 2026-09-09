@@ -30,7 +30,7 @@ Drift check:
 
 from __future__ import annotations
 
-from typing import Callable, Iterable
+from collections.abc import Callable, Iterable
 
 from utils.logging import get_logger
 
@@ -43,6 +43,8 @@ logger = get_logger(__name__)
 SCOPE_READ_MARKET = "read:market"
 SCOPE_READ_ACCOUNT = "read:account"
 SCOPE_WRITE_ORDERS = "write:orders"
+SCOPE_READ_RESEARCH = "read:research"
+SCOPE_WRITE_RESEARCH = "write:research"
 
 
 # --------------------------------------------------------------------
@@ -51,6 +53,19 @@ SCOPE_WRITE_ORDERS = "write:orders"
 # audit_registry() warns about omissions at boot.
 # --------------------------------------------------------------------
 TOOL_SCOPES: dict[str, str] = {
+    # Historical research permissions never authorize trading orders.
+    "research_capabilities": SCOPE_READ_RESEARCH,
+    "research_list_sources": SCOPE_READ_RESEARCH,
+    "research_list_runs": SCOPE_READ_RESEARCH,
+    "research_preview_portfolio": SCOPE_READ_RESEARCH,
+    "research_get_run": SCOPE_READ_RESEARCH,
+    "research_get_trades": SCOPE_READ_RESEARCH,
+    "research_export_strategy": SCOPE_READ_RESEARCH,
+    "research_upload_csv": SCOPE_WRITE_RESEARCH,
+    "research_run_portfolio": SCOPE_WRITE_RESEARCH,
+    "research_cancel_run": SCOPE_WRITE_RESEARCH,
+    "research_resume_run": SCOPE_WRITE_RESEARCH,
+    "research_rerun_trial": SCOPE_WRITE_RESEARCH,
     # ---- Order placement / modification / cancellation ----
     "place_order": SCOPE_WRITE_ORDERS,
     "place_smart_order": SCOPE_WRITE_ORDERS,
@@ -197,7 +212,7 @@ def _load_mcpserver_module():
     module = importlib.util.module_from_spec(spec)
     sys.modules["openalgo_mcp_server"] = module  # so its decorators bind
     spec.loader.exec_module(module)
-    setattr(_load_mcpserver_module, "_module", module)
+    _load_mcpserver_module._module = module
     return module
 
 
@@ -310,16 +325,16 @@ def audit_registry() -> None:
         scope = TOOL_SCOPES.get(name)
         if scope is None or name in WRITE_SCOPE_EXCEPTIONS:
             continue
-        if not meta.read_only and scope != SCOPE_WRITE_ORDERS:
+        if not meta.read_only and scope not in {SCOPE_WRITE_ORDERS, SCOPE_WRITE_RESEARCH}:
             logger.warning(
                 f"MCP tool '{name}' is annotated as a write "
                 f"(readOnlyHint=False) but carries scope '{scope}'. A read-only "
                 "token could call it. Fix the scope in "
                 "utils/mcp_tool_registry.py or the annotation in mcp/mcpserver.py."
             )
-        elif meta.read_only and scope == SCOPE_WRITE_ORDERS:
+        elif meta.read_only and scope in {SCOPE_WRITE_ORDERS, SCOPE_WRITE_RESEARCH}:
             logger.warning(
                 f"MCP tool '{name}' is annotated read-only but requires the "
-                f"'{SCOPE_WRITE_ORDERS}' scope. Clients will be denied a call "
+                f"'{scope}' scope. Clients will be denied a call "
                 "their annotations say is safe."
             )

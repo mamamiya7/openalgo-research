@@ -153,6 +153,10 @@ dependencies = [
   "openstatz==0.4.1",
 ]
 
+[project.optional-dependencies]
+# Existing pandas 2 runtime; engine upgrades require connector compatibility tests.
+research = ["vectorbt==0.28.5", "optuna==5.0.0"]
+
 [build-system]
 requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"

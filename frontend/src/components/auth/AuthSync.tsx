@@ -50,7 +50,7 @@ export function AuthSync({ children }: AuthSyncProps) {
             if (data.active_sessions !== undefined) {
               setActiveSessionCount(data.active_sessions)
             }
-          } else if (data.status === 'success' && data.authenticated && !data.logged_in) {
+          } else if (data.status === 'success' && data.authenticated) {
             // User is logged in but hasn't connected broker yet
             setUser({
               username: data.user,
@@ -77,7 +77,15 @@ export function AuthSync({ children }: AuthSyncProps) {
     }
 
     syncSession()
-  }, [setUser, setApiKey, logout, fetchCapabilities, clearCapabilities, syncAppMode, setActiveSessionCount])
+  }, [
+    setUser,
+    setApiKey,
+    logout,
+    fetchCapabilities,
+    clearCapabilities,
+    syncAppMode,
+    setActiveSessionCount,
+  ])
 
   // Show nothing while checking - prevents flash of wrong content
   if (isChecking) {

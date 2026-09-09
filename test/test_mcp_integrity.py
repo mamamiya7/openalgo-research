@@ -75,7 +75,9 @@ _ensure_sdk_openalgo()
 from utils.mcp_tool_registry import (  # noqa: E402
     SCOPE_READ_ACCOUNT,
     SCOPE_READ_MARKET,
+    SCOPE_READ_RESEARCH,
     SCOPE_WRITE_ORDERS,
+    SCOPE_WRITE_RESEARCH,
     TOOL_SCOPES,
     _load_mcpserver_module,
     get_tool_callable,
@@ -83,7 +85,7 @@ from utils.mcp_tool_registry import (  # noqa: E402
     registered_tool_names,
 )
 
-READ_SCOPES = {SCOPE_READ_MARKET, SCOPE_READ_ACCOUNT}
+READ_SCOPES = {SCOPE_READ_MARKET, SCOPE_READ_ACCOUNT, SCOPE_READ_RESEARCH}
 
 # Tools that change something but are deliberately not write-scoped.
 # Keep this list at zero-or-one entries and justify every addition —
@@ -210,7 +212,7 @@ def test_write_tools_require_the_write_scope(server):
         name
         for name, meta in server.TOOL_META.items()
         if not meta.read_only
-        and TOOL_SCOPES.get(name) != SCOPE_WRITE_ORDERS
+        and TOOL_SCOPES.get(name) not in {SCOPE_WRITE_ORDERS, SCOPE_WRITE_RESEARCH}
         and name not in WRITE_SCOPE_EXCEPTIONS
     ]
     assert not offenders, f"tools annotated as writes but not scoped write:orders: {offenders}"
@@ -220,7 +222,7 @@ def test_read_tools_do_not_require_the_write_scope(server):
     offenders = [
         name
         for name, meta in server.TOOL_META.items()
-        if meta.read_only and TOOL_SCOPES.get(name) == SCOPE_WRITE_ORDERS
+        if meta.read_only and TOOL_SCOPES.get(name) in {SCOPE_WRITE_ORDERS, SCOPE_WRITE_RESEARCH}
     ]
     assert not offenders, f"tools annotated read-only but scoped write:orders: {offenders}"
 
