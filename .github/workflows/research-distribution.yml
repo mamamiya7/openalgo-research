@@ -27,7 +27,7 @@ jobs:
       OPENBLAS_NUM_THREADS: '2'
       NUMBA_NUM_THREADS: '2'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: '3.12'
@@ -92,7 +92,7 @@ jobs:
     env:
       PYTHON_DOTENV_DISABLED: '1'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: '3.12'
