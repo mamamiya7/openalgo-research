@@ -216,7 +216,7 @@ def test_stop_file_failure_still_kills_stubborn_worker(tmp_path):
 def test_service_signal_checkpoints_worker(tmp_path, sig):
     script = child_script(tmp_path)
     runner = tmp_path / "runner.py"
-    module_root = Path(__file__).resolve().parents[2] / ".."
+    module_root = Path(__file__).resolve().parents[2]
     runner.write_text(
         "import pathlib, sys\n"
         f"sys.path.insert(0, {str(module_root)!r})\n"
@@ -228,7 +228,9 @@ def test_service_signal_checkpoints_worker(tmp_path, sig):
         encoding="utf-8",
     )
     with (tmp_path / "supervisor.log").open("w", encoding="utf-8") as log:
-        process = subprocess.Popen([sys.executable, str(runner)], stdout=log, stderr=log)
+        # Exercise the explicit source path without an inherited PYTHONPATH
+        # masking a broken import in a fresh checkout.
+        process = subprocess.Popen([sys.executable, "-I", str(runner)], stdout=log, stderr=log)
         try:
             wait_for(lambda: (tmp_path / "research.pid").exists() or process.poll() is not None)
             assert process.poll() is None, (tmp_path / "supervisor.log").read_text()

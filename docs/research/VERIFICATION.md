@@ -18,7 +18,10 @@ This was a new directory on an existing Windows host with cached packages,
 not a clean operating-system image. Test candles were controlled fixtures;
 real Fyers daily and minute checks are recorded separately below.
 
-Publication preparation changes documentation, ignore rules and CI triggers.
+Publication preparation changes documentation, ignore rules, CI triggers and
+the supervisor test's source import path. The initial clean Linux CI run exposed
+that test path error; its child now imports from the checkout explicitly with
+inherited Python paths disabled.
 Application and engine sources remain the verified preview.4 revision. Packaging
 and compatibility checks passed again (**35 passed, one symlink test skipped**).
 The public ZIP is rebuilt from the tagged source and has its own manifest and
