@@ -57,8 +57,9 @@ The daily archive-reuse check still made requests for uncovered windows that
 returned no usable new candles. Zero newly stored candles does not imply zero
 broker requests. Exact saved replay performs no new acquisition.
 
-The final Windows artifact check preceded publication-only documentation edits;
-its calculation code and locked dependencies are the tested preview.4 baseline.
+The final Windows installation check preceded publication preparation and frontend
+dependency patches. Its calculation code and Python dependency locks remain the
+tested preview.4 baseline; the frontend is rebuilt and checked after its updates.
 Release assets contain a file-hash manifest and checksums identifying their final
 contents. Historical checks are recorded in [VERIFICATION.md](VERIFICATION.md).
 Private inputs, accounts, databases and machine-specific receipts are excluded
@@ -90,9 +91,9 @@ selected engine's results. See [CONNECTORS.md](CONNECTORS.md).
   behavior and exchange matching chronology are outside this model.
 - Real broker acceptance covers the recorded Fyers daily/minute cases. Other
   adapters have controlled checks, not universal live-account certification.
-- Docker build/start has not been executed locally because Docker was unavailable.
-  The workflow defines container checks; successful execution must be established
-  separately.
+- Public CI built the Docker image and probed both locked Python environments.
+  Full container setup, application startup, restart and restore acceptance remain
+  separate from these build and dependency checks.
 - The targeted NSE calendar migration and populated same-version reinstall are
   verified. Broad cross-version update, restore and rollback coverage, clean OS
   installation and unaided consumer acceptance remain open.

@@ -94,7 +94,7 @@ describe('Research credential authentication', () => {
         </AuthSync>
       </MemoryRouter>
     )
-    expect(await screen.findByRole('link', { name: /Scanner Research/ })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: /Backtest & Optimize/ })).toHaveAttribute(
       'href',
       '/scanner-research'
     )

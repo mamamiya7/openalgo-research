@@ -1,7 +1,8 @@
 # OpenAlgo Research verification
 
 Current checkpoint: 9 September 2026, `0.1.0-preview.4`. **Local acceptance is
-complete for the declared native joint-portfolio scope.** Docker, cross-version
+complete for the declared native joint-portfolio scope.** Full Docker application
+acceptance, cross-version
 migrations beyond the targeted calendar update, hosted operation and universal
 broker coverage remain unverified.
 This checkpoint supports the [public preview source and release](https://github.com/mamamiya7/openalgo-research/releases).
@@ -18,7 +19,7 @@ This was a new directory on an existing Windows host with cached packages,
 not a clean operating-system image. Test candles were controlled fixtures;
 real Fyers daily and minute checks are recorded separately below.
 
-Publication preparation changes documentation, ignore rules, CI triggers and
+Publication preparation changes frontend dependency pins, documentation, ignore rules, CI triggers and
 the supervisor test's source import path. The initial clean Linux CI run exposed
 that test path error; its child now imports from the checkout explicitly with
 inherited Python paths disabled.
@@ -26,6 +27,14 @@ Application and engine sources remain the verified preview.4 revision. Packaging
 and compatibility checks passed again (**35 passed, one symlink test skipped**).
 The public ZIP is rebuilt from the tagged source and has its own manifest and
 checksum; it is not identified by the earlier local candidate's checksum.
+
+The initial public [compatibility run](https://github.com/mamamiya7/openalgo-research/actions/runs/34388052145)
+passed 804 Linux and 787 Windows checks, plus 13 Eventlet and 65 Nautilus checks,
+the core-to-Nautilus bridge, 102 interface tests, source packaging and the Docker
+build and dependency probes. Platform skips and the existing Pydantic warning
+remain recorded in that run. Frontend dependency advisories found during packaging
+are addressed separately before the final release is published; release notes
+identify the final revision's checks.
 
 ## Native Fyers no-data correction
 

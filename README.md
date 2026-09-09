@@ -54,7 +54,7 @@ Nautilus is optional; VectorBT and Optuna are the default environment.
 Windows and Linux core workflows, exact replay and controlled fresh-install
 journeys have been checked. Real broker evidence covers Fyers daily and minute
 data. Other brokers use the same native integration path, but have not all been
-verified against live accounts. Docker execution and broad cross-version upgrade
+verified against live accounts. Docker first-run/recovery and broad cross-version upgrade
 coverage remain open. See the [current verification and limits](docs/research/STATUS.md).
 
 This preview accepts CSV signal strategies for long NSE cash equities; it does

@@ -92,8 +92,9 @@ both locked environments and starts the web app, proxy and research worker:
 docker compose up --build -d
 ```
 
-The Dockerfile and CI checks are implemented; a successful local Docker build or
-fresh container setup has **not yet been verified** for this preview.
+Public CI has built the image and checked its core and optional engine
+dependencies. Fresh container setup, full application startup and restore have
+**not yet been verified** for this preview.
 
 ## Updates and recovery
 
@@ -156,8 +157,8 @@ calculations, exact selected replay, restart and exported-report preservation
 passed, along with **40 artifact checks**. Graceful shutdown left no owned
 processes, listening test ports or worker lease. This used an existing Windows
 host and cached packages with controlled Historify candles, not a clean OS image
-or a real broker account. Publication-only documentation edits followed this
-artifact check; release checksums identify the final package.
+or a real broker account. Publication preparation and frontend dependency patches
+followed this installation check; release checksums identify the final package.
 
 An earlier fresh Linux installation passed with new locked core and Nautilus
 environments, real HTTP-to-worker calculations and exact replay. Reinstalling the
@@ -168,5 +169,5 @@ migration.
 Real Fyers daily data use and missing-minute acquisition were checked separately
 inside an existing OpenAlgo installation. The calculation snapshots matched its
 Historify archive. This does not certify every broker or historical symbol.
-Docker execution and broad cross-version upgrade coverage remain open. The
+Full Docker application acceptance and broad cross-version upgrade coverage remain open. The
 verified NSE calendar correction is the targeted migration described above.

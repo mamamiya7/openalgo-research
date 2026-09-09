@@ -103,6 +103,9 @@ jobs:
       - run: uv sync --frozen --extra research
       - working-directory: frontend
         run: npm ci
+      - name: Check frontend dependency advisories
+        working-directory: frontend
+        run: npm audit --audit-level=high
       - name: Portfolio and preserved scanner consumer workflows
         working-directory: frontend
         run: >-
@@ -111,6 +114,8 @@ jobs:
           src/components/research/ConnectorSettings.test.tsx
           src/components/research/PreflightReview.test.tsx
           src/components/layout/ResearchLayout.test.tsx
+          src/components/auth/AuthSync.test.tsx
+          src/components/strategy-builder/PayoffChart.test.tsx
           src/lib/researchDraft.test.ts
           src/pages/ScannerResearch.test.tsx
       - run: uv run --no-sync python tools/research_release.py --output .agent-native/release/ci

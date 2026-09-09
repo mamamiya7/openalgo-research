@@ -76,8 +76,9 @@ login, two-strategy VectorBT, real Optuna trials, exact selected replay, restart
 and export preservation. All 40 artifact checks passed. Native Ctrl+C shut down
 the app and worker successfully, with no owned processes, listening test ports
 or worker lease remaining. This used controlled Historify candles and package
-caches, not a clean operating-system image or a broker login. Publication-only
-documentation edits followed that artifact check.
+caches, not a clean operating-system image or a broker login. Publication
+preparation and frontend dependency patches followed that installation check;
+the calculation source and Python locks remain the same.
 
 ## Managed Linux source installation
 
@@ -112,9 +113,9 @@ docker compose up --build -d
 
 If any supervised service exits, the supervisor stops the others and Compose can
 restart the complete service. It does not silently restart individual jobs. The
-image build and startup path are implemented and checked by the compatibility
-workflow; a local Docker build and fresh-container journey remain unverified for
-this preview.
+compatibility workflow has built the image and probed both Python environments.
+A complete container setup, application startup and recovery journey remains
+unverified for this preview.
 
 The `openalgo_db` volume holds OpenAlgo's operational databases and default
 Historify archive. `openalgo_research` holds research metadata, inputs, snapshots,
