@@ -1,5 +1,5 @@
 import { webClient } from './client'
-import type { ResearchConfig, ResearchSource } from './scannerResearch'
+import type { ResearchActivity, ResearchConfig, ResearchSource } from './scannerResearch'
 
 export type PortfolioAxis =
   | 'target_pct'
@@ -107,6 +107,7 @@ export interface PortfolioResult {
   }
 }
 export interface PortfolioJob {
+  activity?: ResearchActivity
   id: string
   status: string
   progress: number

@@ -1,0 +1,211 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { AxiosError } from 'axios'
+import type { ComponentProps } from 'react'
+import { MemoryRouter, useLocation } from 'react-router'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { type ResearchExperiment, researchLibrary } from '@/api/researchLibrary'
+import { freshPortfolioDraft } from '@/components/research/PortfolioBuilder'
+import type PortfolioResearch from '@/pages/PortfolioResearch'
+import { useAuthStore } from '@/stores/authStore'
+import ResearchLibrary from './ResearchLibrary'
+
+vi.mock('@/api/researchLibrary', () => ({
+  researchLibrary: {
+    list: vi.fn(),
+    studies: vi.fn(),
+    versions: vi.fn(),
+    get: vi.fn(),
+    create: vi.fn(),
+    saveDraft: vi.fn(),
+    run: vi.fn(),
+  },
+}))
+vi.mock('@/api/portfolioResearch', () => ({
+  portfolioResearch: { sources: vi.fn(), jobs: vi.fn() },
+}))
+vi.mock('@/pages/PortfolioResearch', () => ({
+  default: ({ workspace }: ComponentProps<typeof PortfolioResearch>) =>
+    workspace && (
+      <div>
+        <input
+          aria-label="Setup title"
+          value={workspace.draft.portfolio.name}
+          onChange={(event) =>
+            workspace.onChange({
+              ...workspace.draft,
+              portfolio: { ...workspace.draft.portfolio, name: event.target.value },
+            })
+          }
+        />
+        <button
+          type="button"
+          disabled={workspace.disabled}
+          onClick={() => void workspace.onRun().then(workspace.onOpenJob)}
+        >
+          Start calculation
+        </button>
+      </div>
+    ),
+}))
+const blank = (): ResearchExperiment => ({
+  id: 'experiment-1',
+  name: 'Breakout research',
+  notes: '',
+  tags: [],
+  pinned: false,
+  archived: false,
+  revision: 1,
+  created_at: 1,
+  updated_at: 1,
+  job_count: 0,
+  version_count: 0,
+  draft: freshPortfolioDraft(),
+  jobs: [],
+  versions: [],
+  jobs_next_offset: null,
+  versions_next_offset: null,
+})
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+function Location() {
+  const location = useLocation()
+  return <output data-testid="location">{location.search}</output>
+}
+function show(url = '/scanner-research', client?: QueryClient) {
+  const cache =
+    client ??
+    new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
+  return render(
+    <QueryClientProvider client={cache}>
+      <MemoryRouter initialEntries={[url]}>
+        <ResearchLibrary />
+        <Location />
+      </MemoryRouter>
+    </QueryClientProvider>
+  )
+}
+beforeEach(() => {
+  vi.resetAllMocks()
+  sessionStorage.clear()
+  useAuthStore.setState({ user: null })
+  vi.mocked(researchLibrary.list).mockResolvedValue({ items: [], next_offset: null })
+  vi.mocked(researchLibrary.get).mockResolvedValue(blank())
+  vi.mocked(researchLibrary.create).mockResolvedValue(blank())
+  vi.mocked(researchLibrary.saveDraft).mockImplementation(async (_id, revision, draft) => ({
+    ...blank(),
+    revision: revision + 1,
+    draft,
+  }))
+})
+afterEach(cleanup)
+
+describe('research library navigation and lost-work boundaries', () => {
+  it('refreshes the library after creating an experiment despite the host cache policy', async () => {
+    const user = userEvent.setup()
+    vi.mocked(researchLibrary.list)
+      .mockResolvedValueOnce({ items: [], next_offset: null })
+      .mockResolvedValue({ items: [blank()], next_offset: null })
+    show()
+    await screen.findByText('Start with a research question')
+    await user.click(screen.getByRole('button', { name: 'New experiment', exact: true }))
+    await user.type(screen.getByLabelText('Research question or name'), 'Breakout research')
+    await user.click(screen.getByRole('button', { name: 'Create experiment' }))
+    await screen.findByLabelText('Setup title')
+    await user.click(screen.getByRole('button', { name: 'Research library', exact: true }))
+    expect(await screen.findByRole('button', { name: /Breakout research/ })).toBeVisible()
+    expect(researchLibrary.list).toHaveBeenCalledTimes(2)
+  })
+
+  it('loads a fresh server revision before editing a cached experiment', async () => {
+    const user = userEvent.setup()
+    const cache = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } })
+    cache.setQueryData(['research-experiment', 'account', 'experiment-1'], blank())
+    const pending = deferred<ResearchExperiment>()
+    vi.mocked(researchLibrary.get).mockReturnValue(pending.promise)
+    show('/scanner-research?experiment=experiment-1&view=setup', cache)
+    expect(screen.getByText('Opening experiment…')).toBeVisible()
+    expect(screen.queryByLabelText('Setup title')).not.toBeInTheDocument()
+    const fresh = blank()
+    fresh.revision = 3
+    fresh.draft.portfolio.name = 'Saved in another browser'
+    await act(async () => pending.resolve(fresh))
+    expect(await screen.findByLabelText('Setup title')).toHaveValue('Saved in another browser')
+    await user.clear(screen.getByLabelText('Setup title'))
+    await user.type(screen.getByLabelText('Setup title'), 'New idea')
+    await user.click(screen.getByRole('button', { name: 'Research library', exact: true }))
+    await screen.findByRole('heading', { name: 'Research library' })
+    expect(researchLibrary.saveDraft).toHaveBeenCalledWith(
+      'experiment-1',
+      3,
+      expect.objectContaining({ portfolio: expect.objectContaining({ name: 'New idea' }) })
+    )
+  })
+
+  it('keeps navigation and duplicate submissions locked until the accepted job is linked', async () => {
+    const user = userEvent.setup()
+    const pending = deferred<Awaited<ReturnType<typeof researchLibrary.run>>>()
+    vi.mocked(researchLibrary.run).mockReturnValue(pending.promise)
+    show('/scanner-research?experiment=experiment-1&view=setup')
+    await user.click(await screen.findByRole('button', { name: 'Start calculation' }))
+    expect(screen.getByRole('button', { name: 'Research library', exact: true })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Setup', exact: true })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Start calculation' })).toBeDisabled()
+    const job = { id: 'accepted-job', status: 'queued', kind: 'portfolio_backtest' }
+    await act(async () =>
+      pending.resolve({ experiment: blank(), job, version: {} } as Awaited<
+        ReturnType<typeof researchLibrary.run>
+      >)
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent('job=accepted-job')
+    )
+    expect(researchLibrary.run).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves a conflicting local draft as a separate experiment', async () => {
+    const user = userEvent.setup()
+    const changed = new AxiosError('Conflict', undefined, undefined, undefined, {
+      status: 409,
+      statusText: 'Conflict',
+      data: { message: 'Changed elsewhere' },
+      headers: {},
+      config: {} as never,
+    })
+    vi.mocked(researchLibrary.saveDraft).mockRejectedValue(changed)
+    const copy = blank()
+    copy.id = 'copy-id'
+    copy.name = 'Breakout research (copy)'
+    copy.draft.portfolio.name = 'My unsaved idea'
+    vi.mocked(researchLibrary.create).mockResolvedValue(copy)
+    vi.mocked(researchLibrary.get).mockImplementation(async (id) =>
+      id === 'copy-id' ? copy : blank()
+    )
+    show('/scanner-research?experiment=experiment-1&view=setup')
+    await user.clear(await screen.findByLabelText('Setup title'))
+    await user.type(screen.getByLabelText('Setup title'), 'My unsaved idea')
+    await user.click(await screen.findByRole('button', { name: 'Keep my draft as a copy' }))
+    await screen.findByRole('heading', { name: 'Breakout research (copy)' })
+    expect(screen.getByLabelText('Setup title')).toHaveValue('My unsaved idea')
+    expect(researchLibrary.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        draft: expect.objectContaining({
+          portfolio: expect.objectContaining({ name: 'My unsaved idea' }),
+        }),
+      })
+    )
+    expect(sessionStorage.getItem('research-edit:account:experiment-1')).toBeNull()
+  })
+
+  it('opens a usable overview for an unknown saved view', async () => {
+    show('/scanner-research?experiment=experiment-1&view=unsupported')
+    expect(await screen.findByRole('button', { name: 'Add signals' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Overview' })).toHaveAttribute('aria-current', 'page')
+  })
+})

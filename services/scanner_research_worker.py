@@ -142,7 +142,7 @@ def run_one(store, token, stop_requested=None):
         job = db.scalar(
             select(ResearchJob)
             .where(ResearchJob.status == "queued")
-            .order_by(ResearchJob.created_at)
+            .order_by(ResearchJob.updated_at, ResearchJob.created_at, ResearchJob.id)
             .limit(1)
         )
         if job is None:
@@ -154,6 +154,42 @@ def run_one(store, token, stop_requested=None):
     saved = None
     policy = POLICY_VERSION
     last_update = 0.0
+    activity_state = json.loads(experiment.counts).get("activity") if experiment else None
+    last_activity_update = float("-inf")
+
+    def activity(event, force=False):
+        nonlocal activity_state, last_activity_update
+        from services.research_activity import merge_activity
+
+        previous = activity_state or {}
+        activity_state = merge_activity(previous, event, time.time())
+        changed = (
+            previous.get("stage") != activity_state.get("stage")
+            or previous.get("trials", {}).get("completed")
+            != activity_state.get("trials", {}).get("completed")
+            or previous.get("trials", {}).get("active_trial")
+            != activity_state.get("trials", {}).get("active_trial")
+            or previous.get("prices", {}).get("current_symbol")
+            != activity_state.get("prices", {}).get("current_symbol")
+            or previous.get("prices", {}).get("cache_complete")
+            != activity_state.get("prices", {}).get("cache_complete")
+        )
+        now = time.monotonic()
+        if not force and not changed and now - last_activity_update < 1:
+            return
+        if stop_requested and stop_requested():
+            raise Interrupted("Worker shutdown requested")
+        with store.sessions.begin() as db:
+            lease = db.get(ResearchWorker, 1)
+            current = db.get(ResearchJob, job.id)
+            if lease.token != token or current.status != "running" or current.worker != token:
+                raise Cancelled("Cancellation requested or worker lease lost")
+            receipt = db.get(ResearchExperiment, job.id)
+            counts = json.loads(receipt.counts)
+            counts["activity"] = activity_state
+            receipt.counts = encoded(counts).decode()
+            lease.heartbeat = current.updated_at = time.time()
+        last_activity_update = now
 
     def progress(completed, total, force=False):
         nonlocal last_update
@@ -189,7 +225,8 @@ def run_one(store, token, stop_requested=None):
             if current.status != "running" or lease.token != token:
                 raise Cancelled("Cancellation requested before checkpoint publication")
             receipt = db.get(ResearchExperiment, job.id)
-            receipt.checkpoint, receipt.counts = artifact, encoded(counts).decode()
+            display_counts = {**counts, **({"activity": activity_state} if activity_state else {})}
+            receipt.checkpoint, receipt.counts = artifact, encoded(display_counts).decode()
             current.progress = min(99, int(100 * counts["completed"] / max(1, counts["total"])))
 
     history_record = None
@@ -239,8 +276,14 @@ def run_one(store, token, stop_requested=None):
                 if receipt["identity"] == prior.identity and receipt["policy_version"] == policy:
                     saved = receipt["state"]
         if kind in ("portfolio_backtest", "portfolio_optimize"):
+            from services.research_activity import initial_activity
             from services.research_portfolio import run as run_portfolio
 
+            if not activity_state:
+                activity_state = initial_activity(
+                    evidence["receipt"], spec["portfolio"], time.time()
+                )
+            activity({}, force=True)
             with network_lease(store, token, job.id, stop_requested) as cancelled:
                 result, evidence = run_portfolio(
                     store,
@@ -251,6 +294,7 @@ def run_one(store, token, stop_requested=None):
                     checkpoint=checkpoint,
                     progress=progress,
                     cancelled=cancelled,
+                    activity=activity,
                 )
         elif kind in ("prepare", "acquire"):
             if kind == "acquire":
@@ -400,6 +444,8 @@ def run_one(store, token, stop_requested=None):
                     sorted({s["date"] + "|" + s["symbol"] for s in evidence["signals"]})
                 ).decode(),
             )
+        if activity_state:
+            activity({"stage": "saving"}, force=True)
         progress(1, 1)
         if kind in ("prepare", "acquire", "portfolio_backtest", "portfolio_optimize"):
             inputs_artifact = save_artifact(store, evidence)
@@ -444,6 +490,14 @@ def run_one(store, token, stop_requested=None):
             ).rowcount
             if not changed:
                 raise Cancelled("Cancellation requested")
+            if activity_state:
+                from services.research_activity import merge_activity
+
+                activity_state = merge_activity(activity_state, {"stage": "complete"}, time.time())
+                receipt = db.get(ResearchExperiment, job.id)
+                counts = json.loads(receipt.counts)
+                counts["activity"] = activity_state
+                receipt.counts = encoded(counts).decode()
             if kind in ("prepare", "acquire") and db.get(ResearchSource, job.source_id) is None:
                 db.add(
                     ResearchSource(
@@ -472,6 +526,13 @@ def run_one(store, token, stop_requested=None):
                     current.status = "cancelled"
                 elif current.status == "running":
                     current.status, current.worker, current.error = "queued", None, None
+                    if activity_state:
+                        activity_state["batch_count"] = activity_state.get("batch_count", 0) + 1
+                        activity_state["updated_at"] = time.time()
+                        receipt = db.get(ResearchExperiment, job.id)
+                        counts = json.loads(receipt.counts)
+                        counts["activity"] = activity_state
+                        receipt.counts = encoded(counts).decode()
                 current.updated_at = time.time()
     except Interrupted:
         with store.sessions.begin() as db:

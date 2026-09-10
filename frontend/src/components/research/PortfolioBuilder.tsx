@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { researchDefaults } from '@/lib/researchDraft'
 import { PortfolioCsvHelp } from './PortfolioCsvHelp'
 import { PortfolioStrategySettings } from './PortfolioStrategySettings'
+import { type ResearchUploadActivity, ResearchUploadProgress } from './ResearchRunProgress'
 
 export interface PortfolioDraft {
   portfolio: PortfolioRequest
@@ -149,6 +150,7 @@ export function PortfolioBuilder({
   onRun,
   busy,
   uploading,
+  uploadActivity,
   capabilities,
 }: {
   draft: PortfolioDraft
@@ -158,6 +160,7 @@ export function PortfolioBuilder({
   onRun: () => void
   busy: boolean
   uploading: boolean
+  uploadActivity?: ResearchUploadActivity
   capabilities?: PortfolioCapabilities
 }) {
   const input = useRef<HTMLInputElement>(null)
@@ -185,6 +188,7 @@ export function PortfolioBuilder({
         onRun()
       }}
     >
+      {uploading && uploadActivity && <ResearchUploadProgress activity={uploadActivity} />}
       <fieldset disabled={disabled} className="space-y-7 disabled:opacity-70">
         <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(180px,240px)]">
           <div className="space-y-2">

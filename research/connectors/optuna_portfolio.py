@@ -12,6 +12,7 @@ import json
 import math
 import re
 from decimal import Decimal
+from time import monotonic
 
 from research.engine import validate_config
 
@@ -334,6 +335,7 @@ def run_search(
     progress=None,
     checkpoint=None,
     saved=None,
+    activity=None,
 ):
     """Run joint grid/TPE proposals through one shared-capital engine callback.
 
@@ -396,6 +398,40 @@ def run_search(
         study.enqueue_trial(_first_candidate(base, axes))
     rows, trials = {}, []
     winner_report = winner_row = None
+    last_notice, last_notice_key = float("-inf"), None
+
+    def notify(stage="optimizing", active_trial=None, failed=0):
+        nonlocal last_notice, last_notice_key
+        if activity:
+            now = monotonic()
+            key = (stage, active_trial, len(trials), failed)
+            if key == last_notice_key and now - last_notice < 1:
+                return
+            last_notice, last_notice_key = now, key
+            scored = [item for item in trials if item["state"] == "complete"]
+            # Bound the live chart. The complete original history stays in the
+            # immutable Optuna evidence and is not sampled away there.
+            stride = max(1, math.ceil(len(scored) / 99))
+            shown = scored[::stride]
+            if scored and shown[-1] is not scored[-1]:
+                shown.append(scored[-1])
+            activity(
+                {
+                    "stage": stage,
+                    "trials": {
+                        "total": budget,
+                        "completed": len(trials) + failed,
+                        "active_trial": active_trial,
+                        "evaluated": sum(not item["reused"] for item in scored),
+                        "reused": sum(item["reused"] for item in scored),
+                        "rejected": sum(item["state"] == "pruned" for item in trials),
+                        "failed": failed,
+                        "history": [
+                            {"trial": item["number"] + 1, "score": item["value"]} for item in shown
+                        ],
+                    },
+                }
+            )
 
     def suggest(trial):
         return {
@@ -450,8 +486,11 @@ def run_search(
                     raise ValueError("Portfolio checkpoint configuration evidence is inconsistent")
                 rows[config_id] = row
             else:
+                notify("initializing", trial.number + 1)
 
                 def beat(done, count):
+                    if done > 0:
+                        notify("optimizing", trial.number + 1)
                     if progress:
                         progress(len(trials) + min(1, max(0, done / max(1, count))), budget)
 
@@ -481,7 +520,12 @@ def run_search(
                 raise ValueError("Portfolio checkpoint score evidence is inconsistent")
             return row["score"]
 
-        study.optimize(objective, n_trials=1, n_jobs=1)
+        try:
+            study.optimize(objective, n_trials=1, n_jobs=1)
+        except Exception:
+            if replay is None and study.trials[-1].state == optuna.trial.TrialState.FAIL:
+                notify(failed=1)
+            raise
         trials.append(record)
 
     if saved is not None:
@@ -526,9 +570,12 @@ def run_search(
         ):
             raise ValueError("Rejected portfolio trials cannot have a winning report")
 
+    notify()
+
     while len(trials) < budget:
         if progress:
             progress(len(trials), budget)
+        notify(active_trial=len(trials) + 1)
         execute()
         if checkpoint:
             payload = {
@@ -546,6 +593,7 @@ def run_search(
                 copy.deepcopy(payload),
                 {"stage": "search", "completed": len(trials), "total": budget},
             )
+        notify()
         if progress:
             progress(len(trials), budget)
     if winner_row is None or not isinstance(winner_report, dict):

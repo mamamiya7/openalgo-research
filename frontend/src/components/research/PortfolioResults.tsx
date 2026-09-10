@@ -93,6 +93,9 @@ interface ResultProps {
   onRerun: (trialId?: string) => void
   rerunning: boolean
   exportUrl: string
+  onAdjust?: (trialId?: string) => void
+  onOptimize?: () => void
+  readOnly?: boolean
 }
 export function PortfolioResults(props: ResultProps) {
   const [period, setPeriod] = useState<'earlier' | 'later'>('earlier')
@@ -132,6 +135,9 @@ function PortfolioReport({
   onRerun,
   rerunning,
   exportUrl,
+  onAdjust,
+  onOptimize,
+  readOnly = false,
   laterPeriod = false,
 }: ResultProps & { laterPeriod?: boolean }) {
   const [tab, setTab] = useState('summary')
@@ -197,10 +203,20 @@ function PortfolioReport({
               : ''}
           </p>
         </div>
-        <div className="flex gap-2">
-          {!laterPeriod && (
+        <div className="flex flex-wrap gap-2">
+          {!laterPeriod && onOptimize && !readOnly && (
+            <Button type="button" disabled={rerunning} onClick={onOptimize}>
+              Optimize this
+            </Button>
+          )}
+          {!laterPeriod && onAdjust && !readOnly && (
+            <Button type="button" variant="outline" disabled={rerunning} onClick={() => onAdjust()}>
+              Adjust & test
+            </Button>
+          )}
+          {!laterPeriod && !readOnly && (
             <Button type="button" variant="outline" disabled={rerunning} onClick={() => onRerun()}>
-              {rerunning ? 'Starting…' : 'Run again'}
+              {rerunning ? 'Starting…' : onAdjust ? 'Replay exact' : 'Run again'}
             </Button>
           )}
           <Button variant="ghost" asChild>
@@ -490,7 +506,7 @@ function PortfolioReport({
                           type="button"
                           size="sm"
                           variant="outline"
-                          disabled={rerunning}
+                          disabled={rerunning || readOnly}
                           onClick={() => onRerun(trial.config_id)}
                         >
                           Backtest this

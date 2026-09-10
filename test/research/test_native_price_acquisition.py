@@ -8,7 +8,12 @@ import pytest
 
 from services.research_acquisition import acquisition_receipts
 from services.research_historify import native_historify_read, native_historify_write
-from services.research_native_prices import POLICY, acquire_native_prices, native_history
+from services.research_native_prices import (
+    POLICY,
+    NativePriceNoProgress,
+    acquire_native_prices,
+    native_history,
+)
 
 SIGNALS = [{"symbol": "AAA", "date": "2026-01-05", "row": 2}]
 DAYS = ["2026-01-05", "2026-01-06", "2026-01-07"]
@@ -343,7 +348,7 @@ def test_cancel_and_deadline_save_recovery_without_calling_broker(archive):
         )
     assert saved and "progress" in saved[-1]
     ticks = iter([0, 2])
-    with pytest.raises(TimeoutError):
+    with pytest.raises(NativePriceNoProgress):
         acquire_native_prices(
             SIGNALS,
             plan(),

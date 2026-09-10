@@ -128,6 +128,50 @@ export interface ResearchResult {
   experiment?: Experiment
   prepared_source?: ResearchSource
 }
+export interface ResearchActivity {
+  version: 1
+  stage:
+    | 'csv'
+    | 'planning'
+    | 'cache'
+    | 'download'
+    | 'verify'
+    | 'initializing'
+    | 'optimizing'
+    | 'backtest'
+    | 'validation'
+    | 'saving'
+    | 'complete'
+  started_at: number
+  updated_at: number
+  inputs?: { files?: number; signals?: number; symbols?: number; excluded_rows?: number }
+  prices?: {
+    interval?: 'D' | '1m'
+    total_symbols?: number
+    checked_symbols?: number
+    covered_symbols?: number
+    required_candles?: number
+    cached_candles?: number
+    downloaded_candles?: number
+    available_candles?: number
+    missing_candles?: number
+    unavailable_candles?: number
+    pending_windows?: number
+    current_symbol?: string | null
+    cache_complete?: boolean
+  }
+  trials?: {
+    total?: number
+    completed?: number
+    active_trial?: number | null
+    evaluated?: number
+    reused?: number
+    rejected?: number
+    failed?: number
+    history?: Array<{ trial: number; score: number }>
+  }
+  batch_count?: number
+}
 export interface ResearchJob {
   id: string
   source_id: string
@@ -145,6 +189,7 @@ export interface ResearchJob {
   counts?: Record<string, unknown>
   queue_position?: number | null
   resumable?: boolean
+  activity?: ResearchActivity
 }
 export interface JobPage {
   items: ResearchJob[]

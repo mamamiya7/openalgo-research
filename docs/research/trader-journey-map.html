@@ -1,0 +1,1168 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OpenAlgo Research — complete trader journey map</title><style>
+:root{--paper:#fafaf8;--ink:#202722;--muted:#5b665e;--rule:#d7dcd6;--accent:#147d5a;--tint:#edf6ef;color-scheme:light}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:100px}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.65 "Segoe UI",Arial,sans-serif}
+a{color:#17644b;text-underline-offset:3px}a:hover{text-decoration-thickness:2px}button,input{font:inherit}button{background:transparent;border:1px solid #adb8ad;border-radius:6px;padding:7px 12px;color:var(--ink);cursor:pointer}button:hover{background:var(--tint)}a:focus-visible,button:focus-visible,summary:focus-visible,input:focus-visible{outline:3px solid #39785f;outline-offset:4px}
+header,main,footer{max-width:1280px;margin:auto;padding:0 40px}header{padding-top:48px;padding-bottom:32px}.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:600}h1{font-family:Georgia,serif;font-weight:400;font-size:48px;line-height:1.12;max-width:820px;margin:16px 0 20px}header>p{max-width:860px;color:var(--muted);font-size:18px}.scope{border-left:3px solid var(--accent);padding:12px 20px;margin:24px 0;font-size:15px;background:var(--tint);max-width:960px}
+nav{position:sticky;top:0;background:rgba(250,250,248,.98);border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);z-index:3}.nav-inner{max-width:1280px;margin:auto;display:flex;gap:24px;align-items:center;overflow-x:auto;padding:14px 40px;white-space:nowrap}nav a{color:var(--ink);font-size:14px;text-decoration:none}.hero-map{padding:32px 0 40px}h2{font-size:28px;font-weight:500;margin:12px 0}h3{font-size:20px;font-weight:600;margin:28px 0 12px}h4{font-size:18px}.caption{font-size:14px;color:var(--muted);max-width:960px}.diagram{width:100%;overflow-x:auto;border-bottom:1px solid var(--rule)}svg{display:block;width:100%;min-width:1040px;height:auto;background:var(--paper)}svg text{font-family:"Segoe UI",Arial,sans-serif;fill:var(--ink)}.node-title{font-size:20px;font-weight:600}.node-sub{font-size:14px;fill:var(--muted)}.edge-label{font-size:12px;font-weight:600;fill:var(--muted)}.legend{font-size:14px;fill:var(--muted)}svg a:hover rect{stroke:var(--accent);stroke-width:2}svg a:focus rect{stroke:var(--accent);stroke-width:3}
+.chapter{border-top:1px solid var(--rule);padding:0;scroll-margin-top:92px}.chapter>summary{display:flex;align-items:center;gap:20px;padding:22px 0;font-size:22px;line-height:1.4;cursor:pointer;list-style:none}.chapter>summary::after{content:"+";margin-left:auto;color:var(--muted);font-size:26px}.chapter[open]>summary::after{content:"−"}.chapter-no{font-size:12px;color:var(--muted);width:24px;flex-shrink:0}.chapter-body{padding:0 0 30px}.chapter-body>p{max-width:1080px}.chapter-body>ul{max-width:1080px}.chapter-body li{padding-bottom:5px}.table-scroll{overflow-x:auto;width:100%;margin:20px 0}table{border-collapse:collapse;width:100%;min-width:780px;font-size:14px;line-height:1.55}th{text-align:left;vertical-align:top;font-weight:600;background:#edf0e9;border-bottom:1px solid #bbc5ba;padding:12px 14px}td{vertical-align:top;border-bottom:1px solid var(--rule);padding:14px}td:first-child{min-width:150px}th:not(:first-child){min-width:180px}code{font-size:.9em;background:#eef0eb;padding:2px 4px;border-radius:3px;overflow-wrap:anywhere}pre{overflow:auto}footer{padding-top:32px;padding-bottom:48px;border-top:1px solid var(--rule);font-size:14px;color:var(--muted)}.toolbar{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:20px}.filter-label{display:block;margin:4px 0 12px;font-weight:600}input{display:block;width:min(520px,100%);border:1px solid #aeb9af;background:white;border-radius:6px;padding:10px 12px;margin-top:8px}.assets{padding:40px 0}.assets>.chapter>summary{font-size:20px}.muted{color:var(--muted)}.count{font-weight:600;color:var(--accent)}
+@media(max-width:720px){header,main,footer{padding-left:20px;padding-right:20px}header{padding-top:32px}h1{font-size:36px}h2{font-size:24px}.nav-inner{padding:12px 20px;gap:20px}.chapter>summary{font-size:20px;gap:12px}.toolbar{align-items:flex-start;gap:16px}svg{min-width:1040px}.caption{font-size:13px}header>p{font-size:16px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+@media print{nav,.toolbar{display:none}header,main,footer{max-width:none;padding:12px}.chapter{break-inside:auto}svg{min-width:0}table{min-width:0;font-size:10px}.table-scroll{overflow:visible}h1{font-size:32px}a{color:inherit}.diagram{break-inside:avoid}}
+</style></head><body>
+<header><div class="eyebrow">OpenAlgo Research · Product design target · 10 September 2026</div><h1>A research idea should have<br>a complete journey.</h1><p>From a saved question to a baseline, a study, a defensible comparison and a decision you can revisit. Explore the page map, lifecycle and asset-specific choices below.</p><div class="scope"><strong>Proposed experience.</strong> This is a design map, not a running trading screen. The shipped preview remains long NSE cash-equity CSV research; broader profiles need their own data and engine acceptance.</div></header>
+<nav aria-label="Map sections"><div class="nav-inner"><a href="#overview">Journey map</a><a href="#spec-2">Library</a><a href="#spec-3">Pages & back</a><a href="#spec-4">34 journeys</a><a href="#spec-5">Pause & save</a><a href="#asset-profiles">Asset profiles</a><a href="#spec-11">Build slices</a><a href="DELIVERY_PLAN.md">Delivery plan</a></div></nav>
+<main><section id="overview" class="hero-map"><div class="toolbar"><div><h2>One experiment keeps the work together.</h2><p class="caption">Eight stages, with the full detail one click away. Going back preserves context; changing an executed setup creates a new version.</p></div><button id="expand">Expand details</button></div><div class="diagram"><svg viewBox="0 0 1280 640" role="img" aria-labelledby="navigation-title navigation-desc"><title id="navigation-title">The complete research loop</title><desc id="navigation-desc">A named experiment links setup, baseline backtests, optimization studies, comparisons, validation and retained decisions; revisiting creates a new version.</desc><defs><marker id="navigation-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#66706c"/></marker><marker id="navigation-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#147d5a"/></marker><marker id="navigation-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#365e88"/></marker></defs><rect width="1280" height="640" fill="#fafaf8"/><path d="M 288 104 L 400 104" fill="none" stroke="#66706c" stroke-width="1.5" marker-end="url(#navigation-arrow)"/><rect x="312" y="76" width="64" height="20" fill="#fafaf8"/><text x="344.0" y="92" text-anchor="middle" class="edge-label">OPEN</text><path d="M 664 104 L 792 104" fill="none" stroke="#66706c" stroke-width="1.5" marker-end="url(#navigation-arrow)"/><rect x="688" y="76" width="80" height="20" fill="#fafaf8"/><text x="728.0" y="92" text-anchor="middle" class="edge-label">DEFINE</text><path d="M 924 144 L 924 256" fill="none" stroke="#66706c" stroke-width="1.5" marker-end="url(#navigation-arrow)"/><rect x="940" y="188" width="64" height="20" fill="#fafaf8"/><text x="972.0" y="204" text-anchor="middle" class="edge-label">RUN</text><path d="M 792 296 L 664 296" fill="none" stroke="#66706c" stroke-width="1.5" marker-end="url(#navigation-arrow)"/><rect x="676" y="268" width="104" height="20" fill="#fafaf8"/><text x="728.0" y="284" text-anchor="middle" class="edge-label">OPTIMIZE</text><path d="M 400 296 L 288 296" fill="none" stroke="#66706c" stroke-width="1.5" marker-end="url(#navigation-arrow)"/><rect x="296" y="268" width="96" height="20" fill="#fafaf8"/><text x="344.0" y="284" text-anchor="middle" class="edge-label">SHORTLIST</text><path d="M 176 336 L 176 464" fill="none" stroke="#66706c" stroke-width="1.5" marker-end="url(#navigation-arrow)"/><rect x="192" y="388" width="72" height="20" fill="#fafaf8"/><text x="228.0" y="404" text-anchor="middle" class="edge-label">CHECK</text><path d="M 288 504 L 400 504" fill="none" stroke="#66706c" stroke-width="1.5" marker-end="url(#navigation-arrow)"/><rect x="304" y="476" width="80" height="20" fill="#fafaf8"/><text x="344.0" y="492" text-anchor="middle" class="edge-label">REVIEW</text><path d="M 664 504 L 1144 504 Q 1152 504 1152 496 L 1152 32 Q 1152 24 1144 24 L 540 24 Q 532 24 532 32 L 532 64" fill="none" stroke="#66706c" stroke-width="1.5" stroke-dasharray="6 5" marker-end="url(#navigation-arrow)"/><rect x="832" y="476" width="224" height="20" fill="#fafaf8"/><text x="944.0" y="492" text-anchor="middle" class="edge-label">NEW VERSION / REVISIT</text><a href="#spec-2" aria-label="Library — open related specification"><g data-node="library" data-x="64" data-y="64" data-w="224" data-h="80"><rect x="64" y="64" width="224" height="80" rx="8" fill="#edf6ef" stroke="#147d5a" stroke-width="1.2"/><text x="80" y="96" class="node-title">Library</text><text x="80" y="120" class="node-sub">Experiments · studies · setups</text></g></a><a href="#spec-1" aria-label="Experiment — open related specification"><g data-node="experiment" data-x="400" data-y="64" data-w="264" data-h="80"><rect x="400" y="64" width="264" height="80" rx="8" fill="#ffffff" stroke="#a9b0aa" stroke-width="1.2"/><text x="416" y="96" class="node-title">Experiment</text><text x="416" y="120" class="node-sub">Question and connected evidence</text></g></a><a href="#spec-3" aria-label="Setup version — open related specification"><g data-node="setup" data-x="792" data-y="64" data-w="264" data-h="80"><rect x="792" y="64" width="264" height="80" rx="8" fill="#ffffff" stroke="#a9b0aa" stroke-width="1.2"/><text x="808" y="96" class="node-title">Setup version</text><text x="808" y="120" class="node-sub">Inputs · intent · assumptions</text></g></a><a href="#spec-6" aria-label="Backtest — open related specification"><g data-node="backtest" data-x="792" data-y="256" data-w="264" data-h="80"><rect x="792" y="256" width="264" height="80" rx="8" fill="#ffffff" stroke="#a9b0aa" stroke-width="1.2"/><text x="808" y="288" class="node-title">Backtest</text><text x="808" y="312" class="node-sub">Performance and trade diagnosis</text></g></a><a href="#spec-6" aria-label="Optimization study — open related specification"><g data-node="study" data-x="400" data-y="256" data-w="264" data-h="80"><rect x="400" y="256" width="264" height="80" rx="8" fill="#ffffff" stroke="#a9b0aa" stroke-width="1.2"/><text x="416" y="288" class="node-title">Optimization study</text><text x="416" y="312" class="node-sub">Trials and parameter exploration</text></g></a><a href="#spec-4" aria-label="Compare — open related specification"><g data-node="compare" data-x="64" data-y="256" data-w="224" data-h="80"><rect x="64" y="256" width="224" height="80" rx="8" fill="#ffffff" stroke="#a9b0aa" stroke-width="1.2"/><text x="80" y="288" class="node-title">Compare</text><text x="80" y="312" class="node-sub">Baseline and shortlisted choices</text></g></a><a href="#spec-9" aria-label="Validate — open related specification"><g data-node="validate" data-x="64" data-y="464" data-w="224" data-h="80"><rect x="64" y="464" width="224" height="80" rx="8" fill="#ffffff" stroke="#a9b0aa" stroke-width="1.2"/><text x="80" y="496" class="node-title">Validate</text><text x="80" y="520" class="node-sub">Reserved periods and scenarios</text></g></a><a href="#spec-4" aria-label="Decision — open related specification"><g data-node="decision" data-x="400" data-y="464" data-w="264" data-h="80"><rect x="400" y="464" width="264" height="80" rx="8" fill="#edf6ef" stroke="#147d5a" stroke-width="1.2"/><text x="416" y="496" class="node-title">Decision</text><text x="416" y="520" class="node-sub">Keep · reject · revisit</text></g></a><line x1="64" y1="584" x2="1216" y2="584" stroke="#d7dcd6"/><text x="64" y="616" class="legend">Solid: forward action</text><text x="344" y="616" class="legend">Dashed: return / continuation</text><text x="736" y="616" class="legend">Select a node to open its specification</text></svg></div></section>
+<details id="spec-1" class="chapter" open><summary><span class="chapter-no">01</span>Product model and organizing principle</summary><div class="chapter-body"><p>The user is researching a question: “Does this idea work, under which conditions, and is it worth retaining?” A backtest is one observation; an optimization study is one search. Neither is the whole research record.</p>
+<p><strong>Library → Experiment → Setup version → Baseline / Studies → Candidates → Comparison → Validation → Decision.</strong></p>
+<p>An experiment can start from existing signals, an existing saved setup, a supported strategy template, a previous trial, a portfolio composition, or imported research evidence. Signal-generation templates and imported engine code require distinct supported connectors; they are not implied by CSV support.</p>
+<p>Use four working perspectives within this model:</p>
+<ul>
+<li><strong>Signal trader:</strong> imported observations, execution rules, holding periods, costs and opportunity selection.</li>
+<li><strong>Strategy researcher:</strong> rule/template variations, parameter search, sensitivity and separated evaluation.</li>
+<li><strong>Portfolio manager:</strong> shared capital, combinations, concentration, correlated losses and allocation decisions.</li>
+<li><strong>Returning operator:</strong> resume work, inspect newer data, compare versions, investigate a discrepancy, preserve and retire research.</li>
+</ul>
+<p>These are views of one product, not separate applications or separate broker accounts.</p>
+</div></details><details id="spec-2" class="chapter"><summary><span class="chapter-no">02</span>What is saved in the library</summary><div class="chapter-body"><div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Object</th>
+<th>Meaning</th>
+<th>Save and version behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Experiment</td>
+<td>Named research question and its connected work</td>
+<td>Autosaved title/notes/tags; contains multiple versions, studies and results</td>
+</tr>
+<tr>
+<td>Source</td>
+<td>Original signals, universe definition or supported strategy input</td>
+<td>Original bytes and interpretation retained; replacement creates a new source version</td>
+</tr>
+<tr>
+<td>Setup draft</td>
+<td>Current editable rules, allocations, costs and research periods</td>
+<td>Autosaved to the account; incomplete drafts are allowed; never described as a completed run</td>
+</tr>
+<tr>
+<td>Setup version</td>
+<td>Exact configuration accepted for a run</td>
+<td>Immutable; new edits create a child version</td>
+</tr>
+<tr>
+<td>Dataset snapshot</td>
+<td>Exact native prices, metadata, sessions and eligible input observations used</td>
+<td>Immutable reference to frozen evidence derived from Historify; refresh creates a new snapshot</td>
+</tr>
+<tr>
+<td>Backtest result</td>
+<td>A particular setup on particular data through a particular engine</td>
+<td>Immutable report, trades, attribution and assumptions; annotations are separate</td>
+</tr>
+<tr>
+<td>Optimization study</td>
+<td>One defined search question, objective, ranges, data and execution identity</td>
+<td>Real Optuna study/trial semantics; continuing compatible work adds a recorded execution segment</td>
+</tr>
+<tr>
+<td>Trial</td>
+<td>One proposal and outcome within a study</td>
+<td>Preserve trial number, parameters, state and result mapping; repeated proposals remain visible as such</td>
+</tr>
+<tr>
+<td>Candidate</td>
+<td>A shortlisted exact configuration linked to its trial/result</td>
+<td>Selection is saved; removal from shortlist does not delete evidence</td>
+</tr>
+<tr>
+<td>Comparison</td>
+<td>Named selection of aligned results plus comparison settings</td>
+<td>Snapshot the selected versions and assumptions; changing the set creates/revises the comparison record</td>
+</tr>
+<tr>
+<td>Validation plan/report</td>
+<td>Periods, selection rules and an evaluation outcome</td>
+<td>Plan frozen before evaluation; report records every period used for selection and testing</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>Retain, reject, revisit, or hand off a chosen configuration, with reason</td>
+<td>Append-only decision history; a new decision supersedes rather than erases an old one</td>
+</tr>
+<tr>
+<td>Execution segment</td>
+<td>One attempt to prepare data or run/continue a calculation</td>
+<td>Records progress, timing, interruption and recovery independently of the study’s research identity</td>
+</tr>
+</tbody>
+</table></div>
+<p>“Saved result,” “saved setup” and “saved study” must never be synonyms. A user may keep a setup whose latest test failed and retain a rejected study because it explains why an idea was abandoned.</p>
+<h3>Library behavior</h3>
+<p>The default library groups <strong>Experiments</strong>. Tabs provide <strong>Studies</strong>, <strong>Setups</strong>, <strong>Sources</strong>, <strong>Shortlist</strong> and <strong>Archived</strong> without changing ownership. The Studies tab directly satisfies “show all my optimization studies,” across experiments.</p>
+<p>Search title, instrument/universe and tags. Filter by asset/product, venue, frequency, strategy family, engine, research period, modified date and activity state. Advanced filters include data version, parent experiment and validation status. Avoid displaying raw identifiers in the main table.</p>
+<p>Each experiment row shows name, market/universe, current activity, last edited time and chosen result if one exists. Each study row shows experiment, objective, trials completed/budget, state and last activity. “Reviewed” reflects a human review; it is not an automatic quality certificate or proof of profitability.</p>
+<p>Useful actions: open, rename, tag, pin, duplicate setup, compare selected results, archive, export. Destructive deletion is separate from archive and must reveal dependent saved results. Sources or price snapshots referenced by retained evidence cannot be silently removed. A privacy-safe share/export excludes credentials and respects the price-data sharing rights of the source.</p>
+</div></details><details id="spec-3" class="chapter"><summary><span class="chapter-no">03</span>Page and navigation map</summary><div class="chapter-body"><p>Only <strong>Research library</strong> and the current <strong>Experiment</strong> need persistent primary navigation. Deep analysis lives inside the experiment. Data issues and progress open in contextual drawers; they do not become a second mandatory wizard.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>ID / surface</th>
+<th>Content and primary action</th>
+<th>Next, back and persistence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>P0 Library</td>
+<td>Experiment/study lists, saved setups, sources, shortlist, recent work. <strong>New experiment</strong></td>
+<td>Open exact record; filters, search and scroll position survive returning</td>
+</tr>
+<tr>
+<td>P1 Experiment overview</td>
+<td>Question, notes, versions, baseline, studies, shortlisted candidates, validation and decisions. <strong>Continue research</strong></td>
+<td>Opens last active task; breadcrumb returns to P0; timeline preserves lineage</td>
+</tr>
+<tr>
+<td>P2 Setup</td>
+<td>Inputs/universe; asset-aware rules; capital/allocations; research and reserved periods; costs. <strong>Run baseline</strong> or <strong>Start study</strong></td>
+<td>Autosave draft; back to P1 preserves edits; execution freezes a setup version</td>
+</tr>
+<tr>
+<td>P3 Data review drawer</td>
+<td>Resolved instruments, intervals, dates, coverage, estimated work; only material conflicts expanded. <strong>Resolve &amp; continue</strong> when needed</td>
+<td>Back to the same P2 field; successful automatic preparation needs no extra click</td>
+</tr>
+<tr>
+<td>P4 Activity drawer</td>
+<td>Data preparation/calculation stage, elapsed work, honest progress, queue; <strong>Pause</strong>, <strong>Resume</strong> or <strong>Stop</strong> according to state</td>
+<td>Closing drawer or changing pages leaves the job running; reopening restores current state</td>
+</tr>
+<tr>
+<td>P5 Backtest</td>
+<td>Performance, benchmark when valid, drawdowns, trades, positions/exposure, strategy attribution, settings. <strong>Optimize this</strong>, <strong>Adjust &amp; test</strong>, <strong>Compare</strong></td>
+<td>Trade detail returns to same chart/filter; a study-origin backtest links back to the same trial</td>
+</tr>
+<tr>
+<td>P6 Optimization study</td>
+<td>Overview/history; parameter importance; slice/contour/parallel coordinates; trials; saved shortlist. <strong>Open backtest</strong>, <strong>Compare candidates</strong>, <strong>Continue study</strong></td>
+<td>Filters/axes/zoom preserved; selecting a trial never mutates the study; changed search opens a child study</td>
+</tr>
+<tr>
+<td>P7 Comparison</td>
+<td>Baseline plus candidates, common metrics, aligned curves, costs/assumptions differences, period and eligibility differences. <strong>Select for validation</strong></td>
+<td>Remove/add candidates without losing their sources; back restores originating study or library selection</td>
+</tr>
+<tr>
+<td>P8 Validation</td>
+<td>Reserved-period evaluation, rolling windows, robustness/scenarios, leakage history and evidence. <strong>Keep candidate</strong> or <strong>Revise</strong></td>
+<td>Revision creates a setup/study version; validation evidence remains linked; failed hypothesis can be retained</td>
+</tr>
+<tr>
+<td>P9 Portfolio composition</td>
+<td>Existing setup versions/components, cash/allocations, net/gross exposure, concentration, contributions and joint results. <strong>Test combination</strong></td>
+<td>Uses the same P5/P6/P7/P8 views; return to a component without losing the basket</td>
+</tr>
+<tr>
+<td>P10 Decision &amp; handoff</td>
+<td>Chosen setup/version, evidence summary, notes, retain/reject/revisit, named reusable setup and export</td>
+<td>Return to experiment; optional paper/live integration is a separately supported boundary, never an automatic optimizer action</td>
+</tr>
+<tr>
+<td>P11 Review over time</td>
+<td>Explicit refresh/new-period runs, comparison against frozen baseline, paper/live observations if separately connected, revision/retirement</td>
+<td>New data creates new evidence; scheduled review is opt-in; previous conclusions remain readable</td>
+</tr>
+</tbody>
+</table></div>
+<p>Proposed experiment tabs: <strong>Overview · Setup · Backtests · Studies · Validation · Decisions</strong>. Portfolio composition is a setup mode. Compare opens a dedicated view with a clear return location. Activity is always reachable, but healthy operation does not produce repeated notifications.</p>
+<h3>Back and drill-down rules</h3>
+<ul>
+<li>Breadcrumbs show <strong>Library / Experiment / Study / Trial</strong> or the corresponding result path; labels use names, not hashes.</li>
+<li>Browser Back returns to the previous location with filters, axes, selected period and scroll intact.</li>
+<li>Opening a trial’s backtest retains “Back to study · Trial N.” If its full result must be calculated, display that action and job; do not imply summary data is a full saved trade ledger.</li>
+<li>A chart point maps only to an actual trial. An unsampled contour region can prefill a new test, not open an invented result.</li>
+<li>Changing view controls never changes the experiment objective, source data or saved calculation.</li>
+<li>Zooming to a date range filters the investigation; it does not recalculate a standalone backtest for that range. <strong>Test this period</strong> creates a separate result with declared starting capital and position state.</li>
+<li>Edits from a completed result create a new draft labelled with its parent; the prior result stays exact.</li>
+<li>A library action on multiple results opens a comparison with that selection preserved. Leaving comparison does not remove shortlist membership.</li>
+<li>Multiple browser tabs use revision checks. A conflicting edit offers reload or save as another version; silent last-write-wins must not replace a chosen setup.</li>
+</ul>
+</div></details><details id="spec-4" class="chapter"><summary><span class="chapter-no">04</span>Complete journey catalogue</summary><div class="chapter-body"><label class="filter-label">Find a journey <input id="journey-filter" type="search" placeholder="Try: pause, options, compare, refresh" /></label><p id="journey-count" class="caption" aria-live="polite">34 journeys</p><p>“Existing” below means the declared preview has a relevant working component. It does not imply the proposed end-to-end journey is already complete.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Journey</th>
+<th>Start → user action → destination</th>
+<th>Automatic work and saved outcome</th>
+<th>Exit / return and current coverage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>J01 Capture an idea</td>
+<td>P0 → new question → P1/P2</td>
+<td>Create experiment and autosaved draft with optional tags</td>
+<td>Leave and reopen without running. Proposed</td>
+</tr>
+<tr>
+<td>J02 Test existing signals</td>
+<td>P2 → upload/reuse CSV → P5</td>
+<td>Parse observations, resolve identity, infer data, prepare Historify, freeze evidence and calculate</td>
+<td>Edit parent setup or inspect trades. Existing core</td>
+</tr>
+<tr>
+<td>J03 Build signals from rules</td>
+<td>P2 → supported indicator/template → baseline</td>
+<td>Generate signals causally; plan feature warmup and complete parameter range</td>
+<td>Save template-based setup. Proposed connector</td>
+</tr>
+<tr>
+<td>J04 Import outside research</td>
+<td>P0 → import source/setup/report</td>
+<td>Validate format, versions, original evidence and ownership; distinguish reproducible import from attachment</td>
+<td>Missing data/runtime gives review-only state. Proposed</td>
+</tr>
+<tr>
+<td>J05 Resolve ambiguous input</td>
+<td>P3 → choose exact instrument, timezone or CSV meaning</td>
+<td>Retain mapping decision; show preview before a consequential interpretation</td>
+<td>Return to conflicting field; draft preserved. Partly existing</td>
+</tr>
+<tr>
+<td>J06 Prepare missing data</td>
+<td>P2 → run → P4</td>
+<td>Choose required streams, reuse native data, fetch only missing coverage, checkpoint and read back</td>
+<td>Automatic completion to P5/P6; recover in place. Existing core</td>
+</tr>
+<tr>
+<td>J07 Read a baseline</td>
+<td>P5 → inspect performance</td>
+<td>Use engine records, same capital basis, declared benchmark and observed coverage</td>
+<td>Optimize, compare or revise. Existing summary; expanded analysis proposed</td>
+</tr>
+<tr>
+<td>J08 Diagnose a loss</td>
+<td>P5 chart → interval/trade → detail</td>
+<td>Link candles, entry/exit, costs, rules, exclusions and contribution</td>
+<td>Back to exact chart/filter. Proposed linking</td>
+</tr>
+<tr>
+<td>J09 Adjust a known setup</td>
+<td>P5 → Adjust &amp; test → P2</td>
+<td>Create child draft and preserve original setup/result linkage</td>
+<td>New baseline, compare with parent. Proposed transition</td>
+</tr>
+<tr>
+<td>J10 Optimize settings</td>
+<td>P5/P2 → choose axes/objective/budget → P6</td>
+<td>Validate full candidate universe, fixed cohort, real Optuna proposals and engine evaluation</td>
+<td>Baseline-linked study. Search core exists</td>
+</tr>
+<tr>
+<td>J11 Optimize allocations</td>
+<td>P9 → allocation ranges/constraints → P6</td>
+<td>Preserve shared capital, feasible allocations and component versions</td>
+<td>Compare combined risk and contributions. Existing core; comparison proposed</td>
+</tr>
+<tr>
+<td>J12 Monitor a search</td>
+<td>P6/P4 → inspect progress/history</td>
+<td>Record completed, repeated, rejected, failed and active trials honestly</td>
+<td>Navigate away or request pause. Progress exists; analysis/pause proposed</td>
+</tr>
+<tr>
+<td>J13 Explore parameter behavior</td>
+<td>P6 → importance/slice/contour/parallel views</td>
+<td>Use actual study distributions/outcomes and supported analysis functions</td>
+<td>Shortlist trial or prefill child search. Proposed</td>
+</tr>
+<tr>
+<td>J14 Test a manual hypothesis</td>
+<td>P6 → propose exact settings</td>
+<td>Queue supported manual candidate with clear provenance; validate constraints</td>
+<td>Trial → P5; no fabricated trial from chart interpolation. Proposed</td>
+</tr>
+<tr>
+<td>J15 Continue an unchanged study</td>
+<td>P6 → add budget</td>
+<td>Append compatible execution segment; retain frozen objective/data/semantics</td>
+<td>Same study, new segment and counts. Interrupted recovery exists; completed extension proposed</td>
+</tr>
+<tr>
+<td>J16 Narrow or change the search</td>
+<td>P6 → change ranges/objective/engine/data</td>
+<td>Create child study; retain parent and reason. Reuse outcomes only when identity/comparability is proven</td>
+<td>Return to parent study with views intact. Proposed</td>
+</tr>
+<tr>
+<td>J17 Shortlist candidates</td>
+<td>P6/P5 → keep candidate(s)</td>
+<td>Save exact config/result links independent of current ranking</td>
+<td>Cross-study shortlist, P7. Proposed</td>
+</tr>
+<tr>
+<td>J18 Compare fairly</td>
+<td>P7 → baseline/candidates</td>
+<td>Align price period, capital/currency and eligibility; expose differences; calculate normalizations explicitly</td>
+<td>Select candidate or return to investigation. Proposed</td>
+</tr>
+<tr>
+<td>J19 Check untouched data</td>
+<td>P8 → freeze candidate and reserved period</td>
+<td>Separate selection from evaluation, apply same causal policies; track data already inspected</td>
+<td>Keep/reject/revise. Fixed holdout core exists</td>
+</tr>
+<tr>
+<td>J20 Walk forward</td>
+<td>P8 → rolling/expanding schedule</td>
+<td>Refit only inside each training window, evaluate next window, define position carry/reset and aggregate results</td>
+<td>Inspect weak windows or new study. Proposed</td>
+</tr>
+<tr>
+<td>J21 Stress assumptions</td>
+<td>P8 → costs, slippage, delays, missingness, parameter neighborhood</td>
+<td>Bounded declared scenarios, same engine; distinguish empirical from simulated perturbations</td>
+<td>Compare degradation; record scenario recipe. Proposed</td>
+</tr>
+<tr>
+<td>J22 Transfer across markets/periods</td>
+<td>P2/P8 → alternate universe/venue/period</td>
+<td>Resolve fresh instrument profiles and data; preserve rules and record changed assumptions</td>
+<td>New child experiment or validation report. Proposed</td>
+</tr>
+<tr>
+<td>J23 Investigate engine disagreement</td>
+<td>P7 → supported VectorBT/Nautilus results</td>
+<td>Check equal inputs and documented differing fill policies; reconcile at first differing event</td>
+<td>No automatic engine “vote”; retain explanation. Proposed</td>
+</tr>
+<tr>
+<td>J24 Combine strategies</td>
+<td>P9 → saved component versions → joint backtest</td>
+<td>Shared cash/margin/currencies only where supported; test simultaneous demands and attribution</td>
+<td>Compare combination to defined standalone baselines. Existing cash core</td>
+</tr>
+<tr>
+<td>J25 Review exposures and capacity</td>
+<td>P5/P9 → concentration/liquidity/sizing</td>
+<td>Derive supported exposures from actual positions; use quote/volume metadata where available</td>
+<td>Revise sizing or portfolio; unavailable estimates stay unavailable. Proposed</td>
+</tr>
+<tr>
+<td>J26 Recover interrupted work</td>
+<td>P4 → reconnect/fix/resume</td>
+<td>Preserve completed evidence, verify versions, resume from valid boundary</td>
+<td>Same context and honest remaining work. Existing components</td>
+</tr>
+<tr>
+<td>J27 Return days later</td>
+<td>P0 → last experiment/study</td>
+<td>Restore server-saved draft, view state and latest activity; no new data request</td>
+<td>Continue, inspect or archive. Saved runs exist; full library proposed</td>
+</tr>
+<tr>
+<td>J28 Retain or reject an idea</td>
+<td>P10 → decision and reason</td>
+<td>Save chosen version plus evidence; rejection retains useful negative results</td>
+<td>Return to library; revisit later. Proposed</td>
+</tr>
+<tr>
+<td>J29 Reproduce versus refresh</td>
+<td>P5/P11 → Replay exact / Test newer data</td>
+<td>Exact replay uses frozen evidence; refresh is a new dataset/result with a diff</td>
+<td>Compare original/new versions. Replay exists; refresh journey proposed</td>
+</tr>
+<tr>
+<td>J30 Export or share</td>
+<td>P10/P0 → report/setup/evidence export</td>
+<td>Choose reproducible bundle versus redacted report; dependencies and price rights handled</td>
+<td>Original private account unchanged. Exact export core exists</td>
+</tr>
+<tr>
+<td>J31 Review paper/live observations</td>
+<td>P11 → explicitly connected execution observations</td>
+<td>Match a frozen selected setup to later observed fills; attribute execution differences</td>
+<td>Revise/retire through P10; activation is separate. Future connector</td>
+</tr>
+<tr>
+<td>J32 Organize and retire</td>
+<td>P0 → tags/archive/restore/deletion</td>
+<td>Reference-aware retention; active work is stopped separately before archive/deletion</td>
+<td>Undo archive; irreversible removal has impact preview. Proposed</td>
+</tr>
+<tr>
+<td>J33 Upgrade or change broker</td>
+<td>P0/P3 → continue research after change</td>
+<td>Recheck capabilities/metadata/version compatibility; old results remain readable</td>
+<td>New data/version for changed context; no silent price-source substitution. Partly existing</td>
+</tr>
+<tr>
+<td>J34 Work across tabs/devices</td>
+<td>Any view → reopen same experiment</td>
+<td>Account-scoped server draft and optimistic version checks; no duplicate submissions</td>
+<td>Resume view; resolve conflicting edits. Existing identity checks; expanded draft model proposed</td>
+</tr>
+</tbody>
+</table></div>
+</div></details><details id="spec-5" class="chapter"><summary><span class="chapter-no">05</span>Pause, stop, save and resume</summary><div class="chapter-body"><div class="diagram"><svg viewBox="0 0 1280 640" role="img" aria-labelledby="states-title states-desc"><title id="states-title">Pause and continuation</title><desc id="states-desc">Running work pauses only at a supported safe boundary, retains completed evidence, and resumes with compatible identity; attention and completion are distinct states.</desc><defs><marker id="states-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#66706c"/></marker><marker id="states-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#147d5a"/></marker><marker id="states-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#365e88"/></marker></defs><rect width="1280" height="640" fill="#fafaf8"/><path d="M 288 168 L 376 168" fill="none" stroke="#66706c" stroke-width="1.5" marker-end="url(#states-arrow)"/><rect x="296" y="140" width="72" height="20" fill="#fafaf8"/><text x="332.0" y="156" text-anchor="middle" class="edge-label">START</text><path d="M 600 168 L 688 168" fill="none" stroke="#66706c" stroke-width="1.5" marker-end="url(#states-arrow)"/><rect x="608" y="140" width="72" height="20" fill="#fafaf8"/><text x="644.0" y="156" text-anchor="middle" class="edge-label">PAUSE</text><path d="M 912 168 L 1000 168" fill="none" stroke="#66706c" stroke-width="1.5" marker-end="url(#states-arrow)"/><rect x="920" y="140" width="72" height="20" fill="#fafaf8"/><text x="956.0" y="156" text-anchor="middle" class="edge-label">SAVED</text><path d="M 1108 128 L 1108 72 Q 1108 64 1100 64 L 496 64 Q 488 64 488 72 L 488 128" fill="none" stroke="#66706c" stroke-width="1.5" stroke-dasharray="6 5" marker-end="url(#states-arrow)"/><rect x="736" y="36" width="96" height="20" fill="#fafaf8"/><text x="784.0" y="52" text-anchor="middle" class="edge-label">RESUME</text><path d="M 488 208 L 488 400" fill="none" stroke="#66706c" stroke-width="1.5" marker-end="url(#states-arrow)"/><rect x="504" y="296" width="72" height="20" fill="#fafaf8"/><text x="540.0" y="312" text-anchor="middle" class="edge-label">DONE</text><path d="M 600 192 L 632 192 Q 640 192 640 200 L 640 336 Q 640 344 648 344 L 792 344 Q 800 344 800 352 L 800 400" fill="none" stroke="#66706c" stroke-width="1.5" marker-end="url(#states-arrow)"/><rect x="656" y="316" width="80" height="20" fill="#fafaf8"/><text x="696.0" y="332" text-anchor="middle" class="edge-label">ISSUE</text><path d="M 912 440 L 944 440 Q 952 440 952 432 L 952 288 Q 952 280 960 280 L 1100 280 Q 1108 280 1108 272 L 1108 208" fill="none" stroke="#66706c" stroke-width="1.5" stroke-dasharray="6 5" marker-end="url(#states-arrow)"/><rect x="980" y="252" width="104" height="20" fill="#fafaf8"/><text x="1032.0" y="268" text-anchor="middle" class="edge-label">RESOLVED</text><path d="M 1176 208 L 1176 400" fill="none" stroke="#66706c" stroke-width="1.5" marker-end="url(#states-arrow)"/><rect x="1184" y="296" width="32" height="20" fill="#fafaf8"/><text x="1200.0" y="312" text-anchor="middle" class="edge-label">END</text><path d="M 376 440 L 344 440 Q 336 440 336 432 L 336 288 Q 336 280 344 280 L 424 280 Q 432 280 432 272 L 432 208" fill="none" stroke="#66706c" stroke-width="1.5" stroke-dasharray="6 5" marker-end="url(#states-arrow)"/><rect x="336" y="252" width="96" height="20" fill="#fafaf8"/><text x="384.0" y="268" text-anchor="middle" class="edge-label">ADD BUDGET</text><a href="#spec-5" aria-label="Queued — open related specification"><g data-node="queued" data-x="64" data-y="128" data-w="224" data-h="80"><rect x="64" y="128" width="224" height="80" rx="8" fill="#ffffff" stroke="#a9b0aa" stroke-width="1.2"/><text x="80" y="160" class="node-title">Queued</text><text x="80" y="184" class="node-sub">Accepted setup is saved</text></g></a><a href="#spec-5" aria-label="Running — open related specification"><g data-node="running" data-x="376" data-y="128" data-w="224" data-h="80"><rect x="376" y="128" width="224" height="80" rx="8" fill="#ffffff" stroke="#a9b0aa" stroke-width="1.2"/><text x="392" y="160" class="node-title">Running</text><text x="392" y="184" class="node-sub">Data or calculation work</text></g></a><a href="#spec-5" aria-label="Pause requested — open related specification"><g data-node="pausing" data-x="688" data-y="128" data-w="224" data-h="80"><rect x="688" y="128" width="224" height="80" rx="8" fill="#ffffff" stroke="#a9b0aa" stroke-width="1.2"/><text x="704" y="160" class="node-title">Pause requested</text><text x="704" y="184" class="node-sub">Current safe unit finishes</text></g></a><a href="#spec-5" aria-label="Paused — open related specification"><g data-node="paused" data-x="1000" data-y="128" data-w="216" data-h="80"><rect x="1000" y="128" width="216" height="80" rx="8" fill="#edf6ef" stroke="#147d5a" stroke-width="1.2"/><text x="1016" y="160" class="node-title">Paused</text><text x="1016" y="184" class="node-sub">Checkpoint is durable</text></g></a><a href="#spec-5" aria-label="Completed — open related specification"><g data-node="complete" data-x="376" data-y="400" data-w="224" data-h="80"><rect x="376" y="400" width="224" height="80" rx="8" fill="#ffffff" stroke="#a9b0aa" stroke-width="1.2"/><text x="392" y="432" class="node-title">Completed</text><text x="392" y="456" class="node-sub">Segment budget finished</text></g></a><a href="#spec-10" aria-label="Needs attention — open related specification"><g data-node="attention" data-x="688" data-y="400" data-w="224" data-h="80"><rect x="688" y="400" width="224" height="80" rx="8" fill="#ffffff" stroke="#a9b0aa" stroke-width="1.2"/><text x="704" y="432" class="node-title">Needs attention</text><text x="704" y="456" class="node-sub">Resolve the actual cause</text></g></a><a href="#spec-5" aria-label="Stopped early — open related specification"><g data-node="ended" data-x="1000" data-y="400" data-w="216" data-h="80"><rect x="1000" y="400" width="216" height="80" rx="8" fill="#ffffff" stroke="#a9b0aa" stroke-width="1.2"/><text x="1016" y="432" class="node-title">Stopped early</text><text x="1016" y="456" class="node-sub">Completed evidence retained</text></g></a><line x1="64" y1="584" x2="1216" y2="584" stroke="#d7dcd6"/><text x="64" y="616" class="legend">Solid: forward action</text><text x="344" y="616" class="legend">Dashed: return / continuation</text><text x="736" y="616" class="legend">Select a node to open its specification</text></svg></div><p class="caption">Proposed job behavior, with the main transitions shown. Pause waits for the next supported checkpoint; closing a browser does not stop a running server. Stop is also available during active work; the table below specifies all actions and recovery states.</p><h3>Drafts, navigation and saving</h3>
+<p>Typing edits autosaves the draft after validation of structure, not validation of run eligibility. A small “Saved” indicator is enough; no success toast per field. Save failure shows “Not saved” with retry and keeps the local draft recoverable. Account logout removes private browser copies without deleting server evidence.</p>
+<p>Running freezes a new setup version and its full accepted requirements. Parameters remain editable only in a new draft. A short note or research decision can be appended to a saved result without changing its original calculation.</p>
+<p>Closing a browser tab is navigation, not cancellation. A bounded job keeps running while the installation and worker are available. Stopping the computer or worker may interrupt it; the UI must not promise continued background execution in that case.</p>
+<h3>Job states and actions</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>State</th>
+<th>User sees</th>
+<th>Allowed action / what is saved</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Draft</td>
+<td>Setup, last saved time, unresolved required fields</td>
+<td>Edit, leave, duplicate, run when valid</td>
+</tr>
+<tr>
+<td>Queued</td>
+<td>Waiting, position when known</td>
+<td>Remove from queue; setup version remains</td>
+</tr>
+<tr>
+<td>Preparing data</td>
+<td>Reusing/downloading prices, truthful work units</td>
+<td>Pause at a durable data checkpoint, or stop; fetched native candles and completed receipts remain</td>
+</tr>
+<tr>
+<td>Running</td>
+<td>Current stage/trials, elapsed and bounded budget</td>
+<td>Pause request or stop request; navigate freely</td>
+</tr>
+<tr>
+<td>Pause requested</td>
+<td>Pausing after current safe unit</td>
+<td>Do not claim paused before a checkpoint. Exact support depends on adapter</td>
+</tr>
+<tr>
+<td>Paused</td>
+<td>Saved checkpoint and last completed unit</td>
+<td>Resume same identity, inspect completed trials, or end study</td>
+</tr>
+<tr>
+<td>Needs attention</td>
+<td>One actionable cause: auth, ambiguous symbol, quota, incompatible runtime</td>
+<td>Resolve and return; retained progress is shown; no silent source or engine substitution</td>
+</tr>
+<tr>
+<td>Interrupted</td>
+<td>Worker/process stopped unexpectedly</td>
+<td>Verify compatible identity and resume; rerun an incomplete trial only when the adapter cannot checkpoint it</td>
+</tr>
+<tr>
+<td>Stopped early</td>
+<td>User ended the current execution segment</td>
+<td>Inspect completed trials; later continuation may add a new compatible segment</td>
+</tr>
+<tr>
+<td>Completed</td>
+<td>Budget/work complete and result published</td>
+<td>Explore, compare, duplicate, validate; adding search budget is a recorded extension</td>
+</tr>
+<tr>
+<td>Failed</td>
+<td>Work cannot complete under present inputs</td>
+<td>Preserve completed evidence; fix and resume only if identity remains valid, otherwise create a child version</td>
+</tr>
+<tr>
+<td>Archived</td>
+<td>Hidden from default library</td>
+<td>Review and restore; this is an organizational state, not a running job state</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Pause</strong> means stop at the next supported safe boundary and retain continuation intent. <strong>Stop</strong> means end the current segment and keep completed work. <strong>Discard draft</strong> deletes only that unrun draft. Never label destructive data deletion “Cancel.”</p>
+<p>For optimization, the default safe boundary is a completed trial. A pause request may wait for the current engine call; hard interruption preserves completed trials but does not promise an exact mid-simulation resume. Data preparation checkpoints at durable chunks. An engine may add finer checkpoints only through a tested contract.</p>
+<p>Finite automatic retry/backoff is appropriate for classified transient failures and rate limits. Authentication, user-requested pauses, changed financial assumptions and unsupported data require distinct handling. Resume after reconnect restores the same job only when its evidence and versions still match. Repeated clicks cannot create duplicate runs.</p>
+<p>Optuna’s documented stop behavior finishes running trials before leaving its optimization loop; our UI must represent that honestly. <a href="https://optuna.readthedocs.io/en/v5.0.0/reference/generated/optuna.study.Study.html">Optuna Study API</a></p>
+<h3>Continue, fork, replay and refresh rules</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Change</th>
+<th>Correct product action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>More trials, same accepted search/data/objective/engine identity</td>
+<td>Extend study with a recorded budget segment; adapter must support reproducible continuation</td>
+</tr>
+<tr>
+<td>Narrow/widen ranges or change search algorithm</td>
+<td>Child study by default; retain parent, reason and reuse policy</td>
+</tr>
+<tr>
+<td>Change execution rules, costs, objective, eligible cohort, data version or engine</td>
+<td>New setup/study identity; previous outcomes cannot be mixed into the score history as equivalent</td>
+</tr>
+<tr>
+<td>Inspect different chart axes or another displayed metric</td>
+<td>View-only change; original objective and ranking remain recorded</td>
+</tr>
+<tr>
+<td>Reproduce a selected result</td>
+<td>Exact replay with the saved configuration, data and compatible runtime</td>
+</tr>
+<tr>
+<td>Fetch newer history or correct data</td>
+<td>New snapshot and child result, with input differences retained</td>
+</tr>
+<tr>
+<td>Edit a note, tag or shortlist</td>
+<td>Save metadata independently; calculation evidence stays immutable</td>
+</tr>
+</tbody>
+</table></div>
+</div></details><details id="spec-6" class="chapter"><summary><span class="chapter-no">06</span>Native engine analysis, kept in context</summary><div class="chapter-body"><p><strong>VectorBT backtest:</strong> account equity/cash, supported risk/return metrics, drawdown depth/duration, positions and exposure, costs, trades, grouped contributions and a declared benchmark. The chart can drive a filtered trade investigation; an inspected trade can open its price context. Additional metrics appear in the relevant tab rather than all in the overview.</p>
+<p><strong>Optuna study:</strong> history, objective and distributions, actual trial states, importance, slices, contour, parallel coordinates, ranked trials and saved shortlist. Advanced plots include EDF/rank, timing only when recorded, intermediate learning curves only when the evaluation supplies meaningful intermediate data, and Pareto views only for a multi-objective study.</p>
+<p>Reuse official engine APIs and figures. The Optuna analysis adapter must use the real trial history, including repeats and rejected proposals; a deduplicated winner table is not the study. Saved summaries do not automatically contain full VectorBT object analysis. Retain or reconstruct compatible engine-native results through a safe, explicit evidence contract.</p>
+<p>A plotted strong region suggests additional tests; it is not an observed tradeable outcome. “Parameter importance” describes the sampled study and evaluator. Constraints, sample size, correlated parameters and search space affect it; the UI supplies concise context only when material.</p>
+<p>The documented <a href="https://optuna.readthedocs.io/en/v5.0.0/tutorial/10_key_features/005_visualization.html">Optuna visualization APIs</a>, <a href="https://raw.githubusercontent.com/polakowo/vectorbt/v0.28.5/vectorbt/portfolio/base.py">VectorBT portfolio API</a> and <a href="https://github.com/polakowo/vectorbt/blob/v0.28.5/examples/WalkForwardOptimization.ipynb">VectorBT walk-forward example</a> are reuse points. None removes our responsibility for broker data, causal rules and comparable evidence.</p>
+</div></details><details id="spec-7" class="chapter"><summary><span class="chapter-no">07</span>User choices versus automatic reasoning</summary><div class="chapter-body"><p>The app resolves facts, calculates consequences and remembers accepted preferences. It must not invent economic assumptions to make a run succeed.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Automatic behavior</th>
+<th>User responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Instrument identity</td>
+<td>Infer asset/venue/product from an exact native instrument identifier; show one concise resolution</td>
+<td>Resolve an ambiguous symbol or choose the actual exposure when the input names only an underlying</td>
+</tr>
+<tr>
+<td>Broker and price store</td>
+<td>Use the existing connected broker and native Historify; reuse matching coverage; download missing required windows</td>
+<td>Connect/authenticate broker when required; approve a genuinely different data source rather than receiving a silent fallback</td>
+</tr>
+<tr>
+<td>Data resolution</td>
+<td>Derive required bars/quotes/events from observations, execution rules, features and the complete optimizer range</td>
+<td>Choose the intended strategy clock and execution behavior, not a technical candle database</td>
+</tr>
+<tr>
+<td>Calendar and dates</td>
+<td>Resolve effective sessions/timezone/DST/expiry where authoritative; account for lookbacks and holding tails</td>
+<td>Choose research period and reserve evaluation periods before using them for selection</td>
+</tr>
+<tr>
+<td>Sizing and capital</td>
+<td>Apply lot/multiplier/currency rules and feasibility checks; summarize actual resulting quantities</td>
+<td>Choose capital, exposure/allocation intent and risk limits; no automatic leverage increase</td>
+</tr>
+<tr>
+<td>Costs</td>
+<td>Prefill an accepted broker/venue fee schedule or named conservative template with effective date</td>
+<td>Review unknown/hypothetical slippage, borrow, funding, tax assumptions and fill policy</td>
+</tr>
+<tr>
+<td>Engine</td>
+<td>Filter to adapters that support the complete request; retain a compatible default and expose More settings</td>
+<td>Select a different compatible simulator if desired; unsupported requests cannot be silently simplified</td>
+</tr>
+<tr>
+<td>Optimization</td>
+<td>Build valid ranges, constraints and full data requirements; suggest bounded work estimates</td>
+<td>Choose what may vary, objective/tradeoff and budget; changing them is a new research decision</td>
+</tr>
+<tr>
+<td>Comparison</td>
+<td>Detect unmatched data/capital/currency/period/cohort/policy and display differences</td>
+<td>Decide whether comparison remains meaningful; normalization is explicit</td>
+</tr>
+<tr>
+<td>Saving</td>
+<td>Autosave drafts/view state, freeze executed versions, preserve original evidence and relationships</td>
+<td>Name/organize research and record retain/reject/revisit decisions</td>
+</tr>
+</tbody>
+</table></div>
+<p>Resolution comes from <strong>instrument profile + venue + effective date + broker capability + strategy rules + engine adapter</strong>. A class label such as “options” is insufficient.</p>
+<p>No automatic engine fallback, future-informed universe, changed contract, inferred settlement price, fabricated quote, universal zero funding/borrow, or silent conversion of shares to lots.</p>
+</div></details><details id="spec-8" class="chapter"><summary><span class="chapter-no">08</span>Common setup and asset-aware questions</summary><div class="chapter-body"><p>The first setup asks for the research idea/input, instruments or universe, capital and rule intent. Most contract facts are inferred. An advanced drawer holds assumptions; an unresolved consequential fact brings only the relevant question into view.</p>
+<p>For every asset/product profile, plan:</p>
+<ul>
+<li>exact instrument identity and historical universe membership;</li>
+<li>timezone, trading/valuation sessions and instrument lifecycle;</li>
+<li>observation timing, earliest causal order, order/fill model and intrabar ambiguity;</li>
+<li>quantity unit, minimum increment, tick value/multiplier and currency;</li>
+<li>cash/margin/leverage, exposure netting/hedging and settlement/collateral behavior;</li>
+<li>trading fees, financing/funding/borrow and corporate/cash-flow events where applicable;</li>
+<li>full required historical streams, including features and optimizer maximum requirements;</li>
+<li>expired/delisted data availability, missingness and replay provenance;</li>
+<li>engine/adapter support before any expensive download or trial allocation.</li>
+</ul>
+<p>The following asset matrix describes the target product. The current long-NSE-cash adapter cannot be enabled for another asset simply by adding a dropdown.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Profile</th>
+<th>User selects</th>
+<th>App resolves automatically</th>
+<th>Contextual result view</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cash equities / ETFs / listed funds</td>
+<td>Universe, direction, allocation, holding and dividend policy</td>
+<td>Exact security, sessions, native bars, corporate-action facts where available</td>
+<td>Performance, trades, distributions, concentration</td>
+</tr>
+<tr>
+<td>Equity shorts / long-short</td>
+<td>Intraday or borrowed holding, exposure limits, borrowing policy</td>
+<td>Product availability and authoritative borrow/financing inputs where available</td>
+<td>Gross/net exposure, borrow costs, recalls/forced exits</td>
+</tr>
+<tr>
+<td>Equity/index options / multi-leg</td>
+<td>Underlying, structure/legs, expiry/DTE, strike/delta rule, roll/hedge/expiry behavior</td>
+<td>Dated contracts, deliverable, multiplier, exercise style, settlement, required chain and all candidate legs</td>
+<td>Legs, Greeks, package trades, expiry/assignment, margin</td>
+</tr>
+<tr>
+<td>Financial futures</td>
+<td>Exact expiry or roll rule, lots, collateral/holding policy</td>
+<td>Actual historical contracts, multiplier, tick value, settlements, roll overlap</td>
+<td>Contract and roll trades, MTM, margin</td>
+</tr>
+<tr>
+<td>Currency derivatives</td>
+<td>Pair, venue, derivative and expiry/roll, account currency</td>
+<td>Contract/quotation and settlement currency, calendars, conversion requirements</td>
+<td>FX attribution, rolls and settlement</td>
+</tr>
+<tr>
+<td>Spot FX / CFDs</td>
+<td>Actual broker product, units, execution window, financing/margin model</td>
+<td>Broker quotes, tick/units, FX conversions and available financing schedule</td>
+<td>Spread, financing, currency exposure, stop-out</td>
+</tr>
+<tr>
+<td>Commodity derivatives</td>
+<td>Exact contract variant, units, roll and delivery-avoidance rule</td>
+<td>Dated specifications, evening sessions, tender/delivery/expiry, settlement</td>
+<td>Rolls, delivery events/exclusions, collateral</td>
+</tr>
+<tr>
+<td>Crypto spot</td>
+<td>Venue/pair, sizing, reporting currency, cash versus margin</td>
+<td>Base/quote, steps/minimum notional, venue data and fee currency</td>
+<td>Trading PnL, currency/fee attribution</td>
+</tr>
+<tr>
+<td>Crypto perpetuals / dated / options</td>
+<td>Linear/inverse product, collateral, leverage/account model, funding/roll/legs</td>
+<td>Contract terms and available funding, mark/index, chain and settlement streams</td>
+<td>Funding, collateral, liquidation, legs</td>
+</tr>
+<tr>
+<td>Direct bonds / bills</td>
+<td>Security, face value, cashflow/reinvestment strategy</td>
+<td>Dated coupon/maturity/day-count/accrual conventions and events</td>
+<td>Clean/dirty price, cashflows, accrued interest, rate risk</td>
+</tr>
+<tr>
+<td>NAV funds / SIP</td>
+<td>Exact scheme/plan/option, contribution/redemption schedule</td>
+<td>NAV history, applicable dates and dated scheme rules where available</td>
+<td>Contributions, corpus, money/time-weighted returns</td>
+</tr>
+</tbody>
+</table></div>
+<p>All rows specify target journeys. Direct fixed income, NAV funds, bespoke OTC products, physical inventory and on-chain strategies remain separate future profiles until their data and calculation contracts exist. Indices and synthetic signal series are not automatically tradable instruments.</p>
+<p>The full <a href="ASSET_PROFILES.md">Asset profiles</a> appendix defines selections, automatic requirements, material assumptions, data requirements, failure states and primary references for each family. Current Historify OHLC cannot silently serve as an options-chain, funding, corporate-action or bond-cashflow store; additional data types require explicit native OpenAlgo extensions.</p>
+</div></details><details id="spec-9" class="chapter"><summary><span class="chapter-no">09</span>Data, bias and professional research decisions</summary><div class="chapter-body"><p><strong>Research periods are a resource.</strong> Reserve evaluation periods before baseline selection, search or repeated candidate inspection uses them. Record which periods were used for which decision. Reusing a holdout to choose a winner makes it part of selection; future validation needs another reserved period or an explicitly exploratory label.</p>
+<p><strong>Universe history matters.</strong> Current surviving symbols are not a historical index membership list. Delisted securities, changed contract specifications, adjustments, futures rolls, options-chain availability and publication timestamps can change results. The data review exposes a material limitation and preserves the chosen policy.</p>
+<p><strong>Fair comparison needs a contract.</strong> Baseline/candidates should use aligned periods, currency/capital, coverage cohort, fees and execution rules. A comparison may intentionally differ on one assumption; that is a labelled experiment, not an unqualified improvement. Portfolio contribution, a standalone strategy run, and the portfolio rerun without that strategy answer different questions. Removing a component can free capital and change other fills; its effect requires a new joint calculation.</p>
+<p><strong>Portfolio clocks and accounts matter.</strong> Mixed calendars/currencies and derivative margin require compatible event timing, FX conversion and account semantics. Reusing the current finest-interval cash-equity planner does not establish a multi-asset margin engine. Standalone simulations are an explicitly labelled fallback only if the user selects them.</p>
+<p><strong>Robustness is a workflow, not a green badge.</strong> Report results across separated periods, perturbations and combinations; record poor outcomes and rejected hypotheses. No automated “ready to trade” label follows merely from positive PnL or a winning trial.</p>
+<p><strong>Review after selection is optional and explicit.</strong> Future scheduled research or paper/live comparisons require a chosen cadence, data scope and destination. They do not run because someone saved a candidate. Research handoff alone does not place an order.</p>
+</div></details><details id="spec-10" class="chapter"><summary><span class="chapter-no">10</span>Product states that need deliberate design</summary><div class="chapter-body"><div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Product response</th>
+<th>What remains usable</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Broker token expires during acquisition</td>
+<td>Keep completed native data/checkpoints; ask to reconnect in the existing broker flow; return to the paused task</td>
+<td>Library, saved reports and complete cached inputs</td>
+</tr>
+<tr>
+<td>Broker returns a successful empty window</td>
+<td>Apply declared eligibility policy across the experiment; show affected observations and reasons</td>
+<td>Valid retained cohort; all-unusable input must not become a zero-return success</td>
+</tr>
+<tr>
+<td>Historical contract or critical settlement data missing</td>
+<td>Identify the exact missing requirement before engine execution</td>
+<td>Draft, earlier results and alternative supported date/product selection</td>
+</tr>
+<tr>
+<td>Too much requested work/storage</td>
+<td>Estimate before admission, provide a smaller scope/budget action; retain draft; reference-aware storage management</td>
+<td>Completed evidence; no automatic deletion to make space</td>
+</tr>
+<tr>
+<td>Trial rejected/failed</td>
+<td>Preserve state/reason; exclude it from valid-score selection; stop repeated systemic failures</td>
+<td>Completed valid trials and study history</td>
+</tr>
+<tr>
+<td>User changes broker or installs a new engine version</td>
+<td>Recheck capabilities; exact old evidence remains accessible; replay checks its runtime identity</td>
+<td>Reports and exports; incompatible replay is not silently recalculated</td>
+</tr>
+<tr>
+<td>Comparison uses different prices or assumptions</td>
+<td>Show specific mismatches and offer matched reruns as new evidence</td>
+<td>Original comparison and original results</td>
+</tr>
+<tr>
+<td>Simulation and broker fills disagree</td>
+<td>Compare quantities/timestamps/costs/venue policy; preserve both sources</td>
+<td>Research evidence and observed execution record as distinct facts</td>
+</tr>
+<tr>
+<td>Library item is referenced elsewhere</td>
+<td>Archive normally; destructive deletion shows dependencies and blocks breaking retained reports</td>
+<td>Dependent results and restore from archive</td>
+</tr>
+<tr>
+<td>Same draft edited elsewhere</td>
+<td>Detect version conflict, let user keep both versions or reload</td>
+<td>Neither accepted setup is silently lost</td>
+</tr>
+</tbody>
+</table></div>
+</div></details><details id="spec-11" class="chapter"><summary><span class="chapter-no">11</span>Capability map and build order</summary><div class="chapter-body"><div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Existing foundation</th>
+<th>Work required for the target</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OpenAlgo integration</td>
+<td>Account, broker history, Historify, job store/worker</td>
+<td>Rich historical instrument profiles, supported extra data streams, all-broker acceptance</td>
+</tr>
+<tr>
+<td>Research organization</td>
+<td>Saved sources/results and account-scoped browser draft</td>
+<td>Server drafts, experiments, immutable setup versions, study library, lineage, shortlist and decisions</td>
+</tr>
+<tr>
+<td>VectorBT/Nautilus adapters</td>
+<td>Declared joint cash-equity execution</td>
+<td>Expose native analysis; add each asset/product only with tested financial/data contracts</td>
+</tr>
+<tr>
+<td>Optuna</td>
+<td>TPE/grid, numerical ranges, exact checkpoint replay</td>
+<td>Study exploration, trial/result links, compatible study extension, manual candidates, conditional/categorical or multi-objective search where explicitly supported</td>
+</tr>
+<tr>
+<td>Workflow</td>
+<td>Upload, run, basic results, fixed holdout, replay</td>
+<td>Complete result→edit→optimize→compare→validate→save transitions and honest pause behavior</td>
+</tr>
+<tr>
+<td>Ongoing use</td>
+<td>Saved evidence and exact exports</td>
+<td>Version-aware refresh, review/retirement, optional scheduled or execution-observation connectors</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Build slice 1 — finish the existing asset journey.</strong> Experiment/study library, server drafts/versions, completed-result actions, native study exploration, shortlist/comparison, pause semantics and reusable setups for the current cash-equity scope.</p>
+<p><strong>Build slice 2 — deepen decisions.</strong> Expanded trade diagnosis, benchmark, compatible study continuation, separated validation and rolling/scenario analysis, portfolio comparisons and decision records.</p>
+<p><strong>Build slice 3 — add product profiles.</strong> Admit one new instrument family at a time with real metadata/data examples, hand-checkable execution, saved evidence and full UI journeys. Asset-class selection alone is not acceptance.</p>
+<p><strong>Build slice 4 — ongoing research connectors.</strong> Explicit periodic review, observed-execution comparison and supported handoff. User authorization and product scope determine any trading action.</p>
+<p>This order is a proposed implementation sequence. It does not retract the comprehensive target or promise every asset class in the present release.</p>
+</div></details><details id="spec-12" class="chapter"><summary><span class="chapter-no">12</span>Acceptance scenarios for the complete experience</summary><div class="chapter-body"><ol>
+<li><strong>First CSV research:</strong> upload daily signals, reserve a later period, run using native daily prices, understand performance, optimize from the baseline, compare candidates, validate, save a version.</li>
+<li><strong>Intraday research:</strong> timed signals and clock/holding rules automatically select required minute data; partial coverage cannot turn missing exits into invented fills.</li>
+<li><strong>Long search interruption:</strong> leave browser, return, request pause, resume, then add compatible budget; completed trial identity and earlier rankings remain auditable.</li>
+<li><strong>Changed hypothesis:</strong> narrow ranges, change costs or change objective; a child study records the change and keeps the original result.</li>
+<li><strong>Chart-to-result:</strong> select an actual Optuna trial, inspect its settings and full backtest, then return to the same filtered plot; unsampled points cannot masquerade as trials.</li>
+<li><strong>Portfolio decision:</strong> combine saved strategy versions, inspect shared-capital constraints and attribution, compare allocations and make a recorded decision.</li>
+<li><strong>Derivative profile:</strong> resolve an actual dated contract, validate quantity/margin/expiry/settlement data and selected execution model before running; missing authoritative requirements stop preparation clearly.</li>
+<li><strong>Return after an update:</strong> reopen old reports without acquisition, replay only with compatible identity, refresh into a new result and inspect differences.</li>
+<li><strong>Multi-tab save conflict:</strong> keep both draft versions without duplicate execution or silently replacing accepted settings.</li>
+<li><strong>Retirement and export:</strong> archive and restore a failed idea; export a selected setup/report with evidence dependencies and privacy handled explicitly.</li>
+</ol>
+<p>Every scenario is complete only when the user can perform it through the application and reopen what was saved. Test counts or engine imports are supporting evidence, not substitutes.</p>
+</div></details><details id="spec-13" class="chapter"><summary><span class="chapter-no">13</span>Evidence and design boundaries</summary><div class="chapter-body"><p>The existing implementation was inspected through Graphify source locations and the current React/service/connector files referenced in <a href="JOURNEYS.md">JOURNEYS.md</a>. The design also uses official engine and instrument references supplied in the asset appendix. No live broker actions, orders, scheduled research or app behavior changes were performed for this map.</p>
+<p>The current preview supports a narrower market/execution scope than the target described here. “Automatic” means resolving authoritative facts or applying an accepted rule. When neither exists, preserve the draft and request the specific missing choice.</p>
+<p>See <a href="ASSET_PROFILES.md">Asset profiles</a> for official venue/instrument references and <a href="JOURNEYS.md">Journey review</a> for current source paths. General engine documentation is a design reference; acceptance must use the pinned runtime and actual adapter.</p>
+</div></details>
+<section class="assets" id="asset-profiles"><div class="eyebrow">Asset-aware journeys</div><h2>Resolve facts. Keep decisions visible.</h2><p class="caption">Each profile specifies the user’s choices, automatic requirements, material assumptions, required history and the conditions that stop an unsupported run. These are future capability contracts, not enabled asset menus.</p><details class="asset chapter" id="asset-3"><summary>Cash equities, ETFs and listed funds</summary><div class="chapter-body"><p><strong>Journey:</strong> import signals or pick a dated universe → set long holding/allocation rules → choose price return or total-return treatment → run → investigate trades, concentration, dividends and liquidity → compare a baseline/benchmark → save or combine strategies.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Responsibility</th>
+<th>Required design</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>User chooses</td>
+<td>Exchange/region and instrument or dated universe; cash long versus margin/intraday product; account currency; share/notional/weight sizing; holding rules; dividend reinvestment choice; benchmark; rebalancing for allocation studies</td>
+</tr>
+<tr>
+<td>Auto-resolve</td>
+<td>Security/ISIN identity, symbol history, listing/delisting dates, exchange timezone/sessions, dated tick/lot rules, traded currency, split/consolidation events and distributions where authoritative data exist</td>
+</tr>
+<tr>
+<td>Visible assumptions</td>
+<td>Raw versus adjusted signal/valuation basis; cash dividends and their timing; dividend reinvestment; fractional shares; settlement cash reuse; auction participation; transaction costs and liquidity participation</td>
+</tr>
+<tr>
+<td>Historical data</td>
+<td>Daily or intraday OHLCV at required frequency; quotes/trades when a quote-based execution claim requires them; splits and distribution events; point-in-time universe constituents; FX for account conversion; benchmark on comparable return basis</td>
+</tr>
+<tr>
+<td>Engine/adapter requirement</td>
+<td>Ordinary cash long can use the present VectorBT path within the current supported scope. Total-return cashflows, corporate actions, foreign currency and point-in-time universe support require explicit extension and regression evidence. ETF trading prices cannot be replaced silently by underlying NAV. A bond ETF remains a listed fund position, not a directly held bond cashflow schedule.</td>
+</tr>
+<tr>
+<td>Stop/needs-input cases</td>
+<td>Unresolved exchange/symbol; adjusted history of unknown basis; missing action data over a relevant holding; unavailable delisted history; current constituent list offered as historical universe; insufficient executable data; unmodeled settlement or auction requirement</td>
+</tr>
+</tbody>
+</table></div>
+<p>Cash-action treatment is not interchangeable with derivative contract adjustment. NSE documents derivative adjustments to strike, position and multiplier, including dated implementation of actions; it demonstrates the need for event-aware metadata. <a href="https://www.nseindia.com/static/products-services/equity-derivatives-corporate-actions-adjustments">NSE corporate-action adjustments</a></p>
+</div></details><details class="asset chapter" id="asset-4"><summary>Equity shorts and market-neutral portfolios</summary><div class="chapter-body"><p><strong>Journey:</strong> choose a short/long-short strategy → distinguish intraday closeout from overnight borrow → assess lendable coverage and financing → run with explicit borrow assumptions → inspect gross/net exposure, borrow expense and forced exits → validate stress and concentration.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Responsibility</th>
+<th>Required design</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>User chooses</td>
+<td>Intraday short versus borrow-backed overnight short; long/short gross and net caps; borrow constraint/approximation policy; pair or basket relationships; hedge sizing and rebalance rules</td>
+</tr>
+<tr>
+<td>Auto-resolve</td>
+<td>Venue and broker product availability; closing session and documented square-off profile when applicable; available historical borrow/fee observations; margin/collateral metadata with effective dates</td>
+</tr>
+<tr>
+<td>Visible assumptions</td>
+<td>Borrow availability and its historical limitations; borrow fees/rebates, recalls and buy-ins; dividends owed on short holdings; collateral haircuts; intraday compulsory closeout; margin call/liquidation rules</td>
+</tr>
+<tr>
+<td>Historical data</td>
+<td>Cash-equity data plus borrow availability/fees, short dividends, historical margin/financing inputs; simultaneous price coverage for both sides</td>
+</tr>
+<tr>
+<td>Engine/adapter requirement</td>
+<td>Short signals in a general VectorBT API are not enough to claim faithful borrow-backed trading. Need validated financing, collateral and forced-exit accounting. Current adapter is long-only and must reject shorts until extended.</td>
+</tr>
+<tr>
+<td>Stop/needs-input cases</td>
+<td>Overnight short requested with only cash candles and no selected borrow model; borrowed security unavailable; pair leg absent; historical position requires a capability the selected engine/adapter cannot reproduce</td>
+</tr>
+</tbody>
+</table></div>
+<p>IBKR exposes shortable availability and stock-loan rate history as separate financing data, illustrating that price candles do not supply those facts. <a href="https://www.interactivebrokers.com/en/trading/securities-financing.php?menu=A">IBKR securities financing</a>, <a href="https://investors.interactivebrokers.com/en/trading/short-securities-availability.php">Short availability</a></p>
+</div></details><details class="asset chapter" id="asset-5"><summary>Equity/index options and multi-leg strategies</summary><div class="chapter-body"><p><strong>Journey:</strong> choose underlying and options strategy/template or legs → define historical contract selection (expiry/DTE, strike/moneyness/delta) → set net entry/exit and hedge rules → validate all required chains/legs → backtest → inspect payoff and path-dependent realized results separately → analyze Greeks, expiry and leg attribution → optimize only meaningful conditional parameters → compare/validate.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Responsibility</th>
+<th>Required design</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>User chooses</td>
+<td>Underlying and venue; single leg/spread/straddle/strangle/covered or hedged structure; long/short and ratios; exact contract versus dynamic selection; expiry/DTE rule; strike/moneyness/delta/premium rule; per-leg versus package entry/exit; roll/adjust/hedge rules; close-before-expiry versus carry</td>
+</tr>
+<tr>
+<td>Auto-resolve</td>
+<td>Historical listed option series, strike/right/expiry timestamps, multiplier and adjusted deliverable, exercise style, settlement type and fixing, permitted size increments, sessions; map every leg to the dated contract; resolve all contracts any optimization candidate could select</td>
+</tr>
+<tr>
+<td>Visible assumptions</td>
+<td>Net-price/package fill versus independently filled legs; fill/quote freshness and maximum leg delay; IV/Greeks source and model conventions; risk-free/dividend assumptions where Greeks are calculated; exercise and assignment model; handling resulting underlying/futures positions; portfolio margin model; hedge execution; treatment of partial leg failure</td>
+</tr>
+<tr>
+<td>Historical data</td>
+<td>Historical option chain/instrument definitions; each candidate leg's executable quotes or appropriately bounded bars; underlying and hedge prices; expiry fixing/settlement data; adjustment events; IV/Greeks when selection/risk needs them, or explicitly modeled Greeks inputs. Historical chain selection cannot be derived from today's chain.</td>
+</tr>
+<tr>
+<td>Engine/adapter requirement</td>
+<td>Need a tested multi-leg execution/valuation, margin and lifecycle adapter. VectorBT can analyze an input price series but is not automatically a complete options lifecycle model. Latest Nautilus documents option instruments and chain workflows; availability in our pinned engine and native-data path must be separately tested.</td>
+</tr>
+<tr>
+<td>Stop/needs-input cases</td>
+<td>Broker lacks expired contracts or chain history; ATM/delta selection impossible from supplied observations; one leg stale/missing; American early exercise unmodeled; cash-settled assumption applied to physical delivery; contract adjustment lost; required margin interactions unsupported</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Extra result tabs:</strong> leg and package trades, realized P&amp;L versus expiry payoff, Greek exposure through time, expiry/assignment events, hedge contribution, spread/slippage cost, margin utilization and stress scenarios. A payoff diagram is not historical execution proof. A theoretical option price is a separately labelled modeled-price experiment, never silently equivalent to the user's broker history.</p>
+<p>NSE securities options use CE/PE contract identity and dated expiry/lot specifications. US standard equity options documented by OCC use American exercise and share delivery, with adjusted contracts after some actions. Therefore region/venue cannot be ignored. <a href="https://www.nseindia.com/static/products-services/equity-derivatives-individual-securities">NSE securities derivatives</a>, <a href="https://www.theocc.com/clearance-and-settlement/clearing/equity-options-product-specifications">OCC equity option specifications</a>, <a href="https://www.optionseducation.org/optionsoverview/exercising-options">OIC exercise</a></p>
+<p>Latest Nautilus option-chain documentation requires per-contract quotes and Greeks/instruments in its catalog; an engine run itself does not fetch a missing catalog. Our broker/native archive preparation therefore remains a separate necessary layer. <a href="https://nautilustrader.io/docs/latest/concepts/options/">Nautilus options</a></p>
+<p><strong>Source caution:</strong> NSE's generic settlement overview includes older generalized cash-settlement wording. Do not derive production settlement types from that overview alone. Use effective-dated contract specifications and circulars, and fail metadata conflicts instead of guessing. <a href="https://nsearchives.nseindia.com/content/circulars/INSP38433.pdf">NSE physical-settlement FAQ circular</a></p>
+</div></details><details class="asset chapter" id="asset-6"><summary>Dated futures: equity/index and other financial futures</summary><div class="chapter-body"><p><strong>Journey:</strong> select underlying contract family → choose exact contract or roll rule → define signal series versus traded contracts → run → inspect each expiry, roll trades/costs, daily settlement and collateral → compare alternative rolls → validate beyond the original period.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Responsibility</th>
+<th>Required design</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>User chooses</td>
+<td>Contract family/venue; exact expiry or rule-based nearby contract; roll trigger (calendar/volume/open interest or another declared rule); roll timing; sizing in lots/risk/notional; carry or mandatory close before expiry; collateral and account model</td>
+</tr>
+<tr>
+<td>Auto-resolve</td>
+<td>Actual historical contracts; expiry/last trade/settlement timestamps; multiplier, tick/lot, quote and settlement currency; session/calendar; settlement convention; exchange event changes</td>
+</tr>
+<tr>
+<td>Visible assumptions</td>
+<td>Continuous-series construction/adjustment used for signals; explicit conversion to actual execution contracts; volume/OI trigger observation timing; roll-spread execution and costs; daily MTM cash treatment; initial/maintenance margin and liquidation policy</td>
+</tr>
+<tr>
+<td>Historical data</td>
+<td>Individual expiring contract prices; volume/OI if required by the rule; official settlements; dated contract master; both old and new contract coverage around a roll; historical margin and FX inputs when used</td>
+</tr>
+<tr>
+<td>Engine/adapter requirement</td>
+<td>Validated futures multiplier/MTM/margin/expiry accounting and actual roll trades. A back-adjusted synthetic price series cannot be executed as if it were a continuously tradable security. Need a derivatives adapter; not supported by current cash-equity adapter.</td>
+</tr>
+<tr>
+<td>Stop/needs-input cases</td>
+<td>Only a continuous chart is available but actual fill prices are claimed; missing old contract/roll overlap; ambiguous expiry rule; absent settlement record for carry; margin model mismatch; delivery required but unsupported</td>
+</tr>
+</tbody>
+</table></div>
+<p>CME distinguishes expiration management from continued exposure through rolling; its rolling indices have a deliberate construction methodology. Product design implication: store the signal-series recipe separately from the contract execution record. <a href="https://www.cmegroup.com/education/courses/micro-e-mini-futures/managing-micro-e-mini-futures-expiration">CME expiration and roll</a>, <a href="https://www.cmegroup.com/market-data/cme-group-rolling-futures-indices.html">CME rolling indices</a></p>
+</div></details><details class="asset chapter" id="asset-7"><summary>Currency futures/options versus spot FX and CFDs</summary><div class="chapter-body"><p>These require separate profiles even when their visible ticker is the same currency pair.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Profile</th>
+<th>User selections</th>
+<th>Automatic facts/data</th>
+<th>Visible assumptions / capability gate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Exchange currency futures</td>
+<td>Venue, pair, expiry/roll, lots, account currency</td>
+<td>Futures specification, contract units/quotation, sessions, daily/final settlement series, both currencies and FX conversion chain</td>
+<td>All dated-futures requirements; never substitute spot candles for exchange futures prices or assume quote currency equals P&amp;L settlement currency</td>
+</tr>
+<tr>
+<td>Currency options</td>
+<td>Currency-future/spot underlying identity, legs, expiry/strike rules, hedge</td>
+<td>Full derivative chain/contract terms and settlement source</td>
+<td>All options lifecycle requirements plus quotation and currency-conversion conventions</td>
+</tr>
+<tr>
+<td>Broker spot FX / rolling leveraged FX</td>
+<td>Broker market, pair, units, direction, sizing/leverage, execution window</td>
+<td>Broker bid/ask data and quote precision; timezone/DST; historical financing schedules if available; account conversion rates</td>
+<td>Spread/quote-side fills, rollover cutoff and holiday effects, long/short financing, margin/stop-out, settlement convention. Need a validated FX cash/margin adapter.</td>
+</tr>
+<tr>
+<td>CFD</td>
+<td>Exact broker product and reference underlying, size/leverage</td>
+<td>Broker-specific contract units, sessions and price stream; financing/dividend adjustment history where supplied</td>
+<td>A CFD is not interchangeable with an owned share, future or spot commodity. Counterpart cashflows and broker pricing must be modeled by a capability-tested adapter.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Needs input if only midpoint prices exist for a spread-based claim, funding is missing across overnight holds, historical account conversion is absent, or the broker does not offer the selected product/history through OpenAlgo. No fallback from currency futures to spot FX to make the run complete.</p>
+<p>NSE identifies distinct daily and final currency-derivative settlement prices. OANDA's financing documentation separately describes rollover-related daily cashflows that vary by instrument and time. <a href="https://www.nseindia.com/static/products-services/currency-derivatives-settlement-price">NSE currency settlement</a>, <a href="https://www.oanda.com/us-en/trading/financing-fees/">OANDA financing</a></p>
+</div></details><details class="asset chapter" id="asset-8"><summary>Commodity futures/options and spot commodities</summary><div class="chapter-body"><p><strong>Journey:</strong> identify the specific exchange product and unit → choose expiry/roll or option structure → set permitted holding relative to delivery/tender → confirm relevant trading session → run → inspect overnight gaps, rolls, settlement/delivery exclusions and collateral.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Responsibility</th>
+<th>Required design</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>User chooses</td>
+<td>Exact product/venue (gold standard/mini etc. are separate contracts); futures/options/spot exposure; lots; roll rule; holding windows; delivery-avoidance policy; options that settle into underlying futures versus other settlement</td>
+</tr>
+<tr>
+<td>Auto-resolve</td>
+<td>Contract unit/quote basis and multiplier; applicable dated specs; day/evening sessions and holidays; last trading day, tender/notice/delivery dates; settlement type; price limits and any dated changes</td>
+</tr>
+<tr>
+<td>Visible assumptions</td>
+<td>Close/roll ahead of delivery; policy for limit-locked markets; session-spanning signals; liquidity/fill model; storage/delivery economics only if explicitly in scope; option exercise creating futures exposure; negative-price compatibility where relevant</td>
+</tr>
+<tr>
+<td>Historical data</td>
+<td>Actual contract prices and settlements; roll overlap; volume/OI when selected; delivery/calendar metadata; option chain/underlying data for options; relevant FX conversion</td>
+</tr>
+<tr>
+<td>Engine/adapter requirement</td>
+<td>All futures/options requirements plus unit conversion and product-specific lifecycle support. Physical inventory, quality, warehouse, transport and delivery workflows should remain deferred. An explicit close-before-delivery backtest can be a bounded supported profile once tested.</td>
+</tr>
+<tr>
+<td>Stop/needs-input cases</td>
+<td>Unknown product variant or quote multiplier; mandatory delivery exposure enters an unmodeled period; missing evening-session history; signed/negative prices rejected by an adapter needed for the historical sample; inherited equity calendar</td>
+</tr>
+</tbody>
+</table></div>
+<p>MCX maintains different gold variants and effective contract-specification versions. This is why metadata must be contract- and date-specific, not one fixed &quot;commodity&quot; settings template. <a href="https://www.mcxindia.com/en/products/bullion/gold">MCX gold contracts</a></p>
+</div></details><details class="asset chapter" id="asset-9"><summary>Crypto spot, dated futures, linear and inverse perpetuals</summary><div class="chapter-body"><div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Profile</th>
+<th>User choices</th>
+<th>Auto-resolve</th>
+<th>Visible assumptions, history and capability requirements</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Spot</td>
+<td>Venue and pair; account/valuation currency; cash-only or borrow-backed margin; size and fee tier</td>
+<td>Base/quote assets, step/tick/minimum notional, symbol life, sessions/maintenance, venue product flags</td>
+<td>Venue-specific prices/quotes; maker/taker assumptions and fee currency; dust rounding; conversions. Margin spot adds borrow and liquidation models. Exchange-traded exposure excludes on-chain gas/staking unless explicitly modeled.</td>
+</tr>
+<tr>
+<td>Linear perpetual</td>
+<td>Exact venue contract; long/short, leverage, isolated/cross account model, collateral, trigger-price conventions</td>
+<td>Contract unit, quote/settlement currency, funding timestamps/rates when historical feeds exist, maintenance tiers and mark/index series if available</td>
+<td>Need traded prices plus funding events, mark/index for claimed liquidation/trigger behavior, dated account rules and costs. Stablecoin collateral is not automatically risk-free or identical to fiat cash.</td>
+</tr>
+<tr>
+<td>Inverse perpetual/future</td>
+<td>Exact inverse contract; collateral asset; reporting currency; margin model; expiry/roll for dated product</td>
+<td>Inverse contract term, multiplier, settlement/collateral asset, funding or expiry metadata</td>
+<td>Reciprocal-price P&amp;L, collateral valuation and currency conversion must be accounted for in engine adapter; linear return × leverage is not equivalent. Same funding/mark/maintenance requirements as relevant.</td>
+</tr>
+<tr>
+<td>Crypto options</td>
+<td>Underlying and venue, legs, expiry/strike/delta rules, linear/inverse settlement</td>
+<td>Contract specs, settlement conventions, chain/instruments and quotes</td>
+<td>Same multi-leg/Greeks/lifecycle gates as options, plus crypto currency and collateral models.</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Extra result views:</strong> funding P&amp;L versus trading P&amp;L, collateral/maintenance through time, liquidation events, currency attribution and venue outage/staleness intervals. A 24/7 market must not inherit a 252-session assumption automatically. Fixed funding schedules and present-day fee tiers must not be projected backward as historical facts.</p>
+<p>Needs input or blocked when funding/mark data are absent for leveraged/perpetual claims, contract linearity is unresolved, cross-margin interactions unsupported, or the chosen OpenAlgo connection cannot supply required history. Candle-only exploratory unlevered returns may be a separately labeled profile; it must not be described as a faithful perpetual account simulation.</p>
+<p>Binance documents funding history as a distinct market-data endpoint. Bybit explains separate mark-price and inverse settlement mechanics. These are examples of venue-specific inputs, not a decision to add direct venue downloaders. <a href="https://developers.binance.com/docs/derivatives/coin-margined-futures/market-data/rest-api/Get-Funding-Info">Binance funding history</a>, <a href="https://www.bybit.com/en/help-center/article/Inverse-Contract-FAQ">Bybit inverse contracts</a>, <a href="https://www.bybit.com/en/contract-rules?type=futureInverse">Bybit mark and inverse rules</a></p>
+</div></details><details class="asset chapter" id="asset-10"><summary>Fixed income, bonds, bills and structured debt — separately deferred</summary><div class="chapter-body"><p><strong>Why separate:</strong> direct holdings have dated cashflows and price conventions. A bond ETF can follow a listed-fund workflow; it does not validate a direct-bond engine.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Responsibility</th>
+<th>Required design</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>User chooses</td>
+<td>Exact security/ISIN; face-value exposure; maturity/coupon preferences or a dated universe; buy/hold/rebalance; reinvestment; credit/rate benchmark and base currency</td>
+</tr>
+<tr>
+<td>Auto-resolve</td>
+<td>Issue/maturity, coupon schedule and rate/reset, day count, clean/dirty price convention, settlement calendar, face value/minimum lot, call/put/amortization events, accrued interest</td>
+</tr>
+<tr>
+<td>Visible assumptions</td>
+<td>Executable spread/liquidity and quote staleness; reinvestment rate; clean-versus-total-return display; treatment of calls, default and recovery; cashflow reinvestment; accrued-interest settlement</td>
+</tr>
+<tr>
+<td>Historical data</td>
+<td>Executable prices/quotes or clearly identified valuation prices; coupon/reset/redemption events; accrued interest and dated terms; curves if risk/valuation models require them; credit events; FX</td>
+</tr>
+<tr>
+<td>Engine/adapter requirement</td>
+<td>Purpose-built cashflow/rate-convention adapter or a suitable established fixed-income engine connector; test ordinary, callable/floating and default cases separately. Do not coerce these into cash-share orders and call the result complete.</td>
+</tr>
+<tr>
+<td>Stop/needs-input cases</td>
+<td>Clean price treated as all-in purchase cost; missing coupons/events; a present-day yield used historically; sparse indicative marks treated as guaranteed executable fills; unsupported callable/structured payoff</td>
+</tr>
+</tbody>
+</table></div>
+<p>RBI's government-securities guide distinguishes quoted clean prices from accrued-interest-inclusive dirty prices and describes bond cashflow/day-count conventions. <a href="https://m.rbi.org.in/commonman/english/scripts/FAQs.aspx?Id=711">RBI government-securities guide</a></p>
+</div></details><details class="asset chapter" id="asset-11"><summary>Mutual funds, SIP and periodic allocations — separately deferred</summary><div class="chapter-body"><p><strong>Journey:</strong> select exact scheme/plan/option → choose lump sum/SIP/rebalance/redemption → set contribution timing and cashflow goals → simulate actual applicable NAV dates → review corpus, money-weighted/time-weighted returns and cost/holding effects.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Responsibility</th>
+<th>Required design</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>User chooses</td>
+<td>Scheme and direct/regular plan, growth/distribution option; contribution/redemption schedule; amount and target allocation; distribution reinvestment; benchmark</td>
+</tr>
+<tr>
+<td>Auto-resolve</td>
+<td>Exact scheme identifier and inception/merger lineage; published historical NAV; business calendar; applicable scheme cutoffs, minimum investments and redemption terms when dated and authoritative</td>
+</tr>
+<tr>
+<td>Visible assumptions</td>
+<td>Order acceptance/funds-realization time, missed installments, loads/lock-ins, settlement cash timing, reinvestment of distributions, expense basis already embedded in NAV</td>
+</tr>
+<tr>
+<td>Historical data</td>
+<td>Official NAV and distribution history; dated scheme terms/events; actual or modeled contribution timing; benchmark; no fabricated minute candles</td>
+</tr>
+<tr>
+<td>Engine/adapter requirement</td>
+<td>Contribution/withdrawal and NAV-applicability adapter; correct XIRR versus time-weighted performance; avoid double-counting fund expenses already in NAV. Fund holdings analysis is another data problem.</td>
+</tr>
+<tr>
+<td>Stop/needs-input cases</td>
+<td>Scheme plan/option ambiguous; same-day NAV claimed although known only after the decision cutoff; input asks intraday stop fills on a NAV product; missing scheme history after mergers</td>
+</tr>
+</tbody>
+</table></div>
+<p>AMFI describes prospective NAV allocation, business-day cutoffs and funds-realization conditions. <a href="https://www.amfiindia.com/investor/knowledge-center-info?zoneName=NetAssetValueNAV">AMFI NAV guide</a>, <a href="https://www.amfiindia.com/Themes/Theme1/downloads/NewRuleonApplicableNAVeffectivefromFebruary12021.pdf">AMFI applicable-NAV rules</a></p>
+</div></details><details class="asset chapter" id="asset-12"><summary>Additional categories are explicit, not silently bundled</summary><div class="chapter-body"><ul>
+<li><strong>Reference indices and synthetic spreads:</strong> useful as signals/benchmarks, not always directly tradable. Require an explicit traded instrument or portfolio transformation.</li>
+<li><strong>REITs/InvITs and other listed income securities:</strong> reuse cash listing mechanics only after distribution/corporate-action treatment is admitted; sector labels do not substitute for cashflow support.</li>
+<li><strong>Rates swaps, bespoke OTC options, private assets, physical commodity inventory, structured products and on-chain strategies:</strong> explicitly deferred until a provider, data model, established calculation engine and validated adapter exist. A generic CSV upload is not a capability contract.</li>
+</ul>
+</div></details></section></main>
+<footer><p><strong>Use this as the implementation map.</strong> The master specification and asset profiles are also available as <a href="PRODUCT_JOURNEY_MAP.md">Markdown</a> and <a href="ASSET_PROFILES.md">the detailed asset appendix</a>. Current support is recorded in <a href="STATUS.md">Status</a>.</p></footer><script>
+function reveal(hash){const el=document.getElementById(hash.replace(/^#/,''));if(!el)return;let p=el;while(p){if(p.tagName==='DETAILS')p.open=true;p=p.parentElement;}requestAnimationFrame(()=>el.scrollIntoView({block:'start'}));}
+document.addEventListener('click',e=>{const a=e.target.closest('a[href^="#"]');if(a)reveal(a.getAttribute('href'));});
+window.addEventListener('hashchange',()=>reveal(location.hash));if(location.hash)reveal(location.hash);
+document.getElementById('expand').addEventListener('click',()=>{const rows=[...document.querySelectorAll('details.chapter')];const open=rows.some(x=>!x.open);rows.forEach(x=>x.open=open);document.getElementById('expand').textContent=open?'Collapse details':'Expand details';});
+const filter=document.getElementById('journey-filter');filter.addEventListener('input',()=>{const rows=[...document.querySelectorAll('#spec-4 tbody tr')];let n=0;rows.forEach(r=>{const show=r.textContent.toLowerCase().includes(filter.value.toLowerCase());r.hidden=!show;n+=show?1:0;});document.getElementById('journey-count').textContent=n+' of '+rows.length+' journeys';});
+window.addEventListener('beforeprint',()=>document.querySelectorAll('details').forEach(x=>x.open=true));
+</script></body></html>

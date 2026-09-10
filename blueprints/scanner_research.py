@@ -4,6 +4,7 @@ from flask import Blueprint, Response, current_app, jsonify, request, session
 from sqlalchemy import func, select
 
 from database.research_db import ResearchJob, ResearchStore, ResearchWorker
+from services import research_library as library
 from services import scanner_research_service as service
 from utils.logging import get_logger
 
@@ -35,8 +36,133 @@ def missing(error):
     return jsonify(message=str(error)), 404
 
 
+@scanner_research_bp.errorhandler(library.RevisionConflict)
+def library_conflict(error):
+    return jsonify(message=str(error), code="revision_conflict", revision=error.revision), 409
+
+
 def store():
     return current_app.extensions["research_store"]
+
+
+def library_body():
+    limit = library.MAX_DRAFT_BYTES + 65536
+    if (request.content_length or 0) > limit:
+        raise ValueError("Research request exceeds its size limit")
+    if not request.is_json:
+        raise ValueError("Supply a JSON research request")
+    raw = request.stream.read(limit + 1)
+    if len(raw) > limit:
+        raise ValueError("Research request exceeds its size limit")
+    try:
+        data = current_app.json.loads(raw)
+    except (ValueError, UnicodeDecodeError):
+        raise ValueError("Supply valid JSON research settings") from None
+    if not isinstance(data, dict):
+        raise ValueError("Supply a research request object")
+    return data
+
+
+def library_page():
+    archived = request.args.get("archived", "false")
+    if archived not in ("true", "false"):
+        raise ValueError("Archived filter must be true or false")
+    return {
+        "search": request.args.get("search", ""),
+        "archived": archived == "true",
+        "limit": int(request.args.get("limit", "20")),
+        "offset": int(request.args.get("offset", "0")),
+    }
+
+
+@scanner_research_bp.route("/library/experiments", methods=["GET", "POST"])
+def library_experiments():
+    if request.method == "GET":
+        return jsonify(library.list_experiments(store(), session["user"], **library_page()))
+    return jsonify(library.create_experiment(store(), session["user"], library_body())), 201
+
+
+@scanner_research_bp.route(
+    "/library/experiments/<experiment_id>", methods=["GET", "PATCH", "DELETE"]
+)
+def library_experiment(experiment_id):
+    if request.method == "GET":
+        return jsonify(
+            library.get_experiment(
+                store(),
+                session["user"],
+                experiment_id,
+                jobs_offset=int(request.args.get("jobs_offset", "0")),
+                versions_offset=int(request.args.get("versions_offset", "0")),
+            )
+        )
+    if request.method == "DELETE":
+        return jsonify(
+            library.delete_experiment(store(), session["user"], experiment_id, library_body())
+        )
+    return jsonify(
+        library.update_experiment(store(), session["user"], experiment_id, library_body())
+    )
+
+
+@scanner_research_bp.put("/library/experiments/<experiment_id>/draft")
+def library_draft(experiment_id):
+    return jsonify(library.save_draft(store(), session["user"], experiment_id, library_body()))
+
+
+@scanner_research_bp.post("/library/experiments/<experiment_id>/versions")
+def library_save_version(experiment_id):
+    return jsonify(
+        library.save_version(store(), session["user"], experiment_id, library_body())
+    ), 201
+
+
+@scanner_research_bp.get("/library/experiments/<experiment_id>/versions/<version_id>")
+def library_version(experiment_id, version_id):
+    return jsonify(library.get_version(store(), session["user"], experiment_id, version_id))
+
+
+@scanner_research_bp.post("/library/experiments/<experiment_id>/versions/<version_id>/restore")
+def library_restore_version(experiment_id, version_id):
+    return jsonify(
+        library.restore_version(store(), session["user"], experiment_id, version_id, library_body())
+    )
+
+
+@scanner_research_bp.post("/library/experiments/<experiment_id>/run")
+def library_run(experiment_id):
+    if current_app.config.get("RESEARCH_PREVIEW"):
+        raise ValueError(
+            "Open your native OpenAlgo installation to run a portfolio with broker prices."
+        )
+    return jsonify(
+        library.run_experiment(store(), session["user"], experiment_id, library_body())
+    ), 202
+
+
+@scanner_research_bp.post("/library/experiments/<experiment_id>/replay")
+def library_replay(experiment_id):
+    return jsonify(
+        library.replay_experiment(store(), session["user"], experiment_id, library_body())
+    ), 202
+
+
+@scanner_research_bp.post("/library/experiments/from-job")
+def library_from_job():
+    data = library_body()
+    return jsonify(library.from_job(store(), session["user"], data)), 200 if data.get(
+        "experiment_id"
+    ) else 201
+
+
+@scanner_research_bp.get("/library/studies")
+def library_studies():
+    return jsonify(library.list_studies(store(), session["user"], **library_page()))
+
+
+@scanner_research_bp.get("/library/versions")
+def library_versions():
+    return jsonify(library.list_versions(store(), session["user"], **library_page()))
 
 
 @scanner_research_bp.get("/portfolio/capabilities")

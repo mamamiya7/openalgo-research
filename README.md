@@ -15,6 +15,12 @@ the connected engines perform the calculations.
 · [Release notes](docs/research/releases/0.1.0-preview.4.md)
 · [Architecture](docs/research/SYSTEM_MAP.md)
 
+The development source also includes a Research library with saved experiment
+drafts and setup versions, plus live CSV, price and Optuna progress and automatic
+download-batch continuation. These additions are tested in the native app; the
+packaged preview above remains `0.1.0-preview.4`. See the
+[current implementation and verification](docs/research/EXECUTION_STATUS.md).
+
 ## What you can do
 
 - Combine up to eight long NSE cash-equity signal strategies in one shared-capital

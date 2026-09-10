@@ -12,6 +12,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from sqlalchemy import func, select, text, update
+from sqlalchemy.engine import URL
 
 from database.engine_factory import create_db_engine
 from database.research_db import ResearchJob, ResearchWorker
@@ -114,6 +115,7 @@ def _references(engine):
         requests = _rows(db, "research_requests", ("job_id",))
         history = _rows(db, "research_history", ("job_id",))
         attempts = _rows(db, "research_attempts", ("job_id", "previous_job_id", "root_job_id"))
+        library_roots = _library_references(db, tables)
     source_ids, job_ids = {row[0] for row in sources}, {row[0] for row in jobs}
     if any(row[1] not in source_ids for row in jobs):
         raise ValueError("Research job references a missing source")
@@ -127,7 +129,122 @@ def _references(engine):
         {row[1] for row in sources}
         | {row[2] for row in jobs if row[2]}
         | {row[1] for row in experiments if row[1]}
+        | library_roots
     )
+
+
+def _library_references(db, tables):
+    """Validate the additive library graph; old stores without it stay supported."""
+    expected = {
+        "research_library_experiments",
+        "research_setup_versions",
+        "research_library_jobs",
+        "research_library_sources",
+        "research_library_requests",
+    }
+    if not expected.intersection(tables):
+        return set()
+    if not expected.issubset(tables):
+        raise ValueError("Research library metadata tables are incomplete")
+    experiments = {
+        row[0]: row
+        for row in _rows(
+            db,
+            "research_library_experiments",
+            (
+                "id",
+                "owner",
+                "parent_job_id",
+                "parent_result_artifact",
+                "parent_trial_id",
+                "parent_version_id",
+            ),
+        )
+    }
+    versions = {
+        row[0]: row
+        for row in _rows(
+            db,
+            "research_setup_versions",
+            (
+                "id",
+                "experiment_id",
+                "parent_job_id",
+                "parent_result_artifact",
+                "parent_trial_id",
+                "parent_version_id",
+            ),
+        )
+    }
+    jobs = {row[0]: row for row in _rows(db, "research_jobs", ("id", "owner", "result_artifact"))}
+    sources = {row[0]: row[1] for row in _rows(db, "research_sources", ("id", "owner"))}
+    roots = set()
+
+    def container(identifier):
+        if identifier not in experiments:
+            raise ValueError("Research library reference has a missing experiment")
+        return experiments[identifier]
+
+    def job_owner(job_id, owner):
+        if job_id not in jobs or jobs[job_id][1] != owner:
+            raise ValueError("Research library reference has a missing or foreign job")
+
+    def version_owner(version_id, experiment_id):
+        if version_id not in versions or versions[version_id][1] != experiment_id:
+            raise ValueError("Research library reference has a missing or foreign setup version")
+
+    def parents(row, experiment_id):
+        owner = container(experiment_id)[1]
+        parent_job, artifact, trial, version = row[2:]
+        if bool(parent_job) != bool(artifact) or (trial and not parent_job):
+            raise ValueError("Research library parent evidence is incomplete")
+        if parent_job:
+            job_owner(parent_job, owner)
+            if jobs[parent_job][2] != artifact:
+                raise ValueError("Research library parent artifact does not match its result")
+            roots.add(artifact)
+        if version:
+            version_owner(version, experiment_id)
+
+    for identifier, row in experiments.items():
+        parents(row, identifier)
+    for identifier, row in versions.items():
+        container(row[1])
+        parents(row, row[1])
+        if row[5] == identifier:
+            raise ValueError("Research setup version cannot be its own parent")
+    links = _rows(db, "research_library_jobs", ("experiment_id", "job_id", "version_id"))
+    linked_versions = {(row[0], row[1]): row[2] for row in links}
+    for experiment_id, job_id, version_id in links:
+        job_owner(job_id, container(experiment_id)[1])
+        if version_id:
+            version_owner(version_id, experiment_id)
+    for experiment_id, source_id, version_id in _rows(
+        db, "research_library_sources", ("experiment_id", "source_id", "version_id")
+    ):
+        if sources.get(source_id) != container(experiment_id)[1]:
+            raise ValueError("Research library reference has a missing or foreign source")
+        if version_id:
+            version_owner(version_id, experiment_id)
+    for owner, experiment_id, kind, version_id, job_id in _rows(
+        db, "research_library_requests", ("owner", "experiment_id", "kind", "version_id", "job_id")
+    ):
+        if container(experiment_id)[1] != owner:
+            raise ValueError("Research library request belongs to another account")
+        if (
+            kind not in ("run", "replay", "from_job")
+            or not job_id
+            or (kind in ("run", "replay") and not version_id)
+        ):
+            raise ValueError("Research library request has incomplete accepted work")
+        job_owner(job_id, owner)
+        if version_id:
+            version_owner(version_id, experiment_id)
+        if (experiment_id, job_id) not in linked_versions or (
+            kind in ("run", "replay") and linked_versions[(experiment_id, job_id)] != version_id
+        ):
+            raise ValueError("Research library request is missing its accepted job link")
+    return roots
 
 
 def _safe_file(path, root):
@@ -294,10 +411,10 @@ def _copy(source, destination, refresh=lambda: None):
 
 @contextmanager
 def _destination(destination, forbidden=None):
-    target = Path(destination).absolute()
+    target = _maintenance_path(destination)
     if target.is_symlink() or (target.exists() and (not target.is_dir() or any(target.iterdir()))):
         raise ValueError("Destination must be a new or empty directory")
-    if forbidden and target.resolve().is_relative_to(Path(forbidden).resolve()):
+    if forbidden and target.resolve().is_relative_to(_maintenance_path(forbidden).resolve()):
         raise ValueError("Destination must be outside the source store")
     if not target.parent.is_dir():
         raise ValueError("Destination parent must already exist")
@@ -312,8 +429,33 @@ def _destination(destination, forbidden=None):
         staging.rename(target)
 
 
+def _maintenance_path(path):
+    """Use the Windows extended namespace for I/O, retaining symlinks for checks.
+
+    Normalize absolute segments before prefixing: extended Windows paths do not
+    interpret dot segments. Use the same namespace for containment comparisons
+    and the temporary root so its context manager can clean deep files on error.
+    Public receipts and manifest-relative names retain their ordinary spelling.
+    """
+    if os.name != "nt":
+        return Path(path).absolute()
+    absolute = Path(os.path.abspath(path))
+    name = str(absolute)
+    if name.startswith("\\\\?\\"):
+        return absolute
+    if name.startswith("\\\\"):
+        return Path("\\\\?\\UNC\\" + name[2:])
+    return Path("\\\\?\\" + name)
+
+
+def _maintenance_engine(path):
+    # A structured URL keeps the '?' in a Windows extended path out of the URL
+    # query string. The shared factory still provides SQLite's required NullPool.
+    return create_db_engine(URL.create("sqlite", database=str(path)))
+
+
 def _database_copy(source_engine, path, refresh):
-    target_engine = create_db_engine(f"sqlite:///{path.as_posix()}")
+    target_engine = _maintenance_engine(path)
     source, target = None, None
     try:
         source = source_engine.raw_connection()
@@ -336,7 +478,7 @@ def _database_copy(source_engine, path, refresh):
 def backup_store(store, destination):
     with maintenance(store) as refresh, _destination(destination, forbidden=store.root) as staging:
         _database_copy(store.engine, staging / "research.db", refresh)
-        engine = create_db_engine(f"sqlite:///{(staging / 'research.db').as_posix()}")
+        engine = _maintenance_engine(staging / "research.db")
         try:
             roots = _references(engine)
         finally:
@@ -381,7 +523,7 @@ def backup_store(store, destination):
 
 
 def restore_store(backup_directory, destination):
-    source = Path(backup_directory).resolve()
+    source = _maintenance_path(backup_directory).resolve()
     manifest_path = _safe_file(source / "manifest.json", source)
     if manifest_path.stat().st_size > 32 * 1024**2:
         raise ValueError("Backup manifest exceeds 32 MiB")
@@ -420,7 +562,7 @@ def restore_store(backup_directory, destination):
             _copy(source / name, path)
             if _hash(path) != entries[name]["sha256"]:
                 raise ValueError("Backup changed while restoring")
-        engine = create_db_engine(f"sqlite:///{(staging / 'research.db').as_posix()}")
+        engine = _maintenance_engine(staging / "research.db")
         try:
             roots = _references(engine)
             closure = _closure(SimpleNamespace(root=staging), roots)

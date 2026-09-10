@@ -42,7 +42,9 @@ need → drill into the specific file. Don't load everything at once.
 
 | Feature | Entry point |
 |---|---|
-| Native Scanner Research development | [research/BRIEF.md](research/BRIEF.md) · [research/STATUS.md](research/STATUS.md) · [research/SYSTEM_MAP.md](research/SYSTEM_MAP.md) · [research/CONNECTORS.md](research/CONNECTORS.md) |
+| Native Scanner Research development | [research/BRIEF.md](research/BRIEF.md) · [research/STATUS.md](research/STATUS.md) · [research/SYSTEM_MAP.md](research/SYSTEM_MAP.md) · [research/CONNECTORS.md](research/CONNECTORS.md) · [research/JOURNEYS.md](research/JOURNEYS.md) · [research/EXECUTION_STATUS.md](research/EXECUTION_STATUS.md) |
+| Complete trader journeys, study library, navigation and asset-aware design | [research/PRODUCT_JOURNEY_MAP.md](research/PRODUCT_JOURNEY_MAP.md) · [research/ASSET_PROFILES.md](research/ASSET_PROFILES.md) · [visual map](research/trader-journey-map.html) |
+| Integrated Research delivery plan: current evidence, journey gaps, dependencies, assets and release acceptance | [research/DELIVERY_PLAN.md](research/DELIVERY_PLAN.md) |
 | Scalping Terminal (`/scalping`) | [scalping/PRD.md](scalping/PRD.md) |
 | Scanner architecture | [scanner-architecture.md](scanner-architecture.md) |
 | WhatsApp alerts | [whatsapp.md](whatsapp.md) |

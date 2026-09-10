@@ -398,6 +398,44 @@ describe('native portfolio consumer journey', () => {
     expect(portfolioResearch.preflight).not.toHaveBeenCalled()
   })
 
+  it('shows confirmed file progress while the next CSV is still being read', async () => {
+    let completeFirst!: (value: ResearchSource) => void
+    let completeSecond!: (value: ResearchSource) => void
+    vi.mocked(portfolioResearch.upload)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            completeFirst = resolve
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            completeSecond = resolve
+          })
+      )
+    mount()
+    await userEvent.upload(screen.getByLabelText('Upload strategy CSV files'), [
+      new File(['Symbol,Date\nINFY,2026-01-05'], 'First.csv', { type: 'text/csv' }),
+      new File(['Symbol,Date\nTCS,2026-01-05'], 'Second.csv', { type: 'text/csv' }),
+    ])
+    expect(screen.getByText('Reading CSV 1 of 2')).toBeVisible()
+    expect(screen.getByRole('progressbar', { name: 'Reading CSV file' })).not.toHaveAttribute(
+      'value'
+    )
+    expect(screen.queryByText(/signals accepted/)).not.toBeInTheDocument()
+    await act(async () => completeFirst(source('a'.repeat(32))))
+    expect(screen.getByText('Reading CSV 2 of 2')).toBeVisible()
+    expect(screen.getByText('1 file processed · 4 signals accepted')).toBeVisible()
+    expect(screen.getByText('Second.csv')).toBeVisible()
+    await act(async () => completeSecond(source('b'.repeat(32))))
+    expect(screen.queryByRole('progressbar', { name: 'Reading CSV file' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Strategy 1 name')).toHaveValue('First')
+    expect(screen.getByLabelText('Strategy 2 name')).toHaveValue('Second')
+    expect(portfolioResearch.preflight).not.toHaveBeenCalled()
+    expect(portfolioResearch.submit).not.toHaveBeenCalled()
+  })
+
   it('preserves chosen weights when another strategy is added and offers explicit equal split', async () => {
     savedDraft()
     mount()
@@ -463,10 +501,9 @@ describe('native portfolio consumer journey', () => {
     expect(payload.optimization).toBeUndefined()
     expect(payload.strategies[0].source_id).toBe('a'.repeat(32))
     expect(requestId).toBeTruthy()
-    expect(await screen.findByRole('progressbar', { name: 'Portfolio progress' })).toHaveAttribute(
-      'value',
-      '39'
-    )
+    expect(
+      await screen.findByRole('progressbar', { name: 'Running your backtest' })
+    ).not.toHaveAttribute('value')
   })
 
   it('does not submit invalid allocations or optimization with no variable settings', async () => {

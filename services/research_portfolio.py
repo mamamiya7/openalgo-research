@@ -237,7 +237,9 @@ def validate_submission(evidence, kind, spec):
     return {"portfolio": portfolio, "versions": spec["versions"]}
 
 
-def _prepare_prices(store, owner, evidence, *, saved, checkpoint, progress, cancelled):
+def _prepare_prices(
+    store, owner, evidence, *, saved, checkpoint, progress, cancelled, activity=None
+):
     from services.research_acquisition import _save_receipt, acquisition_receipts
     from services.research_checkpoint import MinuteCheckpointWriter, unpack_checkpoint
     from services.research_historify import native_historify_read, native_historify_write
@@ -331,6 +333,7 @@ def _prepare_prices(store, owner, evidence, *, saved, checkpoint, progress, canc
         checkpoint=persist,
         progress=lambda done, total: progress(0.6 * done, total),
         cancelled=cancelled,
+        **({"activity": activity} if activity else {}),
     )
     snapshot.pop("acquisition_checkpoint")
     snapshot["data_requirements"] = plan
@@ -360,13 +363,17 @@ def _prepare_prices(store, owner, evidence, *, saved, checkpoint, progress, canc
     return prepared
 
 
-def run(store, owner, evidence, spec, *, saved=None, checkpoint, progress, cancelled):
+def run(
+    store, owner, evidence, spec, *, saved=None, checkpoint, progress, cancelled, activity=None
+):
     validate_submission(
         evidence,
         "portfolio_optimize" if spec["portfolio"].get("optimization") else "portfolio_backtest",
         spec,
     )
     portfolio = evidence["portfolio"]
+    if activity:
+        activity({"stage": "planning"})
     if saved and saved.get("phase") == "calculation":
         evidence = service.read_artifact(store, saved["inputs_artifact"])
         if evidence["portfolio"] != portfolio or evidence["versions"] != spec["versions"]:
@@ -391,11 +398,21 @@ def run(store, owner, evidence, spec, *, saved=None, checkpoint, progress, cance
             checkpoint=checkpoint,
             progress=progress,
             cancelled=cancelled,
+            **({"activity": activity} if activity else {}),
         )
         inputs_id = service.save_artifact(store, evidence)
         checkpoint(
             {"phase": "calculation", "inputs_artifact": inputs_id, "calculation": None},
             {"completed": 60, "total": 100, "stage": "backtest"},
+        )
+    if activity:
+        # Frozen replays need no archive check or broker download. Only report
+        # quantities actually present in the retained input evidence.
+        activity(
+            {
+                "stage": "initializing",
+                "prices": {"interval": evidence["snapshot"]["provenance"]["interval"]},
+            }
         )
     if portfolio["engine"] == "nautilus":
         from research.connectors.nautilus_runtime import evaluate
@@ -420,6 +437,8 @@ def run(store, owner, evidence, spec, *, saved=None, checkpoint, progress, cance
 
     def calculation_progress(done, total):
         check_control(done, total)
+        if activity and not portfolio.get("optimization") and done > 0:
+            activity({"stage": "backtest"})
         progress(60 + (35 if validation_evidence else 40) * done / max(1, total), 100)
 
     if portfolio.get("optimization"):
@@ -449,6 +468,7 @@ def run(store, owner, evidence, spec, *, saved=None, checkpoint, progress, cance
             progress=calculation_progress,
             checkpoint=persist_calculation,
             saved=(saved or {}).get("calculation"),
+            **({"activity": activity} if activity else {}),
         )
     else:
         result = evaluate(
@@ -458,6 +478,8 @@ def run(store, owner, evidence, spec, *, saved=None, checkpoint, progress, cance
             progress=calculation_progress,
         )
     if validation_evidence is not None:
+        if activity:
+            activity({"stage": "validation"})
         selected = {row["id"]: row for row in result["strategies"]}
         testing = [
             {**row, **selected[row["id"]], "search": {}}

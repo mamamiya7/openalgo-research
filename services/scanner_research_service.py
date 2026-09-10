@@ -69,6 +69,17 @@ def ensure_storage_capacity(store, additional=0):
         raise ValueError("Research storage is full. Your saved progress is safe.")
 
 
+def _retry_windows_file_busy(operation):
+    """Allow a brief Windows sharing lock to clear; other I/O failures stay fatal."""
+    for attempt in range(6):
+        try:
+            return operation()
+        except OSError as error:
+            if getattr(error, "winerror", None) not in (32, 33) or attempt == 5:
+                raise
+            time.sleep(0.05 * 2**attempt)
+
+
 def _write_artifact_bytes(store, digest, raw):
     """Publish one immutable physical file; children precede their manifest."""
     directory = store.root / "artifacts"
@@ -87,10 +98,15 @@ def _write_artifact_bytes(store, digest, raw):
                     stream.write(compressed)
                     stream.flush()
                     os.fsync(stream.fileno())
-                os.replace(name, target)
-            finally:
-                if os.path.exists(name):
-                    os.unlink(name)
+                _retry_windows_file_busy(lambda: os.replace(name, target))
+            except BaseException:
+                try:
+                    _retry_windows_file_busy(lambda: os.unlink(name))
+                except OSError:
+                    # A still-locked temporary file must not mask the original
+                    # publication error; no metadata references it as evidence.
+                    pass
+                raise
     return digest
 
 
@@ -913,11 +929,31 @@ def job_receipt(store, job, include_result=False):
                 and job.status in ("interrupted", "failed", "cancelled")
             ),
         )
+        if experiment and experiment.kind in ("portfolio_backtest", "portfolio_optimize"):
+            from services.research_activity import initial_activity
+
+            activity = value["counts"].get("activity")
+            if activity:
+                value["activity"] = activity
+            elif job.status == "queued" and not experiment.checkpoint:
+                value["activity"] = initial_activity(
+                    source_summary, value["specification"].get("portfolio", {}), job.created_at
+                )
         value["queue_position"] = (
             db.scalar(
                 select(func.count())
                 .select_from(ResearchJob)
-                .where(ResearchJob.status == "queued", ResearchJob.created_at <= job.created_at)
+                .where(
+                    ResearchJob.status == "queued",
+                    or_(
+                        ResearchJob.updated_at < job.updated_at,
+                        (ResearchJob.updated_at == job.updated_at)
+                        & (ResearchJob.created_at < job.created_at),
+                        (ResearchJob.updated_at == job.updated_at)
+                        & (ResearchJob.created_at == job.created_at)
+                        & (ResearchJob.id <= job.id),
+                    ),
+                )
             )
             if job.status == "queued"
             else None

@@ -168,9 +168,10 @@ def test_output_cannot_escape_release_area(source):
         package(source, source / "public-output", build)
 
 
-def test_missing_native_data_adapter_blocks_package(source):
-    (source / "services/research_native_prices.py").unlink()
-    with pytest.raises(ValueError, match="research_native_prices"):
+@pytest.mark.parametrize("module", ["research_native_prices", "research_library", "research_activity"])
+def test_missing_native_module_blocks_package(source, module):
+    (source / f"services/{module}.py").unlink()
+    with pytest.raises(ValueError, match=module):
         package(source, source / ".agent-native/release/missing-adapter", build)
 
 

@@ -24,6 +24,10 @@ MAX_FINDINGS = 1000000
 PRICE_FIELDS = ("open", "high", "low", "close", "volume", "oi")
 
 
+class NativePriceNoProgress(ValueError):
+    """A local batch made no durable progress and must not requeue forever."""
+
+
 def native_history(**request):
     """Exactly the ordinary service used by Historify, Portfolio and SIP."""
     from services.history_service import get_history
@@ -80,6 +84,7 @@ def acquire_native_prices(
     prior=None,
     checkpoint=None,
     progress=None,
+    activity=None,
     cancelled=None,
     history=None,
     max_requests=500,
@@ -94,6 +99,9 @@ def acquire_native_prices(
     A symbol absent from OpenAlgo's master is recorded as a gap. Other failed
     requests block publication. Continuations do not repeat completed empty or
     unavailable-symbol responses. An admitted candle is immutable on resume.
+    ``activity`` receives real stage/candle counters, also retained in the
+    checkpoint. The local time budget yields only between durable units of work;
+    a broker response already received is persisted and verified before yielding.
     """
     interval = plan.get("interval")
     if (
@@ -179,20 +187,96 @@ def acquire_native_prices(
             raise ValueError("Native price recovery does not match its immutable scope")
     state["batch_pending"] = False
     state["hard_failures"] = []
+    state.pop("continuation_reason", None)
     started, observed, login = clock(), 0, None
     covered = sum(map(len, state["bars"].values()))
     total = sum(map(len, required.values()))
     baseline = min(9500, max(500, state.get("progress", {}).get("completed", 0)))
 
+    # These journals describe acquisition work, never the immutable input identity.
+    # Empty archive checks must survive a time-limited pass too, or a slow cache
+    # scan can keep restarting before the first broker request is reached.
+    if prior and not prior.get("batch_pending"):
+        # A user retry after an actual failure can reuse prices which arrived in
+        # Historify since that attempt. Automatic segments retain their scan.
+        state["cache_checked_windows"] = []
+    cache_windows = state.setdefault("cache_checked_windows", [])
+    for symbol, first, last in cache_windows:
+        if symbol not in required or first not in allowed or last not in allowed or first > last:
+            raise ValueError("Invalid native cache-check checkpoint")
+    if len(cache_windows) > MAX_JOURNAL:
+        raise ValueError("Native cache-check journal exceeds its bound")
+    if prior and prior.get("batch_pending") and not cache_windows and "planned_windows" in prior:
+        cache_windows.extend(
+            [symbol, first, last]
+            for symbol, slots in required.items()
+            for first, last in _windows(slots, positions, interval)
+        )
+        if len(cache_windows) > MAX_JOURNAL:
+            raise ValueError("Native cache-check journal exceeds its bound")
+
+    source_counts = state.get("source_counts")
+    if source_counts is None:
+        source_counts = {symbol: {"cached": 0, "downloaded": 0} for symbol in required}
+        # Older checkpoints have exact receipt observations but no source counts.
+        # Recover first admission attribution; do not relabel prior downloads as
+        # cache reuse merely because the worker was restarted.
+        attributed = {symbol: set() for symbol in required}
+        for item in state["receipts"]:
+            if item.get("outcome") not in {"archive_read", "success"}:
+                continue
+            with (root / (item["sha256"] + ".json")).open("rb") as handle:
+                encoded = handle.read(MAX_RECEIPT_BYTES + 1)
+            if hashlib.sha256(encoded).hexdigest() != item["sha256"]:
+                raise ValueError("Native receipt failed integrity check while recovering sources")
+            evidence = json.loads(encoded)
+            symbol = evidence["symbol"]
+            if symbol not in required:
+                raise ValueError("Native receipt belongs to a different symbol scope")
+            accepted_slots = set(evidence["accepted_slots"])
+            for row in evidence["observations"]:
+                slot = row["slot"]
+                if (
+                    slot in accepted_slots
+                    and slot in state["bars"][symbol]
+                    and slot not in attributed[symbol]
+                    and all(
+                        state["bars"][symbol][slot][key] == row[key]
+                        for key in ("open", "high", "low", "close")
+                    )
+                ):
+                    source_counts[symbol]["downloaded" if evidence["broker"] else "cached"] += 1
+                    attributed[symbol].add(slot)
+        if any(len(attributed[symbol]) != len(state["bars"][symbol]) for symbol in required):
+            raise ValueError("Native candle sources cannot be recovered from saved receipts")
+        state["source_counts"] = source_counts
+    if set(source_counts) != set(required) or any(
+        set(counts) != {"cached", "downloaded"}
+        or any(type(value) is not int or value < 0 for value in counts.values())
+        or sum(counts.values()) != len(state["bars"][symbol])
+        for symbol, counts in source_counts.items()
+    ):
+        raise ValueError("Native candle counters do not match admitted prices")
+    durable_start = covered + len(cache_windows) + len(state["completed_windows"])
+
+    class BatchTimeLimit(Exception):
+        """Only our cooperative segment budget, never an external timeout."""
+
     def save():
         if checkpoint:
             checkpoint(state)
 
-    def check():
+    def check(*, boundary=True):
         if cancelled and cancelled():
             raise InterruptedError("Native price acquisition cancelled")
-        if clock() - started >= max_seconds:
-            raise TimeoutError("Native price acquisition deadline reached")
+        if boundary and clock() - started >= max_seconds:
+            durable_now = covered + len(cache_windows) + len(state["completed_windows"])
+            if durable_now <= durable_start:
+                raise NativePriceNoProgress(
+                    "Price preparation reached its time limit without saving progress. "
+                    "Resume to retry."
+                )
+            raise BatchTimeLimit
 
     def report(units, phase):
         done = min(9700, max(int(units), state.get("progress", {}).get("completed", 0)))
@@ -206,30 +290,81 @@ def acquire_native_prices(
         if progress:
             progress(done, 10000)
 
-    def pending_requests():
+    def missing_requests(symbol, *, cache=False):
         # Completed windows include sparse responses and unavailable symbols.
         # A single forward scan avoids a comparison for every slot/window pair.
-        completed = {symbol: [] for symbol in required}
-        for symbol, first, last in state["completed_windows"]:
-            completed[symbol].append((first, last))
+        ranges = sorted(
+            (first, last)
+            for own_symbol, first, last in (
+                state["completed_windows"] + (cache_windows if cache else [])
+            )
+            if own_symbol == symbol
+        )
+        cursor, missing = 0, []
+        for slot in required[symbol]:
+            if slot in state["bars"][symbol]:
+                continue
+            while cursor < len(ranges) and ranges[cursor][1] < slot:
+                cursor += 1
+            if cursor < len(ranges) and ranges[cursor][0] <= slot <= ranges[cursor][1]:
+                continue
+            missing.append(slot)
+        return missing
+
+    def pending_requests(*, cache=False):
         requests = []
-        for symbol, slots in required.items():
-            ranges = sorted(completed[symbol])
-            cursor, missing = 0, []
-            for slot in slots:
-                if slot in state["bars"][symbol]:
-                    continue
-                while cursor < len(ranges) and ranges[cursor][1] < slot:
-                    cursor += 1
-                if cursor < len(ranges) and ranges[cursor][0] <= slot <= ranges[cursor][1]:
-                    continue
-                missing.append(slot)
+        for symbol in required:
             requests.extend(
-                (symbol, first, last) for first, last in _windows(missing, positions, interval)
+                (symbol, first, last)
+                for first, last in _windows(
+                    missing_requests(symbol, cache=cache), positions, interval
+                )
             )
         if len(requests) > MAX_JOURNAL:
             raise ValueError("Native price request plan exceeds its bounded journal")
         return requests
+
+    symbol_counts = {}
+
+    def refresh_counts(symbol):
+        unresolved = missing_requests(symbol)
+        count = len(state["bars"][symbol])
+        symbol_counts[symbol] = {
+            "checked": not missing_requests(symbol, cache=True),
+            "covered": count == len(required[symbol]),
+            "unavailable": len(required[symbol]) - count - len(unresolved),
+            "pending": sum(1 for _ in _windows(unresolved, positions, interval)),
+        }
+
+    for symbol in required:
+        refresh_counts(symbol)
+
+    def emit(stage, symbol=None):
+        checked = sum(counts["checked"] for counts in symbol_counts.values())
+        state["activity"] = {
+            "stage": stage,
+            "prices": {
+                "interval": interval,
+                "total_symbols": len(required),
+                "checked_symbols": checked,
+                "covered_symbols": sum(counts["covered"] for counts in symbol_counts.values()),
+                "required_candles": total,
+                "cached_candles": sum(counts["cached"] for counts in source_counts.values()),
+                "downloaded_candles": sum(
+                    counts["downloaded"] for counts in source_counts.values()
+                ),
+                "available_candles": covered,
+                "missing_candles": total - covered,
+                "unavailable_candles": sum(
+                    counts["unavailable"] for counts in symbol_counts.values()
+                ),
+                "pending_windows": sum(counts["pending"] for counts in symbol_counts.values()),
+                "current_symbol": symbol,
+                "cache_complete": checked == len(required),
+            },
+        }
+        if activity:
+            activity(copy.deepcopy(state["activity"]))
 
     def qualify(symbol, rows, first, last):
         nonlocal observed
@@ -272,7 +407,7 @@ def acquire_native_prices(
                 rejected.append({"kind": reason, "symbol": symbol, "date": slot[:10], "slot": slot})
         return accepted, rejected, observations
 
-    def admit(symbol, rows):
+    def admit(symbol, rows, *, source):
         nonlocal covered
         for slot, row in rows.items():
             if slot not in state["bars"][symbol]:
@@ -280,6 +415,7 @@ def acquire_native_prices(
                 state["bars"][symbol][slot] = values
                 state["raw_bars"][symbol][slot] = dict(values)
                 covered += 1
+                source_counts[symbol][source] += 1
 
     def receipt(
         symbol,
@@ -335,32 +471,42 @@ def acquire_native_prices(
             )
 
     try:
-        reads = pending_requests()
         report(baseline, "stored_prices")
+        emit("planning")
+        reads = pending_requests(cache=True)
         cache_end = baseline + (9500 - baseline) // 10
         for index, (symbol, first, last) in enumerate(reads):
             check()
+            emit("cache", symbol)
+            check()
             rows = reader(symbol, first, last)
             accepted, rejected, observations = qualify(symbol, rows, first, last)
-            admit(symbol, accepted)
+            admit(symbol, accepted, source="cached")
             if len(state["findings"]) + len(rejected) > MAX_FINDINGS:
                 raise ValueError("Native price findings exceed their bound")
             state["findings"].extend(rejected)
             if observations or rejected:
                 receipt(symbol, first, last, observations, rejected, accepted)
+            if len(cache_windows) >= MAX_JOURNAL:
+                raise ValueError("Native cache-check journal exceeds its bound")
+            cache_windows.append([symbol, first, last])
+            refresh_counts(symbol)
             report(baseline + (cache_end - baseline) * (index + 1) / len(reads), "stored_prices")
-            if accepted or rejected:
-                save()
+            emit("cache", symbol)
+            save()
         requests = pending_requests()
         state["planned_windows"] = [list(window) for window in requests]
         state["total_windows"] = len(requests) + len(state["completed_windows"])
         download_start = max(cache_end, int(9000 * covered / max(1, total)))
         report(download_start, "broker_prices")
+        if requests:
+            emit("download")
         save()
         for index, (symbol, first, last) in enumerate(requests):
             check()
             if index >= max_requests:
                 state["batch_pending"] = True
+                state["continuation_reason"] = "request_budget"
                 break
             if login is None:
                 if credentials is None:
@@ -369,6 +515,8 @@ def acquire_native_prices(
                 login = {key: supplied.get(key) for key in ("auth_token", "feed_token", "broker")}
                 if not login["auth_token"] or not login["broker"]:
                     raise ValueError("Connect your broker in OpenAlgo to download missing prices.")
+            check()
+            emit("download", symbol)
             check()
             try:
                 success, response, status = (history or native_history)(
@@ -384,7 +532,9 @@ def acquire_native_prices(
                 raise
             except Exception:
                 success, response, status = False, {}, 502
-            check()
+            # Finish an already returned response across our local deadline.
+            # Cancellation and external timeouts still retain their own outcome.
+            check(boundary=False)
             if not isinstance(response, dict):
                 success, response, status = False, {}, 502
             # Never persist adapter error messages, which may contain request credentials.
@@ -428,9 +578,10 @@ def acquire_native_prices(
             )
             save()  # Preserve exact source observations even if mutable ingestion fails.
             if accepted:
-                check()
+                check(boundary=False)
+                emit("verify", symbol)
                 writer(symbol, list(accepted.values()))
-                check()
+                check(boundary=False)
                 stored, _, _ = qualify(symbol, reader(symbol, first, last), first, last)
                 if any(
                     slot not in stored
@@ -438,7 +589,7 @@ def acquire_native_prices(
                     for slot, row in accepted.items()
                 ):
                     raise ValueError("Stored OpenAlgo prices differ from the downloaded candles.")
-                admit(symbol, {slot: stored[slot] for slot in accepted})
+                admit(symbol, {slot: stored[slot] for slot in accepted}, source="downloaded")
             if len(state["findings"]) + len(rejected) + int(not success) > MAX_FINDINGS:
                 raise ValueError("Native price findings exceed their bound")
             state["findings"].extend(rejected)
@@ -468,14 +619,20 @@ def acquire_native_prices(
                 }
                 state["findings"].append(failure)
                 state["hard_failures"].append(failure)
+            refresh_counts(symbol)
             report(
                 download_start + (9500 - download_start) * (index + 1) / len(requests),
                 "broker_prices",
             )
+            emit("download", symbol)
             save()
             if not success and outcome != "symbol_unavailable":
                 break
-    except (InterruptedError, TimeoutError):
+    except BatchTimeLimit:
+        state["batch_pending"] = True
+        state["continuation_reason"] = "time_budget"
+        save()
+    except (InterruptedError, TimeoutError, NativePriceNoProgress):
         save()
         raise
 
@@ -490,6 +647,7 @@ def acquire_native_prices(
     ]
     if not state["batch_pending"] and not state["hard_failures"]:
         report(9700, "checking_prices")
+        emit("verify")
     save()
     provenance = {
         "provider": "OpenAlgo Historify",

@@ -12,6 +12,10 @@ import {
   portfolioPayload,
 } from '@/components/research/PortfolioBuilder'
 import { PortfolioResults } from '@/components/research/PortfolioResults'
+import {
+  ResearchRunProgress,
+  type ResearchUploadActivity,
+} from '@/components/research/ResearchRunProgress'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -89,20 +93,36 @@ function requestId(owner: string, key: string): string {
 }
 export default function PortfolioResearch({
   onLegacyJob,
+  workspace,
+  onUseSetup,
 }: {
   onLegacyJob?: (jobId: string) => void
+  workspace?: {
+    draft: PortfolioDraft
+    onChange: (draft: PortfolioDraft) => void
+    onRun: () => Promise<PortfolioJob>
+    onOpenJob: (job: PortfolioJob) => void
+    onReplay?: (jobId: string, trialId?: string) => Promise<PortfolioJob>
+    onJobUpdate?: (job: PortfolioJob) => void
+    disabled?: boolean
+    readOnly?: boolean
+  }
+  onUseSetup?: (job: PortfolioJob, mode: 'backtest' | 'optimize', trialId?: string) => Promise<void>
 }) {
   const owner = useAuthStore((state) => state.user?.username ?? 'account')
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const jobId = params.get('job')
   const queryClient = useQueryClient()
-  const [draft, setDraft] = useState(() => readDraft(owner))
+  const [localDraft, setLocalDraft] = useState(() => readDraft(owner))
+  const draft = workspace?.draft ?? localDraft
+  const setDraft = workspace?.onChange ?? setLocalDraft
   const draftRef = useRef(draft)
   const priorOwner = useRef(owner)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [uploadActivity, setUploadActivity] = useState<ResearchUploadActivity | undefined>()
   const [savedOpen, setSavedOpen] = useState(false)
   const [sourcesOpen, setSourcesOpen] = useState(false)
   const [sourceOffset, setSourceOffset] = useState(0)
@@ -124,6 +144,10 @@ export default function PortfolioResearch({
     enabled: savedOpen,
     retry: false,
   })
+  const onJobUpdate = workspace?.onJobUpdate
+  useEffect(() => {
+    if (current.data) onJobUpdate?.(current.data)
+  }, [current.data, onJobUpdate])
   const sources = useQuery({
     queryKey: ['portfolio-sources', owner, sourceOffset],
     queryFn: ({ signal }) => portfolioResearch.sources(sourceOffset, signal),
@@ -138,6 +162,10 @@ export default function PortfolioResearch({
     staleTime: 60000,
   })
   useEffect(() => {
+    if (workspace) {
+      draftRef.current = draft
+      return
+    }
     if (priorOwner.current !== owner) {
       priorOwner.current = owner
       const next = readDraft(owner)
@@ -153,7 +181,7 @@ export default function PortfolioResearch({
     } catch {
       /* Saving a run remains available without browser storage. */
     }
-  }, [draft, owner])
+  }, [draft, owner, workspace, setDraft])
   const changeDraft = (next: PortfolioDraft) => {
     const retainedSources = new Set(next.portfolio.strategies.map((strategy) => strategy.source_id))
     const bounded = {
@@ -190,7 +218,8 @@ export default function PortfolioResearch({
     setError(null)
     setSavedOpen(false)
     queryClient.setQueryData(['portfolio-job', owner, job.id], job)
-    setParams({ job: job.id })
+    if (workspace) workspace.onOpenJob(job)
+    else setParams({ job: job.id })
     void queryClient.invalidateQueries({ queryKey: ['portfolio-job', owner, job.id] })
     void queryClient.invalidateQueries({ queryKey: ['portfolio-jobs', owner] })
   }
@@ -211,17 +240,23 @@ export default function PortfolioResearch({
     }
     setError(null)
     setUploading(true)
+    let completed = 0
+    let signals = 0
     try {
       for (const file of files) {
+        setUploadActivity({ total: files.length, completed, signals, filename: file.name })
         const source = await portfolioResearch.upload(file)
         const next = addPortfolioSource(draftRef.current, source, file.name)
         draftRef.current = next
         setDraft(next)
+        completed += 1
+        signals += source.receipt.signal_count
       }
     } catch (cause) {
       setError(message(cause))
     } finally {
       setUploading(false)
+      setUploadActivity(undefined)
     }
   }
   async function run() {
@@ -233,6 +268,10 @@ export default function PortfolioResearch({
     setError(null)
     setBusy(true)
     try {
+      if (workspace) {
+        openJob(await workspace.onRun())
+        return
+      }
       const payload = portfolioPayload(draftRef.current)
       const checked = await portfolioResearch.preflight(payload)
       const job = await portfolioResearch.submit(
@@ -258,11 +297,13 @@ export default function PortfolioResearch({
     try {
       const job =
         action === 'rerun'
-          ? await portfolioResearch.rerun(
-              jobId,
-              requestId(owner, `rerun:${jobId}:${trialId ?? 'selected'}`),
-              trialId
-            )
+          ? workspace?.onReplay
+            ? await workspace.onReplay(jobId, trialId)
+            : await portfolioResearch.rerun(
+                jobId,
+                requestId(owner, `rerun:${jobId}:${trialId ?? 'selected'}`),
+                trialId
+              )
           : await portfolioResearch[action](jobId)
       openJob(job)
       if (action === 'rerun') {
@@ -283,6 +324,10 @@ export default function PortfolioResearch({
     setParams({})
   }
   function editSetup() {
+    if (onUseSetup && current.data) {
+      void reuseSetup('backtest')
+      return
+    }
     const portfolio = current.data?.specification?.portfolio
     if (portfolio)
       changeDraft({
@@ -294,6 +339,18 @@ export default function PortfolioResearch({
       })
     setParams({})
   }
+  async function reuseSetup(mode: 'backtest' | 'optimize', trialId?: string) {
+    if (!current.data || !onUseSetup) return
+    setBusy(true)
+    setError(null)
+    try {
+      await onUseSetup(current.data, mode, trialId)
+    } catch (cause) {
+      setError(message(cause))
+    } finally {
+      setBusy(false)
+    }
+  }
   const job = current.data
   const visibleError =
     error ??
@@ -301,35 +358,41 @@ export default function PortfolioResearch({
     (job?.error && job.status !== 'completed' ? job.error : null)
   const savedRows =
     saved.data?.items.filter((item) => (earlier ? !isPortfolio(item) : isPortfolio(item))) ?? []
-  const progress = Math.max(0, Math.min(100, job?.progress ?? 0))
+  const Container = workspace ? 'section' : 'main'
   return (
-    <main className="mx-auto w-full max-w-6xl space-y-7 px-4 py-6 sm:px-6 sm:py-8">
+    <Container
+      className={
+        workspace ? 'space-y-7' : 'mx-auto w-full max-w-6xl space-y-7 px-4 py-6 sm:px-6 sm:py-8'
+      }
+    >
       <style>
         {
           '@media (prefers-reduced-motion: reduce) { [data-slot="sheet-overlay"], [data-slot="sheet-content"], [data-slot="dialog-overlay"], [data-slot="dialog-content"] { animation: none !important; transition: none !important; } }'
         }
       </style>
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Backtest & Optimize</h1>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={busy || uploading}
-            onClick={() => {
-              setSavedOpen(true)
-              setError(null)
-            }}
-          >
-            Saved runs
-          </Button>
-          {(jobId || draft.portfolio.strategies.length > 0) && (
-            <Button type="button" variant="ghost" disabled={busy || uploading} onClick={newRun}>
-              New run
+      {!workspace && (
+        <header className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight">Backtest & Optimize</h1>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy || uploading}
+              onClick={() => {
+                setSavedOpen(true)
+                setError(null)
+              }}
+            >
+              Saved runs
             </Button>
-          )}
-        </div>
-      </header>
+            {(jobId || draft.portfolio.strategies.length > 0) && (
+              <Button type="button" variant="ghost" disabled={busy || uploading} onClick={newRun}>
+                New run
+              </Button>
+            )}
+          </div>
+        </header>
+      )}
       {visibleError && (
         <div
           role="alert"
@@ -349,8 +412,9 @@ export default function PortfolioResearch({
           onRun={() => {
             void run()
           }}
-          busy={busy}
+          busy={busy || workspace?.disabled === true}
           uploading={uploading}
+          uploadActivity={uploadActivity}
           capabilities={capabilities.data}
         />
       )}
@@ -379,43 +443,29 @@ export default function PortfolioResearch({
           }}
           rerunning={busy}
           exportUrl={portfolioResearch.exportUrl(job.id)}
+          onAdjust={
+            onUseSetup
+              ? (trialId) => {
+                  void reuseSetup('backtest', trialId)
+                }
+              : undefined
+          }
+          onOptimize={
+            onUseSetup
+              ? () => {
+                  void reuseSetup('optimize')
+                }
+              : undefined
+          }
+          readOnly={workspace?.readOnly}
         />
       )}
       {job && isPortfolio(job) && job.status !== 'completed' && (
-        <section className="mx-auto max-w-2xl space-y-6 py-10" aria-label="Portfolio run progress">
-          <div>
-            <h2 className="text-xl font-semibold">
-              {job.specification?.portfolio?.name ?? 'Portfolio run'}
-            </h2>
-            <output className="mt-2 block text-sm text-muted-foreground">
-              {job.status === 'queued'
-                ? `Queued${job.queue_position && job.queue_position > 1 ? ` · position ${job.queue_position}` : ''}`
-                : job.status === 'running'
-                  ? 'Running your portfolio'
-                  : job.status === 'cancel_requested' || job.status === 'cancelling'
-                    ? 'Stopping…'
-                    : job.status === 'failed'
-                      ? 'Run stopped'
-                      : job.status === 'interrupted'
-                        ? 'Run interrupted'
-                        : job.status === 'cancelled'
-                          ? 'Run cancelled'
-                          : job.status}
-            </output>
-          </div>
-          {active(job.status) && (
-            <div className="space-y-2">
-              <progress
-                className="h-2 w-full overflow-hidden rounded-full accent-primary"
-                max={100}
-                value={progress}
-                aria-label="Portfolio progress"
-              />
-              <p className="text-right text-sm tabular-nums text-muted-foreground">
-                {numberPercent(progress)}
-              </p>
-            </div>
-          )}
+        <section className="mx-auto max-w-3xl space-y-6 py-6" aria-label="Portfolio run progress">
+          <h2 className="text-xl font-semibold">
+            {job.specification?.portfolio?.name ?? 'Portfolio run'}
+          </h2>
+          <ResearchRunProgress job={job} />
           <div className="flex gap-2">
             {active(job.status) ? (
               <Button
@@ -655,9 +705,6 @@ export default function PortfolioResearch({
           )}
         </DialogContent>
       </Dialog>
-    </main>
+    </Container>
   )
-}
-function numberPercent(value: number) {
-  return `${value.toLocaleString('en-IN', { maximumFractionDigits: 0 })}%`
 }

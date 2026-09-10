@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 
-from sqlalchemy import Column, Float, Integer, String, Text
+from sqlalchemy import Boolean, Column, Float, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from database.engine_factory import create_db_engine
@@ -83,6 +83,70 @@ class ResearchAttempt(Base):
     previous_job_id = Column(String(64), nullable=False)
     root_job_id = Column(String(64), nullable=False, index=True)
     created_at = Column(Float, nullable=False)
+
+
+class ResearchLibraryExperiment(Base):
+    """Named product container; the existing job-based experiment remains exact."""
+
+    __tablename__ = "research_library_experiments"
+    id = Column(String(64), primary_key=True)
+    owner = Column(String(255), nullable=False, index=True)
+    name = Column(String(120), nullable=False)
+    notes = Column(Text, nullable=False, default="")
+    tags = Column(Text, nullable=False, default="[]")
+    pinned = Column(Boolean, nullable=False, default=False)
+    archived = Column(Boolean, nullable=False, default=False)
+    revision = Column(Integer, nullable=False, default=1)
+    draft = Column(Text, nullable=False)
+    parent_job_id = Column(String(64))
+    parent_result_artifact = Column(String(64))
+    parent_trial_id = Column(String(64))
+    parent_version_id = Column(String(64))
+    created_at = Column(Float, nullable=False)
+    updated_at = Column(Float, nullable=False)
+
+
+class ResearchSetupVersion(Base):
+    __tablename__ = "research_setup_versions"
+    __table_args__ = (UniqueConstraint("experiment_id", "number"),)
+    id = Column(String(64), primary_key=True)
+    experiment_id = Column(String(64), nullable=False, index=True)
+    name = Column(String(120), nullable=False)
+    number = Column(Integer, nullable=False)
+    draft = Column(Text, nullable=False)
+    portfolio = Column(Text)
+    parent_job_id = Column(String(64))
+    parent_result_artifact = Column(String(64))
+    parent_trial_id = Column(String(64))
+    parent_version_id = Column(String(64))
+    created_at = Column(Float, nullable=False)
+
+
+class ResearchLibraryJob(Base):
+    __tablename__ = "research_library_jobs"
+    experiment_id = Column(String(64), primary_key=True)
+    job_id = Column(String(64), primary_key=True)
+    version_id = Column(String(64), index=True)
+    role = Column(String(24), nullable=False, default="run")
+    created_at = Column(Float, nullable=False)
+
+
+class ResearchLibrarySource(Base):
+    __tablename__ = "research_library_sources"
+    experiment_id = Column(String(64), primary_key=True)
+    source_id = Column(String(64), primary_key=True)
+    version_id = Column(String(64), primary_key=True, default="")
+
+
+class ResearchLibraryRequest(Base):
+    __tablename__ = "research_library_requests"
+    owner = Column(String(255), primary_key=True)
+    token = Column(String(128), primary_key=True)
+    payload_hash = Column(String(64), nullable=False)
+    experiment_id = Column(String(64), nullable=False, index=True)
+    kind = Column(String(24), nullable=False)
+    version_id = Column(String(64))
+    job_id = Column(String(64))
 
 
 class ResearchStore:

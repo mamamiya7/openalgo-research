@@ -1,6 +1,48 @@
 # OpenAlgo Research status
 
-Updated: 9 September 2026. Preview: **`0.1.0-preview.4`**, targeting OpenAlgo 2.0.2.2.
+Updated: 10 September 2026. Published preview: **`0.1.0-preview.4`**, targeting OpenAlgo 2.0.2.2.
+
+## Current development increment
+
+The native Research library, server-saved experiment drafts, setup versions,
+revision conflict recovery, archive/restore and result-to-setup/study/replay
+transitions are implemented in the development worktree. The integrated browser
+journey passed with actual VectorBT/Optuna calculations and controlled native
+Historify prices. The increment was installed into the user's existing instance
+for native testing on 10 September; it is included in the development source and
+has not yet been packaged as a new versioned release.
+Native testing exposed a price-download deadline failure before optimization.
+Automatic download continuation and compact animated stage/counter reporting
+are now implemented, specified in [run progress](RUN_PROGRESS.md). The progress
+increment passed controlled browser acceptance and was installed into the user's
+normal app on 10 September. Existing configuration and saved runs were preserved;
+no active job was interrupted. The latest packaged release remains `0.1.0-preview.4`.
+See the [implementation checkpoint](EXECUTION_STATUS.md)
+for working journeys, remaining M1/M2 work and verification boundaries.
+
+Frontend verification for the library increment: **41 tests passed** across the existing
+portfolio journey checks, draft persistence/recovery and new library navigation;
+TypeScript, scoped Biome and a production build passed. Browser checks also
+covered light/dark layouts, keyboard focus restoration, deletion cancellation,
+notes search and old-report access. Automated accessibility checks reported no
+WCAG A/AA violations on the checked library, setup and study surfaces; this is
+bounded coverage, not a whole-application accessibility certification.
+
+The subsequent progress increment passed **62 frontend tests**, native acquisition
+and Optuna regressions, controlled price preparation, a cache-only repeat,
+selected exact replay and restart checks. Detailed counts and scope are recorded
+in the [implementation checkpoint](EXECUTION_STATUS.md).
+
+Backend verification: **52 library/storage tests passed**, including real
+Optuna/VectorBT calculation, selected replay, concurrent edit/submission races,
+ownership, populated migration, retention and backup/restore. A Windows
+maintenance failure with long destination paths was reproduced and corrected;
+deep backup/restore, failure cleanup and containment have regression coverage.
+The 100-cycle handle check remained within its bound. Ruff and whitespace checks
+passed. A final native-harness restart preserved authentication, drafts, versions,
+study/replay links and the original export bytes.
+
+## Published preview baseline
 
 The native **Backtest & Optimize** workflow is implemented: CSV inputs, automatic
 native price preparation, shared-account VectorBT backtests, Optuna searches,

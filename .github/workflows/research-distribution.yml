@@ -111,12 +111,15 @@ jobs:
         run: >-
           npm run test:run --
           src/components/research/PortfolioJourney.test.tsx
+          src/components/research/ResearchRunProgress.test.tsx
           src/components/research/ConnectorSettings.test.tsx
           src/components/research/PreflightReview.test.tsx
           src/components/layout/ResearchLayout.test.tsx
           src/components/auth/AuthSync.test.tsx
           src/components/strategy-builder/PayoffChart.test.tsx
           src/lib/researchDraft.test.ts
+          src/hooks/useResearchExperiment.test.tsx
+          src/pages/ResearchLibrary.test.tsx
           src/pages/ScannerResearch.test.tsx
       - run: uv run --no-sync python tools/research_release.py --output .agent-native/release/ci
       - name: Retain the installable source distribution and checksums

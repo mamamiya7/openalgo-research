@@ -5,7 +5,9 @@ import os
 import tempfile
 import time
 import unittest
+from contextlib import closing, contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from sqlalchemy import text
@@ -42,6 +44,90 @@ class StorageTest(unittest.TestCase):
     def tearDown(self):
         self.store.close()
         self.temporary.cleanup()
+
+    @contextmanager
+    def windows_deep_parent(self, minimum_length):
+        # Prefix the owned temporary root too, so cleanup can remove deep files
+        # even when Windows' global long-path option is disabled.
+        with tempfile.TemporaryDirectory(dir="\\\\?\\" + str(self.root)) as temporary:
+            parent = Path(temporary)
+            while len(str(parent)[4:]) < minimum_length:
+                parent /= "maintenance-directory-" + "x" * 20
+            parent.mkdir(parents=True)
+            yield Path(str(parent)[4:]), parent
+
+    @unittest.skipUnless(os.name == "nt", "Windows extended-length filesystem paths")
+    def test_backup_restore_deep_windows_paths_preserve_evidence_and_database(self):
+        import sqlite3
+
+        references = self.populate(legacy=True)
+        for minimum_length in (185, 290):
+            with (
+                self.subTest(minimum_length=minimum_length),
+                self.windows_deep_parent(minimum_length) as (parent, io_parent),
+            ):
+                backup = parent / "backup"
+                result = backup_store(self.store, backup)
+                self.assertEqual(result["destination"], str(backup))
+                manifest = json.loads((io_parent / "backup" / "manifest.json").read_bytes())
+                self.assertTrue(all("\\\\?\\" not in name for name in manifest["files"]))
+                target = parent / "restored"
+                receipt = restore_store(backup, target)
+                self.assertEqual(receipt["destination"], str(target))
+                restored = SimpleNamespace(root=io_parent / "restored")
+                for digest in references:
+                    self.assertEqual(
+                        read_artifact(restored, digest), read_artifact(self.store, digest)
+                    )
+                with closing(sqlite3.connect(str(restored.root / "research.db"))) as db:
+                    self.assertEqual(
+                        db.execute("SELECT id FROM research_jobs").fetchall(), [("job",)]
+                    )
+                    self.assertEqual(
+                        db.execute("SELECT token, heartbeat FROM research_worker").fetchall(),
+                        [(None, 0)],
+                    )
+                self.assertFalse(list(io_parent.glob(".research-maintenance-*")))
+
+    @unittest.skipUnless(os.name == "nt", "Windows extended-length filesystem paths")
+    def test_deep_windows_copy_failure_cleans_staging_without_publishing(self):
+        from services.research_storage import _copy
+
+        self.populate()
+        with self.windows_deep_parent(290) as (parent, io_parent):
+            (io_parent / "backup").mkdir()
+
+            def fail_after_copy(*args):
+                _copy(*args)
+                raise OSError("Forced failure after copying an artifact")
+
+            with patch("services.research_storage._copy", side_effect=fail_after_copy):
+                with self.assertRaisesRegex(OSError, "Forced failure"):
+                    backup_store(self.store, parent / "backup")
+            self.assertEqual(list((io_parent / "backup").iterdir()), [])
+            self.assertFalse(list(io_parent.glob(".research-maintenance-*")))
+            with self.store.sessions() as db:
+                self.assertIsNone(db.get(ResearchWorker, 1).token)
+
+            backup_store(self.store, parent / "backup")
+            with patch("services.research_storage._copy", side_effect=fail_after_copy):
+                with self.assertRaisesRegex(OSError, "Forced failure"):
+                    restore_store(parent / "backup", parent / "restored")
+            self.assertFalse((io_parent / "restored").exists())
+            self.assertFalse(list(io_parent.glob(".research-maintenance-*")))
+
+    @unittest.skipUnless(os.name == "nt", "Windows extended-length filesystem paths")
+    def test_extended_windows_alias_cannot_bypass_source_containment(self):
+        self.populate()
+        nested = Path("\\\\?\\" + str(self.store.root / "nested"))
+        with self.assertRaisesRegex(ValueError, "outside the source store"):
+            backup_store(self.store, nested)
+        self.assertFalse(nested.exists())
+        backup = self.root / "backup"
+        backup_store(self.store, backup)
+        with self.assertRaisesRegex(ValueError, "outside the source store"):
+            restore_store(backup, Path("\\\\?\\" + str(backup / "nested")))
+        self.assertFalse((backup / "nested").exists())
 
     def populate(self, legacy=False):
         inputs = save_artifact(self.store, {"signals": [{"symbol": "AAA", "date": "2026-01-05"}]})
