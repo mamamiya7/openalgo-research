@@ -53,7 +53,7 @@ jobs:
         run: |
           PYTHONPATH=. research/runtimes/nautilus/.venv/bin/python -m pytest \
             --confcutdir=test/research test/research/test_nautilus_portfolio.py \
-            test/research/test_nautilus_runtime.py -q
+            test/research/test_nautilus_runtime.py test/research/test_analytics.py -q
       - name: Core environment to real Nautilus side-runtime calculation
         if: runner.os == 'Linux'
         run: |
@@ -111,6 +111,14 @@ jobs:
         run: >-
           npm run test:run --
           src/components/research/PortfolioJourney.test.tsx
+          src/components/research/PortfolioTrials.test.tsx
+          src/components/research/PortfolioAnalysis.test.tsx
+          src/components/research/PortfolioContinuousReport.test.tsx
+          src/components/research/ReportInvestigation.test.tsx
+          src/components/research/useReportPreferences.test.tsx
+          src/components/research/ResearchPlot.test.tsx
+          src/components/research/usePortfolioAnalysis.test.tsx
+          src/components/research/ChartinkImport.test.tsx
           src/components/research/ResearchRunProgress.test.tsx
           src/components/research/ConnectorSettings.test.tsx
           src/components/research/PreflightReview.test.tsx
@@ -122,6 +130,13 @@ jobs:
           src/pages/ResearchLibrary.test.tsx
           src/pages/ScannerResearch.test.tsx
       - run: uv run --no-sync python tools/research_release.py --output .agent-native/release/ci
+      - name: Check and package the Chartink browser connector
+        working-directory: extensions/chartink
+        run: |
+          npm ci
+          npm test
+          python -m unittest discover -s . -p test_package.py
+          python package.py
       - name: Retain the installable source distribution and checksums
         uses: actions/upload-artifact@v6
         with:
@@ -130,6 +145,8 @@ jobs:
             .agent-native/release/ci/*.zip
             .agent-native/release/ci/manifest.json
             .agent-native/release/ci/SHA256SUMS
+            .agent-native/chartink-package/*.zip
+            .agent-native/chartink-package/SHA256SUMS
           if-no-files-found: error
           retention-days: 14
       - name: Build the actual distribution image

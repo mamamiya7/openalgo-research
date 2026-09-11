@@ -1,6 +1,7 @@
 import { FileSpreadsheet, Plus, Settings2, Trash2 } from 'lucide-react'
 import { useRef, useState } from 'react'
 import type {
+  PortfolioAxis,
   PortfolioCapabilities,
   PortfolioRequest,
   PortfolioStrategy,
@@ -10,8 +11,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { researchDefaults } from '@/lib/researchDraft'
+import { ChartinkSource } from './ChartinkSource'
 import { PortfolioCsvHelp } from './PortfolioCsvHelp'
-import { PortfolioStrategySettings } from './PortfolioStrategySettings'
+import { PortfolioStrategySettings, portfolioSearchRange } from './PortfolioStrategySettings'
 import { type ResearchUploadActivity, ResearchUploadProgress } from './ResearchRunProgress'
 
 export interface PortfolioDraft {
@@ -33,7 +35,7 @@ export function freshPortfolioDraft(): PortfolioDraft {
     optimizing: false,
     equalWeights: true,
     sources: {},
-    optimization: { sampler: 'tpe', trials: 50, objective: 'balanced', seed: 0 },
+    optimization: { sampler: 'tpe', trials: 25, objective: 'balanced', seed: 0 },
   }
 }
 export function equalSplit(strategies: PortfolioStrategy[]): PortfolioStrategy[] {
@@ -52,6 +54,86 @@ function activeSearch(strategy: PortfolioStrategy): PortfolioStrategy['search'] 
   if (strategy.config.hold_minutes == null) delete search.hold_minutes
   if (!strategy.config.trailing_enabled) delete search.trailing_pct
   return search
+}
+const searchLabels: Record<PortfolioAxis, string> = {
+  target_pct: 'Profit target',
+  stop_pct: 'Stop loss',
+  hold_sessions: 'Holding sessions',
+  hold_minutes: 'Holding minutes',
+  trailing_pct: 'Trailing stop',
+  order_size_pct: 'Trade size',
+  allocation_pct: 'Allocation',
+}
+export function suggestedStrategySearch(
+  strategy: PortfolioStrategy,
+  engine: PortfolioRequest['engine']
+): PortfolioStrategy['search'] {
+  const fields: Array<Exclude<PortfolioAxis, 'allocation_pct'>> = ['target_pct', 'stop_pct']
+  if (strategy.config.hold_minutes != null) fields.unshift('hold_minutes')
+  else if (strategy.config.trade_horizon !== 'intraday') fields.unshift('hold_sessions')
+  if (strategy.config.trailing_enabled && engine === 'vectorbt') fields.push('trailing_pct')
+  return Object.fromEntries(
+    fields.flatMap((field) => {
+      const value = Number(strategy.config[field])
+      return Number.isFinite(value) && value > 0
+        ? [[field, portfolioSearchRange(field, value)]]
+        : []
+    })
+  )
+}
+export function applySuggestedSearch(draft: PortfolioDraft, onlyEmpty = false): PortfolioDraft {
+  return {
+    ...draft,
+    portfolio: {
+      ...draft.portfolio,
+      strategies: draft.portfolio.strategies.map((strategy) => {
+        if (onlyEmpty && Object.keys(strategy.search).length > 0) return strategy
+        return {
+          ...strategy,
+          search: {
+            ...suggestedStrategySearch(strategy, draft.portfolio.engine),
+            ...strategy.search,
+          },
+        }
+      }),
+    },
+  }
+}
+function searchDescription(strategy: PortfolioStrategy): string {
+  return (
+    Object.entries(activeSearch(strategy)) as Array<
+      [PortfolioAxis, { min: number; max: number; step: number }]
+    >
+  )
+    .map(
+      ([field, range]) =>
+        `${searchLabels[field]} ${range.min}–${range.max}${field.endsWith('_pct') ? '%' : ''} (step ${range.step})`
+    )
+    .join(' · ')
+}
+function sourceSummary(source: ResearchSource | undefined): string {
+  if (!source) return 'Saved signal file'
+  const receipt = source.receipt
+  const signals = `${receipt.signal_count.toLocaleString('en-IN')} signals`
+  if (!receipt.chartink) return `${receipt.filename ? `${receipt.filename} · ` : ''}${signals}`
+  const count = (value: number, word: string) =>
+    `${value.toLocaleString('en-IN')} ${word}${value === 1 ? '' : 's'}`
+  const parts = [count(receipt.signal_count, 'signal'), count(receipt.symbol_count, 'symbol')]
+  const from = new Date(receipt.date_from)
+  const through = new Date(receipt.date_to)
+  if (Number.isFinite(from.getTime()) && Number.isFinite(through.getTime()) && from <= through) {
+    parts.push(
+      new Intl.DateTimeFormat('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'UTC',
+      })
+        .formatRange(from, through)
+        .replace(/\s*–\s*/g, '–')
+    )
+  }
+  return parts.join(' · ')
 }
 export function addPortfolioSource(
   draft: PortfolioDraft,
@@ -72,6 +154,7 @@ export function addPortfolioSource(
     config: structuredClone(researchDefaults),
     search: {},
   }
+  if (draft.optimizing) strategy.search = suggestedStrategySearch(strategy, draft.portfolio.engine)
   const strategies = [...draft.portfolio.strategies, strategy]
   return {
     ...draft,
@@ -91,9 +174,8 @@ export function portfolioPayload(draft: PortfolioDraft): PortfolioRequest {
       config: { ...strategy.config, initial_capital: portfolio.capital },
       search: draft.optimizing ? activeSearch(strategy) : {},
     })),
-    ...(draft.optimizing
-      ? { optimization: draft.optimization, ...(validation ? { validation } : {}) }
-      : {}),
+    ...(draft.optimizing ? { optimization: draft.optimization } : {}),
+    ...(validation && (draft.optimizing || validation.mode === 'reserve') ? { validation } : {}),
   }
 }
 export function portfolioDraftIssue(draft: PortfolioDraft): string | null {
@@ -323,15 +405,15 @@ export function PortfolioBuilder({
                           })
                         }
                       />
-                      <p className="truncate text-xs text-muted-foreground">
-                        {source?.receipt.filename ? `${source.receipt.filename} · ` : ''}
-                        {source
-                          ? `${source.receipt.signal_count.toLocaleString('en-IN')} signals`
-                          : 'Saved signal file'}
+                      <p
+                        className={`text-xs text-muted-foreground ${source?.receipt.chartink ? '' : 'truncate'}`}
+                      >
+                        {sourceSummary(source)}
                         {draft.optimizing && Object.keys(activeSearch(strategy)).length
                           ? ` · ${Object.keys(activeSearch(strategy)).length} settings vary`
                           : ''}
                       </p>
+                      <ChartinkSource source={source?.receipt.chartink} />
                     </div>
                     {range ? (
                       <Button
@@ -427,7 +509,13 @@ export function PortfolioBuilder({
                 size="sm"
                 variant={draft.optimizing === optimizing ? 'secondary' : 'ghost'}
                 aria-pressed={draft.optimizing === optimizing}
-                onClick={() => onChange({ ...draft, optimizing })}
+                onClick={() =>
+                  onChange(
+                    optimizing
+                      ? applySuggestedSearch({ ...draft, optimizing }, true)
+                      : { ...draft, optimizing }
+                  )
+                }
               >
                 {optimizing ? 'Optimize' : 'Backtest'}
               </Button>
@@ -435,6 +523,46 @@ export function PortfolioBuilder({
           </fieldset>
           {draft.optimizing && (
             <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_160px] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150">
+              {portfolio.strategies.length > 0 && (
+                <section aria-label="Optimization ranges" className="space-y-3 sm:col-span-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-medium">Settings to optimize</h3>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onChange(applySuggestedSearch(draft))}
+                    >
+                      Suggested search
+                    </Button>
+                  </div>
+                  <div className="divide-y">
+                    {portfolio.strategies.map((strategy) => (
+                      <div
+                        key={strategy.id}
+                        className="flex items-start justify-between gap-3 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium">{strategy.name}</p>
+                          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                            {searchDescription(strategy) ||
+                              'Choose Suggested search or select your own ranges.'}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          aria-label={`Edit search for ${strategy.name}`}
+                          onClick={(event) => openSettings(strategy.id, event.currentTarget)}
+                        >
+                          Edit
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="portfolio-objective">Optimize for</Label>
                 <select
@@ -476,34 +604,38 @@ export function PortfolioBuilder({
                   }
                 />
               </div>
-              <label className="flex cursor-pointer items-center gap-2 text-sm sm:col-span-2">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-primary"
-                  checked={Boolean(portfolio.validation)}
-                  onChange={(event) =>
-                    update({ validation: event.target.checked ? { train_pct: 80 } : undefined })
-                  }
-                />
-                Check a later period
-              </label>
-              {!portfolio.strategies.some(
-                (strategy) => Object.keys(activeSearch(strategy)).length
-              ) &&
-                portfolio.strategies.length > 0 && (
-                  <Button
-                    type="button"
-                    variant="link"
-                    className="justify-start px-0 sm:col-span-2"
-                    onClick={(event) =>
-                      openSettings(portfolio.strategies[0].id, event.currentTarget)
-                    }
-                  >
-                    Choose settings to optimize
-                  </Button>
-                )}
             </div>
           )}
+          <div className="space-y-1">
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-primary"
+                checked={Boolean(
+                  portfolio.validation &&
+                    (draft.optimizing || portfolio.validation.mode === 'reserve')
+                )}
+                onChange={(event) =>
+                  update({
+                    validation: event.target.checked
+                      ? { train_pct: 80, mode: 'reserve' }
+                      : undefined,
+                  })
+                }
+              />
+              {draft.optimizing && portfolio.validation && portfolio.validation.mode !== 'reserve'
+                ? 'Check a later period'
+                : 'Reserve a later period'}
+            </label>
+            {portfolio.validation &&
+              (draft.optimizing || portfolio.validation.mode === 'reserve') && (
+                <p className="pl-6 text-xs text-muted-foreground">
+                  {portfolio.validation.mode === 'reserve'
+                    ? `Use the first ${portfolio.validation.train_pct}% of signal dates now; test the rest when you choose.`
+                    : 'This saved setup checks both periods during the run.'}
+                </p>
+              )}
+          </div>
           <details className="text-sm">
             <summary className="cursor-pointer text-muted-foreground">More settings</summary>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">

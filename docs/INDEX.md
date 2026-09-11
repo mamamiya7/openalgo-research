@@ -44,7 +44,12 @@ need → drill into the specific file. Don't load everything at once.
 |---|---|
 | Native Scanner Research development | [research/BRIEF.md](research/BRIEF.md) · [research/STATUS.md](research/STATUS.md) · [research/SYSTEM_MAP.md](research/SYSTEM_MAP.md) · [research/CONNECTORS.md](research/CONNECTORS.md) · [research/JOURNEYS.md](research/JOURNEYS.md) · [research/EXECUTION_STATUS.md](research/EXECUTION_STATUS.md) |
 | Complete trader journeys, study library, navigation and asset-aware design | [research/PRODUCT_JOURNEY_MAP.md](research/PRODUCT_JOURNEY_MAP.md) · [research/ASSET_PROFILES.md](research/ASSET_PROFILES.md) · [visual map](research/trader-journey-map.html) |
-| Integrated Research delivery plan: current evidence, journey gaps, dependencies, assets and release acceptance | [research/DELIVERY_PLAN.md](research/DELIVERY_PLAN.md) |
+| Integrated Research delivery plan: reconciled whole-product backlog, all 34 journeys, dependencies, assets and release acceptance | [research/DELIVERY_PLAN.md](research/DELIVERY_PLAN.md) |
+| Research download batching, Historify reuse and bounded evidence publication | [research/DOWNLOAD_PERFORMANCE.md](research/DOWNLOAD_PERFORMANCE.md) |
+| Optimization trial metrics, configurable table columns and settings dialogs | [research/TRIAL_RESULTS.md](research/TRIAL_RESULTS.md) |
+| Continuous report, saved preferences, month/drawdown investigation and evaluation-basis receipts; Optuna study, candidate and comparison/validation plan | [research/REPORT_EXPERIENCE_PLAN.md](research/REPORT_EXPERIENCE_PLAN.md) |
+| Chartink extension to saved research: full journey, names, automatic fields, required choices, engines and results | [research/CHARTINK_JOURNEY.md](research/CHARTINK_JOURNEY.md) |
+| Chrome extension logo, public release steps, store copy and privacy | [research/CHROME_EXTENSION_PUBLISHING.md](research/CHROME_EXTENSION_PUBLISHING.md) · [research/CHARTINK_STORE_LISTING.md](research/CHARTINK_STORE_LISTING.md) · [research/CHARTINK_PRIVACY.md](research/CHARTINK_PRIVACY.md) |
 | Scalping Terminal (`/scalping`) | [scalping/PRD.md](scalping/PRD.md) |
 | Scanner architecture | [scanner-architecture.md](scanner-architecture.md) |
 | WhatsApp alerts | [whatsapp.md](whatsapp.md) |

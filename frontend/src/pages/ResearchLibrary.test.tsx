@@ -107,6 +107,15 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('research library navigation and lost-work boundaries', () => {
+  it('opens an incoming Chartink handoff before any stale experiment selection', () => {
+    show(
+      '/scanner-research?chartink_import=28e5788b-92a1-4e34-877a-8fc902e912fd&experiment=previous'
+    )
+    expect(screen.getByRole('heading', { name: 'Chartink history' })).toBeVisible()
+    expect(screen.getByText('Waiting for your scanner’s history…')).toBeVisible()
+    expect(researchLibrary.get).not.toHaveBeenCalled()
+    expect(researchLibrary.list).not.toHaveBeenCalled()
+  })
   it('refreshes the library after creating an experiment despite the host cache policy', async () => {
     const user = userEvent.setup()
     vi.mocked(researchLibrary.list)

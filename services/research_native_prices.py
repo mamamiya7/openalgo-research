@@ -21,6 +21,7 @@ MODE = "historify-native-prices-v1"
 MAX_RECEIPT_BYTES = 128 * 1024**2
 MAX_JOURNAL = 100000
 MAX_FINDINGS = 1000000
+DAILY_REQUEST_GAP = 20  # One trading month; all request spans still remain below 300 days.
 PRICE_FIELDS = ("open", "high", "low", "close", "volume", "oi")
 
 
@@ -52,14 +53,26 @@ def _epoch(value):
     return int(parsed.timestamp())
 
 
-def _windows(slots, positions, interval):
+def _windows(slots, positions, interval, *, max_gap=0, barriers=()):
     first = previous = None
+    barrier_index = 0
     for slot in slots:
+        # A confirmed broker gap is immutable for this run. A wider request must
+        # not bridge that completed window and silently admit it on continuation.
+        if previous is not None:
+            while barrier_index < len(barriers) and barriers[barrier_index][1] < previous:
+                barrier_index += 1
+        crosses_completed = (
+            previous is not None
+            and barrier_index < len(barriers)
+            and previous < barriers[barrier_index][0] <= slot
+        )
         if first is not None and (
             (
-                positions[slot] != positions[previous] + 1
+                positions[slot] > positions[previous] + 1 + (max_gap if interval == "D" else 0)
                 and (interval == "D" or slot[:10] != previous[:10])
             )
+            or crosses_completed
             or (date.fromisoformat(slot[:10]) - date.fromisoformat(first[:10])).days
             >= (300 if interval == "D" else 5)
         ):
@@ -315,14 +328,30 @@ def acquire_native_prices(
         requests = []
         for symbol in required:
             requests.extend(
-                (symbol, first, last)
-                for first, last in _windows(
-                    missing_requests(symbol, cache=cache), positions, interval
-                )
+                (symbol, first, last) for first, last in request_windows(symbol, cache=cache)
             )
         if len(requests) > MAX_JOURNAL:
             raise ValueError("Native price request plan exceeds its bounded journal")
         return requests
+
+    def request_windows(symbol, *, cache=False):
+        completed = sorted(
+            (first, last)
+            for own_symbol, first, last in (
+                state["completed_windows"] + (cache_windows if cache else [])
+            )
+            if own_symbol == symbol
+        )
+        return _windows(
+            missing_requests(symbol, cache=cache),
+            positions,
+            interval,
+            # Stored daily data can be checked in one bounded range per symbol.
+            # Broker requests bridge only nearby windows. Admission below still
+            # filters every response to the original exact price requirements.
+            max_gap=len(sessions) if cache else DAILY_REQUEST_GAP,
+            barriers=completed,
+        )
 
     symbol_counts = {}
 
@@ -333,7 +362,7 @@ def acquire_native_prices(
             "checked": not missing_requests(symbol, cache=True),
             "covered": count == len(required[symbol]),
             "unavailable": len(required[symbol]) - count - len(unresolved),
-            "pending": sum(1 for _ in _windows(unresolved, positions, interval)),
+            "pending": sum(1 for _ in request_windows(symbol)),
         }
 
     for symbol in required:

@@ -69,9 +69,9 @@ def resolve_inputs(store, owner, request):
         },
     }
     if portfolio.get("validation"):
-        from research.portfolio_validation import split_date
+        from research.portfolio_validation import period_plan
 
-        split_date(result)
+        result["period_plan"] = period_plan(result)
     return result
 
 
@@ -82,6 +82,7 @@ def preview(store, owner, request):
         "receipt": evidence["receipt"],
         "interval": evidence["snapshot"]["provenance"]["interval"],
         "versions": evidence["versions"],
+        **({"period_plan": evidence["period_plan"]} if evidence.get("period_plan") else {}),
     }
 
 
@@ -164,8 +165,12 @@ def submit(store, owner, request, request_id=None):
     )
 
 
-def rerun(store, owner, job_id, *, trial_id=None, request_id=None):
-    """Replay exact saved settings against the exact saved native prices."""
+def replay_inputs(store, owner, job_id, *, trial_id=None, period="selection"):
+    """One exact candidate/period contract for direct and library follow-up jobs."""
+    from research.report_contract import settings_identity
+
+    if period not in ("selection", "evaluation"):
+        raise ValueError("Choose the selection or later period")
     job = service.get_job(store, owner, job_id)
     if job.status != "completed":
         raise ValueError("Choose a completed portfolio run")
@@ -174,17 +179,32 @@ def rerun(store, owner, job_id, *, trial_id=None, request_id=None):
         raise ValueError("Choose a completed portfolio run")
     evidence = service.read_artifact(store, bundle["inputs_artifact"])
     report = bundle["result"]
-    if report.get("validation"):
+    has_split = bool(evidence.get("portfolio", {}).get("validation"))
+    if period == "evaluation" and not has_split:
+        raise ValueError(
+            "This run has no reserved later period. Choose a run with saved evaluation dates."
+        )
+    if has_split:
         from research.portfolio_validation import partition
 
-        evidence, _, _ = partition(evidence)
+        earlier, later, _ = partition(evidence, prepare_period=period)
+        evidence = later if period == "evaluation" else earlier
     selected = report["strategies"]
+    selected_row = None
     if trial_id is not None:
         rows = report.get("experiment", {}).get("rows", [])
         matches = [row for row in rows if row["config_id"] == trial_id]
         if len(matches) != 1:
             raise ValueError("Choose a saved trial from this run")
-        selected = matches[0]["strategies"]
+        selected_row = matches[0]
+        selected = selected_row["strategies"]
+    config_id = settings_identity(selected)
+    study = report.get("experiment", {})
+    inherited_candidate = report.get("replay_origin", {})
+    if selected_row is None:
+        selected_row = next(
+            (row for row in study.get("rows", []) if row["config_id"] == config_id), None
+        )
     definitions = {item["id"]: item for item in selected}
     portfolio = deepcopy(evidence["portfolio"])
     if set(definitions) != {item["id"] for item in portfolio["strategies"]}:
@@ -204,10 +224,39 @@ def rerun(store, owner, job_id, *, trial_id=None, request_id=None):
         "versions": versions,
         "frozen_prices": True,
         "parent_result_artifact": job.result_artifact,
+        "replay_origin": {
+            "parent_job_id": job.id,
+            "parent_result_artifact": job.result_artifact,
+            "period": period
+            if has_split
+            else report.get("replay_origin", {}).get("period", "full"),
+            "config_id": config_id,
+            **(
+                {
+                    "study_job_id": job.id,
+                    "trial_number": selected_row["trial_number"],
+                    "is_objective_winner": study.get("recommendation_id") == config_id,
+                }
+                if selected_row is not None
+                else {
+                    key: inherited_candidate[key]
+                    for key in ("study_job_id", "trial_number", "is_objective_winner")
+                    if inherited_candidate.get("config_id") == config_id
+                    and key in inherited_candidate
+                }
+            ),
+        },
         "strategies": [
             {**item, **definitions[item["id"]], "search": {}} for item in evidence["strategies"]
         ],
     }
+    return job, evidence
+
+
+def rerun(store, owner, job_id, *, trial_id=None, request_id=None, period="selection"):
+    """Replay or evaluate one retained candidate without acquiring market data."""
+    _, evidence = replay_inputs(store, owner, job_id, trial_id=trial_id, period=period)
+    portfolio, versions = evidence["portfolio"], evidence["versions"]
     _, source = service.register_source(store, owner, evidence)
     return service.submit(
         store,
@@ -242,7 +291,7 @@ def _prepare_prices(
 ):
     from services.research_acquisition import _save_receipt, acquisition_receipts
     from services.research_checkpoint import MinuteCheckpointWriter, unpack_checkpoint
-    from services.research_historify import native_historify_read, native_historify_write
+    from services.research_historify import NativeHistorifyArchive
     from services.research_native_calendar import native_calendar_snapshot
     from services.research_native_prices import acquire_native_prices
     from services.research_sources import (
@@ -306,11 +355,15 @@ def _prepare_prices(
         )
 
     def persist(state):
+        # Publish changed symbol/receipt files under one accounted quota scan.
+        # Release that transaction before checkpoint() updates the worker lease.
+        with service.artifact_publication(store):
+            manifest = writer.pack(state)
         checkpoint(
             {
                 "phase": "prices",
                 "reference_artifact": reference_id,
-                "acquisition_manifest": writer.pack(state),
+                "acquisition_manifest": manifest,
             },
             {
                 "completed": 0.6 * state["progress"]["completed"],
@@ -319,14 +372,13 @@ def _prepare_prices(
             },
         )
 
+    archive = NativeHistorifyArchive(target, interval=interval)
     snapshot = acquire_native_prices(
         evidence["signals"],
         plan,
         calendar,
-        reader=lambda symbol, first, last: native_historify_read(
-            symbol, first, last, target, interval=interval
-        ),
-        writer=lambda symbol, rows: native_historify_write(symbol, rows, target, interval=interval),
+        reader=archive.read,
+        writer=archive.write,
         credentials=lambda: resolve_broker_session(owner),
         archive_dir=receipts_dir,
         prior=restored.get("acquisition") if restored else None,
@@ -421,10 +473,44 @@ def run(
 
     calculation_evidence = evidence
     validation_evidence = None
+    reserved_evaluation = None
     if portfolio.get("validation"):
         from research.portfolio_validation import partition
 
-        calculation_evidence, validation_evidence, validation_info = partition(evidence)
+        calculation_evidence, validation_evidence, validation_info = partition(
+            evidence,
+            prepare_period="selection"
+            if portfolio["validation"].get("mode") == "reserve"
+            else "both",
+        )
+        if portfolio["validation"].get("mode") == "reserve":
+            reserved_evaluation = {
+                "version": "research-period-plan-v1",
+                "selection": {
+                    "from": validation_info["train_from"],
+                    "to": validation_info["train_to"],
+                },
+                "evaluation": {
+                    "from": validation_info["test_from"],
+                    "to": validation_info["test_to"],
+                },
+                "status": "reserved",
+            }
+            validation_evidence = None
+
+    from research.evaluation_basis import build_evaluation_basis
+
+    calculation_basis = build_evaluation_basis(
+        calculation_evidence,
+        period="selection"
+        if portfolio.get("validation")
+        else evidence.get("replay_origin", {}).get("period", "full"),
+    )
+    validation_basis = (
+        build_evaluation_basis(validation_evidence, period="evaluation")
+        if validation_evidence is not None
+        else None
+    )
 
     last_control_check = float("-inf")
 
@@ -468,8 +554,17 @@ def run(
             progress=calculation_progress,
             checkpoint=persist_calculation,
             saved=(saved or {}).get("calculation"),
+            record_timing=True,
             **({"activity": activity} if activity else {}),
         )
+        from research.study_analysis import build_study_analysis
+
+        result["experiment"]["study_analysis"] = build_study_analysis(
+            result["experiment"], progress=check_control
+        )
+        # Every candidate uses the same prepared cohort and price observations.
+        # Compact rows reference the study-level basis instead of copying it.
+        result["experiment"]["evaluation_basis_id"] = calculation_basis["evidence_id"]
     else:
         result = evaluate(
             calculation_evidence["strategies"],
@@ -496,6 +591,7 @@ def run(
             portfolio["capital"],
             progress=validation_progress,
         )
+        later["evaluation_basis"] = validation_basis
         later["source"] = {
             "provider": "OpenAlgo Historify",
             "interval": evidence["snapshot"]["provenance"]["interval"],
@@ -506,7 +602,12 @@ def run(
             },
         }
         result["validation"] = {**validation_info, "result": later}
+    result["evaluation_basis"] = calculation_basis
     result["portfolio"] = deepcopy(portfolio)
+    if reserved_evaluation:
+        result["reserved_evaluation"] = reserved_evaluation
+    if evidence.get("replay_origin"):
+        result["replay_origin"] = deepcopy(evidence["replay_origin"])
     result["source"] = {
         "interval": evidence["snapshot"]["provenance"]["interval"],
         "provider": "OpenAlgo Historify",
@@ -519,4 +620,15 @@ def run(
         },
     }
     result.setdefault("config", {"initial_capital": portfolio["capital"]})
+    if result.get("analysis"):
+        from research.analytics import add_price_charts
+
+        result["analysis"] = add_price_charts(
+            result["analysis"], result, calculation_evidence["snapshot"]
+        )
+        if validation_evidence and result.get("validation", {}).get("result", {}).get("analysis"):
+            later = result["validation"]["result"]
+            later["analysis"] = add_price_charts(
+                later["analysis"], later, validation_evidence["snapshot"]
+            )
     return result, evidence

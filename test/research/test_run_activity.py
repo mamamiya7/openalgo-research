@@ -9,7 +9,7 @@ from test_acquisition import reference
 from test_jobs import app, client  # noqa: F401
 from test_native_price_workflow import prepare_archive
 from test_optuna_portfolio import engine, search_request  # noqa: F401
-from test_portfolio_workflow import portfolio
+from test_portfolio_workflow import portfolio, uploaded
 
 from research.connectors.optuna_portfolio import run_search
 from services import research_portfolio
@@ -159,10 +159,40 @@ def test_worker_persists_counts_and_publishes_complete_only_with_result(
     assert result["activity"]["trials"]["completed"] == 3
     assert result["activity"]["prices"]["interval"] == "D"
     assert result["activity"]["prices"]["downloaded_candles"] == 0
+    # Existing jobs already carry signal dates separately from the later entry/
+    # holding candles. The progress UI can use them without a schema migration.
+    assert response.json["source_summary"]["date_from"] == "2026-01-05"
+    assert response.json["source_summary"]["date_to"] == "2026-01-05"
+    cache_start = next(o for o in observations if o["activity"]["stage"] == "cache")
+    assert cache_start["activity"]["prices"]["required_candles"] == 2
+    assert cache_start["activity"]["prices"]["cache_complete"] is False
+    assert cache_start["source_summary"] == response.json["source_summary"]
     assert all(o["activity"]["stage"] != "complete" for o in observations)
     exported = client.get(f"/scanner-research/api/jobs/{job_id}/export").data
     assert client.get(f"/scanner-research/api/jobs/{job_id}").json["activity"] == result["activity"]
     assert client.get(f"/scanner-research/api/jobs/{job_id}/export").data == exported
+
+
+def test_queued_progress_dates_describe_selected_signals_not_entire_source(client):
+    request = portfolio(client)
+    source = uploaded(client, b"Date,Symbol\n2026-01-05,AAA\n2026-01-06,AAA\n2026-01-07,BBB\n")
+    for strategy in request["strategies"]:
+        strategy["source_id"] = source
+    request.update(date_from="2026-01-06", date_to="2026-01-07")
+    preview = client.post("/scanner-research/api/portfolio/preflight", json=request)
+    assert preview.status_code == 200, preview.json
+    response = client.post("/scanner-research/api/portfolio/jobs", json={"portfolio": request})
+    assert response.status_code == 202, response.json
+    job = response.json
+    assert job["source_summary"]["date_from"] == "2026-01-06"
+    assert job["source_summary"]["date_to"] == "2026-01-07"
+    assert job["source_summary"] == preview.json["receipt"]
+    assert job["activity"]["inputs"]["signals"] == 4  # two included signals per strategy
+    assert "prices" not in job["activity"]  # no denominator before the real plan exists
+    assert (
+        client.get(f"/scanner-research/api/jobs/{job['id']}").json["source_summary"]
+        == job["source_summary"]
+    )
 
 
 def test_automatic_continuation_preserves_activity_and_yields_to_next_job(app, client, monkeypatch):

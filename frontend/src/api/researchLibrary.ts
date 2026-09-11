@@ -61,12 +61,19 @@ export const researchLibrary = {
     revision: number,
     job_id: string,
     request_id: string,
-    trial_id?: string
+    trial_id?: string,
+    period?: 'selection' | 'evaluation'
   ): Promise<{ experiment: ResearchExperiment; job: LibraryJob; version: SetupVersion }> {
     return (
       await webClient.post(
         `${path(id)}/replay`,
-        { revision, job_id, request_id, ...(trial_id ? { trial_id } : {}) },
+        {
+          revision,
+          job_id,
+          request_id,
+          ...(trial_id ? { trial_id } : {}),
+          ...(period ? { period } : {}),
+        },
         options
       )
     ).data

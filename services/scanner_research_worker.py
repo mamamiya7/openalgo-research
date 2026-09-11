@@ -191,7 +191,7 @@ def run_one(store, token, stop_requested=None):
             lease.heartbeat = current.updated_at = time.time()
         last_activity_update = now
 
-    def progress(completed, total, force=False):
+    def progress(completed, total, force=False, *, check_storage=True):
         nonlocal last_update
         # Session-level cancellation remains bounded without a SQLite transaction
         # for every session of every grid configuration.
@@ -201,7 +201,12 @@ def run_one(store, token, stop_requested=None):
         if stop_requested and stop_requested():
             raise Interrupted("Worker shutdown requested")
         last_update = now
-        if kind in ("acquire", "evidence_update", "portfolio_backtest", "portfolio_optimize"):
+        if check_storage and kind in (
+            "acquire",
+            "evidence_update",
+            "portfolio_backtest",
+            "portfolio_optimize",
+        ):
             ensure_storage_capacity(store)
         with store.sessions.begin() as db:
             lease = db.get(ResearchWorker, 1)
@@ -213,7 +218,9 @@ def run_one(store, token, stop_requested=None):
             current.updated_at = time.time()
 
     def checkpoint(state, counts):
-        progress(counts["completed"], counts["total"], force=True)
+        # New checkpoint bytes are admitted under the artifact publication lock
+        # below. Keep liveness/cancellation here without scanning storage twice.
+        progress(counts["completed"], counts["total"], force=True, check_storage=False)
         artifact = save_artifact(
             store,
             {"identity": experiment.identity, "policy_version": policy, "state": state},
@@ -275,7 +282,15 @@ def run_one(store, token, stop_requested=None):
                 receipt = read_artifact(store, prior.checkpoint)
                 if receipt["identity"] == prior.identity and receipt["policy_version"] == policy:
                     saved = receipt["state"]
-        if kind in ("portfolio_backtest", "portfolio_optimize"):
+        if kind == "portfolio_analysis":
+            from services.research_analysis import run as run_analysis
+
+            parent_result_artifact = spec["parent_result_artifact"]
+            with network_lease(store, token, job.id, stop_requested) as cancelled:
+                cancelled()
+                result = run_analysis(store, job.owner, job.source_id, spec, progress=progress)
+                cancelled()
+        elif kind in ("portfolio_backtest", "portfolio_optimize"):
             from services.research_activity import initial_activity
             from services.research_portfolio import run as run_portfolio
 
@@ -434,14 +449,24 @@ def run_one(store, token, stop_requested=None):
             )
         else:
             result = evaluate(evidence["signals"], evidence["snapshot"], config, progress=progress)
-        if kind not in ("prepare", "acquire", "evidence_update") and history_record is None:
+        if (
+            kind not in ("prepare", "acquire", "evidence_update", "portfolio_analysis")
+            and history_record is None
+        ):
+            used_signals = evidence["signals"]
+            used_through = evidence["snapshot"]["sessions"][-1]
+            if kind in ("portfolio_backtest", "portfolio_optimize") and result.get(
+                "reserved_evaluation"
+            ):
+                used_through = result["reserved_evaluation"]["selection"]["to"]
+                used_signals = [s for s in used_signals if s["date"] <= used_through]
             history_record = ResearchHistory(
                 job_id=job.id,
                 owner=job.owner,
-                test_from=min(s["date"] for s in evidence["signals"]),
-                test_end=evidence["snapshot"]["sessions"][-1],
+                test_from=min(s["date"] for s in used_signals),
+                test_end=used_through,
                 signal_keys=encoded(
-                    sorted({s["date"] + "|" + s["symbol"] for s in evidence["signals"]})
+                    sorted({s["date"] + "|" + s["symbol"] for s in used_signals})
                 ).decode(),
             )
         if activity_state:

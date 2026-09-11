@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">OpenAlgo Research connector</title>
+  <rect x="16" y="16" width="96" height="96" rx="25" fill="#143E35"/>
+  <g fill="#F1FFF6">
+    <rect x="34" y="66" width="12" height="25" rx="6"/>
+    <rect x="53" y="57" width="12" height="34" rx="6"/>
+    <rect x="72" y="70" width="12" height="21" rx="6"/>
+  </g>
+  <path d="M37 43H88M77 32L88 43L77 54" fill="none" stroke="#A5F5C8" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

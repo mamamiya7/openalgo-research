@@ -11,10 +11,16 @@ import {
   portfolioResearch,
 } from '@/api/portfolioResearch'
 import type { ResearchSource } from '@/api/scannerResearch'
-import { PortfolioLineChart } from '@/components/portfolio/PortfolioLineChart'
 import PortfolioResearch from '@/pages/PortfolioResearch'
 import { useAuthStore } from '@/stores/authStore'
-import { addPortfolioSource, freshPortfolioDraft, portfolioPayload } from './PortfolioBuilder'
+import {
+  addPortfolioSource,
+  applySuggestedSearch,
+  freshPortfolioDraft,
+  portfolioDraftIssue,
+  portfolioPayload,
+  suggestedStrategySearch,
+} from './PortfolioBuilder'
 import { PortfolioResults } from './PortfolioResults'
 
 vi.mock('@/api/portfolioResearch', () => ({
@@ -29,11 +35,19 @@ vi.mock('@/api/portfolioResearch', () => ({
     cancel: vi.fn(),
     resume: vi.fn(),
     rerun: vi.fn(),
+    analysis: vi.fn().mockResolvedValue({ status: 'missing' }),
+    prepareAnalysis: vi.fn(),
+    analysisExportUrl: (id: string) => `/scanner-research/api/portfolio/jobs/${id}/analysis/export`,
     exportUrl: (id: string) => `/scanner-research/api/jobs/${id}/export`,
   },
 }))
 vi.mock('@/components/portfolio/PortfolioLineChart', () => ({
   PortfolioLineChart: vi.fn(() => <div>Native portfolio chart</div>),
+}))
+vi.mock('./ResearchPlot', () => ({
+  default: ({ chart }: { chart: { id: string; figure: unknown } }) => (
+    <output aria-label={chart.id}>{JSON.stringify(chart.figure)}</output>
+  ),
 }))
 const source = (id: string, interval = 'D'): ResearchSource => ({
   id,
@@ -177,6 +191,75 @@ afterEach(() => {
 })
 
 describe('native portfolio consumer journey', () => {
+  it('limits suggestions to compatible enabled rules and keeps capital, costs and chosen axes unchanged', () => {
+    const daily = draft()
+    daily.optimization.trials = 70
+    daily.portfolio.strategies[0].search = { target_pct: { min: 10, max: 30, step: 10 } }
+    const automatic = applySuggestedSearch(daily, true)
+    expect(automatic.portfolio.strategies[0].search).toEqual(daily.portfolio.strategies[0].search)
+    const suggested = applySuggestedSearch(daily)
+    expect(suggested.optimization.trials).toBe(70)
+    expect(suggested.portfolio.strategies[0].search.target_pct).toEqual({
+      min: 10,
+      max: 30,
+      step: 10,
+    })
+    expect(suggested.portfolio.strategies[0].search.hold_sessions).toEqual({
+      min: 3,
+      max: 7,
+      step: 2,
+    })
+    expect(suggested.portfolio.strategies[0].config).toEqual(daily.portfolio.strategies[0].config)
+    expect(suggested.portfolio.capital).toBe(daily.portfolio.capital)
+    expect(suggested.portfolio.strategies[0].search.order_size_pct).toBeUndefined()
+    expect(suggested.portfolio.strategies[0].search.allocation_pct).toBeUndefined()
+    const timed = structuredClone(daily.portfolio.strategies[0])
+    timed.config = {
+      ...timed.config,
+      trade_horizon: 'intraday',
+      hold_minutes: 60,
+      target_pct: 0,
+      stop_pct: 0,
+      trailing_enabled: true,
+      trailing_pct: 2,
+    }
+    const minute = suggestedStrategySearch(timed, 'vectorbt')
+    expect(minute).toEqual({
+      hold_minutes: { min: 30, max: 90, step: 30 },
+      trailing_pct: { min: 1, max: 3, step: 1 },
+    })
+    expect(suggestedStrategySearch(timed, 'nautilus').trailing_pct).toBeUndefined()
+    timed.config.hold_minutes = null
+    timed.config.trailing_enabled = false
+    expect(suggestedStrategySearch(timed, 'vectorbt')).toEqual({})
+    const empty = {
+      ...daily,
+      optimizing: true,
+      portfolio: { ...daily.portfolio, strategies: [{ ...timed, search: {} }] },
+    }
+    expect(portfolioDraftIssue(empty)).toContain('Choose at least one setting')
+  })
+
+  it('starts new CSV optimizations with 25 trials and a visible complete suggested search', async () => {
+    savedDraft()
+    mount()
+    await userEvent.click(screen.getByRole('button', { name: 'Optimize', exact: true }))
+    expect(screen.getByLabelText('Trials')).toHaveValue(25)
+    expect(screen.getByRole('button', { name: 'Suggested search' })).toBeVisible()
+    expect(screen.getByRole('region', { name: 'Optimization ranges' })).toHaveTextContent(
+      'Holding sessions 3–7 (step 2)'
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Run optimization' }))
+    await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
+    const sent = vi.mocked(portfolioResearch.preflight).mock.calls[0][0]
+    expect(sent.optimization).toMatchObject({ trials: 25, sampler: 'tpe', objective: 'balanced' })
+    expect(sent.strategies[0].search).toEqual({
+      hold_sessions: { min: 3, max: 7, step: 2 },
+      target_pct: { min: 5, max: 15, step: 5 },
+      stop_pct: { min: 2.5, max: 7.5, step: 2.5 },
+    })
+  })
+
   it('names old inputs by count and saved time without guessing they are duplicates', async () => {
     const old = {
       ...source('c'.repeat(32)),
@@ -224,6 +307,39 @@ describe('native portfolio consumer journey', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Use saved signals' }))
     await userEvent.click(await screen.findByRole('button', { name: /My breakout\.csv/ }))
     expect(screen.getByLabelText('Strategy 1 name')).toHaveValue('My breakout')
+    expect(screen.getByText('My breakout.csv · 4 signals')).toBeVisible()
+    expect(portfolioResearch.upload).not.toHaveBeenCalled()
+    expect(portfolioResearch.preflight).not.toHaveBeenCalled()
+  })
+
+  it('summarizes an imported Chartink source with signal, symbol and date coverage', async () => {
+    const imported = draft()
+    const receipt = imported.sources[imported.portfolio.strategies[0].source_id].receipt
+    Object.assign(receipt, {
+      filename: 'NKS BEST BUY STOCKS FOR INTRADAY.csv',
+      signal_count: 365,
+      symbol_count: 111,
+      date_from: '2026-01-22',
+      date_to: '2026-09-08',
+      chartink: {
+        url: 'https://chartink.com/screener/nks-best-buy',
+        title: 'NKS BEST BUY STOCKS FOR INTRADAY',
+        selected_period: '9 months',
+        captured_at: '2026-09-11T06:00:00Z',
+        repaints: true,
+        export_kind: 'chartink_history_csv',
+      },
+    })
+    savedDraft(imported)
+    mount()
+    expect(screen.getByText('365 signals · 111 symbols · 22 Jan–8 Sept 2026')).toBeVisible()
+    expect(screen.queryByText(/NKS BEST BUY STOCKS FOR INTRADAY\.csv/)).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Chartink history' })).toHaveAttribute(
+      'href',
+      'https://chartink.com/screener/nks-best-buy'
+    )
+    expect(screen.getByText('· 9 months')).toBeVisible()
+    expect(screen.getByText('· Repainting scanner')).toBeVisible()
     expect(portfolioResearch.upload).not.toHaveBeenCalled()
     expect(portfolioResearch.preflight).not.toHaveBeenCalled()
   })
@@ -453,15 +569,17 @@ describe('native portfolio consumer journey', () => {
     expect(screen.getByLabelText('Allocation for Breakout (%)')).toHaveValue(50)
   })
 
-  it('opens ranges only for selected parameters and preserves them across mode switches', async () => {
+  it('shows suggested ranges, lets the user opt out of one, and preserves choices across mode switches', async () => {
     savedDraft()
     mount()
     await userEvent.click(screen.getByRole('button', { name: 'Optimize', exact: true }))
-    await userEvent.click(screen.getByRole('button', { name: 'Choose settings to optimize' }))
-    expect(screen.getByLabelText('Profit target (%)')).toHaveValue(10)
-    expect(screen.queryByLabelText('Profit target (%) min')).not.toBeInTheDocument()
-    await userEvent.click(screen.getByLabelText('Optimize Profit target (%)'))
+    expect(screen.getByRole('region', { name: 'Optimization ranges' })).toHaveTextContent(
+      'Profit target 5–15% (step 5)'
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Edit search for Breakout' }))
     expect(screen.getByLabelText('Profit target (%) min')).toHaveValue(5)
+    expect(screen.getByLabelText('Stop loss (%) min')).toHaveValue(2.5)
+    await userEvent.click(screen.getByLabelText('Optimize Stop loss (%)'))
     expect(screen.queryByLabelText('Stop loss (%) min')).not.toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Profit target (%) max'), { target: { value: '20' } })
     await userEvent.click(screen.getByRole('button', { name: 'Done' }))
@@ -472,6 +590,7 @@ describe('native portfolio consumer journey', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Optimize', exact: true }))
     await userEvent.click(screen.getByRole('button', { name: 'Settings for Breakout' }))
     expect(screen.getByLabelText('Profit target (%) max')).toHaveValue(20)
+    expect(screen.queryByLabelText('Stop loss (%) min')).not.toBeInTheDocument()
   })
 
   it('uses intraday requirements only when selected and keeps candle choice automatic', async () => {
@@ -506,7 +625,7 @@ describe('native portfolio consumer journey', () => {
     ).not.toHaveAttribute('value')
   })
 
-  it('does not submit invalid allocations or optimization with no variable settings', async () => {
+  it('rejects invalid allocations and runs the visible suggested optimization after correcting them', async () => {
     const invalid = addPortfolioSource(draft(), source('b'.repeat(32)), 'Momentum.csv')
     invalid.portfolio.strategies.forEach((item) => {
       item.allocation_pct = 70
@@ -519,7 +638,10 @@ describe('native portfolio consumer journey', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Equal split' }))
     await userEvent.click(screen.getByRole('button', { name: 'Optimize', exact: true }))
     await userEvent.click(screen.getByRole('button', { name: 'Run optimization' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Choose at least one setting')
+    await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
+    const payload = vi.mocked(portfolioResearch.preflight).mock.calls[0][0]
+    expect(payload.optimization?.trials).toBe(25)
+    expect(payload.strategies.every((item) => Object.keys(item.search).length > 0)).toBe(true)
   })
 
   it('keeps the same request identity after an uncertain submission error', async () => {
@@ -596,19 +718,29 @@ describe('native portfolio consumer journey', () => {
     ).toHaveLength(1)
   })
 
-  it('records later-period validation only for optimization without erasing its draft choice', async () => {
+  it('reserves later data before both baseline and optimization without erasing the choice', async () => {
     const initial = draft()
     initial.optimizing = true
     initial.portfolio.strategies[0].search.target_pct = { min: 5, max: 15, step: 5 }
     savedDraft(initial)
     mount()
-    await userEvent.click(screen.getByLabelText('Check a later period'))
+    await userEvent.click(screen.getByLabelText('Reserve a later period'))
     let stored = JSON.parse(sessionStorage.getItem('portfolio-draft:account')!)
-    expect(portfolioPayload(stored).validation).toEqual({ train_pct: 80 })
+    expect(portfolioPayload(stored).validation).toEqual({ train_pct: 80, mode: 'reserve' })
     await userEvent.click(screen.getByRole('button', { name: 'Backtest', exact: true }))
     stored = JSON.parse(sessionStorage.getItem('portfolio-draft:account')!)
-    expect(portfolioPayload(stored).validation).toBeUndefined()
-    expect(stored.portfolio.validation).toEqual({ train_pct: 80 })
+    expect(portfolioPayload(stored).validation).toEqual({ train_pct: 80, mode: 'reserve' })
+    expect(stored.portfolio.validation).toEqual({ train_pct: 80, mode: 'reserve' })
+  })
+
+  it('preserves legacy validation request semantics and unreserved full-period drafts', () => {
+    const initial = draft()
+    expect(portfolioPayload(initial).validation).toBeUndefined()
+    initial.portfolio.validation = { train_pct: 80 }
+    initial.optimizing = false
+    expect(portfolioPayload(initial).validation).toBeUndefined()
+    initial.optimizing = true
+    expect(portfolioPayload(initial).validation).toEqual({ train_pct: 80 })
   })
 })
 
@@ -691,7 +823,7 @@ describe('portfolio engine capabilities', () => {
       />
     )
     await userEvent.click(screen.getByRole('tab', { name: 'Settings' }))
-    expect(screen.getByText('NautilusTrader 1.221.0')).toBeVisible()
+    expect(screen.getByText('NautilusTrader 1.221.0', { selector: 'p' })).toBeVisible()
   })
 
   it('keeps builder and settings drawer accessible with labelled controls and focus return', async () => {
@@ -711,7 +843,80 @@ describe('portfolio engine capabilities', () => {
 })
 
 describe('portfolio result reading', () => {
-  it('leads with marked account metrics and keeps timestamped chart points intact', () => {
+  it('keeps reserved dates and exact later evaluation separate from the displayed baseline', async () => {
+    const evaluate = vi.fn()
+    const view = render(
+      <PortfolioResults
+        job={finished}
+        result={{
+          ...result,
+          reserved_evaluation: {
+            version: 'research-period-plan-v1',
+            status: 'reserved',
+            selection: { from: '2026-01-05', to: '2026-01-20' },
+            evaluation: { from: '2026-02-01', to: '2026-02-05' },
+          },
+        }}
+        onRerun={vi.fn()}
+        onEvaluate={evaluate}
+        rerunning={false}
+        exportUrl="/export"
+        embedded
+      />
+    )
+    expect(screen.getByText(/Later period reserved/)).toHaveTextContent('2026-02-01')
+    expect(screen.queryByRole('heading', { name: 'My portfolio' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Test later period' }))
+    expect(evaluate).toHaveBeenCalledOnce()
+    expect(
+      screen.queryByRole('button', { name: 'Later period', exact: true })
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Report' })).toHaveAttribute('aria-selected', 'true')
+    view.unmount()
+  })
+
+  it('keeps the trial page when switching away from Trials and back', async () => {
+    const selected: PortfolioResult = {
+      ...result,
+      experiment: {
+        kind: 'portfolio_optimize',
+        rows: Array.from({ length: 65 }, (_, index) => ({
+          trial_number: index,
+          config_id: `trial-${index}`,
+          strategies: [strategy],
+          summary: result.summary,
+          score: 0.5,
+          stage: 'tpe',
+        })),
+        recommendation_id: 'trial-0',
+        selected_strategies: [strategy],
+        specification: { sampler: 'tpe', trials: 100, objective: 'balanced', seed: 0 },
+        optimizer: {
+          sampler: 'TPESampler',
+          objective_definition: 'return minus drawdown',
+          version: '5',
+        },
+        counts: { evaluated_this_pass: 65, rejected_allocations: 0, reused_trials: 35 },
+      },
+    }
+    render(
+      <PortfolioResults
+        job={finished}
+        result={selected}
+        onRerun={vi.fn()}
+        rerunning={false}
+        exportUrl="/export"
+      />
+    )
+    await userEvent.click(screen.getByRole('tab', { name: 'Trials' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(screen.getByText('26–50 of 65')).toBeVisible()
+    await userEvent.click(screen.getByRole('tab', { name: 'Report' }))
+    await userEvent.click(screen.getByRole('tab', { name: 'Trials' }))
+    expect(screen.getByText('26–50 of 65')).toBeVisible()
+  })
+
+  it('leads with marked account metrics and keeps timestamped chart points intact', async () => {
     render(
       <PortfolioResults
         job={finished}
@@ -721,14 +926,14 @@ describe('portfolio result reading', () => {
         exportUrl="/export"
       />
     )
-    expect(screen.getByText('Final equity', { selector: 'dt' }).parentElement).toHaveTextContent(
-      '₹1,01,000'
-    )
+    expect(
+      screen.getByText('Final equity', { selector: 'summary' }).closest('dt')?.parentElement
+    ).toHaveTextContent('₹1,01,000')
     expect(screen.getByText('Available cash', { selector: 'dt' }).parentElement).toHaveTextContent(
       '₹99,000'
     )
     expect(screen.getByRole('heading', { name: 'Strategy contributions' })).toBeVisible()
-    expect(vi.mocked(PortfolioLineChart).mock.calls.at(-1)?.[0].series[0].data[0].date).toBe(
+    expect(await screen.findByLabelText('account-cumulative')).toHaveTextContent(
       '2026-01-06T09:16:00+05:30'
     )
     expect(screen.queryByText('target; open exit')).not.toBeInTheDocument()
@@ -840,14 +1045,14 @@ describe('portfolio result reading', () => {
       />
     )
     await userEvent.click(screen.getByRole('button', { name: 'Later period', exact: true }))
-    expect(screen.getByText('Final equity', { selector: 'dt' }).parentElement).toHaveTextContent(
-      '₹99,800'
-    )
+    expect(
+      screen.getByText('Final equity', { selector: 'summary' }).closest('dt')?.parentElement
+    ).toHaveTextContent('₹99,800')
     expect(screen.queryByRole('button', { name: 'Run again' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Trials' })).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Earlier period', exact: true }))
-    expect(screen.getByText('Final equity', { selector: 'dt' }).parentElement).toHaveTextContent(
-      '₹1,01,000'
-    )
+    expect(
+      screen.getByText('Final equity', { selector: 'summary' }).closest('dt')?.parentElement
+    ).toHaveTextContent('₹1,01,000')
   })
 })

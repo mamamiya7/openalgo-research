@@ -4,7 +4,9 @@ from flask import Blueprint, Response, current_app, jsonify, request, session
 from sqlalchemy import func, select
 
 from database.research_db import ResearchJob, ResearchStore, ResearchWorker
+from services import research_chartink as chartink
 from services import research_library as library
+from services import research_preferences as preferences
 from services import scanner_research_service as service
 from utils.logging import get_logger
 
@@ -41,8 +43,47 @@ def library_conflict(error):
     return jsonify(message=str(error), code="revision_conflict", revision=error.revision), 409
 
 
+@scanner_research_bp.errorhandler(preferences.PreferencesConflict)
+def report_preferences_conflict(error):
+    return jsonify(
+        message=str(error), code="report_preferences_conflict", current=error.current
+    ), 409
+
+
+@scanner_research_bp.errorhandler(chartink.ImportConflict)
+def chartink_conflict(error):
+    return jsonify(message=str(error), code="chartink_import_conflict"), 409
+
+
+@scanner_research_bp.errorhandler(chartink.ImportTooLarge)
+def chartink_too_large(error):
+    return jsonify(message=str(error)), 413
+
+
 def store():
     return current_app.extensions["research_store"]
+
+
+@scanner_research_bp.get("/imports/chartink/capabilities")
+def chartink_capabilities():
+    return jsonify(chartink.capabilities())
+
+
+@scanner_research_bp.post("/imports/chartink")
+def chartink_import():
+    if (request.content_length or 0) > chartink.MAX_BODY_BYTES:
+        raise chartink.ImportTooLarge("Chartink import exceeds its transport size limit")
+    if not request.is_json:
+        raise ValueError("Supply a JSON Chartink history import")
+    raw = request.stream.read(chartink.MAX_BODY_BYTES + 1)
+    if len(raw) > chartink.MAX_BODY_BYTES:
+        raise chartink.ImportTooLarge("Chartink import exceeds its transport size limit")
+    try:
+        data = current_app.json.loads(raw)
+    except (ValueError, UnicodeDecodeError, RecursionError):
+        raise ValueError("Supply a valid JSON Chartink history import") from None
+    result = chartink.import_capture(store(), session["user"], data)
+    return jsonify(result), 200 if result["reused"] else 201
 
 
 def library_body():
@@ -73,6 +114,24 @@ def library_page():
         "limit": int(request.args.get("limit", "20")),
         "offset": int(request.args.get("offset", "0")),
     }
+
+
+@scanner_research_bp.route("/library/report-preferences", methods=["GET", "PATCH"])
+def report_preferences():
+    if request.method == "GET":
+        return jsonify(preferences.get_preferences(store(), session["user"]))
+    if (request.content_length or 0) > preferences.MAX_BODY_BYTES:
+        raise ValueError("Report preferences exceed their size limit")
+    if not request.is_json:
+        raise ValueError("Supply JSON report preferences")
+    raw = request.stream.read(preferences.MAX_BODY_BYTES + 1)
+    if len(raw) > preferences.MAX_BODY_BYTES:
+        raise ValueError("Report preferences exceed their size limit")
+    try:
+        data = current_app.json.loads(raw)
+    except (ValueError, UnicodeDecodeError, RecursionError):
+        raise ValueError("Supply valid JSON report preferences") from None
+    return jsonify(preferences.update_preferences(store(), session["user"], data))
 
 
 @scanner_research_bp.route("/library/experiments", methods=["GET", "POST"])
@@ -222,7 +281,7 @@ def portfolio_rerun(job_id):
     from services.research_portfolio import rerun
 
     data = request.get_json()
-    if not isinstance(data, dict) or set(data) - {"trial_id", "request_id"}:
+    if not isinstance(data, dict) or set(data) - {"trial_id", "request_id", "period"}:
         raise ValueError("Supply a saved trial and request identity")
     return jsonify(
         rerun(
@@ -230,9 +289,73 @@ def portfolio_rerun(job_id):
             session["user"],
             job_id,
             trial_id=data.get("trial_id"),
+            period=data.get("period", "selection"),
             request_id=data.get("request_id"),
         )
     ), 202
+
+
+@scanner_research_bp.route("/portfolio/jobs/<job_id>/analysis", methods=["GET", "POST"])
+def portfolio_analysis(job_id):
+    from services import research_analysis
+
+    if request.method == "GET":
+        return jsonify(research_analysis.status(store(), session["user"], job_id))
+    data = request.get_json()
+    if not isinstance(data, dict) or set(data) - {"parameters", "symbol", "period"}:
+        raise ValueError("Supply analysis parameters or an empty object")
+    result = research_analysis.submit(
+        store(),
+        session["user"],
+        job_id,
+        data.get("parameters"),
+        data.get("symbol"),
+        data.get("period", "selection"),
+    )
+    return jsonify(result), 200 if result["status"] == "complete" else 202
+
+
+@scanner_research_bp.get("/portfolio/jobs/<job_id>/analysis/export")
+def portfolio_analysis_export(job_id):
+    from services.research_analysis import VERSION, latest_job
+
+    parent = service.get_job(store(), session["user"], job_id)
+    analysis_job = latest_job(store(), parent, completed=True)
+    if analysis_job:
+        artifact = analysis_job.result_artifact
+        result = service.read_artifact(store(), artifact)
+    else:
+        if parent.status != "completed":
+            raise ValueError("Prepare analysis before exporting it")
+        artifact = parent.result_artifact
+        original = service.read_artifact(store(), artifact)["result"]
+        if not original.get("analysis"):
+            raise ValueError("Prepare analysis before exporting it")
+        result = {
+            "version": VERSION,
+            "parent_result_artifact": artifact,
+            "analysis": original["analysis"],
+            "study_analysis": original.get("experiment", {}).get("study_analysis"),
+            "analysis_catalog": original.get("experiment", {}).get("analysis_catalog", []),
+            "trial_analysis": [
+                {key: row[key] for key in ("trial_number", "config_id", "analysis") if key in row}
+                for row in original.get("experiment", {}).get("rows", [])
+            ],
+            "validation": original.get("validation", {}).get("result", {}).get("analysis"),
+        }
+    import hashlib
+
+    raw = service.encoded(result)
+    return Response(
+        raw,
+        mimetype="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="research-analysis-{parent.id}.json"',
+            "X-Stored-Artifact-SHA256": artifact,
+            "X-Parent-Artifact-SHA256": parent.result_artifact,
+            "X-Evidence-SHA256": hashlib.sha256(raw).hexdigest(),
+        },
+    )
 
 
 @scanner_research_bp.route("/sources", methods=["GET", "POST"])

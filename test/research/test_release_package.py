@@ -31,6 +31,7 @@ def source(tmp_path):
         "frontend/package.json": "{}",
         "frontend/package-lock.json": "{}",
         "frontend/src/main.ts": "current source",
+        "extensions/chartink/manifest.json": '{"manifest_version":3}',
         "frontend/dist/index.html": "OLD BUILD",
         ".gitignore": ".agent-native/\n.env\nresearch_data/\n*.db\n",
     }
@@ -52,6 +53,8 @@ def source(tmp_path):
         ".agent-native/preview.html",
         "secrets.json",
         "test/research/token.db",
+        "extensions/chartink/signals.csv",
+        "extensions/chartink/node_modules/pkg/private.js",
     ]:
         path = tmp_path / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -76,6 +79,7 @@ def test_current_source_build_hashes_and_private_exclusions(source):
     with zipfile.ZipFile(artifact) as archive:
         names = archive.namelist()
         assert "research/engine.py" in names
+        assert "extensions/chartink/manifest.json" in names
         assert archive.read("app.py") == b"print('current dirty feature')"
         assert b"current.js" in archive.read("frontend/dist/index.html")
         assert "License.md" in names
@@ -168,7 +172,10 @@ def test_output_cannot_escape_release_area(source):
         package(source, source / "public-output", build)
 
 
-@pytest.mark.parametrize("module", ["research_native_prices", "research_library", "research_activity"])
+@pytest.mark.parametrize(
+    "module",
+    ["research_native_prices", "research_library", "research_activity", "research_result_presentation"],
+)
 def test_missing_native_module_blocks_package(source, module):
     (source / f"services/{module}.py").unlink()
     with pytest.raises(ValueError, match=module):

@@ -1,8 +1,127 @@
 # OpenAlgo Research status
 
-Updated: 10 September 2026. Published preview: **`0.1.0-preview.4`**, targeting OpenAlgo 2.0.2.2.
+Updated: 11 September 2026. Published preview: **`0.1.0-preview.4`**, targeting OpenAlgo 2.0.2.2.
 
 ## Current development increment
+
+The [consolidated backlog and delivery sequence](DELIVERY_PLAN.md#9-execution-order-and-completion-reporting)
+reconciles all 34 journey entries with the library, progress, Chartink and analytics
+increments. It separates the next report/study work, first complete cash-equity
+release, professional research depth, asset admission and optional connectors.
+The first dependency-ordered implementation is now in the worktree: stable
+report/configuration/period identities; an optional **Reserve a later period**
+setting for baseline or search; explicit frozen-input evaluation linked back to
+the chosen study/trial; a continuous Report page; and version-2 risk analytics.
+Reserved dates are frozen before price acquisition. The initial run evaluates
+only the selection period; later evaluation is an explicit new linked run.
+Replay and another replay retain the original candidate identity. Original
+summary/objective/export evidence is preserved.
+
+The new Report places performance and underwater charts beside grouped statistics,
+then consistency, rolling risk, drawdown episodes and trade/capital sections.
+Lower charts mount near the viewport. Advanced statistics remain collapsed.
+Daily return quantiles and 21/63/126-session Sharpe, volatility and Sortino use
+complete account observations. Analysis v2 deliberately treats a nonpositive
+previous account equity as an undefined percentage return, rather than silently
+dropping that observation; original summary/ranking values do not change.
+Older analysis remains readable and has an explicit **Update report** action.
+
+The next report slice is now implemented: **Customize** saves headline/side
+statistics, view/log scale, rolling window and expanded sections with the account.
+Stale tabs cannot overwrite newer preferences. Month cells and drawdown rows open
+saved-window charts and actual trades in a dialog; Settings also opens in place.
+New evaluations record their exact ordered signals, admitted cohort, timestamps,
+prices, calendar and instrument basis, with capital/cost/engine context kept
+separate. This supports future fair comparison; an old result without that
+descriptor remains unverified. No saved financial values are rewritten.
+
+Verification includes real VectorBT/Optuna calculations with controlled frozen
+prices, reserved baseline and candidate evaluation without another acquisition,
+old-analysis upgrade, populated library backup/restore and release inventory
+checks. Frontend interaction tests, TypeScript, scoped lint and production build
+passed. Chromium checks covered light/dark desktop, 390px mobile, chart expansion,
+focus restoration, rolling-window changes and trial settings; no page exceptions
+or horizontal page overflow were observed. See the exact
+[first receipt](REPORT_EXPERIENCE_PLAN.md#11-first-implementation-receipt--11-september-2026)
+and [next-slice receipt and remaining work](REPORT_EXPERIENCE_PLAN.md#12-preferences-investigation-and-evaluation-basis--11-september-2026).
+The latest slice passed 74 frontend checks, 41 preference API/storage checks,
+22 focused evaluation-basis/contract checks and 7 existing period regressions.
+Distribution/package checks passed 38 with one environment skip. A fresh-browser
+test verified preferences, inline and expanded heatmap investigation, settings
+and drawdown focus restoration, mobile layout and unchanged original export.
+The report increments were installed into the existing app on 11 September,
+after confirming zero active calculations. The existing supervisor restarted
+the app and worker; all 56 prior research job records and all pre-existing
+research-table fingerprints were preserved. Configuration, broker adapters and
+local frontend customizations stayed unchanged. The new report build is served,
+the preference table exists, authentication is enforced and the worker is online.
+Automated Chrome interaction stopped because the browser address could not be
+reliably identified; no fresh signed-in click-through is claimed. Optional
+Nautilus acceptance and a versioned release of these increments remain pending.
+
+**Next work:** the connected study/candidate workspace and independently frozen
+benchmark evidence, with full reference-field mapping and normal-app acceptance
+continuing alongside them.
+The [report experience specification](REPORT_EXPERIENCE_PLAN.md)
+defines a continuous tear sheet, connected Optuna study dashboard, candidate reports,
+benchmark comparison, shortlist and saved validation/decisions. It records exact
+page contents, score/count semantics, data ownership and R0–R6 acceptance. The
+optional QuantStats connector is pinned there as **QS-01**, to evaluate before
+choosing the final report export implementation. R0–R2 have the bounded
+implementation receipts above; they are not claimed fully accepted. R3–R6 remain open.
+
+The full [tear-sheet increment](TEARSHEET_PLAN.md) is implemented: 121 VectorBT
+and 88 Nautilus catalog entries, extended scalar metrics saved per distinct new
+trial, native Optuna plots, and frozen
+OHLC charts with recorded fills. Metric definitions distinguish daily marked
+account returns from native closed-position returns. Unsupported benchmarks and
+undefined samples retain explicit nulls. Older studies can prepare separate
+versioned analysis artifacts without broker downloads or changes to the original
+result. Its former Summary/Tear sheet views are now combined in Report in this
+worktree. Native testing and installation are recorded in the plan's acceptance
+section; this increment has not been published as a versioned public release.
+
+Optimization results open each trial's settings in a dialog and offer a
+compact **Columns** chooser. Win rate and profit factor join the default table;
+the chooser exposes the 15 saved summary fields and separate objective score
+where present. Preferences stay account-scoped in this browser, table headers
+remain visible while scrolling, and trial pagination survives result-tab changes.
+Existing studies can still use their original fields immediately; see the
+[metric inventory](TRIAL_RESULTS.md). The preceding table-only increment passed 42 component/journey checks,
+6 library checks, TypeScript, scoped Biome and the native production build passed.
+The three frontend files were installed into the user's normal application on
+11 September without restarting its app or worker. Chrome checks on the existing
+saved study confirmed the actual metrics, column persistence and settings-dialog
+focus restoration. Original results, backend calculations and data were unchanged.
+
+Chrome connector **0.1.1** now has an original logo, Chrome icons, popup Privacy/Help
+links, a bundled policy, license/notices and a reproducible Web Store ZIP with its
+manifest at the root. Optional HTTP access is limited to loopback; remote hosts
+require HTTPS. Verification: 26 extension checks and 6 package checks passed;
+one private-export fixture check was skipped. Artwork was visually inspected.
+The user reports the unpacked extension is working; the new 0.1.1 build still
+needs a fresh-profile manual check and real store screenshots. The
+[publishing guide](CHROME_EXTENSION_PUBLISHING.md) includes store copy, data
+disclosures and the specific Chartink export-terms question. No publisher account,
+public source release or Web Store submission was created in this preparation.
+A compatible versioned app release with import protocol 1 remains necessary.
+The extension source, policy and preparation documents accompany the current
+source update; this does not submit the extension to the Chrome Web Store.
+
+The first [Chartink connector](../../extensions/chartink/README.md) increment is
+implemented in this worktree: scoped Chrome pairing/capture, native authenticated
+import, a saved named experiment, original CSV/source evidence, duplicate-safe
+retry, related experiments for changed history, and suggested optimization ranges.
+Real VectorBT/Optuna integration passed using isolated native daily Historify data;
+the audited official export also opens in the native setup with its 365 signals
+and 111 symbols. On 11 September, the matching source and a frontend built against
+the existing installation were installed into the user's normal app, followed by
+a verified restart. Existing research records, configuration and customizations
+were preserved, and the worker returned online. Chrome's browser security policy blocked
+automated extension installation, so the installed-extension click-through remains
+a manual acceptance step. The full [journey](CHARTINK_JOURNEY.md) is still broader
+than this increment; presets, rich study exploration, shortlists and saved
+comparisons are not claimed complete.
 
 The native Research library, server-saved experiment drafts, setup versions,
 revision conflict recovery, archive/restore and result-to-setup/study/replay
@@ -17,6 +136,27 @@ are now implemented, specified in [run progress](RUN_PROGRESS.md). The progress
 increment passed controlled browser acceptance and was installed into the user's
 normal app on 10 September. Existing configuration and saved runs were preserved;
 no active job was interrupted. The latest packaged release remains `0.1.0-preview.4`.
+On 11 September, progress was refined to show accepted signal dates, the exact
+unique candle requirement before archive checks finish, and a compact holding-window
+explanation. It was installed and checked on the active native run without a
+restart; no data acquisition or calculation behavior changed.
+Daily price preparation now groups bounded archive reads and nearby missing
+requests, initializes Historify once per acquisition scope and reduces repeated
+artifact storage scans. Tests preserve required prices, cached candles, minute
+behavior, cancellation and old checkpoint recovery. Controlled local acquisition
+timing improved from 19.51s to 3.53s for a synthetic 16-symbol case; this is not a
+live broker speed guarantee. The five-file research update was installed into the
+normal app on 11 September after the active backtest completed. Restart checks
+confirmed the worker online and all prior research records, broker code,
+configuration and frontend build contents preserved. Native startup regenerated
+compressed asset copies, verified against their unchanged original contents.
+See [download performance](DOWNLOAD_PERFORMANCE.md) for the scope and limits.
+Calendar exclusions now show the affected signal date and the saved calendar
+range, distinguishing dates before/after that range from missing sessions within
+it. Complete saved curves also supply neighboring session dates. This display
+update was installed and checked in Chrome on 11 September; it clarifies existing
+reports without changing stored exports, prices or calculations. Targeted checks:
+19 result/HTTP tests and 18 packaging tests passed, with one Windows skip.
 See the [implementation checkpoint](EXECUTION_STATUS.md)
 for working journeys, remaining M1/M2 work and verification boundaries.
 

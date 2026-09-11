@@ -543,6 +543,44 @@ def test_finite_metrics_that_overflow_objective_are_rejected(search_request):
         run_search(**search_request, evaluate=overflowing)
 
 
+def test_full_scalar_metrics_and_real_timings_survive_resume(search_request):
+    checkpoints = []
+
+    def measured(*args, **kwargs):
+        report = engine(*args, **kwargs)
+        report["analysis"] = {
+            "version": "research-analysis-v1",
+            "metrics": {"account_sharpe": 1.5, "account_beta": None},
+            "unavailable": {"account_beta": "An aligned benchmark is required"},
+            "catalog": [{"key": "account_sharpe", "label": "Sharpe ratio"}],
+            "charts": [{"id": "equity", "figure": {"data": []}}],
+            "basis": ["Daily"],
+        }
+        return report
+
+    complete = run_search(
+        **search_request,
+        evaluate=measured,
+        record_timing=True,
+        checkpoint=lambda state, _: checkpoints.append(state),
+    )
+    experiment = complete["experiment"]
+    assert len(experiment["analysis_catalog"]) == 1
+    assert all(row["analysis"]["metrics"]["account_sharpe"] == 1.5 for row in experiment["rows"])
+    assert all(
+        "charts" not in row["analysis"] and "catalog" not in row["analysis"]
+        for row in experiment["rows"]
+    )
+    assert all(t["datetime_start"] <= t["datetime_complete"] for t in experiment["trials"])
+    restored = run_search(
+        **search_request,
+        evaluate=lambda *a, **k: pytest.fail("Finished trial rerun"),
+        record_timing=True,
+        saved=checkpoints[-1],
+    )
+    assert restored == complete
+
+
 def test_portfolio_capital_is_one_account_and_does_not_mutate_input(search_request):
     search_request["capital"] = 200000
     before = copy.deepcopy(search_request)

@@ -56,22 +56,62 @@ def native_historify_read(symbol, first, last, expected_path, *, interval="D"):
     ]
 
 
+class NativeHistorifyArchive:
+    """One sequential acquisition's native readers and lazy schema initialization.
+
+    This scope owns no connection or row cache. Native read/write calls open and
+    close their own connections, releasing the archive before broker requests.
+    Create a fresh scope when an acquisition is resumed in another worker turn.
+    """
+
+    __slots__ = ("_expected_path", "_interval", "_initialized", "_initialization_attempted")
+
+    def __init__(self, expected_path, *, interval="D"):
+        if interval not in {"D", "1m"}:
+            raise ValueError("Unsupported or oversized research archive write")
+        self._expected_path = Path(expected_path).resolve()
+        self._interval = interval
+        self._initialized = False
+        self._initialization_attempted = False
+
+    def read(self, symbol, first, last):
+        return native_historify_read(
+            symbol, first, last, self._expected_path, interval=self._interval
+        )
+
+    def _check_path(self, historify_db):
+        if Path(historify_db.get_db_path()).resolve() != self._expected_path:
+            raise ValueError("Historify was initialized with a different archive")
+
+    def write(self, symbol, rows):
+        import pandas as pd
+
+        from database import historify_db
+
+        if len(rows) > 10000:
+            raise ValueError("Unsupported or oversized research archive write")
+        self._check_path(historify_db)
+        if not rows:
+            return 0
+        if not self._initialized:
+            if self._initialization_attempted:
+                raise RuntimeError(
+                    "Historify initialization failed; retry with a fresh acquisition"
+                )
+            self._initialization_attempted = True
+            historify_db.init_database()
+            self._initialized = True
+            self._check_path(historify_db)
+        count = historify_db.upsert_market_data(pd.DataFrame(rows), symbol, "NSE", self._interval)
+        if count != len(rows):
+            raise ValueError("Historify did not acknowledge all downloaded rows")
+        return count
+
+
 def native_historify_write(symbol, rows, expected_path, *, interval="1m"):
-    import pandas as pd
-
-    from database import historify_db
-
-    if interval not in {"D", "1m"} or len(rows) > 10000:
-        raise ValueError("Unsupported or oversized research archive write")
-    if Path(historify_db.get_db_path()).resolve() != Path(expected_path).resolve():
-        raise ValueError("Historify was initialized with a different archive")
-    if not rows:
-        return 0
-    historify_db.init_database()
-    count = historify_db.upsert_market_data(pd.DataFrame(rows), symbol, "NSE", interval)
-    if count != len(rows):
-        raise ValueError("Historify did not acknowledge all downloaded rows")
-    return count
+    # Legacy standalone callers retain per-call initialization. Acquisition jobs
+    # instead reuse NativeHistorifyArchive to avoid repeating schema work.
+    return NativeHistorifyArchive(expected_path, interval=interval).write(symbol, rows)
 
 
 def checked_archive_rows(rows, symbol, first, last, reference):

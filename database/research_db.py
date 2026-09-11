@@ -149,6 +149,31 @@ class ResearchLibraryRequest(Base):
     job_id = Column(String(64))
 
 
+class ResearchChartinkImport(Base):
+    """Acknowledged browser captures; every retry stays bound to native evidence."""
+
+    __tablename__ = "research_chartink_imports"
+    owner = Column(String(255), primary_key=True)
+    request_id = Column(String(36), primary_key=True)
+    payload_hash = Column(String(64), nullable=False)
+    import_identity = Column(String(64), nullable=False, index=True)
+    scanner_url = Column(String(512), nullable=False, index=True)
+    source_id = Column(String(64), nullable=False)
+    experiment_id = Column(String(64), nullable=False, index=True)
+    parent_experiment_id = Column(String(64))
+    created_at = Column(Float, nullable=False)
+
+
+class ResearchReportPreferences(Base):
+    """One bounded presentation preference document per app account."""
+
+    __tablename__ = "research_report_preferences"
+    owner = Column(String(255), primary_key=True)
+    revision = Column(Integer, nullable=False)
+    preferences = Column(Text, nullable=False)
+    updated_at = Column(Float, nullable=False)
+
+
 class ResearchStore:
     def __init__(self, root=None):
         self.root = Path(root or os.getenv("RESEARCH_DATA_DIR", "research_data")).resolve()

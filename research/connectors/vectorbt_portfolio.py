@@ -556,7 +556,7 @@ def _report(
     def records(rows):
         return [{key: row[key].item() for key in row.dtype.names} for row in rows]
 
-    return {
+    report = {
         "policy_version": POLICY_VERSION,
         "metric_basis": "minute_marked" if minute else "daily_marked",
         "strategies": [
@@ -599,3 +599,7 @@ def _report(
             "Long cash equities only; no margin, shorts, derivatives or corporate-action cashflows.",
         ],
     }
+    from research.analytics import build_analysis
+
+    report["analysis"] = build_analysis(report, portfolio=pf)
+    return report

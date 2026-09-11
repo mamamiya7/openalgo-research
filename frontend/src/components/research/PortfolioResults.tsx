@@ -1,9 +1,33 @@
-import { useMemo, useState } from 'react'
-import type { PortfolioJob, PortfolioResult, PortfolioSettings } from '@/api/portfolioResearch'
-import { PortfolioLineChart } from '@/components/portfolio/PortfolioLineChart'
+import { MoreHorizontal } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
+import {
+  type PortfolioJob,
+  type PortfolioResult,
+  type PortfolioSettings,
+  portfolioResearch,
+} from '@/api/portfolioResearch'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useAuthStore } from '@/stores/authStore'
+import { PortfolioStudyAnalysis } from './PortfolioAnalysis'
+import { PortfolioContinuousReport } from './PortfolioContinuousReport'
+import { PortfolioTrials } from './PortfolioTrials'
+import { usePortfolioAnalysis } from './usePortfolioAnalysis'
+import { useReportPreferences } from './useReportPreferences'
 
 const number = (value: unknown, suffix = '') =>
   typeof value === 'number' && Number.isFinite(value)
@@ -95,6 +119,8 @@ interface ResultProps {
   exportUrl: string
   onAdjust?: (trialId?: string) => void
   onOptimize?: () => void
+  onEvaluate?: () => void
+  embedded?: boolean
   readOnly?: boolean
 }
 export function PortfolioResults(props: ResultProps) {
@@ -131,75 +157,105 @@ export function PortfolioResults(props: ResultProps) {
 }
 function PortfolioReport({
   job,
-  result,
+  result: initialResult,
   onRerun,
   rerunning,
   exportUrl,
   onAdjust,
   onOptimize,
+  onEvaluate,
+  embedded = false,
   readOnly = false,
   laterPeriod = false,
 }: ResultProps & { laterPeriod?: boolean }) {
-  const [tab, setTab] = useState('summary')
+  const owner = useAuthStore((state) => state.user?.username)
+  const preferences = useReportPreferences(owner)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const settingsOpener = useRef<HTMLElement | null>(null)
+  const [tab, setTab] = useState('report')
   const [strategyFilter, setStrategyFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
   const [query, setQuery] = useState('')
+  const [exactSymbol, setExactSymbol] = useState<string | null>(null)
   const [tradePage, setTradePage] = useState(0)
   const [trialPage, setTrialPage] = useState(0)
-  const [trialDetail, setTrialDetail] = useState<string | null>(null)
+  const analysis = usePortfolioAnalysis(
+    job.id,
+    initialResult,
+    tab === 'report' || tab === 'study',
+    laterPeriod
+  )
+  const result = analysis.result
+  const analysisActions = {
+    busy: analysis.busy,
+    response: analysis.response,
+    onPrepare: analysis.prepare,
+    readOnly,
+    exportUrl: portfolioResearch.analysisExportUrl(job.id),
+  }
   const summary = result.summary
   const experiment = result.experiment
-  const series = useMemo(
-    () => [
-      {
-        name: 'Portfolio equity',
-        color: '#10b981',
-        area: true,
-        data: result.equity_curve.map((point) => ({
-          date: point.timestamp ?? point.date,
-          value: point.equity,
-        })),
-      },
-    ],
-    [result.equity_curve]
-  )
   const trades = useMemo(
     () =>
       result.ledger.filter(
         (trade) =>
           (strategyFilter === 'all' || trade.strategy_id === strategyFilter) &&
           (statusFilter === 'all' || trade.status === statusFilter) &&
-          (!query || String(trade.symbol).toLowerCase().includes(query.toLowerCase()))
+          (exactSymbol
+            ? trade.symbol === exactSymbol
+            : !query || String(trade.symbol).toLowerCase().includes(query.toLowerCase()))
       ),
-    [result.ledger, strategyFilter, statusFilter, query]
+    [result.ledger, strategyFilter, statusFilter, query, exactSymbol]
   )
   const pending = Number(summary.pending_trades ?? 0) + Number(summary.unfunded_pending ?? 0)
   const otherExclusions = Math.max(
     0,
     Number(summary.excluded_signals ?? 0) - Number(result.source?.excluded_signals ?? 0)
   )
-  const metrics = [
-    ['Final equity', portfolioMoney(summary.final_equity)],
-    ['Net P&L', portfolioMoney(summary.net_pnl)],
-    ['Return', number(summary.net_return_pct, '%')],
-    ['Max drawdown', number(summary.max_drawdown_pct, '%')],
-    ['Closed trades', number(summary.closed_trades)],
-    ['Available cash', portfolioMoney(result.equity_curve.at(-1)?.cash)],
-  ]
+  const settingsContent = (
+    <>
+      <div className="space-y-1 border-b pb-4 text-sm">
+        <p>Shared starting cash: {portfolioMoney(summary.initial_capital)}</p>
+        <p className="text-muted-foreground">
+          {(result.execution?.engine ?? result.portfolio?.engine) === 'nautilus'
+            ? 'NautilusTrader'
+            : 'VectorBT'}
+          {result.execution?.engine_version ? ` ${result.execution.engine_version}` : ''}
+          {experiment ? ` · Optuna ${experiment.optimizer.version}` : ''}
+        </p>
+      </div>
+      <div className="divide-y">
+        {result.strategies.map((strategy) => (
+          <StrategySettings key={strategy.id} strategy={strategy} />
+        ))}
+      </div>
+    </>
+  )
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold">
-            {result.portfolio?.name ?? job.specification?.portfolio?.name ?? 'Portfolio result'}
-          </h2>
+          {!embedded && (
+            <h2 className="text-xl font-semibold">
+              {result.portfolio?.name ?? job.specification?.portfolio?.name ?? 'Portfolio result'}
+            </h2>
+          )}
           <p className="mt-1 text-sm text-muted-foreground">
-            {result.source?.provider ?? 'OpenAlgo prices'} ·{' '}
+            {(result.execution?.engine ?? result.portfolio?.engine) === 'nautilus'
+              ? 'NautilusTrader'
+              : 'VectorBT'}{' '}
+            ·{' '}
             {(result.source?.interval ?? result.execution?.interval) === '1m'
               ? 'Minute candles'
               : 'Daily candles'}
-            {result.equity_curve.length
-              ? ` · ${result.equity_curve[0].date} – ${result.equity_curve.at(-1)?.date}`
+            {result.report_context?.dates.from && result.report_context.dates.to
+              ? ` · ${result.report_context.dates.from} – ${result.report_context.dates.to}`
+              : result.equity_curve.length
+                ? ` · ${result.equity_curve[0].date} – ${result.equity_curve.at(-1)?.date}`
+                : ''}
+            {result.report_context?.period_label ? ` · ${result.report_context.period_label}` : ''}
+            {result.report_context?.candidate?.trial_number != null
+              ? ` · Trial ${result.report_context.candidate.trial_number + 1}`
               : ''}
           </p>
         </div>
@@ -214,18 +270,73 @@ function PortfolioReport({
               Adjust & test
             </Button>
           )}
-          {!laterPeriod && !readOnly && (
-            <Button type="button" variant="outline" disabled={rerunning} onClick={() => onRerun()}>
-              {rerunning ? 'Starting…' : onAdjust ? 'Replay exact' : 'Run again'}
-            </Button>
-          )}
           <Button variant="ghost" asChild>
             <a href={exportUrl} download>
               Export
             </a>
           </Button>
+          {!laterPeriod && !readOnly && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" size="icon" variant="ghost" aria-label="More report actions">
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem disabled={rerunning} onSelect={() => onRerun()}>
+                  {rerunning ? 'Starting…' : onAdjust ? 'Replay exact' : 'Run again'}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
+      <details className="text-xs text-muted-foreground">
+        <summary className="cursor-pointer">Report details</summary>
+        <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+          <div>
+            <dt>Price source</dt>
+            <dd>{result.source?.provider ?? 'OpenAlgo prices'}</dd>
+          </div>
+          <div>
+            <dt>Engine</dt>
+            <dd>
+              {(result.execution?.engine ?? result.portfolio?.engine) === 'nautilus'
+                ? 'NautilusTrader'
+                : 'VectorBT'}{' '}
+              {result.execution?.engine_version ?? ''}
+            </dd>
+          </div>
+          {result.report_context?.candidate && (
+            <div>
+              <dt>Study candidate</dt>
+              <dd>
+                Trial {result.report_context.candidate.trial_number + 1}
+                {result.report_context.candidate.is_objective_winner ? ' · Best by objective' : ''}
+              </dd>
+            </div>
+          )}
+          {result.analysis && (
+            <div>
+              <dt>Statistics version</dt>
+              <dd>{result.analysis.version}</dd>
+            </div>
+          )}
+        </dl>
+      </details>
+      {result.reserved_evaluation && (
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <span className="text-muted-foreground">
+            Later period reserved · {result.reserved_evaluation.evaluation.from} –{' '}
+            {result.reserved_evaluation.evaluation.to}
+          </span>
+          {onEvaluate && !readOnly && (
+            <Button size="sm" variant="outline" disabled={rerunning} onClick={onEvaluate}>
+              Test later period
+            </Button>
+          )}
+        </div>
+      )}
       {Number(result.source?.excluded_signals) > 0 && (
         <button
           type="button"
@@ -234,6 +345,7 @@ function PortfolioReport({
             setStatusFilter('excluded')
             setStrategyFilter('all')
             setQuery('')
+            setExactSymbol(null)
             setTradePage(0)
             setTab('trades')
           }}
@@ -245,7 +357,8 @@ function PortfolioReport({
       {experiment && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
           <span className="font-medium">
-            Selected from {experiment.counts.evaluated_this_pass} tested portfolios
+            Best by objective · {new Set(experiment.rows.map((row) => row.config_id)).size} tested
+            portfolios
           </span>
           <span className="text-muted-foreground">
             {experiment.specification.objective === 'return'
@@ -258,75 +371,37 @@ function PortfolioReport({
       )}
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="max-w-full overflow-x-auto">
-          <TabsTrigger value="summary">Summary</TabsTrigger>
+          <TabsTrigger value="report">Report</TabsTrigger>
           <TabsTrigger value="trades">Trades</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
           {experiment && <TabsTrigger value="trials">Trials</TabsTrigger>}
+          {experiment && <TabsTrigger value="study">Study analysis</TabsTrigger>}
         </TabsList>
-        <TabsContent value="summary" className="space-y-7 pt-5">
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3 xl:grid-cols-6">
-            {metrics.map(([label, value]) => (
-              <div key={label}>
-                <dt className="mb-1 text-xs text-muted-foreground">{label}</dt>
-                <dd className="text-xl font-semibold tabular-nums tracking-tight">{value}</dd>
-              </div>
-            ))}
-          </dl>
-          <PortfolioLineChart series={series} height={340} format={portfolioMoney} />
-          <section className="space-y-3" aria-labelledby="portfolio-contribution-heading">
-            <h3 id="portfolio-contribution-heading" className="font-medium">
-              Strategy contributions
-            </h3>
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full">
-                <thead className="bg-muted/40">
-                  <tr>
-                    {[
-                      'Strategy',
-                      'Allocation',
-                      'Net P&L',
-                      'Return contribution',
-                      'Closed trades',
-                    ].map((label) => (
-                      <th className={th} key={label}>
-                        {label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {result.per_strategy.map((strategy) => (
-                    <tr key={strategy.id}>
-                      <td className={td}>
-                        <button
-                          type="button"
-                          className="font-medium underline-offset-4 hover:underline focus-visible:underline"
-                          onClick={() => {
-                            setStrategyFilter(strategy.id)
-                            setTradePage(0)
-                            setTab('trades')
-                          }}
-                        >
-                          {strategy.name}
-                        </button>
-                      </td>
-                      <td className={td}>{number(strategy.allocation_pct, '%')}</td>
-                      <td className={td}>{portfolioMoney(strategy.net_pnl)}</td>
-                      <td className={td} title="Percentage points of the portfolio return">
-                        {number(strategy.contribution_pct, ' pp')}
-                      </td>
-                      <td className={td}>{number(strategy.summary.closed_trades)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+        <TabsContent value="report" className="pt-3">
+          <PortfolioContinuousReport
+            key={owner}
+            result={result}
+            preferences={preferences}
+            {...analysisActions}
+            onSettings={() => {
+              settingsOpener.current =
+                document.activeElement instanceof HTMLElement ? document.activeElement : null
+              setSettingsOpen(true)
+            }}
+            onTrades={(strategyId, symbol) => {
+              setStrategyFilter(strategyId ?? 'all')
+              setStatusFilter('all')
+              setQuery(symbol ?? '')
+              setExactSymbol(symbol ?? null)
+              setTradePage(0)
+              setTab('trades')
+            }}
+          />
           {(pending > 0 || Number(summary.skipped_trades) > 0 || otherExclusions > 0) && (
             <Button
               type="button"
               variant="link"
-              className="h-auto px-0 text-muted-foreground"
+              className="h-auto px-0 pt-4 text-muted-foreground"
               onClick={() => setTab('trades')}
             >
               {[
@@ -340,6 +415,11 @@ function PortfolioReport({
             </Button>
           )}
         </TabsContent>
+        {experiment && (
+          <TabsContent value="study" className="pt-5">
+            <PortfolioStudyAnalysis result={result} {...analysisActions} />
+          </TabsContent>
+        )}
         <TabsContent value="trades" className="space-y-4 pt-4">
           <div className="flex flex-wrap gap-3">
             <Input
@@ -349,6 +429,7 @@ function PortfolioReport({
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value)
+                setExactSymbol(null)
                 setTradePage(0)
               }}
             />
@@ -443,96 +524,40 @@ function PortfolioReport({
           <Pager page={tradePage} count={trades.length} onChange={setTradePage} />
         </TabsContent>
         <TabsContent value="settings" className="pt-4">
-          <div className="space-y-1 border-b pb-4 text-sm">
-            <p>Shared starting cash: {portfolioMoney(summary.initial_capital)}</p>
-            <p className="text-muted-foreground">
-              {(result.execution?.engine ?? result.portfolio?.engine) === 'nautilus'
-                ? 'NautilusTrader'
-                : 'VectorBT'}
-              {result.execution?.engine_version ? ` ${result.execution.engine_version}` : ''}
-              {experiment ? ` · Optuna ${experiment.optimizer.version}` : ''}
-            </p>
-          </div>
-          <div className="divide-y">
-            {result.strategies.map((strategy) => (
-              <StrategySettings key={strategy.id} strategy={strategy} />
-            ))}
-          </div>
+          {settingsContent}
         </TabsContent>
         {experiment && (
           <TabsContent value="trials" className="space-y-4 pt-4">
-            <p className="text-sm text-muted-foreground">
-              {experiment.counts.evaluated_this_pass} distinct portfolios ·{' '}
-              {experiment.counts.rejected_allocations} allocation combinations excluded
-              {experiment.counts.reused_trials
-                ? ` · ${experiment.counts.reused_trials} repeated proposals reused`
-                : ''}
-            </p>
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full">
-                <thead className="bg-muted/40">
-                  <tr>
-                    {['Trial', 'Return', 'Max drawdown', 'Closed trades', ''].map((label) => (
-                      <th className={th} key={label}>
-                        {label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {experiment.rows.slice(trialPage * 25, (trialPage + 1) * 25).map((trial) => (
-                    <tr key={trial.config_id}>
-                      <td className={td}>
-                        {trial.trial_number + 1}
-                        {trial.config_id === experiment.recommendation_id && (
-                          <span className="ml-2 text-xs text-primary">Selected</span>
-                        )}
-                      </td>
-                      <td className={td}>{number(trial.summary.net_return_pct, '%')}</td>
-                      <td className={td}>{number(trial.summary.max_drawdown_pct, '%')}</td>
-                      <td className={td}>{number(trial.summary.closed_trades)}</td>
-                      <td className={td}>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          onClick={() =>
-                            setTrialDetail(trialDetail === trial.config_id ? null : trial.config_id)
-                          }
-                        >
-                          View settings
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          disabled={rerunning || readOnly}
-                          onClick={() => onRerun(trial.config_id)}
-                        >
-                          Backtest this
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <Pager page={trialPage} count={experiment.rows.length} onChange={setTrialPage} />
-            {trialDetail && (
-              <section
-                aria-label="Trial strategy settings"
-                className="divide-y rounded-lg border px-4"
-              >
-                {experiment.rows
-                  .find((trial) => trial.config_id === trialDetail)
-                  ?.strategies.map((strategy) => (
-                    <StrategySettings key={strategy.id} strategy={strategy} />
-                  ))}
-              </section>
-            )}
+            <PortfolioTrials
+              key={job.id}
+              experiment={experiment}
+              page={trialPage}
+              onPageChange={setTrialPage}
+              onRerun={onRerun}
+              rerunning={rerunning}
+              readOnly={readOnly}
+              renderSettings={(strategy) => <StrategySettings strategy={strategy} />}
+            />
           </TabsContent>
         )}
       </Tabs>
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent
+          className="max-h-[85dvh] overflow-y-auto sm:max-w-2xl motion-reduce:animate-none"
+          onCloseAutoFocus={(event) => {
+            if (settingsOpener.current?.isConnected) {
+              event.preventDefault()
+              settingsOpener.current.focus()
+            }
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Report settings</DialogTitle>
+            <DialogDescription>The exact settings used for this result.</DialogDescription>
+          </DialogHeader>
+          {settingsContent}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

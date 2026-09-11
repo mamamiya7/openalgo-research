@@ -6,6 +6,7 @@ from datetime import datetime
 import pytest
 from test_native_price_acquisition import DAYS, calendar, candle, plan
 
+from research import portfolio as portfolio_contract
 from services.research_acquisition import IST
 from services.research_native_prices import NativePriceNoProgress, acquire_native_prices
 
@@ -19,6 +20,7 @@ class NativeArchive:
             for index, symbol in enumerate(symbols)
         ]
         self.plan = plan(interval)
+        self.calendar = calendar()
         self.field = "required_dates" if interval == "D" else "required_timestamps"
         self.slots = self.plan[self.field]["AAA"]
         self.plan[self.field] = {symbol: list(self.slots) for symbol in symbols}
@@ -65,7 +67,9 @@ class NativeArchive:
             "checkpoint": lambda value: self.saved.append(copy.deepcopy(value)),
             "cancelled": lambda: self.cancelled,
         }
-        return acquire_native_prices(self.signals, self.plan, calendar(), **{**options, **kwargs})
+        return acquire_native_prices(
+            self.signals, self.plan, self.calendar, **{**options, **kwargs}
+        )
 
     def advance(self, *_):
         self.now += 2
@@ -110,6 +114,110 @@ def test_unique_required_cache_download_and_omission_counts(tmp_path, interval):
         for event in native.events
     )
     assert native.saved[-1]["activity"] == native.events[-1]
+
+
+@pytest.mark.parametrize("interval", ["D", "1m"])
+@pytest.mark.parametrize("optimize", [False, True])
+def test_early_total_uses_actual_unique_holding_plan_without_changing_evidence(
+    tmp_path, interval, optimize
+):
+    """The denominator is known before reads; neither signal count nor trials scale it."""
+    minute = interval == "1m"
+    raw = {
+        "strategies": [
+            {
+                "id": identifier,
+                "name": identifier,
+                "source_id": digit * 32,
+                "allocation_pct": 50,
+                "config": {
+                    "hold_sessions": 1,
+                    **({"trade_horizon": "intraday", "hold_minutes": 2} if minute else {}),
+                },
+            }
+            for identifier, digit in (("first", "a"), ("second", "b"))
+        ]
+    }
+    if optimize:
+        parameter = "hold_minutes" if minute else "hold_sessions"
+        raw["strategies"][0]["search"] = {
+            parameter: {"min": 2 if minute else 1, "max": 4 if minute else 2, "step": 1}
+        }
+        raw["optimization"] = {"sampler": "tpe", "trials": 3}
+    portfolio = portfolio_contract.normalize(raw)
+    signals = [
+        {"symbol": "AAA", "date": DAYS[0], "row": 2},
+        {"symbol": "AAA", "date": DAYS[0] if minute else DAYS[1], "row": 3},
+        {"symbol": "AAA", "date": DAYS[0], "row": 2},
+        {"symbol": "BBB", "date": DAYS[0], "row": 3},
+    ]
+    if minute:
+        for signal, time in zip(signals, ("09:15", "09:16", "09:15", "09:15"), strict=True):
+            signal["timestamp"] = f"{DAYS[0]}T{time}:00+05:30"
+    strategies = [
+        {**row, "signals": signals[index * 2 : index * 2 + 2]}
+        for index, row in enumerate(portfolio["strategies"])
+    ]
+    sessions = DAYS + ["2026-01-08", "2026-01-09"]
+    native_calendar = {
+        **calendar(),
+        "sessions": sessions,
+        "session_hours": {day: {"open": "09:15", "close": "15:30"} for day in sessions},
+    }
+    planned = portfolio_contract.price_plan(portfolio, strategies, native_calendar)
+    field = "required_timestamps" if minute else "required_dates"
+    # Daily windows include entry plus the holding deadline; minute windows
+    # likewise include the deadline minute. AAA overlaps within/across strategies.
+    expected_total = (9 if optimize else 7) if minute else (6 if optimize else 5)
+    assert sum(map(len, planned[field].values())) == expected_total
+    assert len(planned[field]["AAA"]) == (
+        (6 if optimize else 4) if minute else (4 if optimize else 3)
+    )
+    assert len(planned[field]["BBB"]) == (3 if minute else 2)
+    if not minute:
+        assert planned[field]["AAA"][0] == DAYS[1]
+        assert planned[field]["AAA"][-1] == ("2026-01-09" if optimize else "2026-01-08")
+    original_plan = copy.deepcopy(planned)
+
+    def fixture(path):
+        native = NativeArchive(path, interval)
+        native.calendar = copy.deepcopy(native_calendar)
+        native.signals = copy.deepcopy(signals)
+        native.plan = copy.deepcopy(planned)
+        native.responses = {
+            symbol: [candle(slot) for slot in slots] for symbol, slots in planned[field].items()
+        }
+        # One native cached candle; all remaining candles use the controlled
+        # history stub, including readback. No user archive or broker is opened.
+        native.rows["AAA"] = [copy.deepcopy(native.responses["AAA"][0])]
+        return native
+
+    baseline = fixture(tmp_path / "baseline")
+    expected = baseline.run(activity=None)
+    observed = fixture(tmp_path / "observed")
+
+    def before_read(symbol):
+        activity = observed.events[-1]
+        assert activity["prices"]["required_candles"] == expected_total
+        if len(observed.reads) == 1:
+            assert activity["stage"] == "cache"
+            assert activity["prices"]["cache_complete"] is False
+            assert activity["prices"]["checked_symbols"] == 0
+            assert activity["prices"]["cached_candles"] == 0
+            assert observed.calls == []
+
+    observed.after_read = before_read
+    result = observed.run()
+    assert observed.events[0]["stage"] == "planning"
+    assert observed.events[0]["prices"]["required_candles"] == expected_total
+    assert observed.events[0]["prices"]["cache_complete"] is False
+    assert observed.calls == baseline.calls and observed.reads == baseline.reads
+    assert observed.saved == baseline.saved
+    assert result == expected  # exact inputs, acquisition identity, receipts and checkpoints
+    assert prices(result)["available_candles"] == expected_total
+    assert prices(result)["cached_candles"] == 1
+    assert prices(result)["downloaded_candles"] == expected_total - 1
+    assert planned == original_plan == observed.plan == baseline.plan
 
 
 @pytest.mark.parametrize("interval", ["D", "1m"])

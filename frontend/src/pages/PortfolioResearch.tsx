@@ -102,7 +102,11 @@ export default function PortfolioResearch({
     onChange: (draft: PortfolioDraft) => void
     onRun: () => Promise<PortfolioJob>
     onOpenJob: (job: PortfolioJob) => void
-    onReplay?: (jobId: string, trialId?: string) => Promise<PortfolioJob>
+    onReplay?: (
+      jobId: string,
+      trialId?: string,
+      period?: 'selection' | 'evaluation'
+    ) => Promise<PortfolioJob>
     onJobUpdate?: (job: PortfolioJob) => void
     disabled?: boolean
     readOnly?: boolean
@@ -290,23 +294,28 @@ export default function PortfolioResearch({
       setBusy(false)
     }
   }
-  async function jobAction(action: 'cancel' | 'resume' | 'rerun', trialId?: string) {
+  async function jobAction(action: 'cancel' | 'resume' | 'rerun' | 'evaluate', trialId?: string) {
     if (!jobId) return
     setError(null)
     setBusy(true)
     try {
       const job =
-        action === 'rerun'
+        action === 'rerun' || action === 'evaluate'
           ? workspace?.onReplay
-            ? await workspace.onReplay(jobId, trialId)
+            ? await workspace.onReplay(
+                jobId,
+                trialId,
+                action === 'evaluate' ? 'evaluation' : undefined
+              )
             : await portfolioResearch.rerun(
                 jobId,
-                requestId(owner, `rerun:${jobId}:${trialId ?? 'selected'}`),
-                trialId
+                requestId(owner, `${action}:${jobId}:${trialId ?? 'selected'}`),
+                trialId,
+                action === 'evaluate' ? 'evaluation' : undefined
               )
           : await portfolioResearch[action](jobId)
       openJob(job)
-      if (action === 'rerun') {
+      if (action === 'rerun' || action === 'evaluate') {
         try {
           sessionStorage.removeItem(`portfolio-request:${owner}`)
         } catch {
@@ -362,7 +371,7 @@ export default function PortfolioResearch({
   return (
     <Container
       className={
-        workspace ? 'space-y-7' : 'mx-auto w-full max-w-6xl space-y-7 px-4 py-6 sm:px-6 sm:py-8'
+        workspace ? 'space-y-3' : 'mx-auto w-full max-w-6xl space-y-7 px-4 py-6 sm:px-6 sm:py-8'
       }
     >
       <style>
@@ -438,6 +447,10 @@ export default function PortfolioResearch({
           key={job.id}
           job={job}
           result={job.result}
+          embedded={Boolean(workspace)}
+          onEvaluate={() => {
+            void jobAction('evaluate')
+          }}
           onRerun={(trialId) => {
             void jobAction('rerun', trialId)
           }}

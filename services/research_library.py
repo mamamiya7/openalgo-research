@@ -15,9 +15,10 @@ import time
 import uuid
 from copy import deepcopy
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 
 from database.research_db import (
+    ResearchChartinkImport,
     ResearchExperiment,
     ResearchJob,
     ResearchLibraryExperiment,
@@ -160,8 +161,10 @@ def normalize_draft(store, owner, raw):
         if field in portfolio:
             _text(portfolio[field], 10, "Draft date", empty=True)
     if portfolio.get("validation") is not None:
-        _object(portfolio["validation"], {"train_pct"}, "draft validation")
+        _object(portfolio["validation"], {"train_pct", "mode"}, "draft validation")
         _number_shape(portfolio["validation"].get("train_pct"), "Draft training share")
+        if portfolio["validation"].get("mode", "evaluate") not in ("reserve", "evaluate"):
+            raise ValueError("Choose reserve or evaluate for the later period")
     rows = portfolio.get("strategies")
     if not isinstance(rows, list) or len(rows) > 8:
         raise ValueError("A draft can contain at most eight strategies")
@@ -250,8 +253,8 @@ def portfolio_payload(draft):
         strategy["search"] = search
     if draft["optimizing"]:
         portfolio["optimization"] = deepcopy(draft["optimization"])
-        if validation is not None:
-            portfolio["validation"] = validation
+    if validation is not None and (draft["optimizing"] or validation.get("mode") == "reserve"):
+        portfolio["validation"] = validation
     return portfolio
 
 
@@ -807,9 +810,11 @@ def _enqueue(
 
 
 def replay_experiment(store, owner, identifier, data):
-    from research import portfolio as contract
+    from services.research_portfolio import replay_inputs
 
-    _object(data, {"revision", "request_id", "job_id", "trial_id"}, "exact research replay")
+    _object(
+        data, {"revision", "request_id", "job_id", "trial_id", "period"}, "exact research replay"
+    )
     _job_selection(data)
     token, fingerprint = _request({**data, "experiment_id": identifier}, "replay")
     with store.sessions() as db:
@@ -823,51 +828,14 @@ def replay_experiment(store, owner, identifier, data):
         if link is None:
             raise LookupError("Saved result is not part of this experiment")
         parent_version_id = link.version_id
-    job = evidence_service.get_job(store, owner, data.get("job_id"))
-    if job.status != "completed" or not job.result_artifact:
-        raise ValueError("Choose a completed portfolio result")
-    bundle = evidence_service.read_artifact(store, job.result_artifact)
-    if bundle.get("kind") not in contract.KINDS:
-        raise ValueError("Choose a completed portfolio result")
-    evidence = evidence_service.read_artifact(store, bundle["inputs_artifact"])
-    report = bundle["result"]
-    if report.get("validation"):
-        from research.portfolio_validation import partition
-
-        evidence, _, _ = partition(evidence)
-    selected = report["strategies"]
-    if data.get("trial_id") is not None:
-        matches = [
-            item
-            for item in report.get("experiment", {}).get("rows", [])
-            if item["config_id"] == data["trial_id"]
-        ]
-        if len(matches) != 1:
-            raise ValueError("Choose an actual saved trial from this result")
-        selected = matches[0]["strategies"]
-    definitions = {item["id"]: item for item in selected}
-    portfolio = deepcopy(evidence["portfolio"])
-    if set(definitions) != {item["id"] for item in portfolio["strategies"]}:
-        raise ValueError("Saved strategy identities do not match")
-    portfolio.pop("optimization", None)
-    portfolio.pop("validation", None)
-    for item in portfolio["strategies"]:
-        chosen = definitions[item["id"]]
-        item.update(config=chosen["config"], allocation_pct=chosen["allocation_pct"], search={})
-    portfolio = contract.normalize(portfolio)
-    versions = contract.execution_versions(portfolio)
-    if any(evidence["versions"].get(key) != value for key, value in versions.items()):
-        raise ValueError("This saved run needs its recorded engine version to reproduce exactly")
-    evidence = {
-        **evidence,
-        "portfolio": portfolio,
-        "versions": versions,
-        "frozen_prices": True,
-        "parent_result_artifact": job.result_artifact,
-        "strategies": [
-            {**item, **definitions[item["id"]], "search": {}} for item in evidence["strategies"]
-        ],
-    }
+    job, evidence = replay_inputs(
+        store,
+        owner,
+        data["job_id"],
+        trial_id=data.get("trial_id"),
+        period=data.get("period", "selection"),
+    )
+    portfolio = evidence["portfolio"]
     draft = fresh_draft()
     draft.update(portfolio=portfolio, equalWeights=False)
     draft = normalize_draft(store, owner, draft)
@@ -886,7 +854,7 @@ def replay_experiment(store, owner, identifier, data):
         fingerprint,
         draft,
         evidence,
-        role="replay",
+        role="validation" if data.get("period") == "evaluation" else "replay",
         parents=parents,
     )
 
@@ -1081,6 +1049,14 @@ def delete_experiment(store, owner, identifier, data):
         )
         db.execute(
             delete(ResearchLibraryRequest).where(ResearchLibraryRequest.experiment_id == identifier)
+        )
+        db.execute(
+            delete(ResearchChartinkImport).where(ResearchChartinkImport.experiment_id == identifier)
+        )
+        db.execute(
+            update(ResearchChartinkImport)
+            .where(ResearchChartinkImport.parent_experiment_id == identifier)
+            .values(parent_experiment_id=None)
         )
         db.delete(row)
     return {"deleted": True, "id": identifier}

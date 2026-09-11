@@ -260,29 +260,41 @@ def test_unavailable_symbol_preserves_gap_and_continues_without_repeating(archiv
 
 
 def test_bounded_continuation_does_not_repeat_successful_empty_request(archive):
-    own_plan = {"interval": "D", "required_dates": {"AAA": [DAYS[0], DAYS[2]]}}
+    # Keep two requests beyond the nearby-window batching threshold.
+    start = datetime.fromisoformat(DAYS[0])
+    sessions = [
+        (start + timedelta(days=n)).date().isoformat()
+        for n in range(40)
+        if (start + timedelta(days=n)).weekday() < 5
+    ]
+    own_calendar = {**calendar(), "sessions": sessions}
+    own_plan = {"interval": "D", "required_dates": {"AAA": [sessions[0], sessions[-1]]}}
     calls = []
 
     def history(**request):
         calls.append(request)
-        return True, {"data": [] if request["start_date"] == DAYS[0] else [candle(DAYS[2])]}, 200
+        return (
+            True,
+            {"data": [] if request["start_date"] == DAYS[0] else [candle(sessions[-1])]},
+            200,
+        )
 
     opts = options(archive)
     first = acquire_native_prices(
-        SIGNALS, own_plan, calendar(), max_requests=1, history=history, **opts
+        SIGNALS, own_plan, own_calendar, max_requests=1, history=history, **opts
     )
     assert first["provenance"]["batch_pending"] is True
     second = acquire_native_prices(
         SIGNALS,
         own_plan,
-        calendar(),
+        own_calendar,
         max_requests=1,
         history=history,
         prior=first["acquisition_checkpoint"],
         **opts,
     )
     assert len(calls) == 2
-    assert calls[-1]["start_date"] == DAYS[2]
+    assert calls[-1]["start_date"] == sessions[-1]
     assert second["provenance"]["batch_pending"] is False
     assert second["provenance"]["hard_failures"] == []
     assert second["provenance"]["acquisition_status"] == "partial"

@@ -9,6 +9,9 @@ import re
 import tempfile
 import time
 import uuid
+from contextlib import ExitStack, contextmanager
+from contextvars import ContextVar
+from threading import get_ident
 
 from sqlalchemy import func, or_, select, update
 
@@ -26,8 +29,10 @@ MAX_ARTIFACT_BYTES = 512 * 1024 * 1024
 MAX_COMPRESSED_BYTES = 32 * 1024 * 1024
 CHUNK_ARTIFACT_BYTES = 256 * 1024
 MAX_ARTIFACT_NODES = 100000
+MAX_MANAGED_ENTRIES = 100000
 CHUNK_FORMAT = "research-chunks-v1"
 ACTIVE = ("queued", "running", "cancelling")
+_artifact_publication = ContextVar("research_artifact_publication", default=None)
 
 
 def encoded(value):
@@ -43,7 +48,7 @@ def write_guard(db):
         )
 
 
-def managed_storage_bytes(store):
+def _managed_storage_snapshot(store):
     # DirEntry reuses directory metadata on Windows. Repeated Path.stat calls
     # made checkpoint admission increasingly expensive as saved work accumulated.
     pending, used, count = [store.root], 0, 0
@@ -51,7 +56,7 @@ def managed_storage_bytes(store):
         with os.scandir(pending.pop()) as entries:
             for entry in entries:
                 count += 1
-                if count > 100000:
+                if count > MAX_MANAGED_ENTRIES:
                     raise ValueError("Research storage exceeds the 100000-entry management bound")
                 if entry.is_symlink():
                     raise ValueError("Research storage must not contain symlinks")
@@ -59,7 +64,11 @@ def managed_storage_bytes(store):
                     pending.append(entry.path)
                 elif entry.is_file(follow_symlinks=False):
                     used += entry.stat(follow_symlinks=False).st_size
-    return used
+    return used, count
+
+
+def managed_storage_bytes(store):
+    return _managed_storage_snapshot(store)[0]
 
 
 def ensure_storage_capacity(store, additional=0):
@@ -80,45 +89,153 @@ def _retry_windows_file_busy(operation):
             time.sleep(0.05 * 2**attempt)
 
 
-def _write_artifact_bytes(store, digest, raw):
-    """Publish one immutable physical file; children precede their manifest."""
-    directory = store.root / "artifacts"
-    directory.mkdir(exist_ok=True)
-    target = directory / f"{digest}.json.gz"
-    if not target.exists() and not (directory / f"{digest}.json").exists():
+class _ArtifactPublication:
+    """One synchronous publisher; the SQL write guard fences its byte reservation."""
+
+    def __init__(self, store, stack):
+        self.store, self.root, self.stack = store, store.root.resolve(), stack
+        self.owner, self.closed, self.failed = get_ident(), False, False
+        self.used = self.entries = self.quota = None
+        self.published_files = 0
+
+    def check_owner(self, store):
+        if self.closed or get_ident() != self.owner:
+            raise ValueError("Research publication cannot escape its owning context")
+        if self.failed:
+            raise ValueError("Research publication failed; leave its scope before retrying")
+        if store is not self.store or store.root != self.root:
+            raise ValueError("Research publication cannot span different stores")
+
+    def paths(self, digest):
+        self.check_owner(self.store)
+        if not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest):
+            raise ValueError("Invalid evidence identity")
+        directory = self.root / "artifacts"
+        paths = [directory / f"{digest}{suffix}" for suffix in (".json.gz", ".json")]
+        # Validated digest names are direct children. Resolve their directory,
+        # and check files for links without resolving every reused leaf again.
+        if (
+            directory.is_symlink()
+            or not directory.resolve().is_relative_to(self.root)
+            or any(path.is_symlink() for path in paths)
+        ):
+            raise ValueError("Unsafe research artifact path")
+        return directory, paths
+
+    def publish(self, digest, raw):
+        directory, paths = self.paths(digest)
+        if any(path.exists() for path in paths):
+            return digest
         compressed = gzip.compress(raw, compresslevel=3, mtime=0)
         if len(compressed) > MAX_COMPRESSED_BYTES:
             raise ValueError("Evidence exceeds the 32 MiB compressed research limit")
-        with store.sessions.begin() as db:
-            write_guard(db)
-            ensure_storage_capacity(store, len(compressed))
-            fd, name = tempfile.mkstemp(dir=directory, suffix=".tmp")
+        directory.mkdir(exist_ok=True)
+        if self.used is None:
             try:
-                with os.fdopen(fd, "wb") as stream:
-                    stream.write(compressed)
-                    stream.flush()
-                    os.fsync(stream.fileno())
-                _retry_windows_file_busy(lambda: os.replace(name, target))
+                db = self.stack.enter_context(self.store.sessions.begin())
+                write_guard(db)
+                self.used, self.entries = _managed_storage_snapshot(self.store)
+                self.quota = int(os.getenv("RESEARCH_QUOTA_MB", "2048")) * 1024 * 1024
+            except BaseException:
+                self.failed = True
+                raise
+        # Another publisher may have committed while this scope waited for the
+        # guard. Reuse its file without reserving or replacing the same evidence.
+        directory, paths = self.paths(digest)
+        if any(path.exists() for path in paths):
+            return digest
+        if self.used + len(compressed) > self.quota:
+            raise ValueError("Research storage is full. Your saved progress is safe.")
+        if self.entries + 1 > MAX_MANAGED_ENTRIES:
+            raise ValueError("Research storage exceeds the 100000-entry management bound")
+        # Reserve before opening a temporary file. On failure this scope keeps
+        # the reservation, including a temporary file Windows may refuse to
+        # remove; the next independent scope measures actual disk usage again.
+        self.used += len(compressed)
+        self.entries += 1
+        fd, name = tempfile.mkstemp(dir=directory, suffix=".tmp")
+        try:
+            try:
+                stream = os.fdopen(fd, "wb")
             except BaseException:
                 try:
-                    _retry_windows_file_busy(lambda: os.unlink(name))
+                    os.close(fd)
                 except OSError:
-                    # A still-locked temporary file must not mask the original
-                    # publication error; no metadata references it as evidence.
                     pass
                 raise
-    return digest
+            with stream:
+                stream.write(compressed)
+                stream.flush()
+                os.fsync(stream.fileno())
+            _retry_windows_file_busy(lambda: os.replace(name, paths[0]))
+            self.published_files += 1
+        except BaseException:
+            try:
+                _retry_windows_file_busy(lambda: os.unlink(name))
+            except OSError:
+                # An unreferenced temporary file must not mask the original error.
+                pass
+            raise
+        return digest
+
+    def reconcile(self):
+        if self.published_files > 1:
+            # Native acquisition sidecars and external filesystem writers do
+            # not take this SQL guard. Reconcile a longer, multi-file batch
+            # before its caller can publish metadata. Any excess remains an
+            # unreferenced, accounted orphan; immutable evidence is not deleted.
+            used, _ = _managed_storage_snapshot(self.store)
+            if used > self.quota:
+                raise ValueError("Research storage is full. Your saved progress is safe.")
+
+
+@contextmanager
+def artifact_publication(store):
+    """Share one strict admission scan across bounded immutable artifact writes.
+
+    Only save_artifact/file reads belong inside this synchronous scope. Publish
+    metadata or update worker progress afterwards: those use separate SQL
+    sessions and must not nest inside the held writer transaction. No allowance
+    survives the scope, and a different store or thread cannot reuse it. Artifact
+    publishers serialize; raw sidecars and arbitrary filesystem writers are not
+    fenced. Multi-file scopes also check their growth before returning.
+    """
+    current = _artifact_publication.get()
+    if current is not None:
+        current.check_owner(store)
+        yield current
+        return
+    with ExitStack() as stack:
+        publication = _ArtifactPublication(store, stack)
+        token = _artifact_publication.set(publication)
+        try:
+            yield publication
+            publication.reconcile()
+        finally:
+            publication.closed = True
+            _artifact_publication.reset(token)
+
+
+def _write_artifact_bytes(store, digest, raw):
+    """Publish one immutable physical file; children precede their manifest."""
+    with artifact_publication(store) as publication:
+        return publication.publish(digest, raw)
 
 
 def save_artifact(store, value):
+    with artifact_publication(store):
+        return _save_artifact(store, value)
+
+
+def _save_artifact(store, value):
     raw = encoded(value)
     if len(raw) > MAX_ARTIFACT_BYTES:
         raise ValueError("Evidence exceeds the decoded research size limit")
     digest = hashlib.sha256(raw).hexdigest()
     if len(raw) <= CHUNK_ARTIFACT_BYTES or not isinstance(value, (dict, list)):
         return _write_artifact_bytes(store, digest, raw)
-    directory = store.root / "artifacts"
-    if any((directory / f"{digest}{suffix}").exists() for suffix in (".json", ".json.gz")):
+    _, paths = _artifact_publication.get().paths(digest)
+    if any(path.exists() for path in paths):
         return digest
     decoded_bytes = len(raw)
     del raw
@@ -477,7 +594,11 @@ def submit(
 
     evidence = source_for(store, owner, source_id)
     config = validate_config(config)
-    if kind in ("portfolio_backtest", "portfolio_optimize"):
+    if kind == "portfolio_analysis":
+        from services.research_analysis import validate_request
+
+        specification = validate_request(store, owner, source_id, specification)
+    elif kind in ("portfolio_backtest", "portfolio_optimize"):
         from services.research_portfolio import validate_submission
 
         specification = validate_submission(evidence, kind, specification)
@@ -579,7 +700,9 @@ def submit(
                 specification=encoded(specification).decode(),
                 identity=identity,
                 counts="{}",
-                parent_job_id=specification.get("parent_job_id") if kind == "optimize" else None,
+                parent_job_id=specification.get("parent_job_id")
+                if kind in ("optimize", "portfolio_analysis")
+                else None,
             )
         )
     return job_receipt(store, job)
@@ -979,7 +1102,22 @@ def job_receipt(store, job, include_result=False):
         if part
     )
     if include_result and job.status == "completed":
-        value["result"] = read_artifact(store, job.result_artifact)["result"]
+        from services.research_analysis import saved_overlay
+        from services.research_result_presentation import present_result
+
+        bundle = read_artifact(store, job.result_artifact)
+        result = bundle["result"]
+        if value.get("kind") in ("portfolio_backtest", "portfolio_optimize"):
+            from research.report_contract import present_report
+
+            result = saved_overlay(store, job, result)
+            result = present_report(
+                result,
+                job_id=job.id,
+                result_artifact=job.result_artifact,
+                inputs_artifact=bundle.get("inputs_artifact"),
+            )
+        value["result"] = present_result(result)
     return value
 
 

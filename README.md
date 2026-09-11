@@ -26,6 +26,11 @@ download-batch continuation. These additions are tested in the native app; the
 packaged preview above remains `0.1.0-preview.4`. See the
 [current implementation and verification](docs/research/EXECUTION_STATUS.md).
 
+A [Chartink Chrome connector](extensions/chartink/README.md) is also available in
+development source: capture the scanner's official historical export and open a
+named, saved Research setup. It requires the matching application source and a
+manual unpacked-extension installation; it is not included in preview.4.
+
 ## What you can do
 
 ![Trading journey: import CSV or saved signals, set trading rules and allocations, prepare required broker prices, backtest or optimize, then review, save, export or replay.](docs/research/diagrams/research-journey.svg)

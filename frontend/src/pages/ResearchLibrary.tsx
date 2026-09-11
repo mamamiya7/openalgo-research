@@ -10,6 +10,8 @@ import {
   researchLibrary,
   type SetupVersionSummary,
 } from '@/api/researchLibrary'
+import { ChartinkImport } from '@/components/research/ChartinkImport'
+import { ChartinkSource } from '@/components/research/ChartinkSource'
 import { addPortfolioSource, freshPortfolioDraft } from '@/components/research/PortfolioBuilder'
 import { researchRunStatus } from '@/components/research/ResearchRunProgress'
 import { Button } from '@/components/ui/button'
@@ -126,6 +128,9 @@ export default function ResearchLibrary() {
   const [params, setParams] = useSearchParams()
   const id = params.get('experiment')
   const job = params.get('job')
+  const chartinkImport = params.get('chartink_import')
+  if (chartinkImport !== null)
+    return <ChartinkImport key={chartinkImport} requestId={chartinkImport} owner={owner} />
   if (id) return <ExperimentLoader key={`${owner}:${id}`} id={id} owner={owner} />
   if (job) return <PreviousReport key={`${owner}:${job}`} owner={owner} />
   return <LibraryIndex key={owner} owner={owner} params={params} setParams={setParams} />
@@ -453,6 +458,7 @@ function LibraryIndex({
                 <div key={item.id} className="flex items-center justify-between gap-4 py-4">
                   <div className="min-w-0">
                     <p className="truncate font-medium">{sourceLabel(item)}</p>
+                    <ChartinkSource source={item.receipt.chartink} />
                     <p className="mt-1 text-xs text-muted-foreground">
                       {item.receipt.date_from} – {item.receipt.date_to} ·{' '}
                       {count(item.receipt.signal_count, 'signal')}
@@ -737,14 +743,14 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
     model.accept(next)
     changeView('setup')
   }
-  async function replay(origin: string, trialId?: string) {
+  async function replay(origin: string, trialId?: string, period?: 'selection' | 'evaluation') {
     const latest = await model.flush()
-    const key = `replay:${origin}:${trialId ?? ''}:${latest.revision}`
+    const key = `replay:${origin}:${trialId ?? ''}:${period ?? 'selection'}:${latest.revision}`
     const request =
       copyRequests.current?.key === key ? copyRequests.current.id : crypto.randomUUID()
     copyRequests.current = { key, id: request }
     const result = await researchLibrary
-      .replay(server.id, latest.revision, origin, request, trialId)
+      .replay(server.id, latest.revision, origin, request, trialId, period)
       .catch((cause: unknown) => {
         model.reject(cause)
         throw cause
@@ -790,8 +796,14 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
   const displayedVersions =
     selectedVersion && versionQuery.data ? [versionQuery.data] : server.versions
   return (
-    <section className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
-      <header className="space-y-4">
+    <section
+      className={
+        jobId
+          ? 'mx-auto max-w-6xl space-y-3 px-4 py-3 sm:px-6'
+          : 'mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-8'
+      }
+    >
+      <header className={jobId ? 'space-y-2' : 'space-y-4'}>
         <Button
           variant="ghost"
           size="sm"
@@ -969,7 +981,8 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
               draft,
               onChange: model.change,
               onRun: () => operation(run),
-              onReplay: (origin, trialId) => operation(() => replay(origin, trialId)),
+              onReplay: (origin, trialId, period) =>
+                operation(() => replay(origin, trialId, period)),
               onJobUpdate: model.reflectJob,
               onOpenJob: (job) => {
                 if (

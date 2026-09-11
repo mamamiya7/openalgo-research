@@ -1,6 +1,6 @@
 # Research run progress and automatic recovery
 
-Status: **implemented, tested and installed for native user testing**. Updated 10 September 2026
+Status: **implemented, tested and installed for native user testing**. Updated 11 September 2026
 after native user testing. Delivery: **M2.6**, ahead of richer study charts;
 trial lifecycle and pause semantics connect to **M3.3**. The implementation uses
 the existing native price acquisition, worker and React workflow.
@@ -23,8 +23,8 @@ activity/data drawer. Do not add a wall of cards, logs or repeated notifications
 
 | Stage | Information visible to the user | Counting rule |
 | --- | --- | --- |
-| Read CSV | Files processed, signals accepted, unique symbols identified; a short action for excluded rows when relevant | CSV signal rows and unique symbols are different units. Deduplicate symbols across all strategies in the portfolio; preserve each strategy's separate signal identity. If parsing offers no incremental events, show an indeterminate reading state followed by real final counts. |
-| Prepare prices: check existing data | Automatically selected Daily or 1-minute interval; total required candles; candles already available in OpenAlgo; candles still needed | Derive requirements from the full accepted request, including holding windows and optimization ranges. Count unique required symbol/timestamp pairs; one price candle is not one CSV row. Totals remain provisional until planning and archive checks finish. |
+| Read CSV | Files processed, signals accepted, unique symbols identified, compact signal date range; a short action for excluded rows when relevant | CSV signal rows and unique symbols are different units. Dates come from the accepted run receipt, respecting any date filter. Deduplicate symbols across all strategies in the portfolio; preserve each strategy's separate signal identity. If parsing offers no incremental events, show an indeterminate reading state followed by real final counts. |
+| Prepare prices: check existing data | Automatically selected Daily or 1-minute interval; available versus required candles; one short holding-window explanation | Show the exact plan total as soon as planning finishes, before archive checks. Count unique required symbol/timestamp pairs, including all holding windows and optimization ranges. Daily windows include the entry session plus the allowed later holding sessions. Shared candles count once. Available coverage grows as archive checks finish; the download requirement is shown after the cache check completes. |
 | Prepare prices: download | Newly downloaded and verified candles versus those needed; symbols checked versus total; one active symbol where useful | Count data after native Historify write/readback verification. Keep cache reuse and new downloads separate. A reviewed symbol with missing prices is not a fully covered symbol. Broker omissions/exclusions stay visible in a concise data summary. |
 | Optimize | Actual completed trials versus the trial budget, active trial, elapsed time; a small history trace after real trial results exist | Use Optuna's actual states through our adapter. Keep unique calculations, reused proposals, failures and pruned trials distinguishable in details; none may masquerade as a new successful calculation. Prices are prepared once for the study, not per trial. |
 | Results | Results saved and ready to open | Complete only after durable publication of the result and its experiment link. Engine initialization and saving results have named states; never sit at a misleading 99% or claim completion early. |
@@ -111,6 +111,18 @@ and disabled, including recovery without repeated calculations. Worker checks
 verify that results and the completed display state publish atomically. Frontend
 checks cover upload sequencing, actual trial counts, engine preparation, status
 overrides, unknown legacy counts, accessibility and timer cleanup.
+
+The 11 September progress refinement uses existing job receipts and price-plan
+counts, so it also works for already-running jobs without a backend restart.
+The signal range sits below the CSV counts; daily preparation shows the largest
+allowed holding window, including entry day, and the exact unique candle total.
+Minute preparation keeps entry-to-exit wording instead of assuming daily windows.
+Regression checks cover overlapping strategies, optimization bounds, filtered
+signal dates, early totals, missing legacy fields and unchanged acquisition evidence.
+The refinement passed 70 frontend and 37 backend checks, TypeScript, scoped
+format/lint checks and a production build against the existing installation.
+The updated assets were applied without restarting the app or worker; the active
+native run retained its progress and displayed the new date/window information.
 
 Controlled browser acceptance passed through native price preparation, real
 VectorBT/Optuna calculations, full-cache repeat, selected exact replay and

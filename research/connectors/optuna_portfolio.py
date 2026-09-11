@@ -336,6 +336,7 @@ def run_search(
     checkpoint=None,
     saved=None,
     activity=None,
+    record_timing=False,
 ):
     """Run joint grid/TPE proposals through one shared-capital engine callback.
 
@@ -397,6 +398,7 @@ def run_search(
     if spec["sampler"] == "tpe":
         study.enqueue_trial(_first_candidate(base, axes))
     rows, trials = {}, []
+    analysis_catalog = {}
     winner_report = winner_row = None
     last_notice, last_notice_key = float("-inf"), None
 
@@ -510,13 +512,20 @@ def run_search(
                     "score": value,
                     "stage": spec["sampler"],
                 }
+                if isinstance(report.get("analysis"), dict):
+                    row["analysis"] = {
+                        key: copy.deepcopy(report["analysis"][key])
+                        for key in ("version", "metrics", "unavailable")
+                    }
+                    for definition in report["analysis"].get("catalog", []):
+                        analysis_catalog[definition["key"]] = definition
                 rows[config_id] = row
                 if winner_row is None or _rank(row) < _rank(winner_row):
                     winner_report = report
             if winner_row is None or _rank(row) < _rank(winner_row):
                 winner_row = row
             record["value"] = row["score"]
-            if replay is not None and record != replay:
+            if replay is not None and any(record[key] != replay.get(key) for key in record):
                 raise ValueError("Portfolio checkpoint score evidence is inconsistent")
             return row["score"]
 
@@ -526,6 +535,15 @@ def run_search(
             if replay is None and study.trials[-1].state == optuna.trial.TrialState.FAIL:
                 notify(failed=1)
             raise
+        if replay is not None:
+            # Reporting timestamps never influence proposal/score replay.
+            for key in ("datetime_start", "datetime_complete"):
+                if key in replay:
+                    record[key] = replay[key]
+        elif record_timing:
+            native = study.trials[-1]
+            record["datetime_start"] = native.datetime_start.isoformat()
+            record["datetime_complete"] = native.datetime_complete.isoformat()
         trials.append(record)
 
     if saved is not None:
@@ -559,6 +577,10 @@ def run_search(
         if rows != restored:
             raise ValueError("Portfolio checkpoint contains unused configuration evidence")
         winner_report = saved.get("winner_report")
+        for definition in saved.get(
+            "analysis_catalog", (winner_report or {}).get("analysis", {}).get("catalog", [])
+        ):
+            analysis_catalog[definition["key"]] = definition
         if winner_row is not None and (
             not isinstance(winner_report, dict)
             or winner_report.get("summary") != winner_row["summary"]
@@ -585,6 +607,7 @@ def run_search(
                 "trials": trials,
                 "winner_report": winner_report,
                 "winner_config_id": winner_row["config_id"] if winner_row else None,
+                "analysis_catalog": list(analysis_catalog.values()),
             }
             payload["checkpoint_id"] = _fingerprint(payload, max_bytes=MAX_CHECKPOINT_BYTES)
             # The callback receives a stable snapshot, not lists that future
@@ -621,6 +644,7 @@ def run_search(
             },
             "recommendation_id": winner_row["config_id"],
             "rows": ranked,
+            "analysis_catalog": copy.deepcopy(list(analysis_catalog.values())),
             "pass_rows": list(rows.values()),
             "trials": trials,
             "selected_reports": {winner_row["config_id"]: winner_report},

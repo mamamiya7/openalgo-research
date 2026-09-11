@@ -1,17 +1,45 @@
 """Chronological holdout inputs: split before search, never share positions."""
 
+import hashlib
+import json
 import math
 
 from research.portfolio import requirement_strategies
 from research.portfolio_coverage import prepare
 
+PERIOD_PLAN_VERSION = "research-period-plan-v1"
 
-def split_date(evidence):
+
+def period_plan(evidence):
+    """Freeze signal-date boundaries before acquisition or selection sees prices."""
     days = sorted({signal["date"] for signal in evidence["signals"]})
     if len(days) < 5:
         raise ValueError("A later-period check needs signals on at least five different dates")
-    count = math.floor(len(days) * evidence["portfolio"]["validation"]["train_pct"] / 100)
-    return days[count - 1], days[count]
+    validation = evidence["portfolio"]["validation"]
+    count = math.floor(len(days) * validation["train_pct"] / 100)
+    return {
+        "version": PERIOD_PLAN_VERSION,
+        "mode": validation.get("mode", "evaluate"),
+        "train_pct": validation["train_pct"],
+        "selection": {"from": days[0], "to": days[count - 1]},
+        "evaluation": {"from": days[count], "to": days[-1]},
+        "signal_dates_sha256": hashlib.sha256(
+            json.dumps(days, separators=(",", ":")).encode()
+        ).hexdigest(),
+        "basis": "unique signal dates",
+        "positions": "fresh capital; no positions cross the boundary",
+    }
+
+
+def split_date(evidence):
+    expected = period_plan(evidence)
+    retained = evidence.get("period_plan")
+    if retained is not None and retained != expected:
+        raise ValueError(
+            "Saved evaluation dates do not match these signals and settings. Create a new run."
+        )
+    plan = retained or expected  # Original evidence remains readable without migration.
+    return plan["selection"]["to"], plan["evaluation"]["from"]
 
 
 def _snapshot(snapshot, first, last):
@@ -49,9 +77,11 @@ def _snapshot(snapshot, first, last):
     return result
 
 
-def partition(evidence):
+def partition(evidence, *, prepare_period="both"):
     from research.connectors.vectorbt_portfolio import _deadline, _schedule
 
+    if prepare_period not in ("both", "selection", "evaluation"):
+        raise ValueError("Choose a recorded calculation period")
     train_end, test_start = split_date(evidence)
     snapshot = evidence["snapshot"]
     minute = snapshot["provenance"]["interval"] == "1m"
@@ -94,7 +124,8 @@ def partition(evidence):
             ],
             "snapshot": _snapshot(snapshot, first, last),
         }
-        periods.append(prepare(selected))
+        required = prepare_period == "both" or (training == (prepare_period == "selection"))
+        periods.append(prepare(selected) if required else selected)
     return (
         periods[0],
         periods[1],

@@ -1,4 +1,5 @@
 import { webClient } from './client'
+import type { ChartinkSourceMetadata } from './researchChartink'
 
 export interface ResearchConfig {
   initial_capital: number
@@ -96,6 +97,7 @@ export interface Experiment {
 export interface ResearchSource {
   id: string
   receipt: {
+    chartink?: ChartinkSourceMetadata
     filename?: string
     input_rows: number
     signal_count: number

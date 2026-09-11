@@ -161,9 +161,11 @@ def normalize(raw):
         validation = raw["validation"]
         if (
             not isinstance(validation, dict)
-            or set(validation) != {"train_pct"}
+            or set(validation) - {"train_pct", "mode"}
+            or "train_pct" not in validation
             or type(validation["train_pct"]) is not int
             or not 50 <= validation["train_pct"] <= 90
+            or validation.get("mode", "evaluate") not in ("reserve", "evaluate")
         ):
             raise ValueError("The earlier period must use 50–90% of the signal dates")
         result["validation"] = dict(validation)

@@ -31,6 +31,144 @@ export interface PortfolioStrategy {
   search: Partial<Record<PortfolioAxis, PortfolioRange>>
 }
 export type PortfolioSettings = Pick<PortfolioStrategy, 'id' | 'name' | 'allocation_pct' | 'config'>
+export interface AnalysisMetric {
+  key: string
+  label: string
+  group: string
+  format: 'percent' | 'money' | 'number' | 'text'
+  description: string
+  source: string
+}
+export interface AnalysisChart {
+  id: string
+  title: string
+  status: 'available' | 'unavailable'
+  reason?: string
+  figure?: { data: Record<string, unknown>[]; layout: Record<string, unknown> }
+}
+export interface ScalarAnalysis {
+  version: string
+  metrics: Record<string, number | string | null>
+  unavailable: Record<string, string>
+}
+export interface StudyAnalysis {
+  version: string
+  basis: string[]
+  charts: AnalysisChart[]
+  parameters?: string[]
+}
+export interface PortfolioAnalysis extends ScalarAnalysis, StudyAnalysis {
+  catalog: AnalysisMetric[]
+  price_symbols?: string[]
+  price_symbol?: string
+  report_depth?: {
+    version: 'research-report-depth-v1'
+    daily_return_quantiles: {
+      status: 'available' | 'unavailable'
+      reason?: string
+      rows: Array<{ percentile: number; return_pct: number }>
+      [key: string]: unknown
+    }
+    drawdowns: {
+      status: 'available' | 'unavailable'
+      reason?: string
+      total: number
+      shown: number
+      truncated: boolean
+      basis: string
+      duration_definition: string
+      recovery_definition: string
+      rows: Array<{
+        id: number
+        peak_at: string | null
+        start_at: string
+        trough_at: string
+        end_at: string
+        recovered_at: string | null
+        status: 'recovered' | 'ongoing'
+        depth_pct: number
+        peak_equity: number
+        trough_equity: number
+        underwater_bars: number
+        underwater_sessions: number
+        recovery_sessions: number | null
+        recovery_days: number | null
+        peak_index: number | null
+        trough_index: number
+        end_index: number
+      }>
+    }
+    rolling: {
+      windows: number[]
+      annual_sessions: number
+      sampling: string
+      volatility_ddof: number
+      risk_free_return: number
+      required_return: number
+      sortino_definition: string
+    }
+  }
+}
+export interface PortfolioPeriodPlan {
+  version: 'research-period-plan-v1'
+  mode: 'reserve' | 'evaluate'
+  train_pct: number
+  selection: { from: string; to: string }
+  evaluation: { from: string; to: string }
+  signal_dates_sha256: string
+  basis: string
+  positions: string
+}
+export type EvaluationBasis =
+  | { version: 'research-evaluation-basis-v1'; status: 'unverified' }
+  | {
+      version: 'research-evaluation-basis-v1'
+      status: 'verified'
+      evidence_id: string
+      source_id: string
+      cohort_id: string
+      observations_id: string
+      prices_id: string
+      calendar_id: string
+      instruments_id: string
+      period: {
+        kind: 'selection' | 'evaluation' | 'full'
+        from: string
+        to: string
+        observations: number
+        interval: string
+      }
+      admission: { eligible: number; excluded: number; pending: number }
+      comparison: {
+        id: string
+        period: 'selection' | 'evaluation' | 'full'
+        currency: string
+        capital: number
+        execution: Record<string, unknown>
+        costs: Array<{ strategy_id: string; cost_bps: number; slippage_bps: number }>
+      }
+    }
+export interface PortfolioReportContext {
+  version: 'research-report-context-v1'
+  report_id: string
+  job_id: string
+  result_artifact: string
+  inputs_artifact: string | null
+  config_id: string | null
+  period: 'selection' | 'evaluation' | 'full'
+  period_label: string
+  dates: { from: string | null; to: string | null }
+  analysis_version: string | null
+  analysis_artifact: string | null
+  evaluation_basis?: EvaluationBasis
+  parent_job_id?: string
+  candidate?: {
+    study_job_id: string
+    trial_number: number
+    config_id: string
+    is_objective_winner: boolean
+  }
+}
 export interface PortfolioRequest {
   version: 'research-portfolio-v1'
   name: string
@@ -45,7 +183,7 @@ export interface PortfolioRequest {
   }
   date_from?: string
   date_to?: string
-  validation?: { train_pct: 80 }
+  validation?: { train_pct: number; mode?: 'reserve' | 'evaluate' }
 }
 export interface PortfolioTrial {
   trial_number: number
@@ -54,8 +192,19 @@ export interface PortfolioTrial {
   summary: Record<string, number | string | null>
   score: number
   stage: string
+  analysis?: ScalarAnalysis
 }
 export interface PortfolioResult {
+  report_context?: PortfolioReportContext
+  evaluation_basis?: EvaluationBasis
+  reserved_evaluation?: {
+    version: 'research-period-plan-v1'
+    selection: { from: string; to: string }
+    evaluation: { from: string; to: string }
+    status: 'reserved'
+  }
+  analysis?: PortfolioAnalysis
+  engine_records?: Record<string, Array<Record<string, unknown>>>
   portfolio?: PortfolioRequest
   config: { initial_capital: number }
   strategies: PortfolioSettings[]
@@ -98,12 +247,16 @@ export interface PortfolioResult {
   execution?: { engine: string; engine_version?: string; interval?: string }
   experiment?: {
     kind: 'portfolio_optimize'
+    evaluation_basis_id?: string
     rows: PortfolioTrial[]
     recommendation_id: string
     selected_strategies: PortfolioSettings[]
     optimizer: { sampler: string; objective_definition: string; version: string }
     specification: NonNullable<PortfolioRequest['optimization']>
     counts: Record<string, number>
+    analysis_catalog?: AnalysisMetric[]
+    study_analysis?: StudyAnalysis
+    search_space?: { axes: Record<string, PortfolioRange> }
   }
 }
 export interface PortfolioJob {
@@ -123,10 +276,17 @@ export interface PortfolioJob {
   result?: PortfolioResult
 }
 export interface PortfolioPreview {
+  period_plan?: PortfolioPeriodPlan
   portfolio: PortfolioRequest
   interval: string
   receipt: ResearchSource['receipt'] & { strategy_count: number }
   versions: Record<string, string>
+}
+export interface PortfolioAnalysisStatus {
+  status: 'queued' | 'running' | 'complete' | 'failed' | 'missing'
+  error?: string
+  job?: PortfolioJob
+  analysis_job_id?: string
 }
 export type PortfolioSource = ResearchSource & {
   created_at?: number
@@ -187,17 +347,52 @@ export const portfolioResearch = {
       })
     ).data
   },
-  async rerun(id: string, request_id: string, trial_id?: string): Promise<PortfolioJob> {
+  async rerun(
+    id: string,
+    request_id: string,
+    trial_id?: string,
+    period?: 'selection' | 'evaluation'
+  ): Promise<PortfolioJob> {
     return (
       await webClient.post(
         `${base}/portfolio/jobs/${encodeURIComponent(id)}/rerun`,
         {
           request_id,
           ...(trial_id ? { trial_id } : {}),
+          ...(period ? { period } : {}),
         },
         { timeout: 30000 }
       )
     ).data
+  },
+  async prepareAnalysis(
+    id: string,
+    parameters?: string[],
+    symbol?: string,
+    period?: 'selection' | 'validation'
+  ): Promise<PortfolioAnalysisStatus> {
+    return (
+      await webClient.post(
+        `${base}/portfolio/jobs/${encodeURIComponent(id)}/analysis`,
+        {
+          ...(parameters ? { parameters } : {}),
+          ...(symbol ? { symbol } : {}),
+          ...(period ? { period } : {}),
+        },
+        { timeout: 30000 }
+      )
+    ).data
+  },
+  async analysis(id: string, signal?: AbortSignal): Promise<PortfolioAnalysisStatus> {
+    return (
+      await webClient.get(`${base}/portfolio/jobs/${encodeURIComponent(id)}/analysis`, {
+        signal,
+        timeout: 15000,
+      })
+    ).data
+  },
+  analysisExportUrl(id: string) {
+    return `${import.meta.env.VITE_API_URL || ''}${base}/portfolio/jobs/${encodeURIComponent(id)}/analysis/export`
   },
   exportUrl(id: string) {
     return `${import.meta.env.VITE_API_URL || ''}${base}/jobs/${encodeURIComponent(id)}/export`

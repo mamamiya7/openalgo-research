@@ -244,6 +244,15 @@ def _library_references(db, tables):
             kind in ("run", "replay") and linked_versions[(experiment_id, job_id)] != version_id
         ):
             raise ValueError("Research library request is missing its accepted job link")
+    for owner, experiment_id, source_id, parent_id in _rows(
+        db,
+        "research_chartink_imports",
+        ("owner", "experiment_id", "source_id", "parent_experiment_id"),
+    ):
+        if container(experiment_id)[1] != owner or sources.get(source_id) != owner:
+            raise ValueError("Chartink import references missing or foreign research")
+        if parent_id and container(parent_id)[1] != owner:
+            raise ValueError("Chartink import references a foreign parent experiment")
     return roots
 
 

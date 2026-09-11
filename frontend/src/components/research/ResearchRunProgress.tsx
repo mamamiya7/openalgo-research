@@ -4,12 +4,57 @@ import type { PortfolioJob } from '@/api/portfolioResearch'
 import type { ResearchActivity } from '@/api/scannerResearch'
 import './ResearchRunProgress.css'
 
-type ProgressJob = Pick<PortfolioJob, 'status' | 'kind' | 'activity' | 'queue_position'>
+type ProgressJob = Pick<
+  PortfolioJob,
+  'status' | 'kind' | 'activity' | 'queue_position' | 'source_summary' | 'specification'
+>
 const valid = (value: number | undefined): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0
 const count = (value: number) => value.toLocaleString('en-IN')
 const intervalName = (interval?: string) =>
   interval === 'D' ? 'Daily' : interval === '1m' ? '1-minute' : null
+
+function signalDateRange(source?: ProgressJob['source_summary']) {
+  const from = source?.date_from
+  const to = source?.date_to
+  if (!from || !to || from > to) return undefined
+  const dates = [from, to].map((value) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined
+    const date = new Date(`${value}T00:00:00Z`)
+    return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value
+      ? date
+      : undefined
+  })
+  const [first, last] = dates
+  if (!first || !last) return undefined
+  const format = (date: Date, year = true) =>
+    new Intl.DateTimeFormat('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      ...(year ? { year: 'numeric' as const } : {}),
+      timeZone: 'UTC',
+    }).format(date)
+  return from === to
+    ? format(first)
+    : `${format(first, first.getUTCFullYear() !== last.getUTCFullYear())}–${format(last)}`
+}
+
+function priceWindowSummary(job: ProgressJob, interval?: string) {
+  if (!intervalName(interval)) return undefined
+  const portfolio = job.specification?.portfolio
+  if (interval === 'D' && portfolio?.strategies.length) {
+    const holds = portfolio.strategies.map((strategy) =>
+      portfolio.optimization && strategy.search?.hold_sessions
+        ? strategy.search.hold_sessions.max
+        : strategy.config.hold_sessions
+    )
+    if (holds.every((value) => Number.isSafeInteger(value) && value > 0)) {
+      // Daily plans include the entry session and each later holding session.
+      return `Up to ${count(Math.max(...holds) + 1)} trading days per signal · shared candles counted once`
+    }
+  }
+  return 'Entry-to-exit prices · shared candles counted once'
+}
 
 function stepIndex(stage?: ResearchActivity['stage']): number {
   if (!stage) return -1
@@ -125,9 +170,17 @@ function StageBar({ label, value, total }: { label: string; value?: number; tota
   )
 }
 
-function PriceProgress({ activity, running }: { activity: ResearchActivity; running: boolean }) {
+function PriceProgress({
+  activity,
+  running,
+  windowSummary,
+}: {
+  activity: ResearchActivity
+  running: boolean
+  windowSummary?: string
+}) {
   const prices = activity.prices
-  const knownTotal = prices?.cache_complete && valid(prices.required_candles)
+  const knownTotal = valid(prices?.required_candles)
   const available = prices?.available_candles
   return (
     <div className="space-y-4">
@@ -146,12 +199,18 @@ function PriceProgress({ activity, running }: { activity: ResearchActivity; runn
         {valid(available) && (
           <span className="text-sm text-muted-foreground">candles available</span>
         )}
+        {!valid(available) && knownTotal && (
+          <p className="text-sm text-muted-foreground">
+            {count(prices.required_candles!)} candles needed
+          </p>
+        )}
         {intervalName(prices?.interval) && (
           <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium">
             {intervalName(prices?.interval)}
           </span>
         )}
       </div>
+      {windowSummary && <p className="text-xs text-muted-foreground">{windowSummary}</p>}
       {running && (
         <StageBar
           label={knownTotal ? 'Required candles available' : 'Checking required prices'}
@@ -162,7 +221,10 @@ function PriceProgress({ activity, running }: { activity: ResearchActivity; runn
       <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         <Metric label="Already in OpenAlgo" value={prices?.cached_candles} />
         <Metric label="Downloaded" value={prices?.downloaded_candles} />
-        <Metric label="Still needed" value={knownTotal ? prices?.missing_candles : undefined} />
+        <Metric
+          label="Still needed"
+          value={prices?.cache_complete ? prices.missing_candles : undefined}
+        />
       </dl>
       <p className="flex flex-wrap gap-x-2 text-xs text-muted-foreground">
         {valid(prices?.checked_symbols) && valid(prices?.total_symbols) && (
@@ -231,7 +293,7 @@ function Details({ activity }: { activity: ResearchActivity }) {
     ['Signals accepted', activity.inputs?.signals],
     ['Unique symbols', activity.inputs?.symbols],
     ['Rows excluded', activity.inputs?.excluded_rows],
-    ['Candles required', prices?.cache_complete ? prices.required_candles : undefined],
+    ['Candles required', prices?.required_candles],
     ['Symbols fully covered', prices?.covered_symbols],
     ['Candles unavailable from broker', prices?.unavailable_candles],
     ['Download windows remaining', prices?.pending_windows],
@@ -282,6 +344,7 @@ export function ResearchRunProgress({ job }: { job: ProgressJob }) {
         valid(inputs?.signals) && valid(inputs?.symbols)
           ? `${count(inputs.signals)} signals · ${count(inputs.symbols)} symbols`
           : undefined,
+      dates: signalDateRange(job.source_summary),
     },
     {
       name: 'Prepare prices',
@@ -304,7 +367,7 @@ export function ResearchRunProgress({ job }: { job: ProgressJob }) {
   return (
     <div className="research-run-progress space-y-7" data-running={running}>
       <ol aria-label="Run stages" className="research-stage-track">
-        {steps.map(({ name, Icon, summary }, index) => {
+        {steps.map(({ name, Icon, summary, dates }, index) => {
           const done = current > index
           return (
             <li
@@ -319,6 +382,7 @@ export function ResearchRunProgress({ job }: { job: ProgressJob }) {
               <div className="min-w-0">
                 <span className="text-xs font-medium">{name}</span>
                 {summary && <p className="mt-1 text-xs text-muted-foreground">{summary}</p>}
+                {dates && <p className="mt-1 text-xs text-muted-foreground">{dates}</p>}
               </div>
             </li>
           )
@@ -340,7 +404,13 @@ export function ResearchRunProgress({ job }: { job: ProgressJob }) {
                 : 'Your run is in the queue.'}
           </p>
         )}
-        {activity && current === 1 && <PriceProgress activity={activity} running={running} />}
+        {activity && current === 1 && (
+          <PriceProgress
+            activity={activity}
+            running={running}
+            windowSummary={priceWindowSummary(job, activity.prices?.interval)}
+          />
+        )}
         {activity?.stage === 'csv' && (
           <dl className="grid grid-cols-3 gap-4">
             <Metric label="Files processed" value={inputs?.files} />

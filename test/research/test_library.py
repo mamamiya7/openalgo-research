@@ -501,8 +501,11 @@ def test_real_search_to_selected_draft_keeps_parent_and_original_evidence(
         after_backup = library.get_experiment(restored_store, OWNER, experiment["id"])
         assert after_backup == before_backup
         original_job = service.get_job(restored_store, OWNER, job_id)
+        assert service.read_artifact(restored_store, original_job.result_artifact)["result"] == {
+            key: value for key, value in job["result"].items() if key != "report_context"
+        }
         assert (
-            service.read_artifact(restored_store, original_job.result_artifact)["result"]
+            service.job_receipt(restored_store, original_job, include_result=True)["result"]
             == job["result"]
         )
     finally:

@@ -583,7 +583,7 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
                     "contribution_pct": pnls[-1] / capital * 100,
                 }
             )
-        return {
+        report = {
             "policy_version": POLICY_VERSION,
             "metric_basis": "minute_marked" if minute else "daily_marked",
             "config": {"initial_capital": float(capital)},
@@ -624,6 +624,12 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
                 "Long cash equities with supplied instrument metadata and zero configured slippage only.",
             ],
         }
+        from research.analytics import build_analysis
+
+        report["analysis"] = build_analysis(
+            report, nautilus_engine=engine, venue=venue, currency=currency
+        )
+        return report
     finally:
         if engine is not None:
             engine.dispose()

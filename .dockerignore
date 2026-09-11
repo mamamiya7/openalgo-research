@@ -55,6 +55,7 @@ docker-compose.yml
 
 # Frontend development files (dist is INCLUDED - pre-built for community)
 frontend/node_modules/
+extensions/*/node_modules/
 frontend/.vite/
 frontend/coverage/
 frontend/test-results/

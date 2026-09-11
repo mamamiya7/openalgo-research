@@ -31,7 +31,7 @@ const labels: Record<PortfolioAxis, string> = {
   order_size_pct: 'Per-trade size (%)',
   allocation_pct: 'Portfolio allocation (%)',
 }
-function defaultRange(field: PortfolioAxis, value: number): PortfolioRange {
+export function portfolioSearchRange(field: PortfolioAxis, value: number): PortfolioRange {
   if (field === 'allocation_pct') return { min: 0, max: 100, step: 25 }
   const integer = field === 'hold_sessions' || field === 'hold_minutes'
   const step = integer
@@ -97,7 +97,7 @@ export function PortfolioStrategySettings({
                 checked={Boolean(range)}
                 onChange={(event) => {
                   const search = { ...current.search }
-                  if (event.target.checked) search[field] = defaultRange(field, value)
+                  if (event.target.checked) search[field] = portfolioSearchRange(field, value)
                   else delete search[field]
                   onChange({ ...current, search })
                 }}

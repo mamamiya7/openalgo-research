@@ -2,6 +2,25 @@
 
 **Planning baseline: 10 September 2026, source revision `94d1043fa6f7b1a75cec22ca0a4fd093e288464b`.** This plan connects the [intended journeys](PRODUCT_JOURNEY_MAP.md), [asset profiles](ASSET_PROFILES.md), [source review](JOURNEYS.md) and [recorded delivery status](STATUS.md). It is the implementation sequence and acceptance contract; it does not mark proposed features as shipped.
 
+**Backlog reconciliation: 11 September 2026.** Sections 2, 5 and 9 now account for
+the delivered library, Chartink entry, price progress/batching and native analytics.
+Graphify's refreshed research graph was used to trace these packages to their
+implementation records; STATUS and the focused acceptance documents resolve older
+checkpoint wording. This is a source/document review, not a new broker or browser
+acceptance run. Section 9 is the consolidated remaining-work index. Detailed
+contracts stay in their existing documents; no second product plan is introduced.
+
+**11 September extension:** the [Chartink-to-saved-research journey](CHARTINK_JOURNEY.md) specifies the full external-scanner entry path through M1/M2 setup and data, M3 optimization, and comparison/validation. Its automatic names, defaults, conditional questions, refresh rules and acceptance story supplement this sequence; a working CSV capture alone does not complete that journey.
+
+**11 September report refinement:** [Report experience and study exploration](REPORT_EXPERIENCE_PLAN.md)
+is the exact next specification for P5/P6/P7/P8 and the reporting portions of
+M2/M3/M4a. It replaces the single-chart browsing approach with a continuous report
+and specifies study-to-candidate links, counts, benchmark evidence, shortlist,
+comparison and validation. R0–R6 distinguish existing foundations from planned
+work. QS-01 retains the optional QuantStats connector for a later bounded decision.
+Native Optuna Dashboard embedding and study pause/extension remain subject to the
+separate storage/recovery prerequisites below.
+
 Execution has started. The [implementation checkpoint](EXECUTION_STATUS.md)
 records the working library/draft/version increment and result-to-study links,
 with explicit remaining work and evidence boundaries.
@@ -27,19 +46,19 @@ Evidence labels:
 
 - **C — code-backed:** inspected relevant source; not a fresh browser acceptance claim.
 - **H — historical acceptance:** a bounded previous check recorded in STATUS/VERIFICATION; retain its version, platform and data-source limits.
-- **O — observed now:** a fresh end-to-end receipt with version, input and runtime. No new O evidence is claimed by this planning task.
+- **O — observed now:** a fresh bounded receipt with version, input and runtime. The first report increment has controlled-engine/browser evidence recorded in REPORT_EXPERIENCE_PLAN section 11; it is not whole-release acceptance.
 - **P — proposed:** required behavior that has not been accepted.
 
 | Area | Current foundation | Gap to target | Evidence / next proof |
 | --- | --- | --- | --- |
-| Input and calculation | CSV sources, one to eight long NSE cash strategies, shared-cash VectorBT, optional bounded Nautilus | Reusable editable setup versions and other supported input/profile types | C/H; M0 repeats the current visible daily and timed-input paths |
-| Market data | Daily/minute requirement planning, native Historify reuse, missing-only connected-broker acquisition, frozen snapshots | General instrument/venue profiles, richer history streams, broader broker acceptance | C/H for bounded Fyers cases; M0 and M6 produce separate controlled and real-source receipts |
-| Research records | Sources, jobs, `ResearchExperiment`, `ResearchAttempt`, receipts, evidence history and exports | Named multi-study experiment container, server drafts, library queries, shortlist and decisions | C; M1 evolves existing records and proves populated migration |
-| Results | Summary, equity, contribution, trades/settings/trials, exact replay/export | Completed-result → edit/optimize, deeper diagnosis and comparisons | C/H for current paths; M2/M4 add and exercise the missing transitions |
-| Trial evidence | Full completed/pruned proposal checkpoint records including repeated proposals; separate deduplicated ranked rows | Complete native analysis contract and actual trial navigation; recorded timing/failure/active state where available | C; M3 must expose original proposals rather than synthesize trials from rankings |
+| Input and calculation | CSV/Chartink sources, one to eight long NSE cash strategies, shared-cash VectorBT, bounded optional Nautilus, editable setup versions | Trading presets, supported generated/imported inputs and additional asset profiles | C/H; current daily/minute/mixed paths have bounded receipts; new types need separate admission |
+| Market data | Daily/minute planning, Historify reuse, missing-only acquisition, frozen snapshots, automatic continuation, accurate candle counters and daily request batching | Calendar maintenance, broader broker/venue coverage, additional historical streams and production performance evidence | C/H for bounded Fyers cases and controlled batching/reuse; no universal broker or live speed claim |
+| Research records | Named experiments, server drafts, immutable setup versions, search/notes/tags/pins, linked runs, archive/restore | Persistent candidate shortlist, comparisons, decisions and complete last-view restoration | C/H for core library; report R5 and remaining M1 add the missing records |
+| Results | Continuous report/risk depth, account-saved report preferences, month/drawdown investigation, report/period/candidate and evaluation-basis identities, native statistics, trial settings/Columns, frozen replay and evidence export | Native benchmark, connected candidate/comparison journey, complete context restoration and portable presentation export | C/H plus bounded controlled-engine/browser receipts for R0–R2 slices; normal-app acceptance pending |
+| Trial evidence | Original completed/pruned proposals and repeats, distinct ranked configurations, full scalar analysis for new distinct trials, native Optuna figures | Connected study dashboard, full proposal navigation, candidate links and durable real activity/failure/timing capture | C/H for saved analysis; absent old observations stay unknown; report R4/M3 extend the contract |
 | Continuation | Version-bound JSON replay and interrupted-job recovery | Pause UX and compatible extension of a completed study | C/H for recovery; current identity includes total trial budget, so M3 splits scientific identity from execution budget |
-| Validation | Fixed earlier/later calculation split by unique signal dates; persisted evidence-use history | Candidate-driven reserved evaluation, history integration, rolling/scenario analysis and decision records | C/H for fixed split; history warning path currently belongs to legacy research, so M2/M4 connect it to the portfolio flow |
-| Interface | Native React, shadcn-style primitives, basic saved runs and account-keyed sessionStorage draft | Experiment/library navigation, server save, preserved view state, fewer duplicated controls | C/H bounded current journeys; M0 captures actual screens and M1–M4 check them |
+| Validation | Fixed legacy earlier/later split plus frozen optional reserve mode before baseline/search; explicit chosen-candidate later evaluation, linked history and exact period identity | Fair cohort comparison, visible evidence-use history, rolling/scenario analysis and saved decisions | Controlled baseline/optimization/evaluation/replay ancestry checks passed; broader M2/M4 decision journey remains open |
+| Interface | Native React, continuous report, library/experiment navigation, server autosave/conflict recovery, compact progress and paginated trial metrics | Dedicated study workspace, contextual data/activity views, server-saved preferences and full navigation restoration | C/H and bounded report desktop/mobile receipt; ordinary-app acceptance of the newest increment pending |
 | Distribution | Versioned native OpenAlgo bundle, locked engines, installer/checks, optional Linux runtime | New-schema upgrades, broader host-version compatibility, full Docker/restore and unaided use | H bounded Windows/Linux installs; R checks the exact new release artifact |
 | Extended scope | Upstream OpenAlgo tools and engine capabilities exist | Signal templates, broader instruments, advanced search, research import and execution observation connectors | P for the new joint research journeys; M5–M7 validate reuse before enabling controls |
 
@@ -203,26 +222,29 @@ Each package includes service/UI changes, appropriate numerical or persistence t
 
 ## 5. Every journey has an owner and an acceptance result
 
-All IDs refer to the target catalogue. Current labels below describe relevant components, not full end-to-end completion.
+All IDs refer to the target catalogue. Current labels below were reconciled on
+11 September against STATUS and the focused implementation records. They describe
+relevant components, not full end-to-end completion. C/H retains the limits of the
+original receipt; this review adds no new O evidence.
 
 | ID / journey | Current foundation | Delivery package | Acceptance result |
 | --- | --- | --- | --- |
-| J01 Capture idea | P | M1 | Reopen unfinished named idea with saved draft |
+| J01 Capture idea | C/H named experiment and server draft | M1 | Reopen unfinished named idea with saved draft |
 | J02 Existing signals | C/H core | M0/M2 | Daily and timed CSV loop works with native data |
 | J03 Generate signals | P | M5.1 | Causal template → same saved research loop |
 | J04 Import outside work | Partial source/evidence infrastructure | M5.3 | Versioned import reproduces or is clearly review-only |
 | J05 Resolve input ambiguity | C/H bounded | M2.2/M6.1 | One relevant choice, preserved mapping, return to field |
 | J06 Prepare data | C/H bounded | M0/M2.2/M6 | Matching cache plus missing-only broker acquisition and readback |
-| J07 Read baseline | C/H summary | M2.4 | Supported metrics/benchmark and useful investigation |
-| J08 Diagnose loss | Partial tables | M2.4/M4b | Chart ↔ actual trade/price context without losing filters |
-| J09 Adjust setup | Missing completed-result transition | M2.1 | Exact parent opens child draft and linked result |
-| J10 Optimize settings | C/H search core | M2.1/M3 | Baseline-linked study with full request planning |
+| J07 Read baseline | C/H extensive analytics; continuous report/risk depth tested in controlled runtime; benchmark P | M2.4 / report R0–R3 | Supported metrics/benchmark, useful investigation and normal-app acceptance |
+| J08 Diagnose loss | C/H risk/trade charts and OHLC/fills; month/drawdown-to-trades dialogs observed in controlled browser | M2.4/M4b / report R2 | Complete chart ↔ trade/price return context and normal-app acceptance |
+| J09 Adjust setup | C/H completed-result → child draft | M2.1 | Exact parent opens child draft and linked result |
+| J10 Optimize settings | C/H search and result-to-optimization transition | M2.1/M3 | Baseline-linked study with full request planning |
 | J11 Optimize allocations | C/H joint core | M3/M4b.3 | Feasible allocations compared on shared-account results |
 | J12 Monitor/pause | C/H progress/recovery; pause P | M3.3 | Honest state, safe pause and preserved completed work |
-| J13 Explore parameters | Trial table; rich plots P | M3.2/M5.2 | Actual trials support contextual native plots |
+| J13 Explore parameters | C/H native plots and configurable trials; connected dashboard P | M3.2/M5.2 / report R4 | Actual trials support contextual native plots |
 | J14 Manual hypothesis | P | M3.4 | Validated settings become recorded manual trial |
 | J15 Extend study | Recovery exists; budget is identity-bound | M3.4 | Compatible extra-budget segment preserves history |
-| J16 Refine search | P transition | M3.4 | Changed search is a linked child with preserved parent |
+| J16 Refine search | C/H setup restoration/child lineage; study-native refinement partial | M3.4 | Changed search is a linked child with preserved parent |
 | J17 Shortlist | P | M1/M3.5 | Exact candidate retained across visits/studies |
 | J18 Compare | P in joint UI | M4a.1 | Baseline/candidate comparison exposes material mismatch |
 | J19 Reserved evaluation | C/H fixed split; history integration gap | M2.3/M4a.2 | Frozen candidate evaluated with truthful exposure history |
@@ -231,16 +253,16 @@ All IDs refer to the target catalogue. Current labels below describe relevant co
 | J22 Transfer markets/periods | P transition | M5.4/M6 | New context re-resolves data/contract and preserves differences |
 | J23 Engine discrepancy | C/H two bounded engines; reconciliation UI P | M4b.5 | First differing event/policy explained with exact evidence |
 | J24 Combine strategies | C/H cash core | M1/M4b.3 | Saved components compose and compare without cash double-counting |
-| J25 Exposure/capacity | Partial positions/contributions | M4b.3/M6 | Actual exposures; unsupported capacity estimates stay unavailable |
+| J25 Exposure/capacity | C/H account exposure/contributions; concentration/capacity partial | M4b.3/M6 | Actual exposures; unsupported capacity estimates stay unavailable |
 | J26 Recover work | C/H bounded | M0/M3.3/R | Resume after failure/restart without duplicate accepted evidence |
-| J27 Return later | C/H saved runs; richer library P | M1 | Restore server draft, selected study and view context |
+| J27 Return later | C/H library, drafts and versions; full view restoration partial | M1 | Restore server draft, selected study and view context |
 | J28 Retain/reject | P | M4a.3 | Append decision with chosen version and reason |
 | J29 Replay/refresh | C/H replay; refresh P | M2.5/M7.1/R | Exact replay stays exact; newer data is a child result |
-| J30 Export/share | C/H exact export | M4a.4/M5.3/R | Readable report or declared reproducible bundle with dependencies |
+| J30 Export/share | C/H exact evidence/analysis export; portable report P | M4a.4/M5.3/R / report R6 | Readable report or declared reproducible bundle with dependencies |
 | J31 Execution observations | P connector | M7.3/M7.4 | Observed fills linked separately; no implicit activation |
-| J32 Organize/retire | P library behavior | M1.5/M7.5 | Archive/restore, active-work policy and dependency-aware removal |
+| J32 Organize/retire | C/H search/notes/tags/pins/archive/restore; richer review P | M1.5/M7.5 | Archive/restore, active-work policy and dependency-aware removal |
 | J33 Upgrade/change broker | C/H bounded version checks | M6.5/M7.1/R | Capability recheck, compatible replay, old reports preserved |
-| J34 Tabs/devices | C retry/ownership; browser draft only | M1.2/R | Revision conflict keeps both drafts; no duplicate launch |
+| J34 Tabs/devices | C/H server drafts, revision conflicts and duplicate-launch protection | M1.2/R | Revision conflict keeps both drafts; no duplicate launch |
 
 A journey closes only after its accepted paths and applicable failure/return paths have current evidence. Asset-dependent journeys close separately for each admitted profile.
 
@@ -324,21 +346,73 @@ The current historical check counts remain in STATUS/VERIFICATION. Do not add th
 
 ## 9. Execution order and completion reporting
 
-Start with these concrete work items:
+### Consolidated remaining backlog — 11 September 2026
 
-1. M0 capture and classify the current daily/timed/optimization/replay/recovery paths.
-2. Fix critical baseline defects revealed by those observations.
-3. M1.1 introduce the product-container/relationship migration and preserve old links.
-4. M1.2 implement server drafts/version conflicts/idempotency with persistence acceptance.
-5. M1.3–M1.5 deliver the Library and Experiment experience, including reopen/archive.
-6. Prioritize M2.6 automatic download continuation and truthful animated run progress from native user acceptance; then finish M2.1–M2.3 result actions, full request inference and reserved-period history.
-7. M2.4–M2.5 finish backtest investigation and replay/refresh distinctions.
-8. M3.1 prove durable Study/Trial mapping and compatible recovery, then M3.2–M3.5 expose exploration, pause, extension and shortlist.
-9. M4a complete comparison, candidate validation and decisions; finish R for the first complete cash-equity release.
-10. Continue M4b/M5 and M6 admission packages, then M7; every shipped increment passes its applicable R checks.
+The table is a routing index into the existing contracts, not another feature
+specification. **Now** is the next report/study increment. **First complete public
+release** means the remaining M0–M4a work plus the applicable release R checks for
+declared cash-equity support. **Later** retains the broader product target.
+Discovery may run early without promising executable support. A smaller preview
+can be released earlier with its incomplete journeys explicitly described.
+
+| Workstream | What remains / user outcome | Order and authoritative contract |
+| --- | --- | --- |
+| Reports | Continuous report/risk depth, server-saved preferences, month/drawdown investigation and exact evaluation-basis recording are implemented and tested. Complete reference-field classification, broader comparison acceptance and normal-app acceptance | **Now, alongside study/benchmark work:** remaining R0–R2; exact receipts in [REPORT_EXPERIENCE_PLAN sections 11–12](REPORT_EXPERIENCE_PLAN.md#12-preferences-investigation-and-evaluation-basis--11-september-2026) |
+| Benchmark evidence | Optional benchmark selected through native OpenAlgo history, independently frozen and aligned; relative return/risk statistics and honest missing-data behavior. Older reports receive a separate overlay | **Now, after report contracts:** report R3. A missing benchmark source does not block the independent study work |
+| Connected study exploration | Study Overview/Parameters/Trials/Shortlist, meaningful objective/count displays, numeric sorting and real chart-to-trial-to-report links. Record actual failure/activity/timing for new work; historical unknowns remain unknown | **Now:** report R4; extends implemented Optuna figures rather than replacing or recalculating them |
+| Candidates, comparison and decisions | Save exact candidates, prepare their full reports from frozen inputs, compare baseline plus 2–4 compatible candidates, retain Keep/Reject/Revisit decisions and distinguish the objective winner from the user's chosen setup | **Now, then first complete release:** report R5 / M4a.1/M4a.3; native metadata, migrations and reference retention required |
+| Reserved-period evaluation | Frozen reservation, chosen-candidate evaluation and exact period/cohort/price/context descriptors now work. Finish visible evidence-use history, comparison UI and saved decisions. Preserve separate reports; repeated exposure must not be described as untouched | **Now, contract implemented first:** remaining R0/R5 / M2.3/M4a.2. The new path preserves legacy both-period reports and their evidence |
+| Study lifecycle | Genuine pause/resume at a completed-trial boundary, safe stop/restart, compatible additional trial budget, recorded manual hypotheses and linked refined searches. Separate scientific identity from execution budget and prove sampler recovery | **First complete release:** M3.1/M3.3/M3.4. Current cancellation/recovery and read-only plot reconstruction already work; richer controls require the separate storage/recovery contract |
+| Library and navigation finish | Saved shortlist views, complete filter/axes/scroll/return context, contextual data/activity views and clear links among candidate, study, report and decision | **First complete release:** remaining M1/M2, report R4/R5. Named experiments, drafts, versions, notes/tags/pins, conflict recovery, archive/restore and account-saved report preferences already exist |
+| Scanner repeat-use | Reusable trading presets, explicit search-effort presets, capture another scanner into an existing experiment, source refresh preserving chosen settings and prior versions, import progress and reliable return context | **Next entry-flow increment:** [CHARTINK_JOURNEY](CHARTINK_JOURNEY.md), sections 3–5. Current capture/retry works; changed history already creates a related experiment |
+| Price preparation and runtime quality | Extend the maintained calendar beyond 2026; verify special-session evidence; measure cold/warm preparation and calculation in the ordinary app; improve first-use compilation/worker readiness where measurements justify it; monitor storage/sharing-lock recurrence | **First complete release for its claimed dates/runtime, then continuous:** M0/M2/R and [DOWNLOAD_PERFORMANCE](DOWNLOAD_PERFORMANCE.md). Batching, cache reuse, counters and automatic continuation are implemented. Broker requests remain sequential; any future concurrency needs broker-aware pacing and evidence |
+| Broker support and native history | Real acquisition, native write/readback, cache-only rerun, changed-holding-window and auth/rate-limit recovery receipts by broker/profile/interval. Generalize historical instruments, streams and calendars as assets are admitted | **First release truthfully scoped; broader proof ongoing:** M6/R. Fyers cases are real evidence; controlled adapter tests do not certify every broker. Another broker account is an external verification dependency |
+| Professional robustness | Rolling/expanding walk-forward, cost/slippage/delay scenarios, parameter-neighborhood sensitivity and supported resampling with preserved recipes/results | **After the complete basic decision loop:** M4b.1/M4b.2. The existing fixed split is not a general walk-forward builder |
+| Portfolio research depth | Compose saved strategy components; compare allocation choices, concentration and correlated losses; separate portfolio contribution, standalone results and removing-a-component simulations; capacity only where supported data exists | **Later:** M4b.3/M4b.4/M6. Shared-capital portfolios and allocation optimization already work |
+| Engine diagnosis and capability expansion | Explain the first material VectorBT/Nautilus difference using orders/fills/account policies. Admit additional execution semantics only after reconciliation, including any future Nautilus trailing-stop/nonzero-slippage support | **Later, capability-gated:** M4b.5/M6. Current Nautilus excludes those settings; no requirement to rebuild either engine or claim universal parity |
+| Additional research inputs and search | Connector-backed indicator/rule templates with causal warmup planning; versioned supported source/setup/evidence import; transfer to new periods/universes; conditional/categorical and true multi-objective search; explicit versioned eligibility constraints such as minimum trades | **Later:** M5 and report score contract. Existing EDF/rank/timeline/importance plots are not missing; intermediate, Pareto/hypervolume and termination views need actual corresponding observations. Do not silently rerank a zero-trade winner under the existing low-drawdown objective |
+| Asset admission | Broader cash/ETFs; exact-expiry futures then roll workflows; options and multi-leg; currency/commodity derivatives; shorts; crypto; spot FX/CFDs; separately assessed bonds, NAV/SIP and other products. Cross-asset accounts need their own proof | **Early feasibility, staged implementation after cash journey:** M6 and section 6 / [ASSET_PROFILES](ASSET_PROFILES.md). Each profile needs genuine native history, a supported account/engine model and the entire saved research loop |
+| Return and review | Test newer data as a new result, explain changes from the original, review/retire chosen ideas and optionally schedule bounded research reviews with quiet notifications | **Later:** M7.1/M7.2/M7.5. Exact replay, saved-result reopening and archive/restore already exist |
+| Execution connections | Versioned handoff to supported existing execution surfaces and optional import of observed paper/live fills for comparison with simulated results | **Later, separate explicit execution workflow:** M7.3/M7.4. Current export does not activate orders; building another live-trading platform is not the research goal |
+| Portable output | Self-contained readable HTML/print report with optional study/comparison appendix, consistent values/provenance and a deliberate distinction from the exact evidence bundle | **First complete release:** report R6 / M4a.4. Existing evidence/analysis exports remain available; revisit QS-01 before choosing the implementation |
+| App release and maintenance | Package the current increments; verify exact-artifact Windows/Linux and claimed Docker startup/restart/restore; populated upgrade/rollback and old-report compatibility; ordinary-app unaided usability, keyboard/mobile/motion checks; ownership/size/storage/resource checks; aligned versions/locks/manifests/docs/support matrix | **Starts now, closes each release:** release R / [DISTRIBUTION](DISTRIBUTION.md). Preview.4 is still the recorded public baseline; a build or isolated harness alone does not accept the current full bundle |
+| Extension public release | Compatible protocol-1 app release first, then final 0.1.1 fresh-profile/local/HTTPS/permission/session/update/retry checks, screenshots, public policy/support/source destinations, notices and accurate listing, publisher/reviewer setup and submission | **Separate publication track:** [CHROME_EXTENSION_PUBLISHING](CHROME_EXTENSION_PUBLISHING.md). User unpacked installation works; logo, help/privacy, ZIP and automated checks are prepared. Narrow Chartink export-terms clarification remains recorded; no submission/approval is claimed |
+| Optional connectors | QS-01: evaluate the existing VectorBT/QuantStats adapter for report export using frozen returns. OD-01: assess optional upstream Optuna Dashboard only after storage/auth compatibility. Other connectors require a concrete missing user journey | **Parked with triggers:** [REPORT_EXPERIENCE_PLAN](REPORT_EXPERIENCE_PLAN.md#parked-ideas--explicitly-retained-for-later). Native report/study usability does not depend on embedding another dashboard |
+
+### Forward delivery sequence
+
+1. **Readable results:** report R0–R2. Keep the implemented report, preferences,
+   investigation and evaluation-basis foundation; finish field classification and
+   ordinary-app acceptance. Continue upgrade fixtures, calendar maintenance and
+   real performance measurement alongside it.
+2. **Connected research decisions:** report R3–R6. Native benchmark and study work
+   can proceed independently; then exact candidate reports, shortlist, comparison,
+   reserved validation, saved decisions and portable output. The evaluation-period
+   contract starts in R0, before any baseline/search that would expose that period.
+3. **Finish the first public cash-equity product:** complete remaining M1/M2/M3,
+   including durable pause/extension, and test the whole ordinary-app loop plus
+   installation/update/recovery of the exact release. Publish a compatible app
+   before promoting the extension. Release engineering runs throughout steps 1–3.
+4. **Professional depth:** M4b/M5 robustness, richer portfolios, templates,
+   supported imports, advanced searches and transfers; retain the same report,
+   validation and decision journey for every addition.
+5. **Broader markets and connected review:** admit M6 profiles individually as
+   native data/account feasibility is proved, and add M7 refresh/review/observation
+   workflows. Independent asset probes may start early; broad dropdown menus do
+   not establish supported products.
+
+The first complete product acceptance story is:
+**Chartink/CSV → saved setup → automatic native price preparation → baseline →
+optimization → candidate investigation → fair comparison → reserved validation →
+saved decision/report → leave and reopen.** It must survive the applicable
+interruptions and an accepted upgrade without rewriting previous evidence.
+Later scopes extend this same loop. No full-product percentage or calendar date
+is inferred from file counts, test counts or the number of connected libraries.
 
 Independent early work may include M6 historical-data probes and R install/upgrade fixtures. Do not parallelize schema/identity changes across competing implementations; land one reviewed contract and then build dependent views.
 
 For each package, maintain one state: **not started → implementing → component checked → journey observed → accepted**; use **blocked** only with a specific dependency and the work that can still proceed. For each journey/profile, retain its current evidence level and gap. Report completed user outcomes, the next demonstrable outcome and material unresolved dependencies. Avoid an aggregate “percent complete” across incomparable assets and workflows.
 
-**Planning-task result:** this document is the integrated delivery plan. Source findings have been checked and historical evidence referenced; the new planned app journeys have not been executed or implemented by writing it.
+**Review result:** this document is the integrated delivery plan and reconciled
+backlog index. Current foundations are credited using their recorded evidence;
+remaining journeys are not implemented or newly accepted by this documentation update.

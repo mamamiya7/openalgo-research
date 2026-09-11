@@ -36,7 +36,13 @@ SOURCE_DIRS = set(
 mcp okf portfolio research restx_api sandbox scripts services sip strategies
 subscribers test tools upgrade utils websocket_proxy""".split()
 )
-NEW_PREFIXES = ("research/", "docs/research/", "test/research/", "frontend/src/")
+NEW_PREFIXES = (
+    "research/",
+    "docs/research/",
+    "test/research/",
+    "frontend/src/",
+    "extensions/chartink/",
+)
 NEW_FILES = {
     ".github/workflows/research-distribution.yml",
     "tools/research_release.py",
@@ -153,7 +159,11 @@ def permitted(name):
         return False
     if any(part.lower().startswith((".env", "secrets", "credentials")) for part in path.parts):
         return False
-    return name in ROOT_FILES or (len(path.parts) > 1 and path.parts[0] in SOURCE_DIRS)
+    return (
+        name in ROOT_FILES
+        or (len(path.parts) > 1 and path.parts[0] in SOURCE_DIRS)
+        or name.startswith("extensions/chartink/")
+    )
 
 
 def safe_file(root, name):

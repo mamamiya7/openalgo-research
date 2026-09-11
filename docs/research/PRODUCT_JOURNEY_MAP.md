@@ -8,6 +8,8 @@ The [integrated delivery plan](DELIVERY_PLAN.md) maps every journey to current e
 
 The [implementation checkpoint](EXECUTION_STATUS.md) distinguishes the newly working library and result transitions from the remaining design target below.
 
+The [Chartink end-to-end journey](CHARTINK_JOURNEY.md) connects the browser extension to these native pages, including automatic naming, field defaults, required user choices, price preparation, engine/search execution and saved decisions.
+
 ## 1. Product model and organizing principle
 
 The user is researching a question: “Does this idea work, under which conditions, and is it worth retaining?” A backtest is one observation; an optimization study is one search. Neither is the whole research record.
