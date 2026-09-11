@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="480" viewBox="0 0 1280 480" role="img" aria-labelledby="research-journey-title research-journey-desc">
+<title id="research-journey-title">From scanner signals to a tested strategy</title>
+<desc id="research-journey-desc">Import Chartink-inspired CSV signals or reuse saved signals; define stop-loss, target, trailing, holding and allocation rules; prepare required broker prices; run a backtest or optimize; review and save results, export, or replay. Current main source supports a saved experiment library. The latest packaged preview is 0.1.0-preview.4.</desc>
+<defs>
+<marker id="research-journey-arrow" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#5b665e"/></marker>
+<marker id="research-journey-arrow-accent" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#147d5a"/></marker>
+<marker id="research-journey-arrow-link" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#365e88"/></marker>
+</defs>
+<rect width="1280" height="480" fill="#fafaf8"/>
+<text x="48" y="40" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="600" fill="#147d5a" text-anchor="start" letter-spacing="2">OPENALGO RESEARCH / 01 / THE TRADING JOURNEY</text>
+<text x="48" y="92" font-family="Georgia, serif" font-size="40" font-weight="400" fill="#202722" text-anchor="start">From scanner signals to a tested strategy</text>
+<text x="48" y="128" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Import a CSV. Set your trading rules. Research inside OpenAlgo.</text>
+<path data-connector="true" d="M 248 264 H 296" fill="none" stroke="#5b665e" stroke-width="1.6" marker-end="url(#research-journey-arrow)"/>
+<path data-connector="true" d="M 496 264 H 544" fill="none" stroke="#5b665e" stroke-width="1.6" marker-end="url(#research-journey-arrow)"/>
+<path data-connector="true" d="M 744 264 H 792" fill="none" stroke="#5b665e" stroke-width="1.6" marker-end="url(#research-journey-arrow)"/>
+<path data-connector="true" d="M 992 264 H 1040" fill="none" stroke="#5b665e" stroke-width="1.6" marker-end="url(#research-journey-arrow)"/>
+<text x="48" y="172" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600" fill="#5b665e" text-anchor="start">01</text>
+<g data-node="step-1" data-x="48" data-y="192" data-w="200" data-h="176">
+<rect x="48" y="192" width="200" height="176" rx="8" fill="white" stroke="#a9b4aa" stroke-width="1.2"/>
+<text x="64" y="228" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#202722" text-anchor="start">Import signals</text>
+<text x="64" y="260" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">CSV export</text>
+<text x="64" y="288" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">or saved signals</text>
+</g>
+<text x="296" y="172" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600" fill="#5b665e" text-anchor="start">02</text>
+<g data-node="step-2" data-x="296" data-y="192" data-w="200" data-h="176">
+<rect x="296" y="192" width="200" height="176" rx="8" fill="white" stroke="#a9b4aa" stroke-width="1.2"/>
+<text x="312" y="228" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#202722" text-anchor="start">Set rules</text>
+<text x="312" y="260" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Stop / trailing</text>
+<text x="312" y="288" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Target / holding</text>
+<text x="312" y="316" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Capital allocation</text>
+</g>
+<text x="544" y="172" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600" fill="#5b665e" text-anchor="start">03</text>
+<g data-node="step-3" data-x="544" data-y="192" data-w="200" data-h="176">
+<rect x="544" y="192" width="200" height="176" rx="8" fill="white" stroke="#a9b4aa" stroke-width="1.2"/>
+<text x="560" y="228" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#202722" text-anchor="start">Prepare prices</text>
+<text x="560" y="260" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Required symbols</text>
+<text x="560" y="288" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Daily or minute</text>
+<text x="560" y="316" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">OpenAlgo history</text>
+</g>
+<text x="792" y="172" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600" fill="#5b665e" text-anchor="start">04</text>
+<g data-node="step-4" data-x="792" data-y="192" data-w="200" data-h="176">
+<rect x="792" y="192" width="200" height="176" rx="8" fill="#edf6ef" stroke="#147d5a" stroke-width="1.2"/>
+<text x="808" y="228" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#147d5a" text-anchor="start">Run research</text>
+<text x="808" y="260" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Backtest once</text>
+<text x="808" y="288" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">or optimize</text>
+<text x="808" y="316" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Selected engine</text>
+</g>
+<text x="1040" y="172" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600" fill="#5b665e" text-anchor="start">05</text>
+<g data-node="step-5" data-x="1040" data-y="192" data-w="200" data-h="176">
+<rect x="1040" y="192" width="200" height="176" rx="8" fill="white" stroke="#a9b4aa" stroke-width="1.2"/>
+<text x="1056" y="228" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#202722" text-anchor="start">Review &amp; save</text>
+<text x="1056" y="260" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Equity / trades</text>
+<text x="1056" y="288" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Trials / exports</text>
+<text x="1056" y="316" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Exact replay</text>
+</g>
+<text x="48" y="400" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Your scanner is the idea. The backtest evaluates its signals under your chosen execution rules.</text>
+<path d="M 48 416 H 1232" stroke="#d7dcd6" fill="none"/>
+<text x="48" y="452" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#5b665e" text-anchor="start">Current scope: 1–8 long NSE cash-equity strategies sharing one account. Trading-rule support depends on the selected engine.</text>
+</svg>

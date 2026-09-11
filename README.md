@@ -8,6 +8,11 @@ with a React interface and connectors to VectorBT, Optuna, and optional
 NautilusTrader. Research manages the inputs, data preparation and results;
 the connected engines perform the calculations.
 
+Inspired by **Chartink scanner signals**: evaluate a scanner's CSV signals as a
+portfolio, with your own stops, targets, trailing rules and holding periods.
+The aim is to connect broker data, backtesting and optimization in one open-source
+workflow. Research starts from a CSV export or saved signals.
+
 **Current preview: `0.1.0-preview.4` · OpenAlgo 2.0.2.2 · Python 3.12**
 
 [Download the preview](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.4)
@@ -23,6 +28,8 @@ packaged preview above remains `0.1.0-preview.4`. See the
 
 ## What you can do
 
+![Trading journey: import CSV or saved signals, set trading rules and allocations, prepare required broker prices, backtest or optimize, then review, save, export or replay.](docs/research/diagrams/research-journey.svg)
+
 - Combine up to eight long NSE cash-equity signal strategies in one shared-capital
   backtest, with separate settings and allocation caps.
 - Run daily, intraday or multiday tests using VectorBT, or select the optional
@@ -32,7 +39,18 @@ packaged preview above remains `0.1.0-preview.4`. See the
 - Review the account curve, each strategy's contribution, trades and trials.
   Reopen saved runs, export results, or replay selected settings exactly.
 
+## How the tools fit together
+
+![Architecture: OpenAlgo supplies accounts, broker history and Historify. Our Research layer adds native screens, data planning, engine connectors, background jobs and saved results. VectorBT runs portfolio backtests, Optuna searches settings, and optional NautilusTrader runs event-driven backtests.](docs/research/diagrams/research-architecture.svg)
+
+**VectorBT is the default backtester; Optuna is the optimizer.** NautilusTrader
+is an optional Linux/WSL backtester with its own supported rules. It currently
+excludes trailing stops and nonzero configured slippage. See the
+[engine capabilities](docs/research/CONNECTORS.md).
+
 ## Where the prices come from
+
+![Data flow: signals, execution rules and the full optimizer range determine daily or one-minute requirements. Reuse Historify candles; fetch missing windows through OpenAlgo's connected broker and save them in the same archive. Freeze prepared inputs once for all trials and exact replay.](docs/research/diagrams/research-data.svg)
 
 Research automatically chooses daily or one-minute candles from the uploaded
 signals, execution rules and full optimizer range. It reads matching prices from
@@ -40,6 +58,16 @@ signals, execution rules and full optimizer range. It reads matching prices from
 **OpenAlgo's connected-broker history service**, and saves it into **that same
 database**. Every trial uses the prepared snapshot. There is no separate research
 broker connection or public-file price fallback.
+
+## What happens during optimization
+
+![Optimization loop: choose ranges, objective and trial budget; Optuna proposes settings; the selected engine backtests frozen prices and signals; Research records the trial and returns its score to Optuna. Review the saved study or replay selected settings when finished.](docs/research/diagrams/research-optimization.svg)
+
+Select the settings to vary and the goal to score. Optuna searches those choices
+through the selected backtester, using the same prepared data across trials.
+An optional later-period check selects settings on earlier signals and evaluates
+them separately on later signals. The native Research interface shows progress,
+trials and saved results.
 
 ## Get started
 
