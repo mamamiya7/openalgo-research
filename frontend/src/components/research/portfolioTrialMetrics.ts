@@ -1,5 +1,10 @@
 import type { AnalysisMetric, PortfolioTrial } from '@/api/portfolioResearch'
 import { reportMoney } from './ReportCurrency'
+import {
+  savedSummaryMetric,
+  summaryMetricAliases,
+  summaryMetricKey,
+} from './researchMetricConcepts'
 
 type Metric = Omit<AnalysisMetric, 'source'> & { source?: string }
 
@@ -155,12 +160,17 @@ export function trialMetricText(
 
 export function availableTrialMetrics(rows: PortfolioTrial[], catalog: AnalysisMetric[] = []) {
   const known = new Set(trialMetrics.map((metric) => metric.key))
-  return [...trialMetrics, ...catalog.filter((metric) => !known.has(metric.key))].filter((metric) =>
+  return [
+    ...trialMetrics,
+    ...catalog.filter((metric) => !known.has(summaryMetricKey(metric.key))),
+  ].filter((metric) =>
     rows.some((row) =>
       metric.key === 'objective_score'
         ? Object.hasOwn(row, 'score')
         : Object.hasOwn(row.summary, metric.key) ||
-          Object.hasOwn(row.analysis?.metrics ?? {}, metric.key)
+          Object.hasOwn(row.analysis?.metrics ?? {}, metric.key) ||
+          (Object.hasOwn(summaryMetricAliases, `account_${metric.key}`) &&
+            Object.hasOwn(row.analysis?.metrics ?? {}, `account_${metric.key}`))
     )
   )
 }
@@ -168,9 +178,7 @@ export function availableTrialMetrics(rows: PortfolioTrial[], catalog: AnalysisM
 export function trialMetricValue(metric: Metric, row: PortfolioTrial) {
   return metric.key === 'objective_score'
     ? row.score
-    : Object.hasOwn(row.summary, metric.key)
-      ? row.summary[metric.key]
-      : row.analysis?.metrics[metric.key]
+    : savedSummaryMetric(row.summary, row.analysis?.metrics ?? {}, metric.key)
 }
 
 export function readTrialColumns(owner: string, catalog: AnalysisMetric[] = []): string[] {
@@ -179,10 +187,13 @@ export function readTrialColumns(owner: string, catalog: AnalysisMetric[] = []):
     if (text && text.length < 32768) {
       const value: unknown = JSON.parse(text)
       if (Array.isArray(value)) {
+        const selected = new Set(
+          value.filter((key): key is string => typeof key === 'string').map(summaryMetricKey)
+        )
         const known = [...trialMetrics, ...catalog]
-          .filter((metric) => value.includes(metric.key))
-          .map((metric) => metric.key)
-        if (known.length) return known
+          .map((metric) => summaryMetricKey(metric.key))
+          .filter((key) => selected.has(key))
+        if (known.length) return [...new Set(known)]
       }
     }
   } catch {

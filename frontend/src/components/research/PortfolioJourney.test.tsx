@@ -363,7 +363,8 @@ describe('native portfolio consumer journey', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Use saved signals' }))
     await userEvent.click(await screen.findByRole('button', { name: /My breakout\.csv/ }))
     expect(screen.getByLabelText('Strategy 1 name')).toHaveValue('My breakout')
-    expect(screen.getByText('My breakout.csv · 4 signals')).toBeVisible()
+    expect(screen.getByLabelText('Strategy 1 name')).toHaveValue('My breakout')
+    expect(screen.getByText(/4 signals · 2 symbols ·/)).toBeVisible()
     expect(portfolioResearch.upload).not.toHaveBeenCalled()
     expect(portfolioResearch.preflight).not.toHaveBeenCalled()
   })
@@ -505,7 +506,7 @@ describe('native portfolio consumer journey', () => {
     mount()
     expect(screen.getByRole('heading', { name: 'Backtest & Optimize' })).toBeVisible()
     expect(screen.getByLabelText('Shared starting cash (₹)')).toHaveValue(100000)
-    expect(screen.getByRole('button', { name: 'Add strategy' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Add signal CSV' })).toBeVisible()
     expect(screen.getByRole('button', { name: 'Run backtest' })).toBeDisabled()
     for (const label of [
       'Backtesting engine',

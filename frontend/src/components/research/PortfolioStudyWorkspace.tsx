@@ -36,7 +36,7 @@ import {
   studyPoint,
 } from './studyPresentation'
 import { usePortfolioAnalysis } from './usePortfolioAnalysis'
-import { useStudyWorkspaceView } from './useStudyWorkspaceView'
+import { studyWorkspaceIdentity, useStudyWorkspaceView } from './useStudyWorkspaceView'
 
 const number = (value: unknown) =>
   typeof value === 'number' && Number.isFinite(value)
@@ -56,11 +56,12 @@ interface Props {
 
 export function PortfolioStudyWorkspace(props: Props) {
   const owner = useAuthStore((state) => state.user?.username ?? 'account')
-  const identity = JSON.stringify([
+  const identity = studyWorkspaceIdentity(
     owner,
     props.job.id,
     props.result.report_context?.result_artifact ?? props.job.id,
-  ])
+    props.experimentId
+  )
   return <StudyWorkspace key={identity} {...props} identity={identity} owner={owner} />
 }
 
@@ -254,7 +255,13 @@ function StudyWorkspace({
     <div className="min-w-0 space-y-7" data-testid="study-workspace">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
-          <h2 className="text-xl font-semibold">Study results</h2>
+          <h2
+            className="text-xl font-semibold outline-none"
+            tabIndex={-1}
+            data-research-navigation-heading
+          >
+            Study results
+          </h2>
           <p className="text-sm text-muted-foreground">
             {experiment.optimizer.objective_definition} · Maximize
             {result.report_context?.period_label ? ` · ${result.report_context.period_label}` : ''}

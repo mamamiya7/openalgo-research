@@ -13,8 +13,10 @@ import { Label } from '@/components/ui/label'
 import { researchDefaults } from '@/lib/researchDraft'
 import { ChartinkSource } from './ChartinkSource'
 import { PortfolioCsvHelp } from './PortfolioCsvHelp'
+import { PortfolioSetupReview } from './PortfolioSetupReview'
 import { PortfolioStrategySettings, portfolioSearchRange } from './PortfolioStrategySettings'
 import { type ResearchUploadActivity, ResearchUploadProgress } from './ResearchRunProgress'
+import { strategyRuleSummary } from './researchPresentation'
 
 export interface PortfolioDraft {
   portfolio: PortfolioRequest
@@ -114,8 +116,6 @@ function searchDescription(strategy: PortfolioStrategy): string {
 function sourceSummary(source: ResearchSource | undefined): string {
   if (!source) return 'Saved signal file'
   const receipt = source.receipt
-  const signals = `${receipt.signal_count.toLocaleString('en-IN')} signals`
-  if (!receipt.chartink) return `${receipt.filename ? `${receipt.filename} · ` : ''}${signals}`
   const count = (value: number, word: string) =>
     `${value.toLocaleString('en-IN')} ${word}${value === 1 ? '' : 's'}`
   const parts = [count(receipt.signal_count, 'signal'), count(receipt.symbol_count, 'symbol')]
@@ -341,7 +341,7 @@ export function PortfolioBuilder({
                   onClick={() => input.current?.click()}
                 >
                   <Plus className="h-4 w-4" aria-hidden="true" />
-                  Add strategy
+                  Add signal CSV
                 </Button>
               )}
             </div>
@@ -368,7 +368,7 @@ export function PortfolioBuilder({
               <div className="flex flex-wrap justify-center gap-2">
                 <Button type="button" onClick={() => input.current?.click()}>
                   <Plus className="h-4 w-4" aria-hidden="true" />
-                  {uploading ? 'Adding strategies…' : 'Add strategy'}
+                  {uploading ? 'Adding signals…' : 'Add signal CSV'}
                 </Button>
                 <Button
                   type="button"
@@ -414,6 +414,9 @@ export function PortfolioBuilder({
                           : ''}
                       </p>
                       <ChartinkSource source={source?.receipt.chartink} />
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {strategyRuleSummary(strategy, draft.optimizing)}
+                      </p>
                     </div>
                     {range ? (
                       <Button
@@ -628,14 +631,14 @@ export function PortfolioBuilder({
                 : 'Reserve a later period'}
             </label>
             {portfolio.validation &&
-              (draft.optimizing || portfolio.validation.mode === 'reserve') && (
+              draft.optimizing &&
+              portfolio.validation.mode !== 'reserve' && (
                 <p className="pl-6 text-xs text-muted-foreground">
-                  {portfolio.validation.mode === 'reserve'
-                    ? `Use the first ${portfolio.validation.train_pct}% of signal dates now; test the rest when you choose.`
-                    : 'This saved setup checks both periods during the run.'}
+                  This saved setup checks both periods during the run.
                 </p>
               )}
           </div>
+          <PortfolioSetupReview draft={draft} />
           <details className="text-sm">
             <summary className="cursor-pointer text-muted-foreground">More settings</summary>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">

@@ -57,6 +57,64 @@ def change_result(store, job, change):
     return artifact
 
 
+@pytest.mark.parametrize("child", [False, True])
+def test_optional_displayed_artifact_fence_reuses_exact_bookmark_and_rejects_changed_report(
+    app, client, frozen_studies, child
+):
+    store = app.extensions["research_store"]
+    study, row, experiment = seed(app, client, frozen_studies, True)
+    target = study
+    if child:
+        target = candidates.prepare(store, OWNER, study, row["config_id"])["report_job_id"]
+        run_worker(store)
+    artifact = service.get_job(store, OWNER, target).result_artifact
+    data = {"job_id": target, "config_id": row["config_id"], "expected_result_artifact": artifact}
+    wrong = client.post(path(experiment), json={**data, "expected_result_artifact": "f" * 64})
+    assert wrong.status_code == 400 and "displayed result changed" in wrong.json["message"]
+    accepted = client.post(path(experiment), json=data)
+    assert accepted.status_code == 201, accepted.json
+    again = client.post(path(experiment), json=data)
+    assert again.status_code == 200 and again.json["reused"]
+    assert again.json["candidate"] == accepted.json["candidate"]
+    assert accepted.json["candidate"]["source_job_id"] == study
+    change_result(store, target, lambda report: report["summary"].update(net_return_pct=999))
+    changed = client.post(path(experiment), json=data)
+    assert changed.status_code == 400 and "displayed result changed" in changed.json["message"]
+    with store.sessions() as db:
+        assert db.scalar(select(func.count()).select_from(ResearchShortlistCandidate)) == 1
+        saved = db.get(ResearchShortlistCandidate, accepted.json["candidate"]["id"])
+        assert saved.source_result_artifact == accepted.json["candidate"]["source_result_artifact"]
+
+
+@pytest.mark.parametrize("child", [False, True])
+def test_displayed_report_replaced_after_read_cannot_pass_final_bookmark_write(
+    app, client, frozen_studies, monkeypatch, child
+):
+    store = app.extensions["research_store"]
+    study, row, experiment = seed(app, client, frozen_studies, True)
+    target = study
+    if child:
+        target = candidates.prepare(store, OWNER, study, row["config_id"])["report_job_id"]
+        run_worker(store)
+    data = {
+        "job_id": target,
+        "config_id": row["config_id"],
+        "expected_result_artifact": service.get_job(store, OWNER, target).result_artifact,
+    }
+    snapshot = shortlist._snapshot
+
+    def replaced(*args, **kwargs):
+        receipt = snapshot(*args, **kwargs)
+        change_result(store, target, lambda report: report["summary"].update(net_return_pct=999))
+        return receipt
+
+    monkeypatch.setattr(shortlist, "_snapshot", replaced)
+    with pytest.raises(ValueError, match="saved result changed"):
+        shortlist.save_candidate(store, OWNER, experiment, data)
+    with store.sessions() as db:
+        assert db.scalar(select(func.count()).select_from(ResearchShortlistCandidate)) == 0
+
+
 @pytest.mark.parametrize("reserved", [True, False])
 def test_native_candidate_bookmark_details_and_export_remain_exact(
     app, client, frozen_studies, monkeypatch, reserved

@@ -2,6 +2,108 @@
 
 Updated: 12 September 2026. Published preview: **`0.1.0-preview.4`**, targeting OpenAlgo 2.0.2.2.
 
+## Latest native installation — 12 September 2026
+
+The A1–A4, B1–B3, C1/manual-CSV C2 and C3 increments below are now installed in
+the existing OpenAlgo application. The update applied 51 runtime source files
+and a production interface built against the installation's existing frontend.
+Existing research records, account configuration, broker/history code and UI
+customizations were preserved. The worker is online, new metadata tables are
+empty, authentication/CSRF gates respond correctly and the served assets match
+the installation manifest. See the [installation receipt](DELIVERY_PLAN.md#native-installation-and-publication-checkpoint--12-september-2026).
+
+The implemented runtime matches its 211-check frontend/controlled-browser
+acceptance. A subsequent packaging guard registers six new required modules;
+38 distribution/package checks pass, with one Windows symlink-privilege skip,
+and all 116 structural compatibility checks pass. The GitHub frontend workflow now
+includes the seven new suites; its exact command passes **461 checks in 40 suites**
+locally, overlapping the earlier 211-check set. This is a populated-installation
+smoke check, not a fresh broker calculation or complete release acceptance.
+The versioned preview ZIP remains preview.4; this update is a newer source
+checkpoint. The automatic indicator/regime mode remains the proposal below.
+
+## One-click research requested and specified
+
+The [automatic research contract](AUTOMATED_RESEARCH_PLAN.md) records the new
+requested outcome: one click tests bounded trading rules and causal market/stock
+conditions, checks chronology and robustness, and returns supported findings or
+no reliable improvement. This is a proposal following specialist/code review;
+no automatic indicator/regime mode was implemented in this planning step. Current
+Optimize remains numeric execution/sizing search. Required recovery, benchmark,
+warmup, evaluation and conditional-search work maps to existing D/M4b/M5 packages
+in DELIVERY_PLAN. No runtime, broker calculation or deployment changed.
+
+## Chosen setup and repeat-use implemented
+
+The [chosen setup increment](DELIVERY_PLAN.md#chosen-setup-and-explicit-reuse-receipt--12-september-2026)
+completes C1 and the manual CSV branch of C2 in the worktree. A retained candidate
+can become a named chosen setup on Overview. Use its exact rules with explicitly
+reviewed new CSVs, refine a new search, or replay its original evidence separately.
+Previous drafts become saved versions; choices, reasons and exact reports remain
+linked. New input dates, intervals and reserved periods use native preflight.
+
+**211 integrated frontend checks**, production build, type checks and scoped lint
+pass. Native chosen/library/storage checks, explicit daily/minute reuse, retries,
+revision conflicts, populated restore and the controlled browser journey are
+recorded in the receipt. No new broker acquisition was used for those calculations.
+
+This increment's initial checks used the development checkout; its subsequent
+normal-app installation is recorded above. Next are chosen-setup inheritance for related Chartink captures,
+data recovery and durable study continuation; D–F and release/all-asset acceptance
+remain pending. The published checkpoint below still describes the earlier runtime.
+
+## Connected trader review implemented
+
+The next [execution-worklist increment](DELIVERY_PLAN.md#connected-review-implementation-receipt--12-september-2026)
+is implemented in the worktree: A4 matching baselines, B1–B3 exact candidate
+validation/direct decisions, and C3 navigation around five primary destinations.
+You can review and test the original reserved period, reopen its saved result,
+return to the exact chosen trial, and Keep/Reject/Revisit directly from a report.
+The matching-baseline recipe preserves original rules and recalculates on the
+study's frozen eligible signals and timeline before offering a fair comparison.
+
+Displayed result/analysis identities are checked before decision save and again
+before committing; newer unseen analysis cannot silently become the decision's
+evidence. Existing comparison decisions, accepted retries and old exports remain
+usable. Native worker calculations, source/account fences, populated backup/restore
+and controlled browser journeys are checked; **175 integrated frontend checks** pass.
+The delivery receipt records the exact verification scope and limitations.
+
+This increment's initial checks used the development checkout; it is now included
+in the installation recorded above. C1 and manual CSV repeat-use follow it; operations, investigation,
+benchmark, portable output and exact-release/all-asset acceptance remain pending.
+
+## Trader-audit foundation implemented
+
+The [A–F execution worklist](DELIVERY_PLAN.md#execution-worklist--foundation-first)
+now records all audit recommendations with dependencies and acceptance gates.
+The first A1–A3 increment is implemented and checked in this worktree: distinct
+baseline/study/candidate/later-test/replay identities, recorded result dates,
+return navigation that retains the study view and table position, compact
+signal-date/candle previews and trading rules, inherited new-idea names, and
+removal of the 15 proven account-summary aliases from metric choices. A recent
+resumable stopped run takes precedence over an older completed result on Overview.
+
+The preview uses existing native preflight, including its signal-date partition;
+it does not acquire prices. Tested result dates use the recorded evaluation
+timeline, which can extend beyond the final signal to finish holding periods.
+Legacy list entries with unknown tested dates show signal dates explicitly.
+Original values, exports, research records and broker adapters are preserved.
+
+Controlled native browser checks covered daily-to-minute preview changes,
+named idea creation, saved rules, distinct result lists, plot/trial report return,
+shortlist return, custom metric columns and a 390 px setup. The integrated
+frontend suite passed **117 checks**, with **18 library checks rerun** after the
+last naming correction; those counts overlap. Backend identity/library checks
+passed **51**, with broader worker/candidate/period regressions recorded in the
+[foundation receipt](DELIVERY_PLAN.md#foundation-implementation-receipt--12-september-2026).
+Type checking, scoped lint and the production frontend build passed.
+
+This increment is now included in the installation recorded above. Its original
+acceptance did not complete A4–F or establish broker, all-asset or exact-release
+acceptance. A4/B followed as recorded above. Older installed checkpoints below
+describe the corresponding earlier accepted runtime.
+
 ## Latest trader audit and next priority
 
 The [12 September pro-trader audit](PRO_TRADER_AUDIT.md) and its

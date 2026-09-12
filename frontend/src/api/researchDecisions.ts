@@ -3,10 +3,26 @@ import { webClient } from './client'
 import type { PortfolioJob, PortfolioResult } from './portfolioResearch'
 
 export type DecisionState = 'keep' | 'reject' | 'revisit'
-export interface DecisionTarget {
+export interface ComparisonDecisionTarget {
   comparison_id: string
   member_id: string
 }
+export interface DirectDecisionTarget {
+  job_id: string
+  config_id?: string
+  expected_report?: { result_artifact: string; analysis_artifact: string | null }
+}
+export type DecisionTarget = ComparisonDecisionTarget | DirectDecisionTarget
+export const decisionTargetKey = (target: DecisionTarget) =>
+  'job_id' in target
+    ? [
+        'report',
+        target.job_id,
+        target.config_id ?? 'selected',
+        target.expected_report?.result_artifact,
+        target.expected_report?.analysis_artifact,
+      ]
+    : ['comparison', target.comparison_id, target.member_id]
 export interface LaterEvidenceReceipt {
   id: string
   job_id: string
@@ -21,6 +37,7 @@ export interface EvidenceUseSummary {
   reservation_status: 'reserved_in_setup' | 'not_reserved' | 'unknown'
   calculation: 'not_recorded' | 'recorded' | 'unknown'
   opened_at: number | null
+  later_opened_at?: number | null
   later_used_for_decision: boolean
   coverage: 'recorded' | 'legacy_unknown'
   overlap: 'recorded' | 'not_found' | 'not_checked'
@@ -34,9 +51,10 @@ export interface DecisionEvent {
   reason: string
   created_at: number
   candidate_name: string
-  comparison_name: string
-  comparison_id: string
-  member_id: string
+  comparison_name: string | null
+  comparison_id: string | null
+  member_id: string | null
+  target?: DirectDecisionTarget
   source_job_id: string
   source_result_artifact: string
   config_id: string
@@ -90,13 +108,33 @@ export interface DecisionRequest {
   evaluation_id?: string | null
 }
 export type OpenedEvidenceTarget =
-  | ({ kind: 'comparison_member'; evaluation_id?: string } & DecisionTarget)
+  | ({ kind: 'comparison_member'; evaluation_id?: string } & ComparisonDecisionTarget)
+  | ({ kind: 'direct_report'; evaluation_id?: string } & Pick<
+      DirectDecisionTarget,
+      'job_id' | 'config_id'
+    >)
   | {
       kind: 'decision_event'
       decision_id: string
       event_id: string
       evidence: 'selection' | 'evaluation'
     }
+export const decisionOpeningTarget = (
+  target: DecisionTarget,
+  evaluationId?: string
+): OpenedEvidenceTarget =>
+  'job_id' in target
+    ? {
+        kind: 'direct_report',
+        job_id: target.job_id,
+        ...(target.config_id ? { config_id: target.config_id } : {}),
+        ...(evaluationId ? { evaluation_id: evaluationId } : {}),
+      }
+    : {
+        kind: 'comparison_member',
+        ...target,
+        ...(evaluationId ? { evaluation_id: evaluationId } : {}),
+      }
 export interface EvidenceOpeningIntent {
   request_id: string
   target: OpenedEvidenceTarget
@@ -110,15 +148,25 @@ export const decisionError = (error: unknown) =>
 export const decisionConflict = (error: unknown) =>
   isAxiosError(error) &&
   ['decision_revision_conflict', 'decision_evidence_changed'].includes(error.response?.data?.code)
+export const decisionEvidenceChanged = (error: unknown) =>
+  isAxiosError(error) && error.response?.data?.code === 'decision_evidence_changed'
 const base = (experimentId: string) =>
   `/scanner-research/api/library/experiments/${encodeURIComponent(experimentId)}`
 const targetPath = (experimentId: string, target: DecisionTarget) =>
-  `${base(experimentId)}/comparisons/${encodeURIComponent(target.comparison_id)}/members/${encodeURIComponent(target.member_id)}`
+  'job_id' in target
+    ? `${base(experimentId)}/results/${encodeURIComponent(target.job_id)}`
+    : `${base(experimentId)}/comparisons/${encodeURIComponent(target.comparison_id)}/members/${encodeURIComponent(target.member_id)}`
+const targetParams = (target: DecisionTarget) =>
+  'job_id' in target && target.config_id ? { config_id: target.config_id } : {}
 const path = (experimentId: string, id?: string) =>
   `${base(experimentId)}/decisions${id ? `/${encodeURIComponent(id)}` : ''}`
 const eventPath = (experimentId: string, id: string, eventId: string) =>
   `${path(experimentId, id)}/events/${encodeURIComponent(eventId)}`
 const options = (signal?: AbortSignal) => ({ signal, timeout: 15000 })
+const targetOptions = (target: DecisionTarget, signal?: AbortSignal) => ({
+  ...options(signal),
+  ...('job_id' in target && target.config_id ? { params: targetParams(target) } : {}),
+})
 export const researchDecisions = {
   async context(
     experimentId: string,
@@ -128,7 +176,19 @@ export const researchDecisions = {
   ): Promise<DecisionContext> {
     return (
       await webClient.get(`${targetPath(experimentId, target)}/decision`, {
-        params: { limit: 20, offset },
+        params: {
+          ...targetParams(target),
+          ...('job_id' in target && target.expected_report
+            ? {
+                expected_result_artifact: target.expected_report.result_artifact,
+                ...(target.expected_report.analysis_artifact
+                  ? { expected_analysis_artifact: target.expected_report.analysis_artifact }
+                  : {}),
+              }
+            : {}),
+          limit: 20,
+          offset,
+        },
         ...options(signal),
       })
     ).data
@@ -140,7 +200,16 @@ export const researchDecisions = {
     signal?: AbortSignal
   ): Promise<{ decision: DecisionSummary; event: DecisionEvent; reused: boolean }> {
     return (
-      await webClient.post(`${targetPath(experimentId, target)}/decisions`, data, options(signal))
+      await webClient.post(
+        `${targetPath(experimentId, target)}/decisions`,
+        {
+          ...data,
+          ...('job_id' in target && target.expected_report
+            ? { expected_report: target.expected_report }
+            : {}),
+        },
+        targetOptions(target, signal)
+      )
     ).data
   },
   async list(
@@ -200,7 +269,7 @@ export const researchDecisions = {
     return (
       await webClient.get(
         `${targetPath(experimentId, target)}/decision/evaluations/${encodeURIComponent(evaluationId)}`,
-        options(signal)
+        targetOptions(target, signal)
       )
     ).data
   },

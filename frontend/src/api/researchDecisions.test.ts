@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { webClient } from './client'
-import { researchDecisions } from './researchDecisions'
+import { decisionOpeningTarget, researchDecisions } from './researchDecisions'
 
 vi.mock('./client', () => ({ webClient: { get: vi.fn(), post: vi.fn() } }))
 beforeEach(() => {
@@ -9,6 +9,60 @@ beforeEach(() => {
   vi.mocked(webClient.post).mockResolvedValue({ data: {} })
 })
 describe('native decisions client', () => {
+  it('fences a direct save against the displayed report without changing opening targets', async () => {
+    const target = {
+      job_id: 'job',
+      config_id: 'config',
+      expected_report: { result_artifact: 'frozen', analysis_artifact: null },
+    }
+    await researchDecisions.context('e', target)
+    expect(webClient.get).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        params: { config_id: 'config', expected_result_artifact: 'frozen', limit: 20, offset: 0 },
+      })
+    )
+    const data = { revision: 0, request_id: 'save', state: 'keep' as const, reason: '' }
+    await researchDecisions.save('e', target, data)
+    expect(webClient.post).toHaveBeenLastCalledWith(
+      expect.any(String),
+      { ...data, expected_report: target.expected_report },
+      expect.any(Object)
+    )
+    expect(decisionOpeningTarget(target, 'later')).toEqual({
+      kind: 'direct_report',
+      job_id: 'job',
+      config_id: 'config',
+      evaluation_id: 'later',
+    })
+  })
+  it('uses report routes and carries the exact configuration for a direct decision', async () => {
+    const signal = new AbortController().signal
+    const target = { job_id: 'saved / report', config_id: 'alternative' }
+    await researchDecisions.context('idea', target, 0, signal)
+    expect(webClient.get).toHaveBeenLastCalledWith(
+      '/scanner-research/api/library/experiments/idea/results/saved%20%2F%20report/decision',
+      { params: { config_id: 'alternative', limit: 20, offset: 0 }, signal, timeout: 15000 }
+    )
+    const data = {
+      revision: 0,
+      request_id: 'save',
+      state: 'revisit' as const,
+      reason: '',
+      evaluation_id: null,
+    }
+    await researchDecisions.save('idea', target, data, signal)
+    expect(webClient.post).toHaveBeenLastCalledWith(
+      '/scanner-research/api/library/experiments/idea/results/saved%20%2F%20report/decisions',
+      data,
+      { params: { config_id: 'alternative' }, signal, timeout: 15000 }
+    )
+    await researchDecisions.preview('idea', target, 'later / pin', signal)
+    expect(webClient.get).toHaveBeenLastCalledWith(
+      '/scanner-research/api/library/experiments/idea/results/saved%20%2F%20report/decision/evaluations/later%20%2F%20pin',
+      { params: { config_id: 'alternative' }, signal, timeout: 15000 }
+    )
+  })
   it('bounds owner-scoped reads and URL encodes exact later evidence selectors', async () => {
     const signal = new AbortController().signal
     await researchDecisions.context(

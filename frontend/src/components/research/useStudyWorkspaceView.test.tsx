@@ -4,6 +4,7 @@ import {
   defaultStudyWorkspaceView,
   readStudyView,
   type StudyWorkspaceView,
+  studyWorkspaceIdentity,
   useStudyWorkspaceView,
   writeStudyView,
 } from './useStudyWorkspaceView'
@@ -30,6 +31,51 @@ beforeEach(() => sessionStorage.clear())
 afterEach(() => vi.restoreAllMocks())
 
 describe('tab-local study navigation', () => {
+  it('maps exact historical summary aliases to the visible sort column without changing native definitions', () => {
+    writeStudyView(
+      key(),
+      savedView({ trials: { ...savedView().trials, sortKey: 'account_initial_capital' } })
+    )
+    expect(readStudyView(key()).trials).toMatchObject({
+      sortKey: 'initial_capital',
+      sortDirection: 'asc',
+      page: 2,
+    })
+    writeStudyView(
+      key(),
+      savedView({ trials: { ...savedView().trials, sortKey: 'vectorbt_sharpe_ratio' } })
+    )
+    expect(readStudyView(key()).trials.sortKey).toBe('vectorbt_sharpe_ratio')
+  })
+  it('isolates experiment context and retains both table scroll axes with the exact trial', () => {
+    const first = studyWorkspaceIdentity('alice', 'study', 'artifact', 'idea-one')
+    const other = studyWorkspaceIdentity('alice', 'study', 'artifact', 'idea-two')
+    const value = savedView({ trials: { ...savedView().trials, scrollTop: 180, scrollLeft: 420 } })
+    writeStudyView(first, value)
+    expect(readStudyView(first)).toEqual(value)
+    expect(readStudyView(other)).toEqual(defaultStudyWorkspaceView)
+    expect(readStudyView(studyWorkspaceIdentity('bob', 'study', 'artifact', 'idea-one'))).toEqual(
+      defaultStudyWorkspaceView
+    )
+    expect(studyWorkspaceIdentity('alice', 'job-a', 'artifact-a')).toBe(key())
+    for (const invalid of [-1, '100', null, 1000001]) {
+      sessionStorage.setItem(
+        storageKey,
+        JSON.stringify([
+          {
+            key: first,
+            view: {
+              ...value,
+              trials: { ...value.trials, scrollTop: invalid, scrollLeft: invalid },
+            },
+          },
+        ])
+      )
+      expect(readStudyView(first).trials.scrollTop).toBeUndefined()
+      expect(readStudyView(first).trials.scrollLeft).toBeUndefined()
+      expect(readStudyView(first).candidate).toEqual(value.candidate)
+    }
+  })
   it('restores saved section, candidate, axes and table state without posting defaults or modifying financial evidence', () => {
     const saved = savedView()
     writeStudyView(key(), saved)

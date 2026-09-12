@@ -1,5 +1,6 @@
 import type { AnalysisMetric, PortfolioResult } from '@/api/portfolioResearch'
 import { trialMetricText } from './portfolioTrialMetrics'
+import { savedSummaryMetric } from './researchMetricConcepts'
 
 export type ReportMetric = AnalysisMetric & { summaryKey?: string }
 
@@ -157,8 +158,8 @@ export function reportMetricLabel(metric: ReportMetric) {
 }
 
 export function reportMetricValue(result: PortfolioResult, metric: ReportMetric) {
-  if (metric.summaryKey && Object.hasOwn(result.summary, metric.summaryKey)) {
-    return result.summary[metric.summaryKey]
+  if (metric.summaryKey) {
+    return savedSummaryMetric(result.summary, result.analysis?.metrics ?? {}, metric.key)
   }
   if (Object.hasOwn(result.analysis?.metrics ?? {}, metric.key))
     return result.analysis?.metrics[metric.key]

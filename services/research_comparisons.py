@@ -193,6 +193,14 @@ def _selected_member(store, owner, experiment_id, identifier):
             else "portfolio_backtest",
         }
         revision = candidate.revision
+    member, inputs = pin_member(store, owner, experiment_id, member, source, report_job)
+    return member, inputs, revision
+
+
+def pin_member(
+    store, owner, experiment_id, member, source, report_job, *, include_presentation=True
+):
+    """Pin one canonical selection report for comparisons or direct decisions."""
     # Validate the exact candidate behind the bookmark; reduce its source before
     # reading another potentially large full report.
     bundle, source_result, selected, origin = shortlist._evidence(
@@ -300,9 +308,11 @@ def _selected_member(store, owner, experiment_id, identifier):
         report_context=copy.deepcopy(context),
         summary=summary,
     )
+    if not include_presentation:
+        return member, None
     analysis = result.get("analysis")
     inputs = {
-        "id": identifier,
+        "id": member["id"],
         "name": member["name"],
         "report_context": member["report_context"],
         "summary": summary,
@@ -323,7 +333,7 @@ def _selected_member(store, owner, experiment_id, identifier):
             )
         ),
     }
-    return member, inputs, revision
+    return member, inputs
 
 
 def _request(data):
@@ -554,6 +564,119 @@ def get_member_report(store, owner, experiment_id, identifier, member_id):
     return response
 
 
+def validate_member(member):
+    """Bound a single pinned selection without requiring a comparison."""
+
+    def finite(value):
+        try:
+            return type(value) in (int, float) and math.isfinite(value)
+        except OverflowError:
+            return False
+
+    if not isinstance(member, dict) or set(member) != set(MEMBER_FIELDS) | {
+        "report_job_id",
+        "report_result_artifact",
+        "analysis_job_id",
+        "analysis_artifact",
+        "report_context",
+        "summary",
+        "job",
+    }:
+        raise ValueError("Invalid comparison member")
+    for key in ("id", "source_job_id", "report_job_id"):
+        shortlist._hex(member.get(key), 32, "comparison member")
+    for key in ("source_result_artifact", "report_result_artifact", "config_id"):
+        shortlist._hex(member.get(key), 64, "comparison evidence")
+    if bool(member.get("analysis_job_id")) != bool(member.get("analysis_artifact")):
+        raise ValueError("Incomplete pinned comparison analysis")
+    if member.get("analysis_artifact"):
+        shortlist._hex(member["analysis_job_id"], 32, "analysis job")
+        shortlist._hex(member["analysis_artifact"], 64, "analysis artifact")
+    if member.get("origin_kind") not in ("study", "backtest") or member.get("period") not in (
+        "selection",
+        "full",
+    ):
+        raise ValueError("Invalid comparison member identity")
+    if (
+        type(member.get("is_objective_winner")) is not bool
+        or (
+            member["origin_kind"] == "study"
+            and any(
+                type(member.get(key)) is not int or not 0 <= member[key] < 1000000
+                for key in ("trial_number", "proposal_number")
+            )
+        )
+        or (
+            member["origin_kind"] == "backtest"
+            and (
+                member.get("trial_number") is not None
+                or member.get("proposal_number") is not None
+                or member["is_objective_winner"]
+            )
+        )
+    ):
+        raise ValueError("Invalid comparison proposal identity")
+    library._text(member.get("name"), 120, "Comparison member name")
+    library._text(member.get("note"), 2000, "Comparison member note", empty=True)
+    context = member.get("report_context")
+    if not isinstance(context, dict) or any(
+        context.get(key) != member[field]
+        for key, field in (
+            ("job_id", "report_job_id"),
+            ("result_artifact", "report_result_artifact"),
+            ("analysis_artifact", "analysis_artifact"),
+            ("config_id", "config_id"),
+            ("period", "period"),
+        )
+    ):
+        raise ValueError("Invalid pinned comparison report context")
+    from research.report_contract import fingerprint
+
+    if (
+        context.get("version") != "research-report-context-v1"
+        or context.get("report_id")
+        != fingerprint(
+            {key: context[key] for key in ("version", "result_artifact", "period", "config_id")}
+        )
+        or not isinstance(context.get("evaluation_basis"), dict)
+        or context.get("analysis_version") is not None
+        and (
+            not isinstance(context["analysis_version"], str)
+            or len(context["analysis_version"]) > 64
+        )
+    ):
+        raise ValueError("Invalid pinned comparison report descriptor")
+    if context.get("inputs_artifact") is not None:
+        shortlist._hex(context["inputs_artifact"], 64, "report inputs")
+    shortlist.validate_snapshot(
+        {
+            "summary": member.get("summary"),
+            "dates": context.get("dates"),
+            "capital": None,
+            "currency": None,
+            "engine": None,
+            "objective": None,
+        }
+    )
+    job = member.get("job")
+    kind = (
+        "portfolio_optimize"
+        if member["origin_kind"] == "study" and member["report_job_id"] == member["source_job_id"]
+        else "portfolio_backtest"
+    )
+    if (
+        not isinstance(job, dict)
+        or set(job) != {"id", "status", "progress", "created_at", "kind"}
+        or job["id"] != member["report_job_id"]
+        or job["status"] != "completed"
+        or job["progress"] != 100
+        or not finite(job["created_at"])
+        or job["created_at"] <= 0
+        or job["kind"] != kind
+    ):
+        raise ValueError("Invalid frozen comparison job")
+
+
 def validate_snapshot(snapshot):
     """Bound nested immutable metadata before writing or restoring it."""
     if (
@@ -583,111 +706,10 @@ def validate_snapshot(snapshot):
         )
 
     for member in members:
-        if not isinstance(member, dict) or set(member) != set(MEMBER_FIELDS) | {
-            "report_job_id",
-            "report_result_artifact",
-            "analysis_job_id",
-            "analysis_artifact",
-            "report_context",
-            "summary",
-            "job",
-        }:
-            raise ValueError("Invalid comparison member")
-        for key in ("id", "source_job_id", "report_job_id"):
-            shortlist._hex(member.get(key), 32, "comparison member")
-        for key in ("source_result_artifact", "report_result_artifact", "config_id"):
-            shortlist._hex(member.get(key), 64, "comparison evidence")
-        if bool(member.get("analysis_job_id")) != bool(member.get("analysis_artifact")):
-            raise ValueError("Incomplete pinned comparison analysis")
-        if member.get("analysis_artifact"):
-            shortlist._hex(member["analysis_job_id"], 32, "analysis job")
-            shortlist._hex(member["analysis_artifact"], 64, "analysis artifact")
-        if (
-            member["id"] in ids
-            or member.get("origin_kind") not in ("study", "backtest")
-            or member.get("period") not in ("selection", "full")
-        ):
-            raise ValueError("Invalid comparison member identity")
-        if (
-            type(member.get("is_objective_winner")) is not bool
-            or (
-                member["origin_kind"] == "study"
-                and any(
-                    type(member.get(key)) is not int or not 0 <= member[key] < 1000000
-                    for key in ("trial_number", "proposal_number")
-                )
-            )
-            or (
-                member["origin_kind"] == "backtest"
-                and (
-                    member.get("trial_number") is not None
-                    or member.get("proposal_number") is not None
-                    or member["is_objective_winner"]
-                )
-            )
-        ):
-            raise ValueError("Invalid comparison proposal identity")
+        validate_member(member)
+        if member["id"] in ids:
+            raise ValueError("Duplicate comparison member identity")
         ids.add(member["id"])
-        library._text(member.get("name"), 120, "Comparison member name")
-        library._text(member.get("note"), 2000, "Comparison member note", empty=True)
-        context = member.get("report_context")
-        if not isinstance(context, dict) or any(
-            context.get(key) != member[field]
-            for key, field in (
-                ("job_id", "report_job_id"),
-                ("result_artifact", "report_result_artifact"),
-                ("analysis_artifact", "analysis_artifact"),
-                ("config_id", "config_id"),
-                ("period", "period"),
-            )
-        ):
-            raise ValueError("Invalid pinned comparison report context")
-        from research.report_contract import fingerprint
-
-        if (
-            context.get("version") != "research-report-context-v1"
-            or context.get("report_id")
-            != fingerprint(
-                {key: context[key] for key in ("version", "result_artifact", "period", "config_id")}
-            )
-            or not isinstance(context.get("evaluation_basis"), dict)
-            or context.get("analysis_version") is not None
-            and (
-                not isinstance(context["analysis_version"], str)
-                or len(context["analysis_version"]) > 64
-            )
-        ):
-            raise ValueError("Invalid pinned comparison report descriptor")
-        if context.get("inputs_artifact") is not None:
-            shortlist._hex(context["inputs_artifact"], 64, "report inputs")
-        shortlist.validate_snapshot(
-            {
-                "summary": member.get("summary"),
-                "dates": context.get("dates"),
-                "capital": None,
-                "currency": None,
-                "engine": None,
-                "objective": None,
-            }
-        )
-        job = member.get("job")
-        kind = (
-            "portfolio_optimize"
-            if member["origin_kind"] == "study"
-            and member["report_job_id"] == member["source_job_id"]
-            else "portfolio_backtest"
-        )
-        if (
-            not isinstance(job, dict)
-            or set(job) != {"id", "status", "progress", "created_at", "kind"}
-            or job["id"] != member["report_job_id"]
-            or job["status"] != "completed"
-            or job["progress"] != 100
-            or not finite(job["created_at"])
-            or job["created_at"] <= 0
-            or job["kind"] != kind
-        ):
-            raise ValueError("Invalid frozen comparison job")
     if snapshot["reference_member_id"] not in ids:
         raise ValueError("Invalid frozen comparison reference")
     presentation = snapshot["presentation"]

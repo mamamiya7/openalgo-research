@@ -7,6 +7,7 @@ import {
   type EvidenceUseSummary,
   researchDecisions,
 } from '@/api/researchDecisions'
+import { validationKey } from '@/api/researchValidation'
 import { Button } from '@/components/ui/button'
 import { PortfolioResults } from './PortfolioResults'
 import { ReportCurrency } from './ReportCurrency'
@@ -33,6 +34,9 @@ export function EvidenceUse({ evidence }: { evidence: EvidenceUseSummary }) {
               : 'Earlier calculation history unavailable'}
         </li>
         {evidence.opened_at !== null && <li>Opened {decisionDate(evidence.opened_at)}</li>}
+        {evidence.later_opened_at != null && (
+          <li>Later report opened {decisionDate(evidence.later_opened_at)}</li>
+        )}
         {evidence.later_used_for_decision && <li>Later results have been used in decisions</li>}
         {evidence.coverage === 'legacy_unknown' && <li>Earlier opening history unavailable</li>}
         {evidence.overlap === 'recorded' && <li>Reserved dates appear in recorded calculations</li>}
@@ -73,6 +77,7 @@ export function EvidenceOpened({
           if (controller.signal.aborted) return
           completed.current = identity
           void client.invalidateQueries({ queryKey: decisionKey(owner, experimentId) })
+          void client.invalidateQueries({ queryKey: validationKey(owner, experimentId) })
         })
         .catch(() => {
           if (!controller.signal.aborted) setFailed(true)

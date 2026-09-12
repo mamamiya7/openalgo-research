@@ -60,6 +60,78 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 describe('durable research draft lifecycle', () => {
+  it('adopts a chosen-setup metadata revision before the next draft edit', async () => {
+    const seed = experiment()
+    const hook = renderHook(() => useResearchExperiment(seed, 'account'))
+    vi.mocked(researchLibrary.get).mockResolvedValue({ ...seed, revision: 2, version_count: 1 })
+    await act(async () => {
+      await hook.result.current.refreshMetadata()
+    })
+    expect(hook.result.current.server.revision).toBe(2)
+    expect(hook.result.current.server.version_count).toBe(1)
+    act(() => hook.result.current.change({ ...seed.draft, optimizing: true }))
+    await act(async () => {
+      await hook.result.current.flush()
+    })
+    expect(researchLibrary.saveDraft).toHaveBeenCalledWith(
+      seed.id,
+      2,
+      expect.objectContaining({ optimizing: true })
+    )
+    expect(hook.result.current.state).toBe('saved')
+  })
+  it('flushes pending local edits before adopting metadata without replacing those edits', async () => {
+    const seed = experiment()
+    const hook = renderHook(() => useResearchExperiment(seed, 'account'))
+    const edited = { ...seed.draft, optimizing: true }
+    act(() => hook.result.current.change(edited))
+    vi.mocked(researchLibrary.get).mockResolvedValue({
+      ...seed,
+      draft: edited,
+      revision: 3,
+      version_count: 1,
+    })
+    await act(async () => {
+      await hook.result.current.refreshMetadata()
+    })
+    expect(researchLibrary.saveDraft).toHaveBeenCalledTimes(1)
+    expect(hook.result.current.draft).toEqual(edited)
+    expect(hook.result.current.server.revision).toBe(3)
+  })
+  it('keeps the local setup recoverable if another session changes the draft during metadata refresh', async () => {
+    const seed = experiment()
+    const hook = renderHook(() => useResearchExperiment(seed, 'account'))
+    vi.mocked(researchLibrary.get).mockResolvedValue({
+      ...seed,
+      revision: 2,
+      draft: { ...seed.draft, optimizing: true },
+    })
+    await act(async () => {
+      await expect(hook.result.current.refreshMetadata()).rejects.toThrow('different draft')
+    })
+    expect(hook.result.current.draft).toEqual(seed.draft)
+    expect(hook.result.current.state).toBe('conflict')
+    expect(sessionStorage.getItem('research-edit:account:research-1')).toContain('"revision":1')
+    expect(researchLibrary.saveDraft).not.toHaveBeenCalled()
+  })
+  it('aborts metadata refresh when leaving the workspace', async () => {
+    const seed = experiment()
+    const pending = deferred<ResearchExperiment>()
+    vi.mocked(researchLibrary.get).mockReturnValue(pending.promise)
+    const hook = renderHook(() => useResearchExperiment(seed, 'account'))
+    let refreshing!: Promise<void>
+    await act(async () => {
+      refreshing = hook.result.current.refreshMetadata()
+      await Promise.resolve()
+    })
+    const signal = vi.mocked(researchLibrary.get).mock.calls[0][1]!
+    hook.unmount()
+    expect(signal.aborted).toBe(true)
+    await act(async () => {
+      pending.resolve({ ...seed, revision: 2 })
+      await refreshing
+    })
+  })
   it('refreshes new candidate jobs without changing a dirty draft or its conflict revision', async () => {
     const seed = experiment()
     const hook = renderHook(() => useResearchExperiment(seed, 'account'))

@@ -569,7 +569,7 @@ def test_draft_delete_retains_reusable_source_and_preview_cannot_run(app, client
 def test_repeated_library_success_and_error_paths_release_database_handles(app, client):
     import psutil
 
-    experiment = create(client)
+    experiment = run(client, create(client, draft_for(client)))["experiment"]
     store = app.extensions["research_store"]
     assert isinstance(store.engine.pool, NullPool)
     process = psutil.Process()
@@ -694,4 +694,4 @@ def test_restore_preserves_unfinished_settings_before_any_csv_is_added(client):
     ).json
     assert restored["versions"][0]["draft"]["portfolio"]["capital"] == 34567
     assert restored["versions"][0]["draft"]["portfolio"]["name"] == "Unfinished research"
-    assert restored["draft"] == library.fresh_draft()
+    assert restored["draft"] == original["version"]["draft"]

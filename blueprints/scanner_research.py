@@ -4,14 +4,17 @@ from flask import Blueprint, Response, current_app, jsonify, request, session
 from sqlalchemy import func, select
 
 from database.research_db import ResearchJob, ResearchStore, ResearchWorker
+from services import research_baselines as baselines
 from services import research_candidates as candidates
 from services import research_chartink as chartink
+from services import research_chosen_setups as chosen_setups
 from services import research_comparisons as comparisons
 from services import research_decisions as decisions
 from services import research_library as library
 from services import research_preferences as preferences
 from services import research_shortlist as shortlist
 from services import research_study_activity as study_activity
+from services import research_validation as validation
 from services import scanner_research_service as service
 from utils.logging import get_logger
 
@@ -330,6 +333,164 @@ def decision_page():
         "limit": int(request.args.get("limit", "20")),
         "offset": int(request.args.get("offset", "0")),
     }
+
+
+@scanner_research_bp.route(
+    "/library/experiments/<experiment_id>/chosen-setup", methods=["GET", "POST"]
+)
+def library_chosen_setup(experiment_id):
+    if request.method == "GET":
+        if set(request.args) - {"decision_id", "event_id"} or any(
+            len(request.args.getlist(key)) != 1 for key in request.args
+        ):
+            raise ValueError("Invalid chosen setup query")
+        if bool(request.args.get("decision_id")) != bool(request.args.get("event_id")):
+            raise ValueError("Supply the saved decision and its event together")
+        if any(not request.args[key] for key in request.args):
+            raise ValueError("Supply nonempty saved decision identifiers")
+        return jsonify(
+            chosen_setups.context(
+                store(),
+                session["user"],
+                experiment_id,
+                decision_id=request.args.get("decision_id"),
+                event_id=request.args.get("event_id"),
+            )
+        )
+    if request.args:
+        raise ValueError("Invalid chosen setup query")
+    result = chosen_setups.choose(store(), session["user"], experiment_id, shortlist_body())
+    return jsonify(result), 200 if result["reused"] else 201
+
+
+@scanner_research_bp.get("/library/experiments/<experiment_id>/chosen-setup/history")
+def library_chosen_setup_history(experiment_id):
+    if set(request.args) - {"limit", "offset"}:
+        raise ValueError("Invalid chosen setup history query")
+    return jsonify(
+        chosen_setups.history(store(), session["user"], experiment_id, **decision_page())
+    )
+
+
+@scanner_research_bp.post("/library/experiments/<experiment_id>/chosen-setup/preview")
+def library_chosen_setup_preview(experiment_id):
+    if request.args:
+        raise ValueError("Invalid chosen setup preview query")
+    return jsonify(
+        chosen_setups.preview_use(store(), session["user"], experiment_id, shortlist_body())
+    )
+
+
+@scanner_research_bp.post("/library/experiments/<experiment_id>/chosen-setup/use")
+def library_chosen_setup_use(experiment_id):
+    if request.args:
+        raise ValueError("Invalid chosen setup reuse query")
+    result = chosen_setups.use_choice(store(), session["user"], experiment_id, shortlist_body())
+    return jsonify(result), 200 if result["reused"] else 201
+
+
+@scanner_research_bp.post("/library/experiments/<experiment_id>/chosen-setup/replay")
+def library_chosen_setup_replay(experiment_id):
+    if request.args:
+        raise ValueError("Invalid chosen setup replay query")
+    result = chosen_setups.replay_choice(store(), session["user"], experiment_id, shortlist_body())
+    return jsonify(result), 200 if result["reused"] else 201
+
+
+def result_query(*, paged=False, expected=False):
+    allowed = {"config_id", "limit", "offset"} if paged else {"config_id"}
+    if expected:
+        allowed |= {"expected_result_artifact", "expected_analysis_artifact"}
+    if set(request.args) - allowed or any(
+        len(request.args.getlist(key)) != 1 for key in request.args
+    ):
+        raise ValueError("Invalid saved result query")
+    config_id = request.args.get("config_id")
+    if config_id is not None and not config_id:
+        raise ValueError("Supply a saved configuration identifier")
+    return config_id
+
+
+@scanner_research_bp.get("/library/experiments/<experiment_id>/results/<job_id>/decision")
+def library_direct_decision_context(experiment_id, job_id):
+    config_id = result_query(paged=True, expected=True)
+    expected_report = None
+    if "expected_result_artifact" in request.args:
+        expected_report = {
+            "result_artifact": request.args["expected_result_artifact"],
+            "analysis_artifact": request.args.get("expected_analysis_artifact"),
+        }
+    elif "expected_analysis_artifact" in request.args:
+        raise ValueError("Supply the displayed result with its analysis")
+    return jsonify(
+        decisions.direct_context(
+            store(),
+            session["user"],
+            experiment_id,
+            job_id,
+            config_id=config_id,
+            expected_report=expected_report,
+            **decision_page(),
+        )
+    )
+
+
+@scanner_research_bp.post("/library/experiments/<experiment_id>/results/<job_id>/decisions")
+def library_save_direct_decision(experiment_id, job_id):
+    config_id = result_query()
+    result = decisions.save_direct_decision(
+        store(), session["user"], experiment_id, job_id, shortlist_body(), config_id=config_id
+    )
+    return jsonify(result), 200 if result["reused"] else 201
+
+
+@scanner_research_bp.get(
+    "/library/experiments/<experiment_id>/results/<job_id>/decision/evaluations/<evaluation_id>"
+)
+def library_direct_decision_evaluation(experiment_id, job_id, evaluation_id):
+    config_id = result_query()
+    return jsonify(
+        decisions.preview_direct_evaluation(
+            store(), session["user"], experiment_id, job_id, evaluation_id, config_id=config_id
+        )
+    )
+
+
+@scanner_research_bp.route(
+    "/library/experiments/<experiment_id>/results/<job_id>/validation", methods=["GET", "POST"]
+)
+def library_result_validation(experiment_id, job_id):
+    config_id = result_query()
+    if request.method == "GET":
+        return jsonify(
+            validation.context(store(), session["user"], experiment_id, job_id, config_id=config_id)
+        )
+    data = shortlist_body()
+    if not isinstance(data, dict):
+        raise ValueError("Supply a JSON object for later evaluation")
+    if config_id is not None:
+        if "config_id" in data:
+            raise ValueError("Supply the saved configuration identifier once")
+        data["config_id"] = config_id
+    result = validation.prepare(store(), session["user"], experiment_id, job_id, data)
+    return jsonify(result), 200 if result["reused"] else 201
+
+
+@scanner_research_bp.route(
+    "/library/experiments/<experiment_id>/studies/<study_id>/baselines/<baseline_id>/match",
+    methods=["GET", "POST"],
+)
+def library_matched_baseline(experiment_id, study_id, baseline_id):
+    if request.args:
+        raise ValueError("Invalid baseline matching query")
+    if request.method == "GET":
+        return jsonify(
+            baselines.context(store(), session["user"], experiment_id, study_id, baseline_id)
+        )
+    result = baselines.prepare(
+        store(), session["user"], experiment_id, study_id, baseline_id, shortlist_body()
+    )
+    return jsonify(result), 200 if result["reused"] else 201
 
 
 @scanner_research_bp.post(

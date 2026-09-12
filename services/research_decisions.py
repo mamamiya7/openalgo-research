@@ -15,6 +15,7 @@ from database.research_db import (
     ResearchDecision,
     ResearchDecisionEvent,
     ResearchDecisionRequest,
+    ResearchDecisionTarget,
     ResearchEvidenceOpen,
     ResearchExperiment,
     ResearchHistory,
@@ -223,7 +224,7 @@ def _later_receipt(store, db, owner, pin):
 
 def _event_receipt(store, db, row):
     head = db.get(ResearchDecision, row.decision_id)
-    _, _, member = _member(db, row.owner, row.experiment_id, row.comparison_id, row.member_id)
+    member = _event_member(db, row)
     pin = json.loads(row.evaluation_pin) if row.evaluation_pin else None
     return {
         **{
@@ -246,7 +247,32 @@ def _event_receipt(store, db, row):
         **{key: member[key] for key in ("trial_number", "proposal_number", "is_objective_winner")},
         "evaluation": _later_receipt(store, db, row.owner, pin) if pin else None,
         "evidence_use": json.loads(row.evidence_use),
+        **(
+            {
+                "comparison_id": None,
+                "member_id": None,
+                "comparison_name": None,
+                "target": {"job_id": member["source_job_id"], "config_id": member["config_id"]},
+            }
+            if not row.comparison_id
+            else {}
+        ),
     }
+
+
+def _event_member(db, row):
+    if row.comparison_id:
+        return _member(db, row.owner, row.experiment_id, row.comparison_id, row.member_id)[2]
+    from services.research_decision_targets import validate_selection
+
+    target = db.get(ResearchDecisionTarget, row.id)
+    if target is None or row.member_id or row.comparison_name:
+        raise ValueError("Direct decision selection is missing or inconsistent")
+    member = json.loads(target.selection)
+    validate_selection(member)
+    if not comparisons._member_owned(db, row.owner, member):
+        raise ValueError("Direct decision selection belongs to another account")
+    return member
 
 
 def _summary(store, db, experiment, head, *, event=None):
@@ -480,17 +506,32 @@ def _resolve_later(store, owner, experiment_id, member, identifier):
     return pin
 
 
-def _evidence_use(store, db, owner, experiment_id, member, *, attached=None, source_bundle=None):
-    pin = attached or _selection_pin(member)
-    opened = db.scalar(
-        select(ResearchEvidenceOpen.opened_at).where(
-            ResearchEvidenceOpen.owner == owner,
-            ResearchEvidenceOpen.experiment_id == experiment_id,
-            ResearchEvidenceOpen.evidence_id == fingerprint(pin),
+def _evidence_use(
+    store,
+    db,
+    owner,
+    experiment_id,
+    member,
+    *,
+    attached=None,
+    source_bundle=None,
+    selection_available=True,
+):
+    pin = attached or (_selection_pin(member) if selection_available else None)
+    opened = (
+        db.scalar(
+            select(ResearchEvidenceOpen.opened_at).where(
+                ResearchEvidenceOpen.owner == owner,
+                ResearchEvidenceOpen.experiment_id == experiment_id,
+                ResearchEvidenceOpen.evidence_id == fingerprint(pin),
+            )
         )
+        if pin is not None
+        else None
     )
     result = (source_bundle or _source(store, member))["result"]
     reservation = _reservation(result)
+    later_opened = _later_opened_at(db, owner, experiment_id, member, reservation)
     computed = db.get(ResearchHistory, member["source_job_id"])
     recorded = computed is not None and computed.owner == owner
     overlap = "not_checked"
@@ -538,16 +579,70 @@ def _evidence_use(store, db, owner, experiment_id, member, *, attached=None, sou
         "reservation_status": "reserved_in_setup" if reservation else "not_reserved",
         "calculation": "recorded" if recorded else "unknown",
         "opened_at": opened,
+        "later_opened_at": later_opened,
         "later_used_for_decision": used,
         "coverage": "legacy_unknown",
         "overlap": overlap,
     }
 
 
+def _later_opened_at(db, owner, experiment_id, member, reservation):
+    """Find recorded exposure to this candidate's exact reserved evidence.
+
+    Openings keep their immutable report pin across subsequent analysis changes;
+    querying compact metadata does not open or recalculate those reports.
+    """
+    if member["period"] != "selection" or not reservation:
+        return None
+    fields = {
+        "$.origin.source_job_id": member["source_job_id"],
+        "$.origin.source_result_artifact": member["source_result_artifact"],
+        "$.origin.config_id": member["config_id"],
+        "$.origin.reservation.from": reservation["from"],
+        "$.origin.reservation.to": reservation["to"],
+        "$.report_context.period": "evaluation",
+        "$.report_context.config_id": member["config_id"],
+    }
+    row = db.scalar(
+        select(ResearchEvidenceOpen)
+        .where(
+            ResearchEvidenceOpen.owner == owner,
+            ResearchEvidenceOpen.experiment_id == experiment_id,
+            *(
+                func.json_extract(ResearchEvidenceOpen.report_pin, key) == value
+                for key, value in fields.items()
+            ),
+        )
+        .order_by(ResearchEvidenceOpen.opened_at, ResearchEvidenceOpen.id)
+        .limit(1)
+    )
+    if row is None:
+        return None
+    pin = json.loads(row.report_pin)
+    validate_pin(pin)
+    if fingerprint(pin) != row.evidence_id or not _pin_owned(db, owner, pin):
+        raise ValueError("Recorded later opening has inconsistent evidence")
+    return row.opened_at
+
+
 def decision_context(store, owner, experiment_id, comparison_id, member_id, *, limit=20, offset=0):
+    with store.sessions() as db:
+        _, _, member = _member(db, owner, experiment_id, comparison_id, member_id)
+    return _member_context(
+        store,
+        owner,
+        experiment_id,
+        member,
+        {"comparison_id": comparison_id, "member_id": member_id},
+        limit=limit,
+        offset=offset,
+    )
+
+
+def _member_context(store, owner, experiment_id, member, target, *, limit=20, offset=0):
     limit, offset = library._page(limit, offset)
     with store.sessions() as db:
-        experiment, _, member = _member(db, owner, experiment_id, comparison_id, member_id)
+        experiment = library._owned(db, owner, experiment_id)
         head = _head(db, owner, experiment_id, member)
         current = _summary(store, db, experiment, head) if head else None
         archived = experiment.archived
@@ -571,6 +666,7 @@ def decision_context(store, owner, experiment_id, comparison_id, member_id, *, l
             "reservation_status": "unknown",
             "calculation": "unknown",
             "opened_at": None,
+            "later_opened_at": None,
             "later_used_for_decision": False,
             "coverage": "legacy_unknown",
             "overlap": "not_checked",
@@ -601,7 +697,7 @@ def decision_context(store, owner, experiment_id, comparison_id, member_id, *, l
     with store.sessions() as db:
         items = [_later_receipt(store, db, owner, pin) for pin in pins]
     return {
-        "target": {"comparison_id": comparison_id, "member_id": member_id},
+        "target": target,
         "current": current,
         "evidence_use": use,
         "evaluation": {
@@ -669,6 +765,249 @@ def preview_evaluation(store, owner, experiment_id, comparison_id, member_id, ev
     return _read_pin(
         store, owner, _resolve_later(store, owner, experiment_id, member, evaluation_id)
     )
+
+
+def direct_context(
+    store, owner, experiment_id, job_id, *, config_id=None, expected_report=None, limit=20, offset=0
+):
+    from services.research_decision_targets import selection_member
+
+    expected = validate_expected_report(expected_report) if expected_report is not None else None
+    if expected:
+        with store.sessions() as db:
+            _check_displayed_report(store, db, owner, experiment_id, job_id, expected)
+    member = selection_member(store, owner, experiment_id, job_id, config_id)
+    result = _member_context(
+        store,
+        owner,
+        experiment_id,
+        member,
+        {"job_id": member["source_job_id"], "config_id": member["config_id"]},
+        limit=limit,
+        offset=offset,
+    )
+    if expected:
+        with store.sessions() as db:
+            _check_displayed_report(
+                store, db, owner, experiment_id, job_id, expected, verify_artifact=False
+            )
+    return result
+
+
+def preview_direct_evaluation(
+    store, owner, experiment_id, job_id, evaluation_id, *, config_id=None
+):
+    from services.research_decision_targets import selection_member
+
+    member = selection_member(store, owner, experiment_id, job_id, config_id)
+    return _read_pin(
+        store, owner, _resolve_later(store, owner, experiment_id, member, evaluation_id)
+    )
+
+
+def _direct_target_owned(db, owner, experiment_id, target):
+    library._object(
+        target,
+        {"job_id", "config_id", "expected_report", "expected_analysis_job_id"},
+        "direct decision target",
+    )
+    shortlist._hex(target.get("job_id"), 32, "result")
+    if target.get("config_id") is not None:
+        shortlist._hex(target["config_id"], 64, "configuration")
+    job = shortlist._linked(db, owner, experiment_id, target["job_id"])[1]
+    if "expected_report" in target:
+        expected = validate_expected_report(target["expected_report"])
+        if "expected_analysis_job_id" not in target or (
+            target["expected_analysis_job_id"] is None
+        ) != (expected["analysis_artifact"] is None):
+            raise ValueError("Displayed report has inconsistent analysis metadata")
+        if target["expected_analysis_job_id"] is not None:
+            identifier = shortlist._hex(
+                target["expected_analysis_job_id"], 32, "displayed analysis"
+            )
+            analysis_job = db.get(ResearchJob, identifier)
+            metadata = db.get(ResearchExperiment, identifier)
+            if (
+                not analysis_job
+                or analysis_job.owner != owner
+                or not metadata
+                or metadata.kind != "portfolio_analysis"
+                or metadata.parent_job_id != job.id
+            ):
+                raise ValueError("Displayed report analysis belongs to another result")
+    elif "expected_analysis_job_id" in target:
+        raise ValueError("Displayed analysis needs its report identity")
+    return job
+
+
+def validate_expected_report(value):
+    if not isinstance(value, dict) or set(value) != {"result_artifact", "analysis_artifact"}:
+        raise ValueError("Supply the exact displayed report identity")
+    shortlist._hex(value["result_artifact"], 64, "displayed report artifact")
+    if value["analysis_artifact"] is not None:
+        shortlist._hex(value["analysis_artifact"], 64, "displayed analysis artifact")
+    return value
+
+
+def _check_displayed_report(
+    store, db, owner, experiment_id, job_id, expected, *, verify_artifact=True
+):
+    """Fence the displayed target, including a later/replay result's own analysis."""
+    _, job = shortlist._linked(db, owner, experiment_id, job_id)
+    message = "This report changed. Reopen the report before reviewing or saving its decision."
+    if job.status != "completed" or job.result_artifact != expected["result_artifact"]:
+        raise DecisionEvidenceChanged(message)
+    latest = db.execute(
+        select(ResearchJob, ResearchExperiment.specification)
+        .join(ResearchExperiment, ResearchExperiment.job_id == ResearchJob.id)
+        .where(
+            ResearchJob.owner == owner,
+            ResearchJob.status == "completed",
+            ResearchExperiment.kind == "portfolio_analysis",
+            ResearchExperiment.parent_job_id == job.id,
+        )
+        .order_by(ResearchJob.created_at.desc(), ResearchJob.id.desc())
+        .limit(1)
+    ).first()
+    artifact, analysis_job_id = None, None
+    if latest:
+        specification = json.loads(latest[1])
+        if (
+            specification.get("parent_result_artifact") == job.result_artifact
+            and specification.get("analysis_version") in analysis.READABLE_VERSIONS
+        ):
+            artifact, analysis_job_id = latest[0].result_artifact, latest[0].id
+            if not artifact:
+                raise DecisionEvidenceChanged(message)
+    if artifact != expected["analysis_artifact"] or any(
+        not shortlist._artifact_present(store, identity)
+        for identity in (expected["result_artifact"], artifact)
+        if identity
+    ):
+        raise DecisionEvidenceChanged(message)
+    if verify_artifact and artifact:
+        bundle = service.read_artifact(store, artifact)
+        if (
+            bundle.get("kind") != "portfolio_analysis"
+            or bundle.get("parent_result_artifact") != expected["result_artifact"]
+            or bundle.get("result", {}).get("version") not in analysis.READABLE_VERSIONS
+            or not isinstance(bundle.get("result", {}).get("analysis"), dict)
+        ):
+            raise DecisionEvidenceChanged(message)
+    return analysis_job_id
+
+
+def save_direct_decision(store, owner, experiment_id, job_id, data, *, config_id=None):
+    from services.research_decision_targets import read_selection_report, selection_member
+
+    library._object(
+        data,
+        {"request_id", "revision", "state", "reason", "evaluation_id", "expected_report"},
+        "research decision",
+    )
+    expected = (
+        validate_expected_report(data["expected_report"]) if "expected_report" in data else None
+    )
+    if (
+        data.get("state") not in STATES
+        or type(data.get("revision")) is not int
+        or data["revision"] < 0
+    ):
+        raise ValueError("Choose a decision and its current revision")
+    reason = library._text(data.get("reason", ""), 2000, "Decision reason", empty=True)
+    if data.get("evaluation_id") is not None:
+        _pin_parts(data["evaluation_id"])
+    target = {"job_id": job_id, "config_id": config_id}
+    normalized = {
+        **data,
+        "reason": reason,
+        "evaluation_id": data.get("evaluation_id"),
+        "target": target,
+    }
+    token, raw, digest = _request(normalized, "decision", experiment_id)
+    with store.sessions() as db:
+        experiment = library._owned(db, owner, experiment_id)
+        prior = _previous(db, owner, token, digest)
+        if prior:
+            old = db.get(ResearchDecisionEvent, prior.result_id)
+            return {
+                "decision": _summary(
+                    store, db, experiment, db.get(ResearchDecision, old.decision_id), event=old
+                ),
+                "event": _event_receipt(store, db, old),
+                "reused": True,
+            }
+        library._editable(experiment)
+        target_job = _direct_target_owned(db, owner, experiment_id, target)
+        target_artifact = target_job.result_artifact
+        if expected:
+            _check_displayed_report(store, db, owner, experiment_id, job_id, expected)
+    member = selection_member(store, owner, experiment_id, job_id, config_id)
+    if not read_selection_report(store, owner, member)["available"]:
+        raise ValueError("Open an available exact candidate report before saving a decision")
+    pin = (
+        _resolve_later(store, owner, experiment_id, member, data["evaluation_id"])
+        if data.get("evaluation_id")
+        else None
+    )
+    with store.sessions() as db:
+        use = _evidence_use(store, db, owner, experiment_id, member, attached=pin)
+    with store.sessions.begin() as db:
+        service.write_guard(db)
+        experiment = library._owned(db, owner, experiment_id)
+        prior = _previous(db, owner, token, digest)
+        if prior:
+            old = db.get(ResearchDecisionEvent, prior.result_id)
+            return {
+                "decision": _summary(
+                    store, db, experiment, db.get(ResearchDecision, old.decision_id), event=old
+                ),
+                "event": _event_receipt(store, db, old),
+                "reused": True,
+            }
+        library._editable(experiment)
+        target_job = _direct_target_owned(db, owner, experiment_id, target)
+        if target_job.status != "completed" or target_job.result_artifact != target_artifact:
+            raise DecisionEvidenceChanged(
+                "The opened result changed before this decision was saved"
+            )
+        retained_target = target
+        if expected:
+            analysis_job_id = _check_displayed_report(
+                store, db, owner, experiment_id, job_id, expected, verify_artifact=False
+            )
+            retained_target = {
+                **target,
+                "expected_report": expected,
+                "expected_analysis_job_id": analysis_job_id,
+            }
+        _, source = shortlist._linked(db, owner, experiment_id, member["source_job_id"])
+        if (
+            source.status != "completed"
+            or source.result_artifact != member["source_result_artifact"]
+        ):
+            raise DecisionEvidenceChanged(
+                "The original selection changed before this decision was saved"
+            )
+        _check_current_pin(store, db, owner, _selection_pin(member), label="Selection")
+        if pin:
+            _check_current_pin(store, db, owner, pin)
+        return _append_decision(
+            store,
+            db,
+            owner,
+            experiment_id,
+            experiment,
+            member,
+            data,
+            reason,
+            token,
+            raw,
+            digest,
+            pin,
+            use,
+            direct_target=retained_target,
+        )
 
 
 def save_decision(store, owner, experiment_id, comparison_id, member_id, data):
@@ -741,77 +1080,135 @@ def save_decision(store, owner, experiment_id, comparison_id, member_id, data):
             raise ValueError("Exact selection evidence is unavailable")
         if pin:
             _check_current_pin(store, db, owner, pin)
-        head = _head(db, owner, experiment_id, member)
-        if data["revision"] != (head.revision if head else 0):
-            raise DecisionConflict(_summary(store, db, experiment, head) if head else None)
-        _bound(db, ResearchDecisionEvent)
-        service.ensure_storage_capacity(
-            store, len(raw.encode()) + len(service.encoded(pin)) + 16384
-        )
-        now, event_id = time.time(), uuid.uuid4().hex
-        if not head:
-            _bound(db, ResearchDecision)
-            _bound(
-                db,
-                ResearchDecision,
-                where=(ResearchDecision.experiment_id == experiment_id,),
-                limit=MAX_PER_EXPERIMENT,
-            )
-            head = ResearchDecision(
-                id=uuid.uuid4().hex,
-                owner=owner,
-                experiment_id=experiment_id,
-                **{key: member[key] for key in IDENTITY},
-                revision=0,
-                current_event_id=event_id,
-                created_at=now,
-                updated_at=now,
-            )
-            db.add(head)
-        if head.revision >= MAX_EVENTS:
-            raise ValueError("This candidate's decision history reached its limit")
-        previous_id = head.current_event_id if head.revision else None
-        head.revision += 1
-        head.current_event_id, head.updated_at = event_id, now
-        row = ResearchDecisionEvent(
-            id=event_id,
-            owner=owner,
-            experiment_id=experiment_id,
-            decision_id=head.id,
-            revision=head.revision,
-            supersedes_event_id=previous_id,
-            state=data["state"],
-            reason=reason,
+        return _append_decision(
+            store,
+            db,
+            owner,
+            experiment_id,
+            experiment,
+            member,
+            data,
+            reason,
+            token,
+            raw,
+            digest,
+            pin,
+            use,
             comparison_id=comparison_id,
             member_id=member_id,
-            candidate_name=member["name"],
             comparison_name=comparison.name,
-            evaluation_pin=service.encoded(pin).decode() if pin else None,
-            evidence_use=service.encoded(use).decode(),
-            created_at=now,
         )
-        db.add(row)
-        _remember(db, owner, experiment_id, token, raw, digest, "decision", event_id)
-        db.flush()
-        return {
-            "decision": _summary(store, db, experiment, head),
-            "event": _event_receipt(store, db, row),
-            "reused": False,
-        }
 
 
-def _check_current_pin(store, db, owner, pin):
+def _append_decision(
+    store,
+    db,
+    owner,
+    experiment_id,
+    experiment,
+    member,
+    data,
+    reason,
+    token,
+    raw,
+    digest,
+    pin,
+    use,
+    *,
+    comparison_id="",
+    member_id="",
+    comparison_name="",
+    direct_target=None,
+):
+    head = _head(db, owner, experiment_id, member)
+    if data["revision"] != (head.revision if head else 0):
+        raise DecisionConflict(_summary(store, db, experiment, head) if head else None)
+    _bound(db, ResearchDecisionEvent)
+    service.ensure_storage_capacity(
+        store,
+        len(raw.encode())
+        + len(service.encoded(pin))
+        + 16384
+        + (
+            len(service.encoded(member)) + len(service.encoded(direct_target))
+            if direct_target is not None
+            else 0
+        ),
+    )
+    now, event_id = time.time(), uuid.uuid4().hex
+    if not head:
+        _bound(db, ResearchDecision)
+        _bound(
+            db,
+            ResearchDecision,
+            where=(ResearchDecision.experiment_id == experiment_id,),
+            limit=MAX_PER_EXPERIMENT,
+        )
+        head = ResearchDecision(
+            id=uuid.uuid4().hex,
+            owner=owner,
+            experiment_id=experiment_id,
+            **{key: member[key] for key in IDENTITY},
+            revision=0,
+            current_event_id=event_id,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(head)
+    if head.revision >= MAX_EVENTS:
+        raise ValueError("This candidate's decision history reached its limit")
+    previous_id = head.current_event_id if head.revision else None
+    head.revision += 1
+    head.current_event_id, head.updated_at = event_id, now
+    row = ResearchDecisionEvent(
+        id=event_id,
+        owner=owner,
+        experiment_id=experiment_id,
+        decision_id=head.id,
+        revision=head.revision,
+        supersedes_event_id=previous_id,
+        state=data["state"],
+        reason=reason,
+        comparison_id=comparison_id,
+        member_id=member_id,
+        candidate_name=member["name"],
+        comparison_name=comparison_name,
+        evaluation_pin=service.encoded(pin).decode() if pin else None,
+        evidence_use=service.encoded(use).decode(),
+        created_at=now,
+    )
+    db.add(row)
+    if direct_target is not None:
+        from services.research_decision_targets import validate_selection
+
+        db.add(
+            ResearchDecisionTarget(
+                event_id=event_id,
+                selection=validate_selection(member),
+                target=service.encoded(direct_target).decode(),
+            )
+        )
+    _remember(db, owner, experiment_id, token, raw, digest, "decision", event_id)
+    db.flush()
+    return {
+        "decision": _summary(store, db, experiment, head),
+        "event": _event_receipt(store, db, row),
+        "reused": False,
+    }
+
+
+def _check_current_pin(store, db, owner, pin, *, label="Later"):
     job = db.get(ResearchJob, pin["job_id"])
     if (
         not _pin_available(store, db, owner, pin)
         or job.status != "completed"
         or job.result_artifact != pin["result_artifact"]
     ):
-        raise DecisionEvidenceChanged("Later report changed before it was saved")
+        raise DecisionEvidenceChanged(f"{label} report changed before it was saved")
     if pin["analysis_job_id"]:
         extra = db.get(ResearchJob, pin["analysis_job_id"])
         if extra.status != "completed" or extra.result_artifact != pin["analysis_artifact"]:
-            raise DecisionEvidenceChanged("Later analysis changed before it was saved")
+            raise DecisionEvidenceChanged(f"{label} analysis changed before it was saved")
     latest = db.execute(
         select(ResearchJob, ResearchExperiment.specification)
         .join(ResearchExperiment, ResearchExperiment.job_id == ResearchJob.id)
@@ -832,7 +1229,7 @@ def _check_current_pin(store, db, owner, pin):
             and latest[0].id != pin["analysis_job_id"]
         ):
             raise DecisionEvidenceChanged(
-                "New later analysis completed before this decision was saved"
+                f"New {label.lower()} analysis completed before this decision was saved"
             )
 
 
@@ -885,7 +1282,7 @@ def decision_history(store, owner, experiment_id, identifier, *, limit=20, offse
 def get_event(store, owner, experiment_id, identifier, event_id):
     with store.sessions() as db:
         experiment, _, row = _event(db, owner, experiment_id, identifier, event_id)
-        _, _, member = _member(db, owner, experiment_id, row.comparison_id, row.member_id)
+        member = _event_member(db, row)
         available = comparisons._member_receipt(store, db, owner, member)["available"]
         pin = json.loads(row.evaluation_pin) if row.evaluation_pin else None
         available = available and (not pin or _pin_available(store, db, owner, pin))
@@ -904,7 +1301,12 @@ def event_report(store, owner, experiment_id, identifier, event_id, *, evidence=
         _, _, row = _event(db, owner, experiment_id, identifier, event_id)
         pin = json.loads(row.evaluation_pin) if row.evaluation_pin else None
         comparison_id, member_id = row.comparison_id, row.member_id
+        direct = _event_member(db, row) if not comparison_id else None
     if evidence == "selection":
+        if direct is not None:
+            from services.research_decision_targets import read_selection_report
+
+            return read_selection_report(store, owner, direct)
         result = comparisons.get_member_report(
             store, owner, experiment_id, comparison_id, member_id
         )
@@ -917,7 +1319,22 @@ def event_report(store, owner, experiment_id, identifier, event_id, *, evidence=
 def _open_target(store, owner, experiment_id, target):
     if not isinstance(target, dict):
         raise ValueError("Choose exact report evidence to acknowledge")
-    if target.get("kind") == "comparison_member":
+    if target.get("kind") == "direct_report":
+        from services.research_decision_targets import read_selection_report, selection_member
+
+        library._object(
+            target, {"kind", "job_id", "config_id", "evaluation_id"}, "opened direct report"
+        )
+        member = selection_member(
+            store, owner, experiment_id, target.get("job_id"), target.get("config_id")
+        )
+        if target.get("evaluation_id"):
+            pin = _resolve_later(store, owner, experiment_id, member, target["evaluation_id"])
+            result = _read_pin(store, owner, pin)
+        else:
+            pin = _selection_pin(member)
+            result = read_selection_report(store, owner, member)
+    elif target.get("kind") == "comparison_member":
         library._object(
             target, {"kind", "comparison_id", "member_id", "evaluation_id"}, "opened report"
         )
@@ -943,7 +1360,7 @@ def _open_target(store, owner, experiment_id, target):
             _, _, row = _event(
                 db, owner, experiment_id, target.get("decision_id"), target.get("event_id")
             )
-            _, _, member = _member(db, owner, experiment_id, row.comparison_id, row.member_id)
+            member = _event_member(db, row)
             pin = (
                 json.loads(row.evaluation_pin)
                 if target["evidence"] == "evaluation" and row.evaluation_pin
@@ -1110,7 +1527,7 @@ def validate_pin(pin):
 
 
 def validate_use(value):
-    if not isinstance(value, dict) or set(value) != {
+    if not isinstance(value, dict) or set(value) - {"later_opened_at"} != {
         "reservation",
         "reservation_status",
         "calculation",
@@ -1141,11 +1558,13 @@ def validate_use(value):
         raise ValueError("Invalid reserved evidence dates")
     if (reservation is not None) != (value["reservation_status"] == "reserved_in_setup"):
         raise ValueError("Reserved period state does not match its dates")
-    stamp = value["opened_at"]
-    if stamp is not None and (
-        isinstance(stamp, bool)
-        or not isinstance(stamp, (int, float))
-        or not math.isfinite(stamp)
-        or stamp <= 0
-    ):
-        raise ValueError("Invalid report opening time")
+    for stamp in (value["opened_at"], value.get("later_opened_at")):
+        if stamp is not None and (
+            isinstance(stamp, bool)
+            or not isinstance(stamp, (int, float))
+            or not math.isfinite(stamp)
+            or stamp <= 0
+        ):
+            raise ValueError("Invalid report opening time")
+    if value.get("later_opened_at") is not None and reservation is None:
+        raise ValueError("Later report opening needs its recorded reservation")

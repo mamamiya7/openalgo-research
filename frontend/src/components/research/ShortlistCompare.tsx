@@ -5,6 +5,7 @@ import { comparisonError, comparisonKey, researchComparisons } from '@/api/resea
 import { researchShortlist, shortlistKey } from '@/api/researchShortlist'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { MatchBaseline } from './MatchedBaseline'
 
 export function comparisonSelection(params: URLSearchParams): string[] {
   return [
@@ -55,6 +56,10 @@ export function ShortlistCompare({
     (item) =>
       item.data?.available && item.data.candidate.report.status === 'ready' && !item.data.archived
   )
+  const study = details.find((item) => item.data?.candidate.origin_kind === 'study')?.data
+    ?.candidate
+  const baseline = details.find((item) => item.data?.candidate.origin_kind === 'backtest')?.data
+    ?.candidate
   function changeReference(value: string) {
     const next = new URLSearchParams(params)
     next.set('compare_reference', value)
@@ -145,6 +150,15 @@ export function ShortlistCompare({
         <p className="text-xs text-muted-foreground">
           Open the candidate and prepare its report before comparing.
         </p>
+      )}
+      {ready && ids.length === 2 && study && baseline && !readOnly && (
+        <MatchBaseline
+          owner={owner}
+          experimentId={experimentId}
+          study={study}
+          baseline={baseline}
+          readOnly={readOnly}
+        />
       )}
       {error && (
         <p role="alert" className="text-sm text-destructive">

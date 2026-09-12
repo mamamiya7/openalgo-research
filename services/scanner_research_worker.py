@@ -534,6 +534,13 @@ def run_one(store, token, stop_requested=None):
             ),
         }
         digest = save_artifact(store, bundle)
+        result_display = None
+        if kind in ("portfolio_backtest", "portfolio_optimize"):
+            from research.result_descriptor import recorded_result
+
+            result_display = recorded_result(
+                result, job_id=job.id, result_artifact=digest, inputs_artifact=inputs_artifact
+            )
         with store.sessions.begin() as db:
             # The write reservation orders cancellation and publication atomically.
             db.execute(update(ResearchWorker).where(ResearchWorker.id == 1).values(id=1))
@@ -562,13 +569,17 @@ def run_one(store, token, stop_requested=None):
             ).rowcount
             if not changed:
                 raise Cancelled("Cancellation requested")
+            if activity_state or result_display:
+                receipt = db.get(ResearchExperiment, job.id)
+                counts = json.loads(receipt.counts)
+                if result_display:
+                    counts["result_display"] = result_display
             if activity_state:
                 from services.research_activity import merge_activity
 
                 activity_state = merge_activity(activity_state, {"stage": "complete"}, time.time())
-                receipt = db.get(ResearchExperiment, job.id)
-                counts = json.loads(receipt.counts)
                 counts["activity"] = activity_state
+            if activity_state or result_display:
                 receipt.counts = encoded(counts).decode()
             if kind in ("prepare", "acquire") and db.get(ResearchSource, job.source_id) is None:
                 db.add(

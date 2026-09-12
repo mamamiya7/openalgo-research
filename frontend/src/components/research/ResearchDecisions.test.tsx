@@ -169,6 +169,56 @@ afterEach(() => {
   for (const client of clients.splice(0)) client.clear()
 })
 describe('candidate research decision', () => {
+  it('saves directly from a later report with its admitted supporting evidence', async () => {
+    const target = { job_id: 'study', config_id: 'alternative' }
+    vi.mocked(researchDecisions.context).mockResolvedValue(context({ target }))
+    mount(
+      <CandidateDecision
+        experimentId="e"
+        target={target}
+        name="Trial 3"
+        readOnly={false}
+        preferredEvaluationId={later.id}
+        onHistory={vi.fn()}
+      />
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Decision for Trial 3' }))
+    await waitFor(() => expect(screen.getByLabelText('Supporting report')).toHaveValue(later.id))
+    expect(screen.getByRole('option', { name: 'Selection report only' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Keep', exact: true }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save decision' }))
+    await waitFor(() =>
+      expect(researchDecisions.save).toHaveBeenCalledWith(
+        'e',
+        target,
+        expect.objectContaining({ evaluation_id: later.id, state: 'keep', revision: 0 }),
+        expect.any(AbortSignal)
+      )
+    )
+    expect(researchDecisions.opened).not.toHaveBeenCalled()
+  })
+  it('preserves an existing decision choice when entered from another report', async () => {
+    const target = { job_id: 'study', config_id: 'alternative' }
+    vi.mocked(researchDecisions.context).mockResolvedValue(
+      context({
+        target,
+        current: { id: 'd', revision: 1, current: event({ evaluation: null }), archived: false },
+      })
+    )
+    mount(
+      <CandidateDecision
+        experimentId="e"
+        target={target}
+        name="Trial 3"
+        readOnly={false}
+        preferredEvaluationId={later.id}
+        onHistory={vi.fn()}
+      />
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Decision for Trial 3' }))
+    await waitFor(() => expect(screen.getByLabelText('Supporting report')).toHaveValue(''))
+    expect(screen.getByLabelText(/Reason/)).toHaveValue('Promising with costs')
+  })
   it('cancels a pending context read when the dialog closes', async () => {
     vi.mocked(researchDecisions.context).mockImplementation(() => new Promise(() => {}))
     mount(candidate())

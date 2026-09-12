@@ -391,8 +391,17 @@ def list_candidates(
 
 
 def save_candidate(store, owner, experiment_id, data):
-    library._object(data, {"job_id", "config_id", "proposal_number"}, "candidate bookmark")
+    library._object(
+        data,
+        {"job_id", "config_id", "proposal_number", "expected_result_artifact"},
+        "candidate bookmark",
+    )
     job_id = _hex(data.get("job_id"), 32, "result")
+    expected_result = (
+        _hex(data["expected_result_artifact"], 64, "displayed result evidence")
+        if "expected_result_artifact" in data
+        else None
+    )
     config_id = data.get("config_id")
     if config_id is not None:
         _hex(config_id, 64, "configuration")
@@ -403,6 +412,8 @@ def save_candidate(store, owner, experiment_id, data):
         requested = db.get(ResearchJob, job_id)
         if requested.status != "completed":
             raise ValueError("Choose a completed backtest or optimization study")
+        if expected_result is not None and requested.result_artifact != expected_result:
+            raise ValueError("The displayed result changed; reopen it before saving a candidate")
     _, result, selected, origin = _evidence(store, job, config_id, data.get("proposal_number"))
     if requested.id != job.id:
         _, child_result, _, child_origin = _evidence(store, requested, config_id)
@@ -465,6 +476,21 @@ def save_candidate(store, owner, experiment_id, data):
                 if origin["origin_kind"] == "study"
                 else " · Backtest"
             )
+            name = experiment.name[: 120 - len(suffix)] + suffix
+            matched = result.get("matched_baseline_origin", {})
+            if (
+                origin["origin_kind"] == "backtest"
+                and matched.get("version") == "research-matched-baseline-v1"
+                and matched.get("config_id") == origin["config_id"]
+                and matched.get("period") == origin["period"]
+                and matched.get("verification") == {"settings": "matched", "basis": "matched"}
+            ):
+                frozen_name = result.get("portfolio", {}).get("name")
+                name = (
+                    frozen_name.strip()
+                    if isinstance(frozen_name, str) and frozen_name.strip()
+                    else experiment.name[:101] + " · Matched baseline"
+                )[:120]
             row = ResearchShortlistCandidate(
                 id=uuid.uuid4().hex,
                 owner=owner,
@@ -473,7 +499,7 @@ def save_candidate(store, owner, experiment_id, data):
                 source_result_artifact=job.result_artifact,
                 **origin,
                 snapshot=snapshot,
-                name=experiment.name[: 120 - len(suffix)] + suffix,
+                name=name,
                 note="",
                 revision=1,
                 created_at=now,

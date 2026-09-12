@@ -441,6 +441,8 @@ def _filter(query, owner, search, archived):
 
 
 def list_experiments(store, owner, *, search="", archived=False, limit=20, offset=0):
+    from services.research_chosen_setups import current_summaries
+
     limit, offset = _page(limit, offset)
     with store.sessions() as db:
         rows = db.scalars(
@@ -453,18 +455,24 @@ def list_experiments(store, owner, *, search="", archived=False, limit=20, offse
             .offset(offset)
             .limit(limit + 1)
         ).all()
+        choices = current_summaries(db, owner, rows[:limit])
         return {
-            "items": [_summary(db, row) for row in rows[:limit]],
+            "items": [
+                {**_summary(db, row), "chosen_setup": choices.get(row.id)} for row in rows[:limit]
+            ],
             "next_offset": offset + limit if len(rows) > limit else None,
         }
 
 
 def get_experiment(store, owner, identifier, *, jobs_offset=0, versions_offset=0):
+    from services.research_chosen_setups import current_summaries
+
     _page(PAGE_SIZE, jobs_offset)
     _page(PAGE_SIZE, versions_offset)
     with store.sessions() as db:
         row = _owned(db, owner, identifier)
         result = _summary(db, row)
+        result["chosen_setup"] = current_summaries(db, owner, [row]).get(identifier)
         draft = json.loads(row.draft)
         linked = db.execute(
             select(ResearchLibraryJob, ResearchJob)
@@ -484,7 +492,7 @@ def get_experiment(store, owner, identifier, *, jobs_offset=0, versions_offset=0
     result["draft"] = normalize_draft(store, owner, draft)
     result["jobs"] = [
         {
-            **evidence_service.job_receipt(store, job),
+            **evidence_service.job_receipt(store, job, experiment_id=identifier),
             "version_id": link.version_id,
             "role": link.role,
             "experiment_id": identifier,
@@ -501,8 +509,11 @@ def get_experiment(store, owner, identifier, *, jobs_offset=0, versions_offset=0
 
 def create_experiment(store, owner, data):
     _object(data, {"name", "notes", "tags", "draft"}, "new experiment")
-    draft = normalize_draft(store, owner, data.get("draft", fresh_draft()))
     metadata = _metadata(data, create=True)
+    raw_draft = data.get("draft", fresh_draft())
+    if "draft" not in data and "name" in data:
+        raw_draft["portfolio"]["name"] = metadata["name"]
+    draft = normalize_draft(store, owner, raw_draft)
     with store.sessions.begin() as db:
         evidence_service.write_guard(db)
         evidence_service.ensure_storage_capacity(store, len(_bounded_json(draft)) + 16384)
@@ -673,7 +684,9 @@ def _run_response(store, owner, identifier, version_id, job_id):
     return {
         "experiment": get_experiment(store, owner, identifier),
         "version": version,
-        "job": evidence_service.job_receipt(store, evidence_service.get_job(store, owner, job_id)),
+        "job": evidence_service.job_receipt(
+            store, evidence_service.get_job(store, owner, job_id), experiment_id=identifier
+        ),
     }
 
 
@@ -695,7 +708,21 @@ def run_experiment(store, owner, identifier, data):
 
 
 def _enqueue(
-    store, owner, identifier, data, token, fingerprint, draft, evidence, *, role="run", parents=None
+    store,
+    owner,
+    identifier,
+    data,
+    token,
+    fingerprint,
+    draft,
+    evidence,
+    *,
+    role="run",
+    parents=None,
+    with_reuse=False,
+    source_fences=(),
+    admission_guard=None,
+    publication_hook=None,
 ):
     from research.connectors.registry import policy_for_request
     from research.engine import validate_config
@@ -734,6 +761,24 @@ def _enqueue(
         else:
             _revision(row, data.get("revision"))
             _editable(row)
+            for source_parent in ([parents] if parents else []) + list(source_fences):
+                parent = db.get(ResearchJob, source_parent.get("parent_job_id"))
+                parent_link = db.get(
+                    ResearchLibraryJob, (identifier, source_parent.get("parent_job_id"))
+                )
+                if (
+                    not parent
+                    or parent.owner != owner
+                    or parent.status != "completed"
+                    or parent.result_artifact != source_parent.get("parent_result_artifact")
+                    or not parent_link
+                    or parent_link.version_id != source_parent.get("parent_version_id")
+                ):
+                    raise ValueError(
+                        "The original saved result changed; reopen it before replaying"
+                    )
+            if admission_guard is not None:
+                admission_guard(db, row)
             _check_sources(db, owner, draft)
             if (
                 db.scalar(
@@ -808,7 +853,10 @@ def _enqueue(
                 )
             )
             _touch(row)
-    return _run_response(store, owner, identifier, version_id, job_id)
+            if publication_hook is not None:
+                publication_hook(db, row, version, job_id)
+    response = _run_response(store, owner, identifier, version_id, job_id)
+    return {**response, "reused": bool(prior)} if with_reuse else response
 
 
 def replay_experiment(store, owner, identifier, data):
@@ -1015,7 +1063,7 @@ def list_studies(store, owner, *, search="", archived=False, limit=20, offset=0)
     return {
         "items": [
             {
-                **evidence_service.job_receipt(store, job),
+                **evidence_service.job_receipt(store, job, experiment_id=row.id),
                 "experiment_id": row.id,
                 "experiment_name": row.name,
                 "version_id": link.version_id,

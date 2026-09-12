@@ -55,6 +55,7 @@ export interface SaveCandidate {
   job_id: string
   config_id?: string
   proposal_number?: number
+  expected_result_artifact?: string
 }
 const path = (experimentId: string, id?: string) =>
   `/scanner-research/api/library/experiments/${encodeURIComponent(experimentId)}/shortlist${id ? `/${encodeURIComponent(id)}` : ''}`

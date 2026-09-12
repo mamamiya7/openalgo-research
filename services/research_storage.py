@@ -121,6 +121,9 @@ def _references(engine):
         shortlist_roots = _shortlist_references(db, tables)
         comparison_roots = _comparison_references(db, tables)
         decision_roots = _decision_references(db, tables)
+        from services.research_chosen_setups import references as chosen_references
+
+        chosen_roots = chosen_references(db, tables)
         _study_activity_references(db, tables)
     source_ids, job_ids = {row[0] for row in sources}, {row[0] for row in jobs}
     if any(row[1] not in source_ids for row in jobs):
@@ -140,6 +143,7 @@ def _references(engine):
         | shortlist_roots
         | comparison_roots
         | decision_roots
+        | chosen_roots
     )
 
 
@@ -467,6 +471,7 @@ def _decision_references(connection, tables):
         ResearchDecision,
         ResearchDecisionEvent,
         ResearchDecisionRequest,
+        ResearchDecisionTarget,
         ResearchEvidenceOpen,
         ResearchLibraryExperiment,
     )
@@ -480,9 +485,29 @@ def _decision_references(connection, tables):
         "research_evidence_opens",
     }
     if not required.intersection(tables):
+        if (
+            "research_decision_targets" in tables
+            and connection.exec_driver_sql(
+                "SELECT 1 FROM research_decision_targets LIMIT 1"
+            ).first()
+        ):
+            raise ValueError("Direct decision selection is orphaned")
         return set()
     if not required.issubset(tables):
         raise ValueError("Decision metadata tables are incomplete")
+    has_direct = "research_decision_targets" in tables
+    if has_direct:
+        if (
+            connection.exec_driver_sql("SELECT count(*) FROM research_decision_targets").scalar()
+            > decisions.MAX_ROWS
+        ):
+            raise ValueError("Direct decision selections exceed their limit")
+        if connection.exec_driver_sql(
+            "SELECT 1 FROM research_decision_targets t LEFT JOIN research_decision_events e ON e.id=t.event_id "
+            "WHERE e.id IS NULL OR e.comparison_id != '' OR length(CAST(t.selection AS BLOB)) > ? OR length(t.target) > 512 LIMIT 1",
+            (decisions.MAX_SNAPSHOT_BYTES,),
+        ).first():
+            raise ValueError("Direct decision selection is orphaned or exceeds its limit")
     for table in sorted(required):
         if (
             connection.exec_driver_sql(f"SELECT count(*) FROM {table}").scalar()
@@ -617,14 +642,40 @@ def _decision_references(connection, tables):
                 and item.supersedes_event_id is not None
             ):
                 raise ValueError("Decision supersession chain is invalid")
-            _, _, member = decisions._member(
-                db, item.owner, item.experiment_id, item.comparison_id, item.member_id
-            )
+            if not item.comparison_id and not has_direct:
+                raise ValueError("Direct decision selection table is missing")
+            member = decisions._event_member(db, item)
+            if not item.comparison_id:
+                from services.research_decision_targets import validate_target_link
+
+                direct = db.get(ResearchDecisionTarget, item.id)
+                retained_target = json.loads(direct.target)
+                validate_target_link(
+                    db,
+                    item.owner,
+                    item.experiment_id,
+                    retained_target,
+                    member["source_job_id"],
+                    member["config_id"],
+                    member["source_result_artifact"],
+                )
+                pin_roots(db, item.owner, decisions._selection_pin(member), member)
+                roots.add(member["source_result_artifact"])
+                if "expected_report" in retained_target:
+                    displayed = retained_target["expected_report"]
+                    roots.update(identity for identity in displayed.values() if identity)
+                    if retained_target["job_id"] == member["report_job_id"] and displayed != {
+                        "result_artifact": member["report_result_artifact"],
+                        "analysis_artifact": member["analysis_artifact"],
+                    }:
+                        raise ValueError("Displayed selection differs from its retained decision")
             if any(getattr(head, key) != member[key] for key in decisions.IDENTITY):
                 raise ValueError("Decision was retargeted to a different candidate")
             library._text(item.reason, 2000, "Decision reason", empty=True)
             library._text(item.candidate_name, 120, "Decision candidate")
-            library._text(item.comparison_name, 120, "Decision comparison")
+            library._text(
+                item.comparison_name, 120, "Decision comparison", empty=not item.comparison_id
+            )
             use = json.loads(item.evidence_use)
             decisions.validate_use(use)
             if item.evaluation_pin:
@@ -697,6 +748,16 @@ def _decision_references(connection, tables):
                     "reason": item.reason if item else None,
                     "evaluation_id": decisions._pin_id(pin) if pin else None,
                 }
+                if item is not None and not item.comparison_id:
+                    direct = db.get(ResearchDecisionTarget, item.id)
+                    expected.pop("comparison_id")
+                    expected.pop("member_id")
+                    retained_target = json.loads(direct.target)
+                    expected["target"] = {
+                        key: retained_target[key] for key in ("job_id", "config_id")
+                    }
+                    if "expected_report" in retained_target:
+                        expected["expected_report"] = retained_target["expected_report"]
                 if (
                     not item
                     or item.owner != request.owner
@@ -750,9 +811,7 @@ def _decision_open_member(db, decisions, owner, experiment_id, target, pin):
         _, _, item = decisions._event(
             db, owner, experiment_id, target["decision_id"], target["event_id"]
         )
-        _, _, member = decisions._member(
-            db, owner, experiment_id, item.comparison_id, item.member_id
-        )
+        member = decisions._event_member(db, item)
         expected = (
             json.loads(item.evaluation_pin)
             if target["evidence"] == "evaluation" and item.evaluation_pin
@@ -760,6 +819,50 @@ def _decision_open_member(db, decisions, owner, experiment_id, target, pin):
         )
         if pin != expected:
             raise ValueError("Opened decision report differs from its saved evidence")
+    elif target.get("kind") == "direct_report":
+        from services.research_decision_targets import validate_target_link
+
+        if set(target) - {"kind", "job_id", "config_id", "evaluation_id"}:
+            raise ValueError("Invalid direct report opening target")
+        decisions._direct_target_owned(
+            db,
+            owner,
+            experiment_id,
+            {"job_id": target.get("job_id"), "config_id": target.get("config_id")},
+        )
+        context = pin["report_context"]
+        origin = pin.get("origin")
+        source_id = (
+            origin["source_job_id"]
+            if origin
+            else context.get("candidate", {}).get("study_job_id", pin["job_id"])
+        )
+        validate_target_link(
+            db,
+            owner,
+            experiment_id,
+            {"job_id": target["job_id"], "config_id": target.get("config_id")},
+            source_id,
+            context["config_id"],
+            origin["source_result_artifact"] if origin else None,
+        )
+        if target.get("evaluation_id"):
+            if (
+                decisions._pin_id(pin) != target["evaluation_id"]
+                or context["period"] != "evaluation"
+                or not origin
+            ):
+                raise ValueError("Opened direct later evidence differs from its target")
+            member = {
+                "source_job_id": origin["source_job_id"],
+                "source_result_artifact": origin["source_result_artifact"],
+                "config_id": context["config_id"],
+                "period": "selection",
+            }
+        else:
+            if context["period"] not in ("selection", "full"):
+                raise ValueError("Direct selection opening is not a selection report")
+            member = None
     else:
         raise ValueError("Invalid saved opening target")
     return member

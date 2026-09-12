@@ -265,7 +265,7 @@ class ResearchDecision(Base):
 
 
 class ResearchDecisionEvent(Base):
-    """Append-only decisions; exact comparisons own selection financial evidence."""
+    """Append-only decisions; comparison or direct target pins retain exact evidence."""
 
     __tablename__ = "research_decision_events"
     __table_args__ = (UniqueConstraint("decision_id", "revision"),)
@@ -283,6 +283,47 @@ class ResearchDecisionEvent(Base):
     comparison_name = Column(String(120), nullable=False)
     evaluation_pin = Column(Text)
     evidence_use = Column(Text, nullable=False)
+    created_at = Column(Float, nullable=False)
+
+
+class ResearchDecisionTarget(Base):
+    """Pinned single-result selection for direct events; old comparisons stay exact."""
+
+    __tablename__ = "research_decision_targets"
+    event_id = Column(String(32), primary_key=True)
+    selection = Column(Text, nullable=False)
+    target = Column(Text, nullable=False)
+
+
+class ResearchChosenSetup(Base):
+    """Deliberate immutable choices, each backed by a native frozen setup version."""
+
+    __tablename__ = "research_chosen_setups"
+    __table_args__ = (UniqueConstraint("experiment_id", "sequence"),)
+    id = Column(String(32), primary_key=True)
+    owner = Column(String(255), nullable=False, index=True)
+    experiment_id = Column(String(64), nullable=False, index=True)
+    sequence = Column(Integer, nullable=False)
+    name = Column(String(120), nullable=False)
+    decision_id = Column(String(32), nullable=False)
+    event_id = Column(String(32), nullable=False)
+    version_id = Column(String(32), nullable=False)
+    snapshot = Column(Text, nullable=False)
+    created_at = Column(Float, nullable=False)
+
+
+class ResearchChosenRequest(Base):
+    """Bounded retry receipts for choosing, applying and replaying chosen rules."""
+
+    __tablename__ = "research_chosen_requests"
+    owner = Column(String(255), primary_key=True)
+    token = Column(String(128), primary_key=True)
+    experiment_id = Column(String(64), nullable=False, index=True)
+    kind = Column(String(16), nullable=False)
+    payload = Column(Text, nullable=False)
+    payload_hash = Column(String(64), nullable=False)
+    choice_id = Column(String(32), nullable=False)
+    response = Column(Text, nullable=False)
     created_at = Column(Float, nullable=False)
 
 

@@ -1,11 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AxiosError } from 'axios'
 import type { ComponentProps } from 'react'
 import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { type ResearchExperiment, researchLibrary } from '@/api/researchLibrary'
+import { portfolioResearch } from '@/api/portfolioResearch'
+import { type LibraryJob, type ResearchExperiment, researchLibrary } from '@/api/researchLibrary'
 import { freshPortfolioDraft } from '@/components/research/PortfolioBuilder'
 import type { ResearchShortlist } from '@/components/research/ResearchShortlist'
 import type PortfolioResearch from '@/pages/PortfolioResearch'
@@ -24,7 +25,7 @@ vi.mock('@/api/researchLibrary', () => ({
   },
 }))
 vi.mock('@/api/portfolioResearch', () => ({
-  portfolioResearch: { sources: vi.fn(), jobs: vi.fn() },
+  portfolioResearch: { sources: vi.fn(), jobs: vi.fn(), job: vi.fn(), resume: vi.fn() },
 }))
 vi.mock('@/pages/PortfolioResearch', () => ({
   default: ({ workspace }: ComponentProps<typeof PortfolioResearch>) =>
@@ -156,6 +157,83 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('research library navigation and lost-work boundaries', () => {
+  const savedJob = (
+    id: string,
+    status: string,
+    created_at: number | string,
+    resumable = false
+  ): LibraryJob => ({
+    id,
+    status,
+    created_at,
+    resumable,
+    progress: status === 'completed' ? 100 : 40,
+    kind: 'portfolio_optimize',
+    experiment_id: 'experiment-1',
+  })
+  it.each([
+    'failed',
+    'interrupted',
+    'cancelled',
+  ])('offers the newest %s checkpoint ahead of an older result without automatically resuming', async (status) => {
+    const data = blank()
+    data.jobs = [
+      savedJob('older-checkpoint', 'interrupted', 1, true),
+      savedJob('result', 'completed', 2),
+      savedJob('recover-this', status, 3, true),
+    ]
+    vi.mocked(researchLibrary.get).mockResolvedValue(data)
+    show('/scanner-research?experiment=experiment-1')
+    await userEvent.click(await screen.findByRole('button', { name: 'Resume run', exact: true }))
+    expect(screen.getByTestId('location')).toHaveTextContent('job=recover-this')
+    expect(screen.getByTestId('location')).toHaveTextContent('view=studies')
+    expect(portfolioResearch.resume).not.toHaveBeenCalled()
+    expect(researchLibrary.run).not.toHaveBeenCalled()
+    expect(researchLibrary.saveDraft).not.toHaveBeenCalled()
+  })
+  it('continues a newer completed result instead of an older checkpoint or an unrecoverable failure', async () => {
+    const data = blank()
+    data.jobs = [
+      savedJob('old-checkpoint', 'failed', '2026-01-01T00:00:00Z', true),
+      savedJob('latest-failure', 'failed', '2026-01-03T00:00:00Z'),
+      savedJob('latest-result', 'completed', '2026-01-02T00:00:00Z'),
+    ]
+    vi.mocked(researchLibrary.get).mockResolvedValue(data)
+    show('/scanner-research?experiment=experiment-1')
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Continue research', exact: true })
+    )
+    expect(screen.getByTestId('location')).toHaveTextContent('job=latest-result')
+    expect(portfolioResearch.resume).not.toHaveBeenCalled()
+  })
+  it('keeps active work ahead of recovery and does not resume anything when viewing progress', async () => {
+    const data = blank()
+    const current = savedJob('active-run', 'running', 2)
+    data.jobs = [
+      savedJob('new-checkpoint', 'failed', 3, true),
+      current,
+      savedJob('result', 'completed', 1),
+    ]
+    vi.mocked(researchLibrary.get).mockResolvedValue(data)
+    vi.mocked(portfolioResearch.job).mockResolvedValue(current)
+    show('/scanner-research?experiment=experiment-1')
+    await userEvent.click(await screen.findByRole('button', { name: 'View progress', exact: true }))
+    expect(screen.getByTestId('location')).toHaveTextContent('job=active-run')
+    expect(portfolioResearch.resume).not.toHaveBeenCalled()
+  })
+  it.each([
+    false,
+    true,
+  ])('opens a stopped run for review when no result is available (archived: %s)', async (archived) => {
+    const data = blank()
+    data.archived = archived
+    data.jobs = [savedJob('stopped-run', 'failed', 3, archived)]
+    vi.mocked(researchLibrary.get).mockResolvedValue(data)
+    show('/scanner-research?experiment=experiment-1')
+    await userEvent.click(await screen.findByRole('button', { name: 'View run', exact: true }))
+    expect(screen.getByTestId('location')).toHaveTextContent('job=stopped-run')
+    expect(portfolioResearch.resume).not.toHaveBeenCalled()
+  })
   it('opens an incoming Chartink handoff before any stale experiment selection', () => {
     show(
       '/scanner-research?chartink_import=28e5788b-92a1-4e34-877a-8fc902e912fd&experiment=previous'
@@ -176,6 +254,12 @@ describe('research library navigation and lost-work boundaries', () => {
     await user.type(screen.getByLabelText('Research question or name'), 'Breakout research')
     await user.click(screen.getByRole('button', { name: 'Create experiment' }))
     await screen.findByLabelText('Setup title')
+    expect(researchLibrary.create).toHaveBeenCalledWith({
+      name: 'Breakout research',
+      draft: expect.objectContaining({
+        portfolio: expect.objectContaining({ name: 'Breakout research' }),
+      }),
+    })
     await user.click(screen.getByRole('button', { name: 'Research library', exact: true }))
     expect(await screen.findByRole('button', { name: /Breakout research/ })).toBeVisible()
     expect(researchLibrary.list).toHaveBeenCalledTimes(2)
@@ -271,6 +355,13 @@ describe('research library navigation and lost-work boundaries', () => {
       '/scanner-research?experiment=experiment-1&view=decisions&decision=d&decision_event=old&decision_report=selection&return_decision=d'
     )
     expect(await screen.findByText('Saved decisions editable')).toBeVisible()
+    expect(
+      within(screen.getByRole('navigation', { name: 'Experiment' })).getAllByRole('button')
+    ).toHaveLength(5)
+    expect(screen.getByRole('button', { name: 'Review', exact: true })).toHaveAttribute(
+      'aria-current',
+      'page'
+    )
     expect(screen.getByRole('button', { name: 'Decisions', exact: true })).toHaveAttribute(
       'aria-current',
       'page'
@@ -298,7 +389,7 @@ describe('research library navigation and lost-work boundaries', () => {
             height: 40,
             toJSON: () => ({}),
           }
-        if (this.getAttribute('aria-current') === 'page' && this.textContent === 'Comparisons')
+        if (this.getAttribute('aria-current') === 'page' && this.textContent === 'Review')
           return {
             left: 450,
             right: 550,

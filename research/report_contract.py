@@ -32,6 +32,7 @@ def report_context(result, *, job_id, result_artifact, inputs_artifact, period=N
     period = (
         period
         or origin.get("period")
+        or result.get("matched_baseline_origin", {}).get("period")
         or (
             "selection" if result.get("validation") or result.get("reserved_evaluation") else "full"
         )

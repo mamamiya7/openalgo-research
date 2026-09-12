@@ -8,9 +8,11 @@ import {
   researchDecisions,
 } from '@/api/researchDecisions'
 import { Button } from '@/components/ui/button'
+import { researchBackParams, researchNavigationReturn } from '@/hooks/useResearchNavigation'
 import { useAuthStore } from '@/stores/authStore'
 import { CandidateDecision } from './CandidateDecision'
 import { decisionDate, decisionLabels, EvidenceUse, FrozenDecisionReport } from './DecisionEvidence'
+import { ChooseResearchSetup } from './ResearchChosenSetup'
 
 const pageOffset = (value: string | null) => {
   const parsed = Number(value ?? 0)
@@ -35,6 +37,7 @@ function Decisions({
   const eventId = params.get('decision_event')
   const evidence = params.get('decision_report')
   const reportEvidence = evidence === 'selection' || evidence === 'evaluation' ? evidence : null
+  const returnResearch = researchBackParams(params.get('return_research'), experimentId)
   useEffect(() => {
     if (!reportEvidence) setIntent(null)
   }, [reportEvidence])
@@ -95,6 +98,11 @@ function Decisions({
     navigate({ decision_report: which })
   }
   const saved = event.data?.event
+  const savedTarget =
+    saved?.target ??
+    (saved?.comparison_id && saved.member_id
+      ? { comparison_id: saved.comparison_id, member_id: saved.member_id }
+      : null)
   const matchingIntent =
     intent?.target.kind === 'decision_event' &&
     intent.target.decision_id === id &&
@@ -151,17 +159,21 @@ function Decisions({
             variant="ghost"
             size="sm"
             onClick={() =>
-              navigate({
-                decision: null,
-                decision_event: null,
-                decision_report: null,
-                decision_history_offset: null,
-              })
+              returnResearch
+                ? setParams(returnResearch, {
+                    state: researchNavigationReturn(owner, experimentId, returnResearch),
+                  })
+                : navigate({
+                    decision: null,
+                    decision_event: null,
+                    decision_report: null,
+                    decision_history_offset: null,
+                  })
             }
           >
-            Back to decisions
+            {returnResearch ? 'Back to research' : 'Back to decisions'}
           </Button>
-          {saved && (
+          {saved?.comparison_id && (
             <Button
               variant="ghost"
               size="sm"
@@ -193,16 +205,20 @@ function Decisions({
             <header className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0 space-y-1">
                 <h2 className="break-words text-xl font-semibold">{saved.candidate_name}</h2>
-                <p className="text-xs text-muted-foreground">{saved.comparison_name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {saved.comparison_name ?? 'Saved report'}
+                </p>
               </div>
-              <CandidateDecision
-                experimentId={experimentId}
-                target={{ comparison_id: saved.comparison_id, member_id: saved.member_id }}
-                name={saved.candidate_name}
-                readOnly={readOnly || Boolean(event.data?.archived)}
-                onHistory={select}
-                onSaved={select}
-              />
+              {savedTarget && (
+                <CandidateDecision
+                  experimentId={experimentId}
+                  target={savedTarget}
+                  name={saved.candidate_name}
+                  readOnly={readOnly || Boolean(event.data?.archived)}
+                  onHistory={select}
+                  onSaved={select}
+                />
+              )}
             </header>
             <div className="space-y-2">
               <p className="font-semibold">
@@ -222,6 +238,11 @@ function Decisions({
               </p>
             )}
             <div className="flex flex-wrap gap-2">
+              <ChooseResearchSetup
+                experimentId={experimentId}
+                event={saved}
+                readOnly={readOnly || Boolean(event.data?.archived) || !event.data?.available}
+              />
               <Button size="sm" variant="outline" onClick={() => openReport('selection')}>
                 Open report
               </Button>
@@ -313,7 +334,7 @@ function Decisions({
         <p className="py-12 text-center text-sm text-muted-foreground">
           {state
             ? 'No decisions match.'
-            : 'Save a decision from a comparison to keep your research here.'}
+            : 'Keep, reject or revisit a result from its report to save your research here.'}
         </p>
       )}
       {list.data && list.data.items.length > 0 && (

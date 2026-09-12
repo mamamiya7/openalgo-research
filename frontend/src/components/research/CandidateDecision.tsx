@@ -3,10 +3,14 @@ import { useEffect, useRef, useState } from 'react'
 import {
   type DecisionContext,
   type DecisionState,
+  type DecisionSummary,
   type DecisionTarget,
   decisionConflict,
   decisionError,
+  decisionEvidenceChanged,
   decisionKey,
+  decisionOpeningTarget,
+  decisionTargetKey,
   type EvidenceOpeningIntent,
   researchDecisions,
 } from '@/api/researchDecisions'
@@ -30,6 +34,8 @@ interface Props {
   readOnly: boolean
   onHistory: (id: string, eventId: string) => void
   onSaved?: (id: string, eventId: string) => void
+  currentDecision?: DecisionSummary | null
+  preferredEvaluationId?: string
 }
 interface Draft {
   revision: number
@@ -37,17 +43,19 @@ interface Draft {
   reason: string
   evaluation: string
 }
-const initial = (context: DecisionContext): Draft => ({
+const initial = (context: DecisionContext, preferredEvaluationId?: string): Draft => ({
   revision: context.current?.revision ?? 0,
   state: context.current?.current.state ?? '',
   reason: context.current?.current.reason ?? '',
-  evaluation: context.current?.current.evaluation?.id ?? '',
+  evaluation: context.current
+    ? (context.current.current.evaluation?.id ?? '')
+    : (context.evaluation.items.find((item) => item.id === preferredEvaluationId)?.id ?? ''),
 })
 export function CandidateDecision(props: Props) {
   const owner = useAuthStore((state) => state.user?.username ?? 'account')
   return (
     <DecisionAction
-      key={`${owner}:${props.experimentId}:${props.target.comparison_id}:${props.target.member_id}`}
+      key={JSON.stringify([owner, props.experimentId, decisionTargetKey(props.target)])}
       {...props}
       owner={owner}
     />
@@ -61,6 +69,8 @@ function DecisionAction({
   readOnly,
   onHistory,
   onSaved,
+  currentDecision,
+  preferredEvaluationId,
 }: Props & { owner: string }) {
   const client = useQueryClient()
   const [open, setOpen] = useState(false)
@@ -69,6 +79,7 @@ function DecisionAction({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [conflict, setConflict] = useState(false)
+  const [evidenceChanged, setEvidenceChanged] = useState(false)
   const [preview, setPreview] = useState<{ id: string; intent: EvidenceOpeningIntent } | null>(null)
   const controller = useRef<AbortController | null>(null)
   const request = useRef<{ signature: string; id: string } | null>(null)
@@ -78,8 +89,7 @@ function DecisionAction({
   const key = [
     ...decisionKey(owner, experimentId),
     'context',
-    target.comparison_id,
-    target.member_id,
+    ...decisionTargetKey(target),
     offset,
     readOnly,
   ]
@@ -94,8 +104,7 @@ function DecisionAction({
     queryKey: [
       ...decisionKey(owner, experimentId),
       'preview',
-      target.comparison_id,
-      target.member_id,
+      ...decisionTargetKey(target),
       preview?.id,
     ],
     queryFn: ({ signal }) => researchDecisions.preview(experimentId, target, preview!.id, signal),
@@ -105,8 +114,8 @@ function DecisionAction({
     retry: false,
   })
   useEffect(() => {
-    if (open && !draft && context.data) setDraft(initial(context.data))
-  }, [open, draft, context.data])
+    if (open && !draft && context.data) setDraft(initial(context.data, preferredEvaluationId))
+  }, [open, draft, context.data, preferredEvaluationId])
   useEffect(
     () => () => {
       controller.current?.abort()
@@ -115,7 +124,7 @@ function DecisionAction({
     []
   )
   const archived = readOnly || Boolean(context.data?.archived)
-  const current = context.data?.current
+  const current = context.data?.current ?? currentDecision
   const receipts = context.data?.evaluation.items ?? []
   const previousEvaluation = current?.current.evaluation
   const missingSelected = Boolean(
@@ -130,26 +139,17 @@ function DecisionAction({
     setPreview(null)
     if (!value) {
       void client.cancelQueries({
-        queryKey: [
-          ...decisionKey(owner, experimentId),
-          'context',
-          target.comparison_id,
-          target.member_id,
-        ],
+        queryKey: [...decisionKey(owner, experimentId), 'context', ...decisionTargetKey(target)],
       })
       void client.cancelQueries({
-        queryKey: [
-          ...decisionKey(owner, experimentId),
-          'preview',
-          target.comparison_id,
-          target.member_id,
-        ],
+        queryKey: [...decisionKey(owner, experimentId), 'preview', ...decisionTargetKey(target)],
       })
     }
     if (value) {
-      setDraft(context.data ? initial(context.data) : null)
+      setDraft(context.data ? initial(context.data, preferredEvaluationId) : null)
       setError(null)
       setConflict(false)
+      setEvidenceChanged(false)
     }
   }
   async function save() {
@@ -168,6 +168,7 @@ function DecisionAction({
     setBusy(true)
     setError(null)
     setConflict(false)
+    setEvidenceChanged(false)
     try {
       const receipt = await researchDecisions.save(
         experimentId,
@@ -187,6 +188,7 @@ function DecisionAction({
       if (!abort.signal.aborted) {
         setError(decisionError(cause))
         setConflict(decisionConflict(cause))
+        setEvidenceChanged(decisionEvidenceChanged(cause))
       }
     } finally {
       if (!abort.signal.aborted) {
@@ -199,9 +201,10 @@ function DecisionAction({
     const generation = dialogGeneration.current
     const refreshed = await context.refetch()
     if (opened.current && generation === dialogGeneration.current && refreshed.data) {
-      setDraft(initial(refreshed.data))
+      setDraft(initial(refreshed.data, preferredEvaluationId))
       setError(null)
       setConflict(false)
+      setEvidenceChanged(false)
       request.current = null
     }
   }
@@ -276,9 +279,18 @@ function DecisionAction({
               )}
               {context.isError && (
                 <p role="alert" className="text-sm">
-                  Decision could not be loaded.{' '}
-                  <Button variant="link" onClick={() => void context.refetch()}>
-                    Retry
+                  {decisionEvidenceChanged(context.error)
+                    ? decisionError(context.error)
+                    : 'Decision could not be loaded.'}{' '}
+                  <Button
+                    variant="link"
+                    onClick={() =>
+                      decisionEvidenceChanged(context.error)
+                        ? window.location.reload()
+                        : void context.refetch()
+                    }
+                  >
+                    {decisionEvidenceChanged(context.error) ? 'Reload report' : 'Retry'}
                   </Button>
                 </p>
               )}
@@ -327,7 +339,9 @@ function DecisionAction({
                         value={draft.evaluation}
                         onChange={(event) => setDraft({ ...draft, evaluation: event.target.value })}
                       >
-                        <option value="">Comparison report only</option>
+                        <option value="">
+                          {'job_id' in target ? 'Selection report only' : 'Comparison report only'}
+                        </option>
                         {missingSelected && (
                           <option value={draft.evaluation}>Previously selected later report</option>
                         )}
@@ -349,11 +363,7 @@ function DecisionAction({
                               id: draft.evaluation,
                               intent: {
                                 request_id: crypto.randomUUID(),
-                                target: {
-                                  kind: 'comparison_member',
-                                  ...target,
-                                  evaluation_id: draft.evaluation,
-                                },
+                                target: decisionOpeningTarget(target, draft.evaluation),
                               },
                             })
                           }
@@ -394,9 +404,11 @@ function DecisionAction({
                           type="button"
                           variant="outline"
                           size="sm"
-                          onClick={() => void reload()}
+                          onClick={() =>
+                            evidenceChanged ? window.location.reload() : void reload()
+                          }
                         >
-                          Reload saved decision
+                          {evidenceChanged ? 'Reload report' : 'Reload saved decision'}
                         </Button>
                       )}
                     </div>

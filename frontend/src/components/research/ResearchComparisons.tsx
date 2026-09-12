@@ -29,22 +29,10 @@ import { CandidateDecision } from './CandidateDecision'
 import { EvidenceOpened } from './DecisionEvidence'
 import { PortfolioResults } from './PortfolioResults'
 import { ReportCurrency, reportMoney } from './ReportCurrency'
+import { ResearchResultReview } from './ResearchResultReview'
+import { evaluationDifferenceLabels as differenceLabels } from './researchPresentation'
 
 const number = (value: number) => value.toLocaleString('en-IN', { maximumFractionDigits: 2 })
-const differenceLabels: Record<string, string> = {
-  source: 'Signals',
-  cohort: 'Eligible signals',
-  observations: 'Price timestamps',
-  prices: 'Historical prices',
-  calendar: 'Trading calendar',
-  instruments: 'Instruments',
-  period: 'Evaluation period',
-  currency: 'Currency',
-  capital: 'Starting capital',
-  execution: 'Execution rules',
-  costs: 'Costs',
-  unverified: 'Unverified report context',
-}
 // Layout changes belong to the view; keep saved traces and their coordinates intact.
 export function comparisonChartView(
   chart: SavedComparison['cumulative']
@@ -754,6 +742,13 @@ function FrozenMember({
             {data.member.name} · Saved comparison report
             {!memberCurrency(data.member) ? ' · Currency unrecorded' : ''}
           </p>
+          <ResearchResultReview
+            experimentId={experimentId}
+            job={data.job}
+            result={data.result}
+            readOnly={readOnly}
+            decisionTarget={{ comparison_id: id, member_id: memberId }}
+          />
           <ReportCurrency.Provider value={memberCurrency(data.member)}>
             <PortfolioResults
               key={JSON.stringify([

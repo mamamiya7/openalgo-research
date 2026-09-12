@@ -25,6 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { researchNavigationReturn } from '@/hooks/useResearchNavigation'
 import { useAuthStore } from '@/stores/authStore'
 
 const active = (status?: string) =>
@@ -392,7 +393,13 @@ export default function PortfolioResearch({
         }
       </style>
       {!workspace && params.get('return_job') && (
-        <Button variant="ghost" onClick={() => setParams({ job: params.get('return_job')! })}>
+        <Button
+          variant="ghost"
+          onClick={() => {
+            const next = new URLSearchParams({ job: params.get('return_job')! })
+            setParams(next, { state: researchNavigationReturn(owner, null, next) })
+          }}
+        >
           Back to study
         </Button>
       )}
@@ -466,11 +473,17 @@ export default function PortfolioResearch({
           result={job.result}
           experimentId={workspace?.experimentId}
           studyReport={params.get('report') === 'best'}
+          hideStudyBack={params.has('return_shortlist') || params.has('return_research')}
           onStudyReportChange={(open) => {
             const next = new URLSearchParams(params)
             if (open) next.set('report', 'best')
             else next.delete('report')
-            setParams(next)
+            setParams(
+              next,
+              !open
+                ? { state: researchNavigationReturn(owner, workspace?.experimentId, next) }
+                : undefined
+            )
           }}
           onOpenReport={(reportJobId) => {
             reportRequest.current?.abort()

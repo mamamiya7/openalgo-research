@@ -7,6 +7,8 @@ export interface StudyTrialView {
   sortDirection: 'asc' | 'desc'
   page: number
   selectedConfigId?: string | null
+  scrollTop?: number
+  scrollLeft?: number
 }
 
 export const defaultStudyTrialView: StudyTrialView = {

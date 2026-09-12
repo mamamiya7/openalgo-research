@@ -6,6 +6,21 @@ journeys against current source. **Section 10 owns the next execution order** wh
 it refines the older “Now” labels or sequence below. Existing M/R packages remain
 the implementation contracts; no new product or second roadmap is introduced.
 
+**12 September requested expansion:** [one-click strategy research](AUTOMATED_RESEARCH_PLAN.md)
+defines the desired automatic Optimize journey: observed scanner signals → bounded
+execution/condition hypotheses → chronological validation and stress → supported
+findings → chosen setup. This is proposed, not implemented by the chosen-setup
+increment. It makes D1/D2 recovery, D4 benchmark and the M4b/M5 causal evaluation
+contracts prerequisites for the automatic mode; it does not bypass them or turn
+the existing scalar search into indicator/regime discovery. Section 10 remains
+the execution owner; the linked contract refines its D/F work and acceptance.
+
+**12 September installation:** the A–C increments recorded below are now installed
+in the ordinary application, with retained records and current served assets
+verified. The [installation checkpoint](#native-installation-and-publication-checkpoint--12-september-2026)
+separates this completed runtime from the proposed automatic research mode and
+from the older versioned preview ZIP.
+
 **Planning baseline: 10 September 2026, source revision `94d1043fa6f7b1a75cec22ca0a4fd093e288464b`.** This plan connects the [intended journeys](PRODUCT_JOURNEY_MAP.md), [asset profiles](ASSET_PROFILES.md), [source review](JOURNEYS.md) and [recorded delivery status](STATUS.md). It is the implementation sequence and acceptance contract; it does not mark proposed features as shipped.
 
 **Backlog reconciliation: 11 September 2026.** Sections 2, 5 and 9 now account for
@@ -616,3 +631,273 @@ sections remain the detailed contracts. Do not independently maintain competing
 “next” lists. Record code-backed, controlled-observed, broker-observed and exact
 release acceptance separately. The audit's screenshots are not an all-broker,
 all-asset, unaided-user, accessibility or financial-model certification.
+
+### Execution worklist — foundation first
+
+The user authorized implementation after the trader audit. This is the worklist
+for A–F above, not a second roadmap. An increment is complete only after its
+changed contracts, user interactions and saved-evidence compatibility are checked.
+
+| Work item | Dependency | Delivered user outcome / acceptance gate | Current state |
+| --- | --- | --- | --- |
+| A1 Result identity and return navigation | Existing frozen report and library records | Baseline, study, candidate, later test and replay are distinguishable; open at the result identity and return to the same trial/chart/list position. Old unknown dates stay unknown. | Implemented; focused controlled journeys checked |
+| A2 Compact setup review | Existing native preflight; A1 date vocabulary | Show actual signal/reserved-signal dates, resolved candle interval and active trading rules before Run. Keep signal boundaries distinct from final holding-period prices. No broker acquisition during preview; edits invalidate stale previews. | Implemented; daily/minute and narrow-screen preview observed |
+| A3 One metric concept per choice | Existing summary/analytics definitions | Remove only proven aliases, retain native definitions and old preferences/values; report, trials and comparisons agree on meaning. | Implemented for 15 known account-summary aliases; native variants retained |
+| A4 Matched baseline recipe | A1–A2, frozen eligible cohort/account basis | Create a new financially equivalent baseline when comparison differs; preserve the original and explain the exact mismatch. | Implemented for verified matching native cash-equity inputs; original rules and evidence preserved |
+| B1 Canonical candidate validation | A1–A2 | Resolve any actual candidate back to its original reservation, review recorded/unknown exposure, prepare or reopen exact later evidence. | Implemented; exact reservation, repeated/concurrent admission and retained report reuse checked |
+| B2 Direct decisions | A1 and current decision retention contract | Keep/reject/revisit one exact result without manufacturing a comparison; old comparison decisions survive. | Implemented; direct and comparison history, displayed-evidence fences and populated restore checked |
+| B3 Connected evaluation review | B1–B2; A4 when comparison is requested | Move between selection, later evidence and decision with the same source/configuration identity and a visible current decision. | Implemented; selection → later test → decision → exact source return observed |
+| C1 Chosen reusable setup | B2–B3 | Distinguish retained candidates from the deliberate chosen setup; reuse its exact rules and linked evidence. | Implemented and checked in worktree; receipt below |
+| C2 Return, refresh and source replacement | C1 | Reopen without downloads; explicitly test new data/CSV, retain the prior result and show the change. Preserve cross-session edits. | Manual CSV reuse implemented and checked; related Chartink capture refresh inheritance remains pending |
+| C3 Contextual navigation | A1, working B/C destinations | Five primary destinations with versions in Setup and review actions in context; preserve old links and history. | Implemented for existing destinations; five primary tabs and old deep links checked |
+| D1 Data recovery | A2 and native job lifecycle | Repair the actual broker/calendar/quota/runtime issue and return to compatible saved progress. Accept cold/warm and changed-holding behavior on the ordinary installation. | Planned |
+| D2 Study continuation | Scientific identity separated from execution budget | Durable segments and sampler state precede Pause/Resume, Stop/partial results, Add trials and refined/manual child hypotheses. | Planned |
+| D3 Exact trade investigation | A1 and existing R2 evidence | Explain the selected trade's modeled candle/fill/rule/cost and return to the original drawdown or month. | Planned |
+| D4 Native benchmark | Frozen independent benchmark acquisition/return basis | Compare to an appropriate retained benchmark; explicit overlays for old reports, no replacement price source. | Planned |
+| E1 Portable presentation | B/C retained decisions and existing export | Readable standalone HTML/print report with optional study/comparison/decision appendix; separately evaluate QS-01. | Planned |
+| E2 Exact release acceptance | Release engineering throughout; A–D complete journeys | Populated upgrade/rollback/restore, claimed hosts/brokers/intervals, desktop/mobile/keyboard and unaided-user quick/deep journeys. Extension store work follows its separate contract. | Planned |
+| F1 Professional research depth | Complete cash-equity loop | Stress, walk-forward, saved-component portfolios, exposure/capacity evidence and exact engine disagreement diagnosis. | Planned |
+| F2 Rule/import/advanced-search entry | Versioned causal input and search contracts | Regenerate supported indicator rules or import reproducible research; maintain manual/conditional/multi-objective provenance. CSV membership alone does not implement this. | Planned |
+| F3 Additional asset profiles | Independent native-data probes; end-to-end admission | Admit each asset/account profile only after native data, calculation, report, validation and replay acceptance. | Planned |
+| F4 Connected review | Chosen setup and observation identity | Optional scheduled review and paper/live observations with explicit execution boundaries; no automatic orders or notifications from a saved decision. | Planned |
+
+A1–A3 can share one foundation increment: metadata projection, navigation and
+presentation have separate ownership, then integrate against the same result and
+period contract. A4/B build on that accepted foundation. Operational defects
+discovered during acceptance interrupt this order when they prevent using the
+existing supported workflow; broader features do not displace those repairs.
+
+### Foundation implementation receipt — 12 September 2026
+
+**Scope:** A1–A3 are an additive foundation in the worktree. They have not been
+installed or published in that foundation increment. A4–F were then planned; the earlier audit
+is a record of the previous UI and must not be silently rewritten as a new audit.
+
+- Result projection is compact worker metadata committed with existing fenced
+  completion. Lists read no result artifacts. An explicit old report opening
+  derives its known context without backfill or rewriting exports. Owner/version
+  links and unknown legacy dates are tested. New reports distinguish the
+  optimizer's best objective from a user's eventual chosen setup.
+- Native preflight is debounced and cancellable; changing settings hides stale
+  dates immediately. Signal partitions are labeled as signals. A verified result
+  timeline takes precedence over calendar padding, including an embedded later
+  result rather than its parent study's dates. This is presentation, not a new
+  interval-selection or acquisition system.
+- Page history is bounded and account/experiment scoped. Study controls also
+  include the job and artifact identity. Tab, sort, table position, selected
+  trial and parameter controls survive the checked report returns. Ordinary
+  forward destinations reveal their heading beneath OpenAlgo's sticky toolbar;
+  explicit Back/history uses the recorded position. Stored study controls retain
+  the latest view per study, not independent historical copies of every edit.
+- New named ideas pass the same title into the initial setup. Saved versions
+  expose their rules without applying them. Overview prioritizes active work,
+  then a newer recoverable run over an older completed result; opening **Resume
+  run** does not itself restart a calculation.
+- Only literal account-summary copies are coalesced. Original null values remain
+  null; native statistics with different definitions remain available. Remembered
+  alias column/sort choices normalize in memory without rewriting saved evidence.
+
+**Verification:** 117 frontend checks across nine suites passed. After the final
+new-idea naming correction, the affected 18-check library suite passed again;
+these counts are not additive. TypeScript, scoped Biome, production build and
+diff whitespace checks passed. Final backend identity/library verification passed
+51 tests; an earlier overlapping 89-test set covered worker, candidate reports,
+portfolio workflow and reserved-period regressions. Scoped Ruff passed.
+
+A fresh loopback native Flask/React fixture used real VectorBT/Optuna with
+controlled three-symbol prices: a 20-trial study, baseline, prepared alternative
+and later-period evaluation. Browser checks observed distinct saved roles/dates;
+contour point → winner report → Back restored Parameters at the same 808 px
+position; a nonwinner report restored Trials, return sorting and 110 px horizontal
+table position; a shortlisted winner returned to its exact candidate dialog.
+The final heading was visible at 73 px below the 57 px native toolbar. The
+column chooser exposed one original Starting capital and Return choice while
+retaining native groups. Named idea creation, saved rule expansion and daily →
+minute preview changes passed. The 390 px setup showed no horizontal page overflow.
+
+**Resource review:** metadata sessions retain existing bounded scopes; a 100-cycle
+success/error handle test passed within the backend set. Navigation listeners,
+timers and observers have cleanup; history is capped at 60 entries and study view
+storage at 20 contexts. Preview requests abort when unmounted and expire from
+query cache. No live credentials, trading services or ordinary runtime database
+were used for these acceptance calculations. Fresh broker downloads, extension
+acceptance, unaided-user assessment and full release/accessibility testing remain
+their separate gates.
+
+### Connected review implementation receipt — 12 September 2026
+
+**Scope:** A4, B1–B3 and the existing-destination part of C3 now build on A1–A3
+in the worktree. This is a completed research-review increment, not completion of
+C1/C2 or D–F and not a claim of exact public-release acceptance. The ordinary
+port-5000 installation and Git publication have not been updated in this increment.
+
+- A real baseline, study winner or prepared alternative can enter a direct
+  Keep/Reject/Revisit decision. No comparison or shortlist record is manufactured
+  for the decision. The same canonical candidate shares its decision history
+  across direct and comparison entry; saved comparison numbers remain frozen.
+- **Test later period** first reviews the original reserved dates. It resolves a
+  prepared candidate, exact replay or later report through verified native lineage.
+  Repeated and concurrent requests reuse one calculation; completed evidence opens
+  directly and stopped work opens its existing progress rather than restarting.
+  The test uses frozen native inputs and resets cash/positions. It does not acquire
+  prices, rerun optimization or manufacture a new reservation.
+- **Selection report** returns from later evidence to the exact selected report,
+  including a nonwinner. Its direct decision defaults to that exact later receipt
+  when no prior decision exists. Existing saved decision choices remain explicit
+  rather than being silently replaced; the optional alternative is labeled
+  **Selection report only**. Saved reason, history and exact report remain linked.
+- Explicit visible opening is distinguished from calculation, URL restoration and
+  prefetch. A later receipt must match the rendered result, analysis, configuration
+  and view. Direct saving also fences the displayed result/analysis, including a
+  final transaction check. A changed analysis requires reopening; an accepted retry
+  continues to return its original event. Later opening exposure is additive;
+  legacy unknown history is never rewritten into an untouched-data claim.
+- In Shortlist, select one original baseline and one study candidate, then use
+  **Match baseline**. The read-only recipe identifies the data/cohort differences.
+  Original baseline rules are recalculated on the study's exact frozen eligible
+  signals and observation timeline. Account, execution, cost and source policies
+  must already be compatible; unavailable or unprovable recipes are refused.
+  The worker verifies both settings and evaluation basis again before completion.
+  **Compare with study** retains the new baseline and creates a normal comparison
+  with it as reference. The old baseline stays intact. Matching is independent of
+  the optimizer's accepted trial identities and does not create a holdout claim.
+- Primary navigation is Overview, Setup, Backtests, Studies and Review. Saved
+  versions sit under Setup; Decisions, Shortlist and Comparisons under Review.
+  Existing URLs remain usable. Research Back links retain the originating view,
+  with bounded same-experiment return parameters and existing position restoration.
+
+**Verification:** the integrated frontend set passed **175 checks across 15 suites**.
+Native HTTP and result-identity checks, backend concurrency/lineage/source fences,
+old/direct decision compatibility, matched daily/minute calculations, populated
+backup/restore and bounded resource checks are recorded in the local acceptance
+receipt. Backend subsets overlap and their counts must not be added as a single
+suite. TypeScript, scoped lint and whitespace checks passed. The production build
+and controlled browser evidence are recorded in the local delivery receipt.
+
+Controlled native Flask/React browser acceptance used real VectorBT/Optuna with
+three-symbol fixture prices. It observed an alternative trial's saved later report,
+direct decision and exact source return; a fresh winner's later calculation;
+and original baseline → matching baseline → compatible comparison with the
+selected alternative. A 390 px decision dialog fit within the viewport without
+horizontal overflow. This does not establish fresh broker acquisition, all-broker,
+all-asset, unaided-user or full accessibility/release acceptance.
+
+**Resource review:** existing bounded worker/queue and scoped database sessions
+are reused. Direct evidence pins, lookup scans, lineage depth and request metadata
+are bounded; populated restore retains original/analysis/selection/later evidence.
+New browser requests abort on close/unmount/account change, and their query data
+expires when unused. Opening observers invalidate both decision and validation
+views; each explicit opening keeps one immutable identity and retry token.
+
+**Following increment:** C1 and manual-CSV C2 are recorded below. Related Chartink
+capture refresh, D1–D4 and E/F remain the detailed follow-on contracts above.
+
+Journey references reviewed as inspiration were the official
+[QuantConnect optimization results](https://www.quantconnect.com/docs/v2/cloud-platform/optimization/results),
+[AmiBroker walk-forward guide](https://ftp.amibroker.com/guide/h_walkforward.html)
+and [Optuna Dashboard guide](https://optuna-dashboard.readthedocs.io/en/latest/).
+Those references informed connected report drill-down and separate selection/later
+review; they are not claims that those products were interactively audited or that
+this increment implements rolling walk-forward or an embedded Optuna Dashboard.
+
+### Chosen setup and explicit reuse receipt — 12 September 2026
+
+**Scope:** C1 and the manual CSV branch of C2 build on the connected review above.
+The ordinary port-5000 installation and Git publication have not been updated.
+Related Chartink capture refresh still inherits the mutable experiment draft;
+deliberate inheritance from the chosen setup remains pending. D–F are not complete.
+
+- After a current **Keep** decision, **Choose setup** reviews the exact candidate
+  rules and gives the retained setup a name. It creates an immutable native saved
+  version without replacing the working draft. Overview shows the current choice,
+  its dates and compact rules, with access to its evidence and previous choices.
+  A later Reject/Revisit preserves the record while preventing fresh use until
+  the candidate is kept again. Multiple retained candidates do not silently choose
+  a setup for the user.
+- **Use setup** reviews the original inputs or an explicitly selected/uploaded CSV
+  for each strategy. Replacement displays old/new dates and signal counts while
+  preserving the chosen rules, allocations, costs and account. Applying saves the
+  displaced draft as a version and opens the existing Setup page; preview and use
+  do not launch work or acquire prices. Changed inputs clear obsolete date filters;
+  native preflight derives candle interval and fresh reserved periods from those
+  inputs. Alternative-trial reuse retains the original reservation intent.
+- **Refine search** uses the same reviewed rules and inputs, with empty visible
+  search axes for the user to select. Previous optimization search settings are
+  not silently inherited. **Replay exact** separately recalculates the original
+  pinned evidence through native replay and leaves the editable draft untouched.
+- Pending edits are saved before reviewing a choice or reuse. Metadata refresh
+  after choosing preserves the draft and reconciles its revision. Another session's
+  changes raise a conflict without discarding local work. Network retries retain
+  their reviewed inputs, revision and request identity; accepted retries return
+  the original outcome. A changed current choice cancels an outstanding use.
+  Failed replacement previews remain editable so the input can be corrected.
+
+**Verification:** **211 integrated frontend checks across 17 suites**, TypeScript,
+production build and scoped lint passed. The chosen/library/storage regression
+set passed **65 checks**, including 13 chosen-setup cases; the reuse helper passed
+15 and native route integration passed 2. These backend sets overlap with other
+checks and must not be added into a single total. Checks cover nonwinner settings,
+new daily/minute requirements and reservation dates, exact replay, atomic queue
+admission, concurrent retries, owner/source/revision fences and populated restore.
+
+Final-build browser acceptance used native Flask/React and real VectorBT/Optuna
+with controlled three-symbol prices: keep an alternative trial → choose a named
+setup → replace its 85-signal CSV with 20 newer signals → inspect unchanged rules
+and a fresh reservation → run a backtest → separately replay the original trial.
+The replacement dialog fits a 390 px viewport without horizontal overflow.
+The controlled price fixture intentionally supplies its full synthetic calendar;
+it is not an acceptance test of broker range acquisition or download efficiency.
+Fresh broker, all-asset, unaided-user and full release/accessibility acceptance
+remain pending.
+
+**Resource review:** metadata sessions use context managers; no new persistent
+executor, socket or broker client was introduced. Choice/request history, retained
+snapshots and paginated reads are bounded. Populated backup/restore validates and
+retains choice, version, decision and exact-report lineage. Repeated metadata,
+retry and failure checks returned SQLAlchemy connections to zero; frontend work
+aborts on close/unmount/choice replacement and query entries expire when unused.
+
+**Next dependencies:** complete chosen-setup inheritance for related Chartink
+captures; then D1 recovery around compatible saved progress and D2 durable study
+segments/sampler state before exposing expanded continuation controls. Investigation,
+benchmark, portable output and exact-release acceptance follow the worklist above.
+
+### Native installation and publication checkpoint — 12 September 2026
+
+The user authorized installing the completed app, pushing its source and refreshing
+Graphify before developing the newly proposed automatic mode. The installed scope
+is A1–A4, B1–B3, C1, explicit manual-CSV C2 and C3. Related Chartink capture inheritance
+and D–F remain pending. Automatic indicator/regime discovery is a specification,
+not a capability enabled by this installation.
+
+**Installed and checked:** 51 runtime source files and a production frontend built
+from the existing installation plus the reviewed research changes. Source admission
+found no conflicting user changes and no active calculations. The existing
+supervisor stopped gracefully; research metadata received a checked local backup
+before applying additive tables. Source and old entry assets were retained for
+rollback. The same supervisor restarted the normal application and worker.
+
+Checks confirm existing account/configuration, retained research table contents,
+broker/history code and unrelated UI customizations are unchanged. New decision
+target and chosen-setup tables are empty after smoke acceptance. The worker
+heartbeat is current; normal account setup remains complete; new routes enforce
+authentication/CSRF; served entry and research assets match the build manifest.
+The normal browser shows the standard login screen. No credentials were requested
+or injected, no live calculation/download was launched and no orders were placed.
+
+**Publication gates:** application source matches the earlier 211-frontend-check
+and controlled native browser receipt. Release inventory inspection caught six
+new services omitted while untracked; `REQUIRED_RESEARCH_FILES` now explicitly
+requires all six. The distribution/package suite passes 38 checks with one
+Windows symlink-privilege skip. All 116 compatibility checks pass; scoped Python
+lint and diff checks are clean. Candidate paths and secret checks exclude runtime
+data and private material; the sole secret-pattern match is a controlled test key.
+The automatic GitHub frontend workflow includes the seven new research suites.
+Its exact command passes 461 checks across 40 suites locally (including the earlier
+211-check set); existing non-failing React act warnings remain in layout tests.
+
+This source checkpoint is intended for the Research repository's `main` branch;
+the exact remote commit and Graphify source hashes are recorded in the local
+completion receipt after publication. The existing versioned preview.4 asset is
+not overwritten or represented as containing this newer code. This installation
+does not establish a fresh all-broker, all-asset or complete public-release check.

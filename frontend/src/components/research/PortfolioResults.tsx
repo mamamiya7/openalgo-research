@@ -28,10 +28,12 @@ import { PortfolioContinuousReport } from './PortfolioContinuousReport'
 import { BackToStudy, PortfolioStudyWorkspace } from './PortfolioStudyWorkspace'
 import { PortfolioTrials } from './PortfolioTrials'
 import { reportMoney, useReportCurrency } from './ReportCurrency'
+import { ResearchResultReview } from './ResearchResultReview'
+import { researchResultPeriod, researchResultRole } from './researchPresentation'
 import { SaveToShortlist } from './SaveToShortlist'
 import { usePortfolioAnalysis } from './usePortfolioAnalysis'
 import { useReportPreferences } from './useReportPreferences'
-import { readStudyView, writeStudyView } from './useStudyWorkspaceView'
+import { readStudyView, studyWorkspaceIdentity, writeStudyView } from './useStudyWorkspaceView'
 
 const number = (value: unknown, suffix = '') =>
   typeof value === 'number' && Number.isFinite(value)
@@ -131,14 +133,16 @@ interface ResultProps {
   onStudyReportChange?: (open: boolean) => void
   experimentId?: string
   freezeAnalysis?: boolean
+  hideStudyBack?: boolean
 }
 export function PortfolioResults(props: ResultProps) {
   const owner = useAuthStore((state) => state.user?.username ?? 'account')
-  const identity = JSON.stringify([
+  const identity = studyWorkspaceIdentity(
     owner,
     props.job.id,
     props.result.report_context?.result_artifact ?? props.job.id,
-  ])
+    props.experimentId
+  )
   const [period, setPeriod] = useState<'earlier' | 'later'>('earlier')
   const [localReport, updateShowReport] = useState(
     () => readStudyView(identity).surface === 'report'
@@ -182,7 +186,10 @@ export function PortfolioResults(props: ResultProps) {
         }}
       />
     )
-  const back = connectedStudy ? <BackToStudy onClick={() => setShowReport(false)} /> : null
+  const back =
+    connectedStudy && !props.hideStudyBack ? (
+      <BackToStudy onClick={() => setShowReport(false)} />
+    ) : null
   if (!validation)
     return (
       <div>
@@ -312,11 +319,17 @@ function PortfolioReport({
     <div className="space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          {!embedded && (
-            <h2 className="text-xl font-semibold">
-              {result.portfolio?.name ?? job.specification?.portfolio?.name ?? 'Portfolio result'}
-            </h2>
-          )}
+          <h2
+            className="text-xl font-semibold focus:outline-none"
+            data-research-navigation-heading
+            tabIndex={-1}
+          >
+            {embedded
+              ? researchResultRole({ ...job, result }, true)
+              : (result.portfolio?.name ??
+                job.specification?.portfolio?.name ??
+                'Portfolio result')}
+          </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {(result.execution?.engine ?? result.portfolio?.engine) === 'nautilus'
               ? 'NautilusTrader'
@@ -325,28 +338,34 @@ function PortfolioReport({
             {(result.source?.interval ?? result.execution?.interval) === '1m'
               ? 'Minute candles'
               : 'Daily candles'}
-            {result.report_context?.dates.from && result.report_context.dates.to
-              ? ` · ${result.report_context.dates.from} – ${result.report_context.dates.to}`
-              : result.equity_curve.length
-                ? ` · ${result.equity_curve[0].date} – ${result.equity_curve.at(-1)?.date}`
-                : ''}
-            {result.report_context?.period_label ? ` · ${result.report_context.period_label}` : ''}
-            {result.report_context?.candidate?.trial_number != null
-              ? ` · Trial ${result.report_context.candidate.trial_number + 1}`
+            {researchResultPeriod({ ...job, result })
+              ? ` · ${researchResultPeriod({ ...job, result })}`
               : ''}
+            {!embedded ? ` · ${researchResultRole({ ...job, result }, true)}` : ''}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {!laterPeriod && onOptimize && !readOnly && (
-            <Button type="button" disabled={rerunning} onClick={onOptimize}>
-              Optimize this
-            </Button>
-          )}
-          {!laterPeriod && onAdjust && !readOnly && (
-            <Button type="button" variant="outline" disabled={rerunning} onClick={() => onAdjust()}>
-              Adjust & test
-            </Button>
-          )}
+          {!laterPeriod &&
+            result.report_context?.period !== 'evaluation' &&
+            onOptimize &&
+            !readOnly && (
+              <Button type="button" disabled={rerunning} onClick={onOptimize}>
+                Optimize this
+              </Button>
+            )}
+          {!laterPeriod &&
+            result.report_context?.period !== 'evaluation' &&
+            onAdjust &&
+            !readOnly && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={rerunning}
+                onClick={() => onAdjust()}
+              >
+                Adjust & test
+              </Button>
+            )}
           {!laterPeriod && result.report_context?.period !== 'evaluation' && experimentId && (
             <SaveToShortlist
               experimentId={experimentId}
@@ -385,6 +404,14 @@ function PortfolioReport({
           )}
         </div>
       </div>
+      {experimentId && result.report_context && !freezeAnalysis && (
+        <ResearchResultReview
+          experimentId={experimentId}
+          job={job}
+          result={result}
+          readOnly={readOnly}
+        />
+      )}
       <details className="text-xs text-muted-foreground">
         <summary className="cursor-pointer">Report details</summary>
         <dl className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -418,7 +445,7 @@ function PortfolioReport({
           )}
         </dl>
       </details>
-      {result.reserved_evaluation && (
+      {!experimentId && result.reserved_evaluation && (
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <span className="text-muted-foreground">
             Later period reserved · {result.reserved_evaluation.evaluation.from} –{' '}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { summaryMetricKey } from './researchMetricConcepts'
 import type { StudyPoint } from './studyPresentation'
 import { defaultStudyTrialView, type StudyTrialView } from './studyTrialView'
 
@@ -21,6 +22,17 @@ const storageKey = 'research-study-navigation-v1'
 type Entry = { key: string; view: StudyWorkspaceView }
 const identityText = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0 && value.length <= 128
+const position = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1000000
+    ? value
+    : undefined
+export const studyWorkspaceIdentity = (
+  owner: string,
+  jobId: string,
+  artifact: string,
+  experimentId?: string
+) =>
+  JSON.stringify(experimentId ? [owner, experimentId, jobId, artifact] : [owner, jobId, artifact])
 function entries(): Entry[] {
   try {
     const value: unknown = JSON.parse(sessionStorage.getItem(storageKey) ?? '[]')
@@ -49,7 +61,10 @@ export function readStudyView(key: string): StudyWorkspaceView {
     ...value,
     trials: {
       ...trials,
+      sortKey: summaryMetricKey(trials.sortKey),
       selectedConfigId: identityText(trials.selectedConfigId) ? trials.selectedConfigId : null,
+      scrollTop: position(trials.scrollTop),
+      scrollLeft: position(trials.scrollLeft),
     },
     surface: value.surface === 'report' ? 'report' : 'study',
     candidate:

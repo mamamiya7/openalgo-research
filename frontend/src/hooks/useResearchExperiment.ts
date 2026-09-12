@@ -33,6 +33,7 @@ export function useResearchExperiment(initial: ResearchExperiment, owner: string
   const inFlight = useRef<Promise<ResearchExperiment> | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const jobsRequest = useRef<AbortController | null>(null)
+  const metadataRequest = useRef<AbortController | null>(null)
   const mounted = useRef(true)
   const ownerMatches = useCallback(
     () => (useAuthStore.getState().user?.username ?? 'account') === owner,
@@ -192,6 +193,7 @@ export function useResearchExperiment(initial: ResearchExperiment, owner: string
     return () => {
       mounted.current = false
       jobsRequest.current?.abort()
+      metadataRequest.current?.abort()
       window.removeEventListener('beforeunload', beforeUnload)
       if (timer.current) clearTimeout(timer.current)
       if (ownerMatches()) void flush().catch(() => {})
@@ -208,6 +210,31 @@ export function useResearchExperiment(initial: ResearchExperiment, owner: string
     const next = await researchLibrary.get(initial.id)
     accept(next)
   }, [accept, initial.id])
+  const refreshMetadata = useCallback(async () => {
+    const before = await flush()
+    const sent = generation.current
+    metadataRequest.current?.abort()
+    const controller = new AbortController()
+    metadataRequest.current = controller
+    try {
+      const next = await researchLibrary.get(initial.id, controller.signal)
+      if (controller.signal.aborted || !mounted.current || !ownerMatches()) return
+      if (
+        generation.current !== sent ||
+        serverRef.current.revision !== before.revision ||
+        serialized(next.draft) !== serialized(before.draft)
+      ) {
+        dirty.current = true
+        buffer()
+        const message = 'A different draft was saved. Review the draft conflict before continuing.'
+        saveState('conflict', message)
+        throw new Error(message)
+      }
+      accept(next)
+    } finally {
+      if (metadataRequest.current === controller) metadataRequest.current = null
+    }
+  }, [accept, buffer, flush, initial.id, ownerMatches, saveState])
   const reject = useCallback(
     (cause: unknown) => {
       if (isAxiosError(cause) && cause.response?.status === 409) {
@@ -280,5 +307,6 @@ export function useResearchExperiment(initial: ResearchExperiment, owner: string
     reject,
     reflectJob,
     refreshJobs,
+    refreshMetadata,
   }
 }

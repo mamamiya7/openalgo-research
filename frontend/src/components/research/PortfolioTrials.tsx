@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, ArrowUpDown, Columns3 } from 'lucide-react'
-import { type ReactNode, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { PortfolioResult, PortfolioSettings } from '@/api/portfolioResearch'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -87,6 +87,7 @@ function TrialTable({
         next.sortDirection !== view.sortDirection)
     ) {
       tableRegion.current.scrollTop = 0
+      next.scrollTop = 0
     }
     if (onViewChange) onViewChange(next)
     else {
@@ -94,6 +95,12 @@ function TrialTable({
       if (next.page !== requestedPage) setPage(next.page)
     }
   }
+  useLayoutEffect(() => {
+    const region = tableRegion.current
+    if (!region) return
+    region.scrollTop = view.scrollTop ?? 0
+    region.scrollLeft = view.scrollLeft ?? 0
+  }, [view.scrollTop, view.scrollLeft])
   const settingsTrigger = useRef<HTMLButtonElement | null>(null)
   const settingsTitle = useRef<HTMLHeadingElement | null>(null)
   const [columns, setColumns] = useState(() => readTrialColumns(owner, experiment.analysis_catalog))
@@ -299,6 +306,11 @@ function TrialTable({
 
       <section
         ref={tableRegion}
+        onScroll={(event) => {
+          const region = event.currentTarget
+          if (region.scrollTop !== view.scrollTop || region.scrollLeft !== view.scrollLeft)
+            updateView({ scrollTop: region.scrollTop, scrollLeft: region.scrollLeft })
+        }}
         className="max-h-[60vh] overflow-auto rounded-lg border"
         aria-label="Trial comparison"
         // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users must be able to scroll this bounded comparison table.

@@ -1026,7 +1026,7 @@ def list_jobs(store, owner, *, page_size=30, cursor=None, query="", kind=None, s
     }
 
 
-def job_receipt(store, job, include_result=False):
+def job_receipt(store, job, include_result=False, *, experiment_id=None):
     value = {
         key: getattr(job, key)
         for key in ("id", "source_id", "status", "progress", "created_at", "updated_at", "error")
@@ -1037,9 +1037,8 @@ def job_receipt(store, job, include_result=False):
         experiment = db.get(ResearchExperiment, job.id)
         attempt = db.get(ResearchAttempt, job.id)
         cached_source = db.get(ResearchSourceReceipt, job.source_id)
-        source_summary = (
-            json.loads(cached_source.receipt).get("receipt", {}) if cached_source else {}
-        )
+        cached_receipt = json.loads(cached_source.receipt) if cached_source else {}
+        source_summary = cached_receipt.get("receipt", {})
         value["source_summary"] = source_summary
         value["previous_attempt_id"] = attempt.previous_job_id if attempt else None
         value.update(
@@ -1053,7 +1052,21 @@ def job_receipt(store, job, include_result=False):
             ),
         )
         if experiment and experiment.kind in ("portfolio_backtest", "portfolio_optimize"):
+            from research.result_descriptor import display_result
             from services.research_activity import initial_activity
+            from services.research_result_identity import display_links
+
+            descriptor_args = {
+                "kind": experiment.kind,
+                "evidence_id": job.result_artifact,
+                "calculation_id": experiment.identity,
+                "specification": value["specification"],
+                "source_receipt": cached_receipt,
+                **display_links(db, job, experiment_id=experiment_id),
+            }
+            value["display"] = display_result(
+                **descriptor_args, recorded=value["counts"].get("result_display")
+            )
 
             activity = value["counts"].get("activity")
             if activity:
@@ -1109,6 +1122,19 @@ def job_receipt(store, job, include_result=False):
         result = bundle["result"]
         if value.get("kind") in ("portfolio_backtest", "portfolio_optimize"):
             from research.report_contract import present_report
+            from research.result_descriptor import recorded_result
+
+            # The report is already loaded for this explicit opening. Old reports
+            # gain truthful presentation without a hidden list backfill or rewrite.
+            value["display"] = display_result(
+                **descriptor_args,
+                recorded=recorded_result(
+                    result,
+                    job_id=job.id,
+                    result_artifact=job.result_artifact,
+                    inputs_artifact=bundle.get("inputs_artifact"),
+                ),
+            )
 
             result = saved_overlay(store, job, result)
             result = present_report(

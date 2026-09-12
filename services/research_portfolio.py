@@ -229,7 +229,8 @@ def replay_inputs(store, owner, job_id, *, trial_id=None, period="selection"):
             "parent_result_artifact": job.result_artifact,
             "period": period
             if has_split
-            else report.get("replay_origin", {}).get("period", "full"),
+            else report.get("replay_origin", {}).get("period")
+            or report.get("matched_baseline_origin", {}).get("period", "full"),
             "config_id": config_id,
             **(
                 {
@@ -514,7 +515,8 @@ def run(
         calculation_evidence,
         period="selection"
         if portfolio.get("validation")
-        else evidence.get("replay_origin", {}).get("period", "full"),
+        else evidence.get("replay_origin", {}).get("period")
+        or evidence.get("matched_baseline_origin", {}).get("period", "full"),
     )
     validation_basis = (
         build_evaluation_basis(validation_evidence, period="evaluation")
@@ -646,4 +648,8 @@ def run(
         from services.research_candidates import verify_reconstruction
 
         verify_reconstruction(evidence, result)
+    if evidence.get("matched_baseline_origin"):
+        from services.research_baselines import verify_reconstruction as verify_baseline
+
+        verify_baseline(evidence, result)
     return result, evidence

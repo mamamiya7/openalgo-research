@@ -205,6 +205,14 @@ export interface PortfolioProposal {
   datetime_complete?: string
 }
 export interface PortfolioResult {
+  matched_baseline_origin?: {
+    version: string
+    study_job_id: string
+    study_result_artifact: string
+    baseline_job_id: string
+    baseline_result_artifact: string
+    verification?: { settings: string; basis: string }
+  }
   report_context?: PortfolioReportContext
   evaluation_basis?: EvaluationBasis
   reserved_evaluation?: {
@@ -270,7 +278,40 @@ export interface PortfolioResult {
     search_space?: { axes: Record<string, PortfolioRange>; proposal_budget?: number }
   }
 }
+export interface ResearchResultDescriptor {
+  version: 'research-result-descriptor-v1'
+  role:
+    | 'baseline'
+    | 'matched_baseline'
+    | 'optimization'
+    | 'candidate'
+    | 'evaluation'
+    | 'replay'
+    | 'backtest'
+  evidence_id: string | null
+  report_id: string | null
+  config_id: string | null
+  calculation_id: string | null
+  period: 'selection' | 'evaluation' | 'full' | null
+  dates: { from: string | null; to: string | null; status: 'recorded' | 'unknown' }
+  input_dates: { from: string | null; to: string | null }
+  candidate: {
+    study_job_id: string
+    config_id: string
+    trial_number?: number
+    is_objective_winner?: boolean
+    period?: string
+  } | null
+  parent_job_id: string | null
+  account: { capital: number | null; currency: string | null }
+  interval: string | null
+  evaluation_basis_id: string | null
+  cohort_id: string | null
+  reservation: Record<string, unknown> | null
+  setup: { id: string; name: string; number: number; parent_version_id?: string } | null
+}
 export interface PortfolioJob {
+  display?: ResearchResultDescriptor
   updated_at?: number | string
   activity?: ResearchActivity
   id: string
@@ -321,13 +362,20 @@ export const portfolioResearch = {
   async capabilities(signal?: AbortSignal): Promise<PortfolioCapabilities> {
     return (await webClient.get(`${base}/portfolio/capabilities`, { signal, timeout: 15000 })).data
   },
-  async upload(file: File): Promise<ResearchSource> {
+  async upload(file: File, signal?: AbortSignal): Promise<ResearchSource> {
     const form = new FormData()
     form.append('file', file)
-    return (await webClient.post(`${base}/portfolio/inputs`, form, { timeout: 45000 })).data
+    return (
+      await webClient.post(`${base}/portfolio/inputs`, form, {
+        timeout: 45000,
+        ...(signal ? { signal } : {}),
+      })
+    ).data
   },
-  async preflight(portfolio: PortfolioRequest): Promise<PortfolioPreview> {
-    return (await webClient.post(`${base}/portfolio/preflight`, portfolio, { timeout: 30000 })).data
+  async preflight(portfolio: PortfolioRequest, signal?: AbortSignal): Promise<PortfolioPreview> {
+    return (
+      await webClient.post(`${base}/portfolio/preflight`, portfolio, { signal, timeout: 30000 })
+    ).data
   },
   async submit(portfolio: PortfolioRequest, request_id: string): Promise<PortfolioJob> {
     return (

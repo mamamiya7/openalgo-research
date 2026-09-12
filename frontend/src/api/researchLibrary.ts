@@ -1,6 +1,7 @@
 import type { PortfolioDraft } from '@/components/research/PortfolioBuilder'
 import { webClient } from './client'
 import type { PortfolioJob, PortfolioRequest } from './portfolioResearch'
+import type { ChosenSetup } from './researchChosenSetups'
 
 export interface ExperimentSummary {
   id: string
@@ -16,6 +17,7 @@ export interface ExperimentSummary {
   job_count: number
   active_job_count?: number
   version_count: number
+  chosen_setup?: ChosenSetup | null
 }
 export interface SetupVersionSummary {
   id: string

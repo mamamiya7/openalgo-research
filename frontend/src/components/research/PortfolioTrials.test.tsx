@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { axe } from 'jest-axe'
 import { type ComponentProps, useState } from 'react'
@@ -87,6 +87,43 @@ afterEach(() => {
 })
 
 describe('optimization trial comparison', () => {
+  it('restores horizontal and vertical table position after leaving and resets vertical position when the page changes', async () => {
+    let view: StudyTrialView = {
+      ...defaultStudyTrialView,
+      page: 1,
+      scrollTop: 120,
+      scrollLeft: 250,
+    }
+    const props = {
+      experiment: experiment(125),
+      page: 1,
+      onPageChange: vi.fn(),
+      onRerun: vi.fn(),
+      rerunning: false,
+      readOnly: false,
+      renderSettings,
+      onViewChange: vi.fn((next: StudyTrialView) => {
+        view = next
+      }),
+    }
+    const first = render(<PortfolioTrials {...props} view={view} />)
+    let region = screen.getByRole('region', { name: 'Trial comparison' })
+    expect(region.scrollTop).toBe(120)
+    expect(region.scrollLeft).toBe(250)
+    region.scrollTop = 190
+    region.scrollLeft = 330
+    fireEvent.scroll(region)
+    expect(view).toMatchObject({ page: 1, scrollTop: 190, scrollLeft: 330 })
+    first.unmount()
+    render(<PortfolioTrials {...props} view={view} />)
+    region = screen.getByRole('region', { name: 'Trial comparison' })
+    expect(region.scrollTop).toBe(190)
+    expect(region.scrollLeft).toBe(330)
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(view).toMatchObject({ page: 2, scrollTop: 0, scrollLeft: 330 })
+    expect(region.scrollTop).toBe(0)
+    expect(props.onRerun).not.toHaveBeenCalled()
+  })
   it('opens the exact paginated trial in a dialog and restores focus without losing table position', async () => {
     const user = userEvent.setup()
     const { rerun } = mount(experiment(125))
@@ -445,7 +482,7 @@ describe('optimization trial comparison', () => {
     expect(first).toHaveAttribute('data-config-id', 'trial-44')
     expect(first).toHaveClass('bg-muted/30')
     await userEvent.click(screen.getByRole('button', { name: 'Next' }))
-    expect(onViewChange).toHaveBeenLastCalledWith({ ...view, page: 2 })
+    expect(onViewChange).toHaveBeenLastCalledWith({ ...view, page: 2, scrollTop: 0 })
     expect(props.onPageChange).not.toHaveBeenCalled()
     unmount()
     render(<PortfolioTrials {...props} />)
@@ -454,7 +491,12 @@ describe('optimization trial comparison', () => {
       'trial-44'
     )
     await userEvent.click(screen.getByRole('button', { name: 'Distinct portfolios' }))
-    expect(onViewChange).toHaveBeenLastCalledWith({ ...view, scope: 'distinct', page: 0 })
+    expect(onViewChange).toHaveBeenLastCalledWith({
+      ...view,
+      scope: 'distinct',
+      page: 0,
+      scrollTop: 0,
+    })
   })
 
   it('labels missing old proposal history without inventing rejected or repeated rows', async () => {

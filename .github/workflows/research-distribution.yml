@@ -126,6 +126,12 @@ jobs:
           src/components/research/ResearchDecisions.test.tsx
           src/components/research/ResearchComparisons.test.tsx
           src/components/research/ShortlistCompare.test.tsx
+          src/components/research/MatchedBaseline.test.tsx
+          src/components/research/ResearchResultReview.test.tsx
+          src/components/research/ResearchChosenSetup.test.tsx
+          src/components/research/PortfolioSetupReview.test.tsx
+          src/components/research/portfolioTrialMetrics.test.ts
+          src/components/research/researchPresentation.test.ts
           src/components/research/PortfolioAnalysis.test.tsx
           src/components/research/PortfolioContinuousReport.test.tsx
           src/components/research/ReportInvestigation.test.tsx
@@ -141,6 +147,7 @@ jobs:
           src/components/strategy-builder/PayoffChart.test.tsx
           src/lib/researchDraft.test.ts
           src/hooks/useResearchExperiment.test.tsx
+          src/hooks/useResearchNavigation.test.tsx
           src/pages/ResearchLibrary.test.tsx
           src/pages/ScannerResearch.test.tsx
       - run: uv run --no-sync python tools/research_release.py --output .agent-native/release/ci
