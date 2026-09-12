@@ -27,6 +27,7 @@ from database.research_db import (
     ResearchLibrarySource,
     ResearchRequest,
     ResearchSetupVersion,
+    ResearchShortlistCandidate,
     ResearchSource,
     ResearchSourceReceipt,
 )
@@ -1040,7 +1041,12 @@ def delete_experiment(store, owner, identifier, data):
             .select_from(ResearchSetupVersion)
             .where(ResearchSetupVersion.experiment_id == identifier)
         )
-        if has_jobs or has_versions or any(getattr(row, key) for key in PARENTS):
+        has_candidates = db.scalar(
+            select(func.count())
+            .select_from(ResearchShortlistCandidate)
+            .where(ResearchShortlistCandidate.experiment_id == identifier)
+        )
+        if has_jobs or has_versions or has_candidates or any(getattr(row, key) for key in PARENTS):
             raise ValueError(
                 "This experiment retains saved evidence or setup versions. Archive it instead."
             )

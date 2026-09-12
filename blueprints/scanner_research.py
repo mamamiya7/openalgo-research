@@ -8,6 +8,8 @@ from services import research_candidates as candidates
 from services import research_chartink as chartink
 from services import research_library as library
 from services import research_preferences as preferences
+from services import research_shortlist as shortlist
+from services import research_study_activity as study_activity
 from services import scanner_research_service as service
 from utils.logging import get_logger
 
@@ -44,6 +46,13 @@ def library_conflict(error):
     return jsonify(message=str(error), code="revision_conflict", revision=error.revision), 409
 
 
+@scanner_research_bp.errorhandler(shortlist.ShortlistConflict)
+def shortlist_conflict(error):
+    return jsonify(
+        message=str(error), code="shortlist_revision_conflict", current=error.current
+    ), 409
+
+
 @scanner_research_bp.errorhandler(preferences.PreferencesConflict)
 def report_preferences_conflict(error):
     return jsonify(
@@ -63,6 +72,24 @@ def chartink_too_large(error):
 
 def store():
     return current_app.extensions["research_store"]
+
+
+@scanner_research_bp.get("/portfolio/jobs/<job_id>/activity")
+def portfolio_study_activity(job_id):
+    if set(request.args) - {"limit", "before", "execution"} or any(
+        len(request.args.getlist(key)) != 1 for key in request.args
+    ):
+        raise ValueError("Invalid study activity query")
+    return jsonify(
+        study_activity.read(
+            store(),
+            session["user"],
+            job_id,
+            limit=request.args.get("limit"),
+            before=request.args.get("before"),
+            execution=request.args.get("execution"),
+        )
+    )
 
 
 @scanner_research_bp.get("/portfolio/jobs/<job_id>/candidates")
@@ -139,6 +166,63 @@ def library_page():
         "limit": int(request.args.get("limit", "20")),
         "offset": int(request.args.get("offset", "0")),
     }
+
+
+def shortlist_body():
+    if (request.content_length or 0) > shortlist.MAX_BODY_BYTES:
+        raise ValueError("Candidate bookmark request exceeds its size limit")
+    if not request.is_json:
+        raise ValueError("Supply a JSON candidate bookmark request")
+    raw = request.stream.read(shortlist.MAX_BODY_BYTES + 1)
+    if len(raw) > shortlist.MAX_BODY_BYTES:
+        raise ValueError("Candidate bookmark request exceeds its size limit")
+    try:
+        return current_app.json.loads(raw)
+    except (ValueError, UnicodeDecodeError, RecursionError):
+        raise ValueError("Supply a valid JSON candidate bookmark request") from None
+
+
+@scanner_research_bp.route(
+    "/library/experiments/<experiment_id>/shortlist", methods=["GET", "POST"]
+)
+def library_shortlist(experiment_id):
+    if request.method == "POST":
+        result = shortlist.save_candidate(store(), session["user"], experiment_id, shortlist_body())
+        return jsonify(result), 200 if result["reused"] else 201
+    if set(request.args) - {"limit", "offset", "job_id", "config_id"} or any(
+        len(request.args.getlist(key)) != 1 for key in request.args
+    ):
+        raise ValueError("Invalid shortlist query")
+    return jsonify(
+        shortlist.list_candidates(
+            store(),
+            session["user"],
+            experiment_id,
+            limit=int(request.args.get("limit", "20")),
+            offset=int(request.args.get("offset", "0")),
+            job_id=request.args.get("job_id"),
+            config_id=request.args.get("config_id"),
+        )
+    )
+
+
+@scanner_research_bp.route(
+    "/library/experiments/<experiment_id>/shortlist/<candidate_id>",
+    methods=["GET", "PATCH", "DELETE"],
+)
+def library_shortlist_candidate(experiment_id, candidate_id):
+    if request.method == "GET":
+        if request.args:
+            raise ValueError("Invalid saved candidate query")
+        return jsonify(
+            shortlist.get_candidate(store(), session["user"], experiment_id, candidate_id)
+        )
+    operation = (
+        shortlist.update_candidate if request.method == "PATCH" else shortlist.remove_candidate
+    )
+    return jsonify(
+        operation(store(), session["user"], experiment_id, candidate_id, shortlist_body())
+    )
 
 
 @scanner_research_bp.route("/library/report-preferences", methods=["GET", "PATCH"])

@@ -7,6 +7,7 @@ import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type ResearchExperiment, researchLibrary } from '@/api/researchLibrary'
 import { freshPortfolioDraft } from '@/components/research/PortfolioBuilder'
+import type { ResearchShortlist } from '@/components/research/ResearchShortlist'
 import type PortfolioResearch from '@/pages/PortfolioResearch'
 import { useAuthStore } from '@/stores/authStore'
 import ResearchLibrary from './ResearchLibrary'
@@ -48,6 +49,37 @@ vi.mock('@/pages/PortfolioResearch', () => ({
         </button>
       </div>
     ),
+}))
+vi.mock('@/components/research/ResearchShortlist', () => ({
+  ResearchShortlist: ({ onOpenReport, readOnly }: ComponentProps<typeof ResearchShortlist>) => (
+    <div>
+      <output>Saved shortlist {readOnly ? 'read only' : 'editable'}</output>
+      <button
+        type="button"
+        onClick={() =>
+          onOpenReport('study', {
+            id: 'saved-candidate',
+            source_job_id: 'study',
+            origin_kind: 'study',
+          } as never)
+        }
+      >
+        Open saved winner
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onOpenReport('prepared-report', {
+            id: 'saved-other',
+            source_job_id: 'study',
+            origin_kind: 'study',
+          } as never)
+        }
+      >
+        Open saved candidate report
+      </button>
+    </div>
+  ),
 }))
 const blank = (): ResearchExperiment => ({
   id: 'experiment-1',
@@ -216,5 +248,32 @@ describe('research library navigation and lost-work boundaries', () => {
     show('/scanner-research?experiment=experiment-1&view=unsupported')
     expect(await screen.findByRole('button', { name: 'Add signals' })).toBeVisible()
     expect(screen.getByRole('button', { name: 'Overview' })).toHaveAttribute('aria-current', 'page')
+  })
+  it('opens the saved winner report and returns to the same shortlist detail and page', async () => {
+    show(
+      '/scanner-research?experiment=experiment-1&view=shortlist&shortlist_offset=20&shortlist=saved-candidate'
+    )
+    await userEvent.click(await screen.findByRole('button', { name: 'Open saved winner' }))
+    expect(screen.getByTestId('location')).toHaveTextContent('job=study')
+    expect(screen.getByTestId('location')).toHaveTextContent('report=best')
+    expect(screen.getByTestId('location')).toHaveTextContent('return_shortlist=saved-candidate')
+    await userEvent.click(screen.getByRole('button', { name: 'Back to shortlist' }))
+    expect(screen.getByTestId('location')).toHaveTextContent('shortlist=saved-candidate')
+    expect(screen.getByTestId('location')).toHaveTextContent('shortlist_offset=20')
+    expect(screen.getByTestId('location')).not.toHaveTextContent('job=')
+    expect(researchLibrary.saveDraft).not.toHaveBeenCalled()
+    expect(researchLibrary.run).not.toHaveBeenCalled()
+  })
+  it('opens a prepared report as a backtest while retaining its shortlist origin', async () => {
+    show('/scanner-research?experiment=experiment-1&view=shortlist')
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Open saved candidate report' })
+    )
+    expect(screen.getByTestId('location')).toHaveTextContent('job=prepared-report')
+    expect(screen.getByTestId('location')).toHaveTextContent('view=backtests')
+    expect(screen.getByTestId('location')).toHaveTextContent('return_shortlist=saved-other')
+    expect(screen.getByTestId('location')).not.toHaveTextContent('report=best')
+    await userEvent.click(screen.getByRole('button', { name: 'Back to shortlist' }))
+    expect(screen.getByTestId('location')).toHaveTextContent('shortlist=saved-other')
   })
 })

@@ -10,6 +10,48 @@ import {
 } from './studyPresentation'
 
 type Experiment = NonNullable<PortfolioResult['experiment']>
+
+it('presents native timeline trial numbers consistently without changing saved figures', () => {
+  const original = chart(
+    'timeline',
+    [
+      {
+        type: 'bar',
+        orientation: 'h',
+        name: 'COMPLETE',
+        y: [3, 8, 12],
+        x: [10, 20, 30],
+        base: ['a', 'b', 'c'],
+        text: ['raw', 'raw', 'raw'],
+      },
+      { type: 'bar', orientation: 'h', name: 'PRUNED', y: [6], x: [5], base: ['d'], text: ['raw'] },
+    ],
+    { yaxis: { title: { text: 'Trial' } } }
+  )
+  const before = JSON.stringify(original)
+  const shown = connectedStudyChart(original, study())
+  expect(shown.figure!.data[0].y).toEqual([4, 9, 13])
+  expect(shown.figure!.data[0].text).toEqual([
+    'Trial 4<br>Finished<br>Objective score: 2',
+    'Trial 9<br>Finished<br>Objective score: 0',
+    'Trial 13<br>Finished<br>Objective score: 2',
+  ])
+  expect(shown.figure!.data[1].text).toEqual(['Trial 7<br>Allocation excluded'])
+  expect(shown.figure!.layout.yaxis).toMatchObject({
+    tickvals: [4, 7, 9, 13],
+    ticktext: ['4', '7', '9', '13'],
+  })
+  expect(shown.figure!.data[0].x).toEqual([10, 20, 30])
+  expect(shown.figure!.data[0].base).toEqual(['a', 'b', 'c'])
+  expect(JSON.stringify(original)).toBe(before)
+})
+
+it('keeps an unverified native timeline intact rather than renumbering only some bars', () => {
+  const original = chart('timeline', [
+    { type: 'bar', orientation: 'h', y: [3, 99], text: ['raw', 'unknown'] },
+  ])
+  expect(connectedStudyChart(original, study()).figure!.data).toEqual(original.figure!.data)
+})
 function candidate(number: number, configId: string): PortfolioTrial {
   return {
     config_id: configId,

@@ -27,6 +27,7 @@ import { PortfolioStudyAnalysis } from './PortfolioAnalysis'
 import { PortfolioContinuousReport } from './PortfolioContinuousReport'
 import { BackToStudy, PortfolioStudyWorkspace } from './PortfolioStudyWorkspace'
 import { PortfolioTrials } from './PortfolioTrials'
+import { SaveToShortlist } from './SaveToShortlist'
 import { usePortfolioAnalysis } from './usePortfolioAnalysis'
 import { useReportPreferences } from './useReportPreferences'
 import { readStudyView, writeStudyView } from './useStudyWorkspaceView'
@@ -79,7 +80,7 @@ function Pager({
     </div>
   )
 }
-function StrategySettings({ strategy }: { strategy: PortfolioSettings }) {
+export function StrategySettings({ strategy }: { strategy: PortfolioSettings }) {
   const config = strategy.config
   const settings = [
     ['Allocation', number(strategy.allocation_pct, '%')],
@@ -101,12 +102,12 @@ function StrategySettings({ strategy }: { strategy: PortfolioSettings }) {
   ]
   return (
     <div className="space-y-3 py-5">
-      <h3 className="font-medium">{strategy.name}</h3>
-      <dl className="grid gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
+      <h3 className="break-words font-medium">{strategy.name}</h3>
+      <dl className="grid gap-x-12 gap-y-2 text-sm sm:grid-cols-2">
         {settings.map(([label, value]) => (
-          <div className="flex justify-between gap-3" key={label}>
-            <dt className="text-muted-foreground">{label}</dt>
-            <dd className="text-right tabular-nums">{value}</dd>
+          <div className="flex min-w-0 justify-between gap-4" key={label}>
+            <dt className="min-w-0 break-words text-muted-foreground">{label}</dt>
+            <dd className="max-w-[60%] break-words text-right tabular-nums">{value}</dd>
           </div>
         ))}
       </dl>
@@ -127,6 +128,7 @@ interface ResultProps {
   onOpenReport?: (jobId: string) => void
   studyReport?: boolean
   onStudyReportChange?: (open: boolean) => void
+  experimentId?: string
 }
 export function PortfolioResults(props: ResultProps) {
   const owner = useAuthStore((state) => state.user?.username ?? 'account')
@@ -215,6 +217,7 @@ function PortfolioReport({
   readOnly = false,
   laterPeriod = false,
   hideStudyTabs = false,
+  experimentId,
 }: ResultProps & { laterPeriod?: boolean; hideStudyTabs?: boolean }) {
   const owner = useAuthStore((state) => state.user?.username)
   const preferences = useReportPreferences(owner)
@@ -317,6 +320,21 @@ function PortfolioReport({
             <Button type="button" variant="outline" disabled={rerunning} onClick={() => onAdjust()}>
               Adjust & test
             </Button>
+          )}
+          {!laterPeriod && result.report_context?.period !== 'evaluation' && experimentId && (
+            <SaveToShortlist
+              experimentId={experimentId}
+              jobId={job.id}
+              configId={
+                result.experiment
+                  ? (result.report_context?.config_id ?? result.experiment.recommendation_id)
+                  : undefined
+              }
+              proposalNumber={
+                result.experiment ? result.report_context?.candidate?.trial_number : undefined
+              }
+              readOnly={readOnly}
+            />
           )}
           <Button variant="ghost" asChild>
             <a href={exportUrl} download>

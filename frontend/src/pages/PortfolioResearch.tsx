@@ -16,6 +16,7 @@ import {
   ResearchRunProgress,
   type ResearchUploadActivity,
 } from '@/components/research/ResearchRunProgress'
+import { StudyActivity } from '@/components/research/StudyActivity'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -98,6 +99,7 @@ export default function PortfolioResearch({
 }: {
   onLegacyJob?: (jobId: string) => void
   workspace?: {
+    experimentId?: string
     draft: PortfolioDraft
     onChange: (draft: PortfolioDraft) => void
     onRun: () => Promise<PortfolioJob>
@@ -125,6 +127,7 @@ export default function PortfolioResearch({
   const priorOwner = useRef(owner)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [activityIdentity, setActivityIdentity] = useState<string | null>(null)
   const reportRequest = useRef<AbortController | null>(null)
   // Cancel an old report lookup when its account or originating study changes.
   // biome-ignore lint/correctness/useExhaustiveDependencies: these identities define the request lifetime.
@@ -461,6 +464,7 @@ export default function PortfolioResearch({
           key={job.id}
           job={job}
           result={job.result}
+          experimentId={workspace?.experimentId}
           studyReport={params.get('report') === 'best'}
           onStudyReportChange={(open) => {
             const next = new URLSearchParams(params)
@@ -552,7 +556,34 @@ export default function PortfolioResearch({
                 )}
               </>
             )}
+            {job.kind === 'portfolio_optimize' && (
+              <Button
+                type="button"
+                variant="ghost"
+                aria-expanded={activityIdentity === JSON.stringify([owner, job.id])}
+                aria-controls="portfolio-study-activity"
+                onClick={() =>
+                  setActivityIdentity((previous) =>
+                    previous === JSON.stringify([owner, job.id])
+                      ? null
+                      : JSON.stringify([owner, job.id])
+                  )
+                }
+              >
+                Activity
+              </Button>
+            )}
           </div>
+          {job.kind === 'portfolio_optimize' &&
+            activityIdentity === JSON.stringify([owner, job.id]) && (
+              <div id="portfolio-study-activity" className="border-t pt-6">
+                <StudyActivity
+                  jobId={job.id}
+                  jobStatus={job.status}
+                  strategies={job.specification?.portfolio?.strategies}
+                />
+              </div>
+            )}
         </section>
       )}
       <Dialog open={sourcesOpen} onOpenChange={setSourcesOpen}>

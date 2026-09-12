@@ -337,6 +337,7 @@ def run_search(
     saved=None,
     activity=None,
     record_timing=False,
+    observe=None,
 ):
     """Run joint grid/TPE proposals through one shared-capital engine callback.
 
@@ -448,9 +449,10 @@ def run_search(
     def execute(replay=None, restored_rows=None):
         nonlocal winner_row, winner_report
         record = None
+        observation_failed = False
 
         def objective(trial):
-            nonlocal record, winner_row, winner_report
+            nonlocal record, winner_row, winner_report, observation_failed
             params = suggest(trial)
             candidate = _candidate(base, params)
             settings = _settings(candidate)
@@ -468,6 +470,22 @@ def run_search(
                 record[key] != replay.get(key) for key in record if key != "value"
             ):
                 raise ValueError("Portfolio checkpoint does not replay the same Optuna proposals")
+            if replay is None and observe:
+                # Operational observations are separate from scientific evidence.
+                # Never report replayed proposals as a new calculation attempt.
+                try:
+                    observe(
+                        {
+                            "kind": "proposal_started",
+                            "number": trial.number,
+                            "params": copy.deepcopy(params),
+                            "config_id": config_id,
+                            "reused": record["reused"],
+                        }
+                    )
+                except Exception:
+                    observation_failed = True
+                    raise
             if not feasible:
                 if replay is not None and replay.get("value") is not None:
                     raise ValueError("Rejected portfolio checkpoint trial has a score")
@@ -532,7 +550,12 @@ def run_search(
         try:
             study.optimize(objective, n_trials=1, n_jobs=1)
         except Exception:
-            if replay is None and study.trials[-1].state == optuna.trial.TrialState.FAIL:
+            if (
+                replay is None
+                and not observation_failed
+                and study.trials
+                and study.trials[-1].state == optuna.trial.TrialState.FAIL
+            ):
                 notify(failed=1)
             raise
         if replay is not None:
@@ -544,6 +567,16 @@ def run_search(
             native = study.trials[-1]
             record["datetime_start"] = native.datetime_start.isoformat()
             record["datetime_complete"] = native.datetime_complete.isoformat()
+        if replay is None and observe:
+            observe(
+                {
+                    "kind": "proposal_finished",
+                    "number": record["number"],
+                    "state": record["state"],
+                    "value": record["value"],
+                    "reused": record["reused"],
+                }
+            )
         trials.append(record)
 
     if saved is not None:
@@ -592,6 +625,8 @@ def run_search(
         ):
             raise ValueError("Rejected portfolio trials cannot have a winning report")
 
+    if observe:
+        observe({"kind": "search_started", "proposal_budget": budget, "replayed": len(trials)})
     notify()
 
     while len(trials) < budget:

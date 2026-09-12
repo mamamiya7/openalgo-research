@@ -25,6 +25,7 @@ from database.research_db import (
     ResearchStore,
     ResearchWorker,
 )
+from services import research_study_activity as study_activity
 from services.research_sources import AcquisitionBatchPending
 from services.scanner_research_service import (
     encoded,
@@ -63,6 +64,7 @@ def acquire(store, token):
         ).rowcount
         if not changed:
             raise RuntimeError("A research worker already holds the active lease")
+        study_activity.reconcile(db, now)
         db.execute(
             update(ResearchJob)
             .where(ResearchJob.status.in_(("running", "cancelling")))
@@ -156,6 +158,43 @@ def run_one(store, token, stop_requested=None):
     last_update = 0.0
     activity_state = json.loads(experiment.counts).get("activity") if experiment else None
     last_activity_update = float("-inf")
+    study_observer = (
+        study_activity.StudyObserver(store, token, job.id) if kind == "portfolio_optimize" else None
+    )
+
+    def observe(event):
+        # Preserve a native outcome already observed before a simultaneous stop.
+        # The following progress/checkpoint boundary honors cancellation before
+        # more work, and the observer still rejects a replaced worker token.
+        if event.get("kind") != "proposal_finished" and stop_requested and stop_requested():
+            raise Interrupted("Worker shutdown requested")
+        try:
+            study_observer(event)
+        except study_activity.ObservationLeaseLost as error:
+            raise Cancelled("Cancellation requested or worker lease lost") from error
+
+    def finish_job(state, reason_code, error=None, *, observation_failed=False):
+        # The same reservation fences both operational observations and job state.
+        # A stale worker does nothing; the successor owns interruption reconciliation.
+        with store.sessions.begin() as db:
+            db.execute(update(ResearchWorker).where(ResearchWorker.id == 1).values(id=1))
+            lease, current = db.get(ResearchWorker, 1), db.get(ResearchJob, job.id)
+            if (
+                lease.token != token
+                or current.worker != token
+                or current.status not in ("running", "cancelling")
+            ):
+                return
+            if study_observer:
+                study_observer.finish(
+                    db,
+                    "observation_failed" if observation_failed else state,
+                    reason_code,
+                    known_finish=not observation_failed,
+                )
+            current.status, current.updated_at = state, time.time()
+            if error is not None:
+                current.error = error
 
     def activity(event, force=False):
         nonlocal activity_state, last_activity_update
@@ -229,8 +268,10 @@ def run_one(store, token, stop_requested=None):
             db.execute(update(ResearchWorker).where(ResearchWorker.id == 1).values(id=1))
             current = db.get(ResearchJob, job.id)
             lease = db.get(ResearchWorker, 1)
-            if current.status != "running" or lease.token != token:
+            if current.status != "running" or lease.token != token or current.worker != token:
                 raise Cancelled("Cancellation requested before checkpoint publication")
+            if study_observer:
+                study_observer.checkpoint(db, state)
             receipt = db.get(ResearchExperiment, job.id)
             display_counts = {**counts, **({"activity": activity_state} if activity_state else {})}
             receipt.checkpoint, receipt.counts = artifact, encoded(display_counts).decode()
@@ -310,6 +351,7 @@ def run_one(store, token, stop_requested=None):
                     progress=progress,
                     cancelled=cancelled,
                     activity=activity,
+                    **({"observe": observe} if study_observer else {}),
                 )
         elif kind in ("prepare", "acquire"):
             if kind == "acquire":
@@ -498,6 +540,11 @@ def run_one(store, token, stop_requested=None):
             lease = db.get(ResearchWorker, 1)
             if lease.token != token:
                 raise Cancelled("Worker lease lost")
+            if study_observer:
+                try:
+                    study_observer.finish(db, "completed")
+                except study_activity.ObservationLeaseLost as error:
+                    raise Cancelled("Cancellation requested before result publication") from error
             changed = db.execute(
                 update(ResearchJob)
                 .where(
@@ -560,54 +607,43 @@ def run_one(store, token, stop_requested=None):
                         receipt.counts = encoded(counts).decode()
                 current.updated_at = time.time()
     except Interrupted:
-        with store.sessions.begin() as db:
-            db.execute(
-                update(ResearchJob)
-                .where(
-                    ResearchJob.id == job.id,
-                    ResearchJob.worker == token,
-                    ResearchJob.status.in_(("running", "cancelling")),
-                )
-                .values(
-                    status="interrupted",
-                    error="Worker stopped; resume the last verified checkpoint when available",
-                    updated_at=time.time(),
-                )
-            )
+        finish_job(
+            "interrupted",
+            "worker_shutdown",
+            "Worker stopped; resume the last verified checkpoint when available",
+        )
     except Cancelled:
-        with store.sessions.begin() as db:
-            db.execute(
-                update(ResearchJob)
-                .where(
-                    ResearchJob.id == job.id,
-                    ResearchJob.worker == token,
-                    ResearchJob.status.in_(("running", "cancelling")),
-                )
-                .values(status="cancelled", updated_at=time.time())
-            )
+        finish_job("cancelled", "cancellation_requested")
+    except study_activity.ObservationFailed:
+        logger.exception("Research study activity recording failed")
+        finish_job(
+            "interrupted",
+            "observation_failed",
+            "Study activity could not be recorded; resume the last verified checkpoint when available.",
+            observation_failed=True,
+        )
     except Exception as error:
         logger.exception("Scanner Research calculation failed")
-        with store.sessions.begin() as db:
-            db.execute(
-                update(ResearchJob)
-                .where(
-                    ResearchJob.id == job.id,
-                    ResearchJob.worker == token,
-                    ResearchJob.status.in_(("running", "cancelling")),
-                )
-                .values(
-                    status="failed",
-                    error=str(error)
-                    if isinstance(error, ValueError)
-                    else "Calculation failed; see the local error log.",
-                    updated_at=time.time(),
-                )
-            )
+        finish_job(
+            "failed",
+            "calculation_failed",
+            str(error)
+            if isinstance(error, ValueError)
+            else "Calculation failed; see the local error log.",
+        )
     return True
 
 
 def release(store, token):
     with store.sessions.begin() as db:
+        claimed = db.execute(
+            update(ResearchWorker)
+            .where(ResearchWorker.id == 1, ResearchWorker.token == token)
+            .values(heartbeat=time.time())
+        ).rowcount
+        if not claimed:
+            return
+        study_activity.reconcile(db, time.time(), token=token)
         db.execute(
             update(ResearchJob)
             .where(ResearchJob.worker == token, ResearchJob.status.in_(("running", "cancelling")))

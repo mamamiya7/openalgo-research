@@ -71,6 +71,50 @@ export function connectedStudyChart(chart: AnalysisChart, experiment: Experiment
       if (trace.name === 'Best Value') trace.name = 'Best so far'
     }
   }
+  if (chart.id === 'timeline') {
+    const actual = new Map(experiment.trials.map((trial) => [trial.number, trial]))
+    const displayed = new Set<number>()
+    const bars = figure.data.filter((trace) => trace.type === 'bar' && trace.orientation === 'h')
+    if (
+      bars.some(
+        (trace) =>
+          !Array.isArray(trace.y) ||
+          !trace.y.every((value) => typeof value === 'number' && actual.has(value))
+      )
+    )
+      return copy
+    for (const trace of figure.data) {
+      if (trace.type !== 'bar' || trace.orientation !== 'h' || !Array.isArray(trace.y)) continue
+      const numbers = trace.y
+      if (!numbers.every((value) => typeof value === 'number' && actual.has(value))) continue
+      // Timeline identity comes from native bar coordinates, never array order.
+      // The original stored figure and evidence keep their zero-based numbers.
+      trace.y = numbers.map((value) => {
+        displayed.add(value + 1)
+        return value + 1
+      })
+      trace.text = numbers.map((value) => {
+        const trial = actual.get(value)!
+        return `Trial ${value + 1}<br>${trial.state === 'pruned' ? 'Allocation excluded' : 'Finished'}${finite(trial.value) ? `<br>Objective score: ${trial.value}` : ''}`
+      })
+      trace.hovertemplate = '%{text}<extra></extra>'
+      if (trace.name === 'COMPLETE') trace.name = 'Finished'
+      if (trace.name === 'PRUNED') trace.name = 'Allocation excluded'
+    }
+    if (displayed.size) {
+      const values = [...displayed].sort((a, b) => a - b)
+      const ticks = values.filter(
+        (_, index) => index % Math.max(1, Math.ceil(values.length / 8)) === 0
+      )
+      if (ticks.at(-1) !== values.at(-1)) ticks.push(values.at(-1)!)
+      figure.layout.yaxis = {
+        ...(figure.layout.yaxis as Record<string, unknown>),
+        tickmode: 'array',
+        tickvals: ticks,
+        ticktext: ticks.map(String),
+      }
+    }
+  }
   for (const trace of figure.data) {
     const colorbar = trace.colorbar as { title?: { text?: string } } | undefined
     if (colorbar?.title?.text === experiment.optimizer.objective_definition)

@@ -187,6 +187,73 @@ class ResearchCandidateReport(Base):
     created_at = Column(Float, nullable=False)
 
 
+class ResearchShortlistCandidate(Base):
+    """Editable bookmarks around exact, immutable calculation evidence."""
+
+    __tablename__ = "research_shortlist_candidates"
+    __table_args__ = (
+        UniqueConstraint(
+            "experiment_id", "source_job_id", "source_result_artifact", "config_id", "period"
+        ),
+    )
+    id = Column(String(32), primary_key=True)
+    owner = Column(String(255), nullable=False, index=True)
+    experiment_id = Column(String(64), nullable=False, index=True)
+    source_job_id = Column(String(64), nullable=False, index=True)
+    source_result_artifact = Column(String(64), nullable=False)
+    config_id = Column(String(64), nullable=False)
+    period = Column(String(16), nullable=False)
+    origin_kind = Column(String(16), nullable=False)
+    trial_number = Column(Integer)
+    proposal_number = Column(Integer)
+    is_objective_winner = Column(Boolean, nullable=False, default=False)
+    snapshot = Column(Text, nullable=False)
+    name = Column(String(120), nullable=False)
+    note = Column(String(2000), nullable=False, default="")
+    revision = Column(Integer, nullable=False, default=1)
+    created_at = Column(Float, nullable=False)
+    updated_at = Column(Float, nullable=False)
+
+
+class ResearchStudyExecution(Base):
+    """Observed search passes, independent of scientific checkpoint identity."""
+
+    __tablename__ = "research_study_executions"
+    id = Column(String(32), primary_key=True)
+    job_id = Column(String(64), nullable=False, index=True)
+    owner = Column(String(255), nullable=False, index=True)
+    worker = Column(String(64), nullable=False)
+    version = Column(String(40), nullable=False)
+    state = Column(String(24), nullable=False)
+    proposal_budget = Column(Integer, nullable=False)
+    replayed = Column(Integer, nullable=False)
+    started_at = Column(Float, nullable=False)
+    finished_at = Column(Float)
+    observed_at = Column(Float, nullable=False)
+    reason_code = Column(String(32))
+
+
+class ResearchStudyProposal(Base):
+    """Only proposals actually observed in one pass; no synthetic replay rows."""
+
+    __tablename__ = "research_study_proposals"
+    __table_args__ = (UniqueConstraint("execution_id", "number"),)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    execution_id = Column(String(32), nullable=False, index=True)
+    job_id = Column(String(64), nullable=False, index=True)
+    number = Column(Integer, nullable=False)
+    config_id = Column(String(64), nullable=False)
+    params = Column(Text, nullable=False)
+    state = Column(String(24), nullable=False)
+    value = Column(Float)
+    reused = Column(Boolean, nullable=False, default=False)
+    started_at = Column(Float, nullable=False)
+    finished_at = Column(Float)
+    observed_at = Column(Float, nullable=False)
+    reason_code = Column(String(32))
+    checkpointed = Column(Boolean, nullable=False, default=False)
+
+
 class ResearchStore:
     def __init__(self, root=None):
         self.root = Path(root or os.getenv("RESEARCH_DATA_DIR", "research_data")).resolve()

@@ -10,12 +10,21 @@ import {
   portfolioResearch,
 } from '@/api/portfolioResearch'
 import { type CandidateReportsReceipt, researchCandidates } from '@/api/researchCandidates'
+import { researchShortlist, type ShortlistCandidate } from '@/api/researchShortlist'
+import { researchStudyActivity } from '@/api/researchStudyActivity'
 import { researchDefaults } from '@/lib/researchDraft'
 import { useAuthStore } from '@/stores/authStore'
 import { PortfolioStudyWorkspace } from './PortfolioStudyWorkspace'
 
 vi.mock('@/api/researchCandidates', () => ({
   researchCandidates: { get: vi.fn(), prepare: vi.fn() },
+}))
+vi.mock('@/api/researchStudyActivity', () => ({
+  researchStudyActivity: { get: vi.fn() },
+}))
+vi.mock('@/api/researchShortlist', async (original) => ({
+  ...(await original<typeof import('@/api/researchShortlist')>()),
+  researchShortlist: { list: vi.fn(), save: vi.fn() },
 }))
 vi.mock('@/api/portfolioResearch', () => ({
   portfolioResearch: {
@@ -155,7 +164,12 @@ const receipt = (): CandidateReportsReceipt => ({
 })
 const clients: QueryClient[] = []
 function mount(
-  options: { readOnly?: boolean; data?: PortfolioResult; onOpenReport?: (id: string) => void } = {}
+  options: {
+    readOnly?: boolean
+    data?: PortfolioResult
+    onOpenReport?: (id: string) => void
+    experimentId?: string
+  } = {}
 ) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
   clients.push(client)
@@ -164,6 +178,7 @@ function mount(
   const tree = (
     <QueryClientProvider client={client}>
       <PortfolioStudyWorkspace
+        experimentId={options.experimentId}
         job={
           {
             id: studyId,
@@ -190,6 +205,39 @@ beforeEach(() => {
   localStorage.clear()
   useAuthStore.setState({ user: { username: 'test-owner' } })
   vi.mocked(researchCandidates.get).mockResolvedValue(receipt())
+  vi.mocked(researchShortlist.list).mockResolvedValue({
+    version: 'research-shortlist-v1',
+    experiment_id: 'saved-experiment',
+    archived: false,
+    items: [],
+    total: 0,
+    next_offset: null,
+  })
+  vi.mocked(researchShortlist.save).mockResolvedValue({
+    candidate: { id: 'saved-candidate' } as ShortlistCandidate,
+    reused: false,
+  })
+  vi.mocked(researchStudyActivity.get).mockResolvedValue({
+    version: 'research-study-activity-v1',
+    job_id: studyId,
+    job_status: 'completed',
+    available: false,
+    reason: 'not_recorded',
+    executions: [],
+    executions_truncated: false,
+    counts: {
+      recorded: 0,
+      running: 0,
+      evaluated: 0,
+      reused: 0,
+      allocation_rejected: 0,
+      failed: 0,
+      cancelled: 0,
+      interrupted: 0,
+    },
+    rows: [],
+    next_before: null,
+  })
 })
 afterEach(() => {
   cleanup()
@@ -197,6 +245,31 @@ afterEach(() => {
 })
 
 describe('connected study exploration', () => {
+  it('loads durable activity only on the Activity tab and retains the native timeline', async () => {
+    mount()
+    expect(researchStudyActivity.get).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('tab', { name: 'Activity', exact: true }))
+    expect(
+      await screen.findByText('Detailed activity was not recorded for this study.')
+    ).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Timeline' })).toBeVisible()
+    expect(screen.getByText('Timing was not recorded.')).toBeVisible()
+    expect(researchStudyActivity.get).toHaveBeenCalledTimes(1)
+    await userEvent.click(screen.getByRole('tab', { name: 'Overview', exact: true }))
+    expect(
+      screen.queryByText('Detailed activity was not recorded for this study.')
+    ).not.toBeInTheDocument()
+  })
+
+  it('aborts an unfinished activity lookup on leaving its tab', async () => {
+    vi.mocked(researchStudyActivity.get).mockImplementation(() => new Promise(() => {}))
+    mount()
+    await userEvent.click(screen.getByRole('tab', { name: 'Activity', exact: true }))
+    const signal = vi.mocked(researchStudyActivity.get).mock.calls[0][2]!
+    await userEvent.click(screen.getByRole('tab', { name: 'Overview', exact: true }))
+    expect(signal.aborted).toBe(true)
+  })
+
   it('uses actual proposal counts, opens a plotted proposal in place and keeps preparation explicit', async () => {
     const data = result()
     data.experiment!.specification.trials = 100
@@ -288,6 +361,22 @@ describe('connected study exploration', () => {
       'aria-pressed',
       'true'
     )
+  })
+  it('shortlists the actually inspected repeated proposal without preparing a report', async () => {
+    mount({ experimentId: 'saved-experiment' })
+    await userEvent.click(screen.getByRole('tab', { name: 'Trials' }))
+    await userEvent.click(screen.getByRole('button', { name: 'All proposals' }))
+    const row = screen.getAllByRole('row').find((item) => item.textContent?.includes('Reused'))!
+    await userEvent.click(within(row).getByRole('button', { name: 'View details' }))
+    const button = await screen.findByRole('button', { name: 'Shortlist', exact: true })
+    await userEvent.click(button)
+    expect(researchShortlist.save).toHaveBeenCalledWith(
+      'saved-experiment',
+      { job_id: studyId, config_id: 'config-1', proposal_number: 3 },
+      expect.any(AbortSignal)
+    )
+    expect(researchCandidates.prepare).not.toHaveBeenCalled()
+    expect(result().experiment?.recommendation_id).toBe('config-0')
   })
 
   it('shows a reconstruction mismatch without offering a new report as if it matched', async () => {

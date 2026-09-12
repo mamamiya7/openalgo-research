@@ -424,7 +424,8 @@ export function ResearchRunProgress({ job }: { job: ProgressJob }) {
               <p className="text-2xl font-semibold tabular-nums">
                 {count(trials.completed)}{' '}
                 <span className="text-base font-normal text-muted-foreground">
-                  / {count(trials.total)} trials completed
+                  / {count(trials.total)} trials{' '}
+                  {valid(trials.failed) && trials.failed > 0 ? 'processed' : 'completed'}
                 </span>
               </p>
             )}

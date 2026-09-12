@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import math
 import os
 import re
 import tempfile
@@ -117,6 +118,8 @@ def _references(engine):
         attempts = _rows(db, "research_attempts", ("job_id", "previous_job_id", "root_job_id"))
         library_roots = _library_references(db, tables)
         candidate_roots = _candidate_references(db)
+        shortlist_roots = _shortlist_references(db, tables)
+        _study_activity_references(db, tables)
     source_ids, job_ids = {row[0] for row in sources}, {row[0] for row in jobs}
     if any(row[1] not in source_ids for row in jobs):
         raise ValueError("Research job references a missing source")
@@ -132,7 +135,286 @@ def _references(engine):
         | {row[1] for row in experiments if row[1]}
         | library_roots
         | candidate_roots
+        | shortlist_roots
     )
+
+
+def _study_activity_references(db, tables):
+    """Validate additive observation metadata without requiring it in old stores."""
+    from services.research_study_activity import (
+        EXECUTION_STATES,
+        MAX_EXECUTIONS_PER_JOB,
+        MAX_PARAMS_BYTES,
+        MAX_PROPOSALS,
+        PROPOSAL_STATES,
+        REASONS,
+        VERSION,
+        _params,
+    )
+
+    expected = {"research_study_executions", "research_study_proposals"}
+    if not expected.intersection(tables):
+        return
+    if not expected.issubset(tables):
+        raise ValueError("Research study activity metadata tables are incomplete")
+    executions = _rows(
+        db,
+        "research_study_executions",
+        (
+            "id",
+            "job_id",
+            "owner",
+            "worker",
+            "version",
+            "state",
+            "proposal_budget",
+            "replayed",
+            "started_at",
+            "finished_at",
+            "observed_at",
+            "reason_code",
+        ),
+    )
+    import math
+    from collections import Counter
+
+    def timestamp(value, *, optional=False):
+        return (optional and value is None) or (
+            isinstance(value, (int, float)) and math.isfinite(value) and value >= 0
+        )
+
+    jobs = {row[0]: row[1] for row in _rows(db, "research_jobs", ("id", "owner"))}
+    kinds = dict(_rows(db, "research_experiments", ("job_id", "kind")))
+    per_job = Counter(row[1] for row in executions)
+    if any(count > MAX_EXECUTIONS_PER_JOB for count in per_job.values()):
+        raise ValueError("Research study activity execution bound exceeded")
+    execution_map = {}
+    for row in executions:
+        (
+            identifier,
+            job,
+            owner,
+            worker,
+            version,
+            state,
+            budget,
+            replayed,
+            started,
+            finished,
+            observed,
+            reason,
+        ) = row
+        if (
+            not re.fullmatch(r"[a-f0-9]{32}", identifier or "")
+            or jobs.get(job) != owner
+            or kinds.get(job) != "portfolio_optimize"
+            or not isinstance(worker, str)
+            or not 1 <= len(worker) <= 64
+            or version != VERSION
+            or state not in EXECUTION_STATES
+            or not isinstance(budget, int)
+            or not 1 <= budget <= MAX_PROPOSALS
+            or not isinstance(replayed, int)
+            or not 0 <= replayed <= budget
+            or not timestamp(started)
+            or not timestamp(observed)
+            or not timestamp(finished, optional=True)
+            or reason not in (*REASONS, None)
+            or (state == "running" and (finished is not None or reason is not None))
+            or (state == "completed" and (finished is None or reason is not None))
+        ):
+            raise ValueError("Research study execution references invalid or foreign metadata")
+        execution_map[identifier] = row
+    counts = Counter()
+    open_counts = Counter()
+
+    def validate_proposal(row):
+        (
+            identifier,
+            execution_id,
+            job,
+            number,
+            config,
+            params,
+            state,
+            value,
+            reused,
+            started,
+            finished,
+            observed,
+            reason,
+            checkpointed,
+        ) = row
+        execution = execution_map.get(execution_id)
+        try:
+            valid_params = isinstance(params, str) and _params(json.loads(params)) == params
+        except (ValueError, TypeError, OverflowError):
+            valid_params = False
+        outcome = state in ("evaluated", "reused", "allocation_rejected")
+        if (
+            not isinstance(identifier, int)
+            or identifier < 1
+            or execution is None
+            or job != execution[1]
+            or not isinstance(number, int)
+            or not execution[7] <= number < execution[6]
+            or not re.fullmatch(r"[a-f0-9]{64}", config or "")
+            or not valid_params
+            or state not in PROPOSAL_STATES
+            or reused not in (0, 1)
+            or checkpointed not in (0, 1)
+            or not timestamp(started)
+            or not timestamp(observed)
+            or not timestamp(finished, optional=True)
+            or reason not in (*REASONS, None)
+            or (checkpointed and not outcome)
+            or (
+                state == "running"
+                and (execution[5] != "running" or finished is not None or reason is not None)
+            )
+            or (outcome and (finished is None or reason is not None))
+            or (
+                state in ("evaluated", "reused")
+                and (not isinstance(value, (int, float)) or not math.isfinite(value))
+            )
+            or (state not in ("evaluated", "reused") and value is not None)
+            or (state == "evaluated" and reused)
+            or (state == "reused" and not reused)
+        ):
+            raise ValueError("Research study proposal references invalid or foreign metadata")
+        counts[execution_id] += 1
+        open_counts[execution_id] += state == "running"
+
+    # Stream bounded batches so a large retained observation history does not
+    # materialize every parameter document at once. Reject oversized imported
+    # cells in SQLite before copying their contents into Python memory.
+    with db.exec_driver_sql(
+        "SELECT id,execution_id,job_id,number,config_id,"
+        "CASE WHEN length(CAST(params AS BLOB)) <= ? THEN params ELSE NULL END,"
+        "state,value,reused,started_at,finished_at,observed_at,reason_code,checkpointed "
+        "FROM research_study_proposals LIMIT ?",
+        (MAX_PARAMS_BYTES, MAX_FILES + 1),
+    ) as proposals:
+        for index, row in enumerate(proposals.yield_per(100)):
+            if index >= MAX_FILES:
+                raise ValueError("Metadata exceeds the 100000-row maintenance bound")
+            validate_proposal(row)
+    if any(count > MAX_PROPOSALS for count in counts.values()) or any(
+        count > 1 for count in open_counts.values()
+    ):
+        raise ValueError("Research study proposal bound exceeded")
+
+
+def _shortlist_references(db, tables):
+    """Retain exact bookmark roots; older backups may omit this additive table."""
+    from services import research_library as library
+    from services.research_shortlist import (
+        MAX_PER_EXPERIMENT,
+        MAX_ROWS,
+        MAX_SNAPSHOT_BYTES,
+        validate_snapshot,
+    )
+
+    table = "research_shortlist_candidates"
+    if table not in tables:
+        return set()
+    if db.exec_driver_sql(f"SELECT count(*) FROM {table}").scalar() > MAX_ROWS:
+        raise ValueError("Saved candidates exceed the maintenance row bound")
+    if db.exec_driver_sql(
+        f"SELECT 1 FROM {table} GROUP BY experiment_id HAVING count(*) > ? LIMIT 1",
+        (MAX_PER_EXPERIMENT,),
+    ).first():
+        raise ValueError("Saved candidates exceed the experiment bound")
+    # Reject oversized SQLite cells before materializing even one snapshot.
+    if db.exec_driver_sql(
+        f"SELECT 1 FROM {table} WHERE length(CAST(snapshot AS BLOB)) > ? "
+        "OR length(name) > 120 OR length(note) > 2000 LIMIT 1",
+        (MAX_SNAPSHOT_BYTES,),
+    ).first():
+        raise ValueError("Saved candidate metadata exceeds its size limit")
+    experiments = {
+        row[0]: row[1] for row in _rows(db, "research_library_experiments", ("id", "owner"))
+    }
+    jobs = {
+        row[0]: row[1:]
+        for row in _rows(db, "research_jobs", ("id", "owner", "result_artifact", "status"))
+    }
+    kinds = {row[0]: row[1] for row in _rows(db, "research_experiments", ("job_id", "kind"))}
+    links = {tuple(row) for row in _rows(db, "research_library_jobs", ("experiment_id", "job_id"))}
+    roots, identities = set(), set()
+    with db.exec_driver_sql(
+        f"SELECT id,owner,experiment_id,source_job_id,source_result_artifact,config_id,period,"
+        f"origin_kind,trial_number,proposal_number,is_objective_winner,snapshot,name,note,revision,created_at,updated_at FROM {table}"
+    ) as cursor:
+        while rows := cursor.fetchmany(64):
+            for row in rows:
+                (
+                    identifier,
+                    owner,
+                    experiment,
+                    source,
+                    artifact,
+                    config,
+                    period,
+                    origin,
+                    trial,
+                    proposal,
+                    winner,
+                    raw,
+                    name,
+                    note,
+                    revision,
+                    created,
+                    updated,
+                ) = row
+                identity = (experiment, source, artifact, config, period)
+                if (
+                    not isinstance(identifier, str)
+                    or not re.fullmatch(r"[a-f0-9]{32}", identifier)
+                    or experiments.get(experiment) != owner
+                    or jobs.get(source) != (owner, artifact, "completed")
+                    or (experiment, source) not in links
+                    or not isinstance(config, str)
+                    or not re.fullmatch(r"[a-f0-9]{64}", config)
+                    or not isinstance(artifact, str)
+                    or not re.fullmatch(r"[a-f0-9]{64}", artifact)
+                    or period not in ("full", "selection")
+                    or origin not in ("study", "backtest")
+                    or kinds.get(source)
+                    != ("portfolio_optimize" if origin == "study" else "portfolio_backtest")
+                    or winner not in (0, 1)
+                    or type(revision) is not int
+                    or revision < 1
+                    or any(
+                        not isinstance(value, (int, float))
+                        or not math.isfinite(value)
+                        or value <= 0
+                        for value in (created, updated)
+                    )
+                    or updated < created
+                    or identity in identities
+                    or (
+                        origin == "study"
+                        and any(
+                            type(value) is not int or not 0 <= value < 1000000
+                            for value in (trial, proposal)
+                        )
+                    )
+                    or (
+                        origin == "backtest"
+                        and (trial is not None or proposal is not None or winner)
+                    )
+                ):
+                    raise ValueError("Saved candidate references invalid or foreign evidence")
+                library._text(name, 120, "Candidate name")
+                library._text(note, 2000, "Candidate note", empty=True)
+                try:
+                    validate_snapshot(json.loads(raw))
+                except (ValueError, TypeError, RecursionError):
+                    raise ValueError("Saved candidate has invalid summary metadata") from None
+                roots.add(artifact)
+                identities.add(identity)
+    return roots
 
 
 def _candidate_references(db):

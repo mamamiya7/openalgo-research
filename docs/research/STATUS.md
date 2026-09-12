@@ -72,9 +72,33 @@ with the user; the best report has its own URL state and browser-history entry.
 Library job refresh preserves unsaved setup edits and conflict state.
 See [the R4 receipt and precise limits](REPORT_EXPERIENCE_PLAN.md#14-connected-study-and-exact-candidate-reports--12-september-2026).
 
-**Next work:** finish R4's separate durable activity/failure/interruption records
-without changing scientific checkpoint replay, then R5 shortlist/comparison on
-the established candidate/report identities. R3 independently frozen benchmark
+The next R4 slice now records durable **trial activity** separately from scientific
+checkpoints. New executions retain actual proposed settings, outcomes, failures,
+cancellations and interruptions. Recovery preserves the prior attempt; replayed
+proposals do not appear as fresh calculations. A worker lost without a recorded
+finish retains an unknown end time. The Activity view has bounded pages, attempt
+filtering and in-place settings; active or failed runs open it on demand. Original
+result exports, scores and seeded recovery remain unchanged. Native failure/resume,
+storage recovery and controlled desktop/mobile browser checks passed; see
+[the activity receipt](REPORT_EXPERIENCE_PLAN.md#16-durable-study-activity--12-september-2026).
+The first R5 slice now adds a saved **Shortlist** to each experiment. Save an actual
+study trial or fixed backtest, rename it, add a note and return to its exact settings
+and report. Native metadata preserves its original result/configuration/period and
+first saved proposal; duplicate saves reuse the same candidate. A full-period
+baseline stays distinct from a selection-period trial. Saving does not calculate,
+download, change the winning trial or invalidate the setup draft. Report preparation
+remains explicit. Archive viewing, bounded pages, stale-edit protection and
+backup/restore are covered. See the [shortlist receipt](REPORT_EXPERIENCE_PLAN.md#17-exact-saved-shortlists--12-september-2026)
+for 90 backend and 77 frontend checks and the controlled native desktop/mobile journey.
+The activity and shortlist slices were installed into the existing app on
+12 September: 21 runtime files and the native frontend build, with all 57 saved
+jobs and every pre-existing research-table fingerprint preserved. The three new
+activity/shortlist tables start empty, the worker is online, and authentication
+and CSRF checks passed. Configuration, broker/history data and local UI
+customizations remain intact. See the [installation receipt](REPORT_EXPERIENCE_PLAN.md#18-activity-and-shortlist-installation--12-september-2026).
+
+**Next work:** R5 fair comparison and decisions on the now-saved candidate/report
+identities, with evidence-use history. R3 independently frozen benchmark
 evidence can proceed separately. Full reference-field mapping, real optional
 Nautilus acceptance and broader normal-account journey acceptance remain open.
 The [report experience specification](REPORT_EXPERIENCE_PLAN.md)
@@ -84,8 +108,10 @@ page contents, score/count semantics, data ownership and R0–R6 acceptance. The
 optional QuantStats connector is pinned there as **QS-01**, to evaluate before
 choosing the final report export implementation. R0–R2 have the bounded
 implementation receipts above; they are not claimed fully accepted. R4's connected
-study/candidate slice is journey-observed on controlled data; the full R3–R6
-packages remain open. On 12 September, the authorized 20-file study update was
+study/candidate and durable-activity slices, and R5 saved shortlists, are
+journey-observed on controlled data; broader acceptance and the full R3/R5/R6
+packages remain open. On 12 September,
+the authorized 20-file study update was
 built against and installed into the existing app. All 57 saved jobs and every
 pre-existing research-table fingerprint were preserved; the candidate table was
 added, the app/worker restarted, the current bundle is served, and native login/

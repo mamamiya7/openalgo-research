@@ -10,6 +10,7 @@ import {
   type PortfolioResult,
   portfolioResearch,
 } from '@/api/portfolioResearch'
+import { researchStudyActivity } from '@/api/researchStudyActivity'
 import type { ResearchSource } from '@/api/scannerResearch'
 import PortfolioResearch from '@/pages/PortfolioResearch'
 import { useAuthStore } from '@/stores/authStore'
@@ -40,6 +41,9 @@ vi.mock('@/api/portfolioResearch', () => ({
     analysisExportUrl: (id: string) => `/scanner-research/api/portfolio/jobs/${id}/analysis/export`,
     exportUrl: (id: string) => `/scanner-research/api/jobs/${id}/export`,
   },
+}))
+vi.mock('@/api/researchStudyActivity', () => ({
+  researchStudyActivity: { get: vi.fn() },
 }))
 vi.mock('@/components/portfolio/PortfolioLineChart', () => ({
   PortfolioLineChart: vi.fn(() => <div>Native portfolio chart</div>),
@@ -184,6 +188,27 @@ beforeEach(() => {
   }))
   vi.mocked(portfolioResearch.submit).mockResolvedValue(running)
   vi.mocked(portfolioResearch.upload).mockResolvedValue(source('a'.repeat(32)))
+  vi.mocked(researchStudyActivity.get).mockResolvedValue({
+    version: 'research-study-activity-v1',
+    job_id: running.id,
+    job_status: 'failed',
+    available: false,
+    reason: 'not_recorded',
+    executions: [],
+    executions_truncated: false,
+    counts: {
+      recorded: 0,
+      running: 0,
+      evaluated: 0,
+      reused: 0,
+      allocation_rejected: 0,
+      failed: 0,
+      cancelled: 0,
+      interrupted: 0,
+    },
+    rows: [],
+    next_before: null,
+  })
 })
 afterEach(() => {
   for (const client of clients) client.clear()
@@ -191,6 +216,36 @@ afterEach(() => {
 })
 
 describe('native portfolio consumer journey', () => {
+  it.each([
+    'running',
+    'failed',
+  ])('offers study activity on demand for a %s optimization', async (status) => {
+    vi.mocked(portfolioResearch.job).mockResolvedValue({
+      ...running,
+      kind: 'portfolio_optimize',
+      status,
+    })
+    vi.mocked(researchStudyActivity.get).mockImplementation(() => new Promise(() => {}))
+    mount('/scanner-research?job=running-job')
+    const button = await screen.findByRole('button', { name: 'Activity', exact: true })
+    expect(button).toHaveAttribute('aria-expanded', 'false')
+    expect(researchStudyActivity.get).not.toHaveBeenCalled()
+    await userEvent.click(button)
+    expect(button).toHaveAttribute('aria-expanded', 'true')
+    expect(researchStudyActivity.get).toHaveBeenCalledTimes(1)
+    const signal = vi.mocked(researchStudyActivity.get).mock.calls[0][2]!
+    await userEvent.click(button)
+    expect(signal.aborted).toBe(true)
+    expect(button).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('does not offer optimizer activity for a backtest run', async () => {
+    mount('/scanner-research?job=running-job')
+    await screen.findByRole('button', { name: 'Cancel run', exact: true })
+    expect(screen.queryByRole('button', { name: 'Activity', exact: true })).not.toBeInTheDocument()
+    expect(researchStudyActivity.get).not.toHaveBeenCalled()
+  })
+
   it('limits suggestions to compatible enabled rules and keeps capital, costs and chosen axes unchanged', () => {
     const daily = draft()
     daily.optimization.trials = 70

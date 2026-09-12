@@ -204,7 +204,19 @@ def test_automatic_continuation_preserves_activity_and_yields_to_next_job(app, c
     store = app.extensions["research_store"]
     calls = []
 
-    def run(store, owner, evidence, spec, *, saved, checkpoint, progress, cancelled, activity):
+    def run(
+        store,
+        owner,
+        evidence,
+        spec,
+        *,
+        saved,
+        checkpoint,
+        progress,
+        cancelled,
+        activity,
+        observe=None,
+    ):
         calls.append(saved)
         if len(calls) == 1:
             activity(
@@ -243,7 +255,19 @@ def test_symbol_transition_is_persisted_before_a_long_request(app, client, monke
     ]
     store = app.extensions["research_store"]
 
-    def run(store, owner, evidence, spec, *, saved, checkpoint, progress, cancelled, activity):
+    def run(
+        store,
+        owner,
+        evidence,
+        spec,
+        *,
+        saved,
+        checkpoint,
+        progress,
+        cancelled,
+        activity,
+        observe=None,
+    ):
         for symbol in ("AAA", "BBB"):
             activity({"stage": "download", "prices": {"current_symbol": symbol}})
             shown = client.get(f"/scanner-research/api/jobs/{job_id}").json["activity"]

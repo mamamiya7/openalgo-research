@@ -14,6 +14,7 @@ import { ChartinkImport } from '@/components/research/ChartinkImport'
 import { ChartinkSource } from '@/components/research/ChartinkSource'
 import { addPortfolioSource, freshPortfolioDraft } from '@/components/research/PortfolioBuilder'
 import { researchRunStatus } from '@/components/research/ResearchRunProgress'
+import { ResearchShortlist } from '@/components/research/ResearchShortlist'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -627,7 +628,9 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
   const queryClient = useQueryClient()
   const jobId = params.get('job')
   const requestedView = params.get('view') ?? 'overview'
-  const view = ['overview', 'setup', 'backtests', 'studies', 'setups'].includes(requestedView)
+  const view = ['overview', 'setup', 'backtests', 'studies', 'setups', 'shortlist'].includes(
+    requestedView
+  )
     ? requestedView
     : 'overview'
   const activeJobIds = server.jobs
@@ -673,12 +676,25 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
     next.delete('version')
     next.delete('return_job')
     next.delete('report')
+    next.delete('return_shortlist')
+    next.delete('shortlist')
+    if (nextView !== 'shortlist') next.delete('shortlist_offset')
     if (job) next.set('job', job)
     setParams(next)
   }
   function library() {
     const next = new URLSearchParams(params)
-    for (const key of ['experiment', 'job', 'view', 'version', 'return_job', 'report'])
+    for (const key of [
+      'experiment',
+      'job',
+      'view',
+      'version',
+      'return_job',
+      'report',
+      'shortlist',
+      'shortlist_offset',
+      'return_shortlist',
+    ])
       next.delete(key)
     setParams(next)
   }
@@ -941,24 +957,26 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
         </div>
       )}
       <nav aria-label="Experiment" className="flex gap-1 overflow-x-auto border-b pb-2">
-        {(['overview', 'setup', 'backtests', 'studies', 'setups'] as const).map((item) => (
-          <Button
-            key={item}
-            variant={!jobId && view === item ? 'secondary' : 'ghost'}
-            size="sm"
-            className="shrink-0"
-            aria-current={!jobId && view === item ? 'page' : undefined}
-            disabled={busy}
-            onClick={() => {
-              void action(async () => {
-                await model.flush()
-                changeView(item)
-              })
-            }}
-          >
-            {item === 'setups' ? 'Saved setups' : item.charAt(0).toUpperCase() + item.slice(1)}
-          </Button>
-        ))}
+        {(['overview', 'setup', 'backtests', 'studies', 'shortlist', 'setups'] as const).map(
+          (item) => (
+            <Button
+              key={item}
+              variant={!jobId && view === item ? 'secondary' : 'ghost'}
+              size="sm"
+              className="shrink-0"
+              aria-current={!jobId && view === item ? 'page' : undefined}
+              disabled={busy}
+              onClick={() => {
+                void action(async () => {
+                  await model.flush()
+                  changeView(item)
+                })
+              }}
+            >
+              {item === 'setups' ? 'Saved setups' : item.charAt(0).toUpperCase() + item.slice(1)}
+            </Button>
+          )
+        )}
       </nav>
       {jobId && (
         <div className="flex items-center justify-between gap-3">
@@ -967,15 +985,28 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
             variant="ghost"
             disabled={busy}
             onClick={() =>
-              params.get('return_job')
-                ? changeView('studies', params.get('return_job')!)
-                : changeView(view === 'studies' ? 'studies' : 'backtests')
+              params.get('return_shortlist')
+                ? (() => {
+                    const next = new URLSearchParams(params)
+                    next.set('view', 'shortlist')
+                    next.set('shortlist', params.get('return_shortlist')!)
+                    next.delete('return_shortlist')
+                    next.delete('job')
+                    next.delete('return_job')
+                    next.delete('report')
+                    setParams(next)
+                  })()
+                : params.get('return_job')
+                  ? changeView('studies', params.get('return_job')!)
+                  : changeView(view === 'studies' ? 'studies' : 'backtests')
             }
           >
             <ArrowLeft className="mr-2 size-4" />
-            {params.get('return_job')
-              ? 'Back to study'
-              : `Back to ${view === 'studies' ? 'studies' : 'backtests'}`}
+            {params.get('return_shortlist')
+              ? 'Back to shortlist'
+              : params.get('return_job')
+                ? 'Back to study'
+                : `Back to ${view === 'studies' ? 'studies' : 'backtests'}`}
           </Button>
         </div>
       )}
@@ -987,6 +1018,7 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
           <PortfolioResearch
             key={jobId ?? 'draft'}
             workspace={{
+              experimentId: server.id,
               draft,
               onChange: model.change,
               onRun: () => operation(run),
@@ -994,6 +1026,14 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
                 operation(() => replay(origin, trialId, period)),
               onJobUpdate: model.reflectJob,
               onOpenJob: (job, returnStudyId) => {
+                if (params.get('return_shortlist')) {
+                  const next = new URLSearchParams(params)
+                  next.set('job', job.id)
+                  next.set('view', job.kind === 'portfolio_optimize' ? 'studies' : 'backtests')
+                  next.delete('report')
+                  setParams(next)
+                  return
+                }
                 if (
                   (returnStudyId || (view === 'studies' && jobId)) &&
                   job.id !== (returnStudyId || jobId) &&
@@ -1018,6 +1058,29 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
             onUseSetup={(job, mode, trialId) => operation(() => reuseSetup(job, mode, trialId))}
           />
         </fieldset>
+      )}
+      {!jobId && view === 'shortlist' && (
+        <ResearchShortlist
+          experimentId={server.id}
+          readOnly={server.archived}
+          onOpenReport={(reportId, candidate) => {
+            const next = new URLSearchParams(params)
+            next.set('job', reportId)
+            next.set('return_shortlist', candidate.id)
+            next.set(
+              'view',
+              candidate.origin_kind === 'study' && reportId === candidate.source_job_id
+                ? 'studies'
+                : 'backtests'
+            )
+            next.delete('shortlist')
+            next.delete('return_job')
+            if (candidate.origin_kind === 'study' && reportId === candidate.source_job_id)
+              next.set('report', 'best')
+            else next.delete('report')
+            setParams(next)
+          }}
+        />
       )}
       {!jobId && view === 'overview' && (
         <div className="space-y-7">

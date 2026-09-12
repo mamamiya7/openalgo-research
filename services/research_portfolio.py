@@ -416,7 +416,17 @@ def _prepare_prices(
 
 
 def run(
-    store, owner, evidence, spec, *, saved=None, checkpoint, progress, cancelled, activity=None
+    store,
+    owner,
+    evidence,
+    spec,
+    *,
+    saved=None,
+    checkpoint,
+    progress,
+    cancelled,
+    activity=None,
+    observe=None,
 ):
     validate_submission(
         evidence,
@@ -556,6 +566,7 @@ def run(
             saved=(saved or {}).get("calculation"),
             record_timing=True,
             **({"activity": activity} if activity else {}),
+            **({"observe": observe} if observe else {}),
         )
         from research.study_analysis import build_study_analysis
 

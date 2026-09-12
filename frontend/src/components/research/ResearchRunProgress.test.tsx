@@ -258,6 +258,25 @@ describe('Research progress journey', () => {
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
   })
 
+  it('labels a stopped trial as processed rather than a completed calculation', () => {
+    render(
+      <ResearchRunProgress
+        job={job(
+          {
+            ...base,
+            stage: 'optimizing',
+            trials: { total: 40, completed: 1, failed: 1, evaluated: 0 },
+          },
+          'failed'
+        )}
+      />
+    )
+    expect(screen.getByText('/ 40 trials processed')).toBeVisible()
+    expect(screen.queryByText(/trials completed/)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText('Run details'))
+    expect(screen.getByText('Failed trials').nextElementSibling).toHaveTextContent('1')
+  })
+
   it('shows minute prices and broker omissions without counting checked symbols as covered', () => {
     render(
       <ResearchRunProgress

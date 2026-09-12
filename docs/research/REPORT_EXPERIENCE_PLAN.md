@@ -176,11 +176,12 @@ inferred from a single completed objective value.
   failed states separate when inspecting an interrupted study. Derive counts from
   actual records; current `evaluated_this_pass` / `evaluated_all_passes` fields do
   not prove how many evaluations occurred in the latest execution segment.
-- Current durable reconstruction supports completed/pruned records, not a full
-  failed/running/waiting trial history. R4 adds separate versioned activity records
-  when a proposal starts, completes or fails, with actual parameters/times/state.
+- Scientific reconstruction continues to use completed/pruned records. R4 now
+  stores separate versioned execution/proposal observations when a proposal
+  starts, completes or fails, with actual parameters/times/state (section 16).
   They must not alter sampler recovery or invent an objective for a failed trial.
-  An interrupted active proposal remains Interrupted/unknown until reconciled.
+  Worker-loss reconciliation marks the observed open proposal Interrupted with an
+  unknown finish time. A later execution does not rewrite that prior observation.
   Historical missing states or timings stay unavailable; job failure alone does
   not prove a particular trial number, parameter set or duration.
 - Budget progress uses proposals against the requested proposal budget. The
@@ -589,7 +590,7 @@ report polling ends at a terminal state, and navigation storage is capped at 20
 account/job/artifact entries. This is bounded lifecycle testing, not a production
 memory soak test.
 
-**Remaining R4:** separate versioned capture of actual running/failed/interrupted
+**Remaining R4 at this receipt (subsequently implemented in section 16):** separate versioned capture of actual running/failed/interrupted
 trial activity without changing sampler recovery. Activity currently shows only
 recorded outcomes and native timing when it exists; it does not fabricate older
 times/states. Exact scroll/zoom restoration and cross-device study-navigation
@@ -621,6 +622,167 @@ is included with the source update so the entry page cannot reference omitted
 ignored bundles. This updates repository source and the existing app; it does not
 create a new versioned release, Chrome Web Store submission or claim a fresh
 normal-account broker calculation/Nautilus acceptance.
+
+## 16. Durable study activity — 12 September 2026
+
+**State: implemented and journey-observed on controlled data in the development
+worktree.** Graphify refreshed the baseline corpus (61 code files, 16 documents),
+then its activity/recovery and candidate links guided this slice. Source inspection
+confirmed that a failure-history layer could be added without changing native
+Optuna sampler replay. Explicit semantic provenance corrected stale planning
+entries during the refresh; unchanged source contributions were retained.
+
+New `research-study-activity-v1` metadata records a calculation execution only
+after its saved proposals have replayed and verified. Each new proposal retains
+its actual number, configuration, numeric parameters, observed start and outcome:
+evaluated, reused, allocation excluded, failed, cancelled or interrupted. There
+are no inferred waiting proposals or reconstructed historical failures. A job
+failure after the final proposal does not invent another failed trial.
+
+Activity capture uses the existing worker lease and scoped metadata sessions.
+Scientific result/checkpoint payloads, optimizer binding, ranking and original
+exports stay unchanged. Observed completion and recoverable checkpoint coverage
+are separate: the coverage flag is set only in the transaction publishing its
+matching scientific checkpoint. A completed proposal is retained even when stop
+or cancellation arrives immediately before its finish observation. No further
+proposal starts after the stop. Capture failure is classified separately from an
+engine failure. Fenced recovery records when an abandoned execution was noticed;
+it does not invent an actual finish time, duration or score.
+
+The completed study's **Activity** section shows 25 observations per page, a recent
+attempt selector and settings in a dialog. Earlier attempts remain reachable by
+pagination. Native timeline bars use the same displayed trial numbers as the
+table when their original identities are verified; the stored figures remain
+unchanged. Running/failed optimization pages offer Activity beside existing run
+controls, with no extra always-open diagnostic panel. Unknown prior history is
+explicit; pre-search activity waits for optimization. Failed trial progress says
+processed rather than implying a successful completed calculation.
+
+Verification:
+
+- 94 backend checks passed across activity, progress, jobs, storage and candidate
+  reports; the 43 new activity checks include native failure/resume, interruption,
+  full-checkpoint replay, stale-worker fencing, all six known-finish/stop races,
+  owner/pagination bounds and populated metadata upgrade/backup/restore.
+- Eight adapter-observation checks verify exact grid/TPE results and deterministic
+  checkpoint dictionaries with/without recording (timing disabled), replay without duplicate observations,
+  failed calculations without invented scores, and isolated capture failures.
+  The existing optimizer suite also passed. Additional portfolio/period/candidate
+  regressions passed 33; distribution and worker CLI checks passed 42 with one
+  Windows environment skip. These overlap other receipts and are not cumulative.
+- 105 final frontend checks cover actual/unknown states, settings and focus, original score
+  precision, pagination/filtering, legacy history, visible-only reads, account/job
+  changes, request aborts and terminal polling. TypeScript, scoped lint and the
+  production build passed.
+- The controlled browser used a native 40-configuration grid, failed the third
+  evaluation, and resumed its verified checkpoint. It retained 41 observations
+  across two attempts (40 evaluated, one failed). Desktop light/dark, 390px mobile,
+  25/16 paging, attempt filtering, failed settings and focus restoration passed.
+  A separate failed native job exercised the on-demand Activity action. Browser
+  interactions made no write request, produced no page exception, and preserved
+  the original completed-study export hash. Exact receipts/screenshots are ignored
+  under `.agent-native/study-activity/`.
+
+Resource review followed `fd-audit`: one small per-execution observer; no additional
+engine, thread, executor, network client or global history cache. Read pages and
+metadata sizes/counts are bounded; quota admission occurs once per search rather
+than adding a full storage walk for each proposal. Backup validates proposal rows
+in bounded batches. One hundred repeated request/error cycles returned database
+connections. UI queries abort on navigation/account changes, stop polling at
+terminal state and discard unused pages. This is measured lifecycle testing, not
+a production memory soak.
+
+**Next:** R5 saved shortlists, fair comparison, candidate decisions and evidence-use
+history. R3 benchmark evidence can proceed independently. Genuine pause/extension
+still requires its M3 sampler/recovery contract. Exact scroll/zoom and cross-device
+study navigation, broader normal-account acceptance and optional Nautilus execution
+remain separate work. No normal-app installation or release publication is claimed
+for this development slice.
+
+## 17. Exact saved shortlists — 12 September 2026
+
+**State: saved-shortlist slice implemented and journey-observed on controlled data;
+comparison and decisions remain the next R5 work.**
+
+Graphify was refreshed with the completed activity slice before planning this
+increment: 28 changed sources, 33,148 nodes and 75,341 links; the focused research
+graph has 3,150 nodes and 8,767 links. Candidate, library and report relationships
+were checked against the source. Stable saved candidates are the next dependency
+for comparison and decisions; benchmark acquisition remains independent.
+
+The bounded journey is **study trial or fixed backtest → Save to shortlist →
+experiment Shortlist → inspect, rename, add a note and reopen the exact report**.
+The existing candidate dialog keeps settings near the action. Saving a bookmark
+does not calculate, download, change the winning trial or create a validated setup.
+Missing detailed reports retain the existing explicit Prepare report action.
+
+| Contract | Behavior |
+| --- | --- |
+| Candidate identity | Server-derived source job, original content-addressed result, exact configuration and primary selection/full period. Fixed baselines keep their original period. A durably linked prepared candidate report resolves to its original study candidate. |
+| Proposal identity | The canonical configuration trial and the actual inspected completed proposal are retained separately. Repeated saves reuse the bookmark without changing the first saved observation or the user's name and note. |
+| Metadata | Native account/experiment-scoped additive table, bounded scalar snapshot, name and note. Independent bookmark revisions protect edits without invalidating the setup draft. |
+| Reading and retention | Bounded pages and on-demand exact settings/statistics. Missing or mismatched evidence remains explicit. Archive is readable; add/edit/remove requires an active experiment. Removing a bookmark retains source runs and reports. |
+| Future comparison | A bookmark is a selection of evidence, not a frozen comparison. The later comparison record must pin the actual report/analysis versions and check period, capital, costs and evaluation-basis compatibility before showing comparable deltas. |
+
+**Acceptance:** 90 backend checks passed, including 22 new shortlist cases and
+existing candidate, library and storage regressions. They cover actual native
+VectorBT/Optuna results, baseline periods, repeated proposals, exact report
+normalization, concurrent duplicate admission, revision conflicts, account and
+archive rules, CSRF, bounded input, populated upgrades and backup/restore.
+Source and archive changes are rechecked inside the native metadata write fence.
+One hundred successful requests and one hundred stale-revision error requests
+returned database connections after each call.
+
+Seventy-seven frontend checks passed across six suites, including account and
+navigation cancellation, pending-report polling shutdown, stale-note recovery,
+20-row pages, archive viewing and URL-based return to the same saved candidate.
+TypeScript, scoped lint and the production build passed. Distribution/package
+and worker CLI checks passed 42, with one Windows environment skip; source
+compatibility checks passed for the existing preview.4 distribution.
+
+A fresh controlled browser journey used a real native 20-configuration study,
+a fixed full-period baseline and an explicitly requested candidate report.
+Saving added no calculation and did not change the setup revision. Renaming and
+notes survived reload; exact settings remained readable; Open report and Back to
+shortlist restored the candidate. Full and selection periods stayed distinct.
+Archived candidates remained readable with changes disabled; removing the
+bookmark retained the original reports. The original study export's SHA-256
+stayed unchanged, and the only additional job came from explicit Prepare report.
+Desktop light mode and 390px dark mode passed without page exceptions or
+horizontal page overflow. Visual review also improved the shared settings gutter
+and bounded long labels/values.
+
+Resources remain scoped: native NullPool sessions, bounded metadata and streamed
+backup validation, abortable visible-only UI reads and no new worker, broker
+client or persistent cache. This is focused lifecycle testing, not a production
+memory soak. Browser acceptance uses controlled prices and a shell authentication
+fixture, not the user's broker or live account. This development increment does
+not install into the normal app, publish to Git or create a release.
+
+The graph refresh is the planning baseline above. Subsequent implementation edits
+are explicitly queued for the next extraction instead of marked already indexed.
+
+**Next:** fair comparison, candidate decisions and evidence-use history. R3 frozen
+benchmark evidence, true pause/extension and R6 portable exports retain their
+separate dependencies and acceptance requirements.
+
+## 18. Activity and shortlist installation — 12 September 2026
+
+Following the user's installation/publication request, the preceding activity and
+shortlist increments were staged against the existing installation and its local
+frontend customizations. All 21 changed runtime files matched the prior baseline;
+no source conflicts or active calculations were present. The staged interface
+passed its production build before the native supervisor restarted the app and
+research worker.
+
+All 57 saved jobs (50 completed, seven failed) and every pre-existing research
+metadata fingerprint were preserved. The two activity tables and shortlist table
+were added empty. The installed bundle is served, the worker heartbeat is current,
+anonymous candidate/activity/shortlist reads are rejected and shortlist mutations
+remain protected by CSRF. Configuration, broker credentials, Historify prices and
+local customizations were preserved. No user-data calculation or download was
+started. This is installation smoke acceptance alongside the controlled browser
+journeys above; the versioned packaged release remains preview.4.
 
 ## References
 

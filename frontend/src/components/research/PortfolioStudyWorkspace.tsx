@@ -24,6 +24,8 @@ import { AnalysisMetricTable } from './AnalysisMetricTable'
 import { AnalysisBasis, AnalysisPreparation } from './PortfolioAnalysis'
 import { PortfolioTrials } from './PortfolioTrials'
 import { availableTrialMetrics, trialMetricText, trialMetricValue } from './portfolioTrialMetrics'
+import { SaveToShortlist } from './SaveToShortlist'
+import { StudyActivity } from './StudyActivity'
 import {
   connectedStudyChart,
   pointsFromChart,
@@ -49,6 +51,7 @@ interface Props {
   onAdjust?: (configId: string) => void
   onOpenReport: (jobId: string) => void
   renderSettings: (strategy: PortfolioSettings) => ReactNode
+  experimentId?: string
 }
 
 export function PortfolioStudyWorkspace(props: Props) {
@@ -72,6 +75,7 @@ function StudyWorkspace({
   renderSettings,
   identity,
   owner,
+  experimentId,
 }: Props & { identity: string; owner: string }) {
   const [view, setView] = useStudyWorkspaceView(identity)
   const [overlapping, setOverlapping] = useState<StudyPoint[]>([])
@@ -383,17 +387,10 @@ function StudyWorkspace({
           />
         </TabsContent>
         <TabsContent value="activity" className="space-y-5">
-          <p className="text-sm text-muted-foreground">
-            {number(counts.proposed)} proposals recorded · {number(counts.rejected)} allocation
-            combinations excluded
-          </p>
-          {chart('timeline')}
-          {!native && (
-            <p className="text-sm text-muted-foreground">
-              Open All proposals in Trials for the recorded outcomes. Timing is shown when it was
-              saved.
-            </p>
+          {view.section === 'activity' && (
+            <StudyActivity jobId={job.id} jobStatus={job.status} strategies={result.strategies} />
           )}
+          {chart('timeline')}
         </TabsContent>
       </Tabs>
       <Dialog
@@ -479,6 +476,15 @@ function StudyWorkspace({
                   ))}
               </dl>
               <div className="flex flex-wrap items-center gap-3">
+                {experimentId && (
+                  <SaveToShortlist
+                    experimentId={experimentId}
+                    jobId={job.id}
+                    configId={candidate.configId}
+                    proposalNumber={candidate.proposalNumber}
+                    readOnly={readOnly}
+                  />
+                )}
                 {report?.status === 'ready' && report.report_job_id && (
                   <Button onClick={() => onOpenReport(report.report_job_id!)}>Open report</Button>
                 )}
