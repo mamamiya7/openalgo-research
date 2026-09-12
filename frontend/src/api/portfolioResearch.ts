@@ -331,6 +331,7 @@ export interface PortfolioJob {
   kind?: string
   error?: string | null
   resumable?: boolean
+  pausable?: boolean
   queue_position?: number | null
   counts?: Record<string, unknown>
   specification?: { portfolio?: PortfolioRequest }
@@ -402,17 +403,27 @@ export const portfolioResearch = {
   ): Promise<{ items: PortfolioJob[]; next_cursor: string | null }> {
     return (await webClient.get(`${base}/jobs`, { params, signal, timeout: 15000 })).data
   },
-  async cancel(id: string): Promise<PortfolioJob> {
+  async pause(id: string, signal?: AbortSignal): Promise<PortfolioJob> {
     return (
-      await webClient.post(`${base}/jobs/${encodeURIComponent(id)}/cancel`, undefined, {
+      await webClient.post(`${base}/jobs/${encodeURIComponent(id)}/pause`, undefined, {
         timeout: 15000,
+        signal,
       })
     ).data
   },
-  async resume(id: string): Promise<PortfolioJob> {
+  async cancel(id: string, signal?: AbortSignal): Promise<PortfolioJob> {
+    return (
+      await webClient.post(`${base}/jobs/${encodeURIComponent(id)}/cancel`, undefined, {
+        timeout: 15000,
+        signal,
+      })
+    ).data
+  },
+  async resume(id: string, signal?: AbortSignal): Promise<PortfolioJob> {
     return (
       await webClient.post(`${base}/jobs/${encodeURIComponent(id)}/resume`, undefined, {
         timeout: 30000,
+        signal,
       })
     ).data
   },

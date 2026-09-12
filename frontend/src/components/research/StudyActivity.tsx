@@ -18,7 +18,7 @@ import {
 import { useAuthStore } from '@/stores/authStore'
 
 const active = (status: string) =>
-  ['queued', 'running', 'cancelling', 'cancel_requested'].includes(status)
+  ['queued', 'running', 'pausing', 'cancelling', 'cancel_requested'].includes(status)
 const finite = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value)
 const number = (value: unknown) =>
@@ -32,6 +32,7 @@ const stateLabels: Record<StudyProposalState | StudyExecution['state'], string> 
   failed: 'Failed',
   cancelled: 'Cancelled',
   interrupted: 'Interrupted',
+  paused: 'Paused',
   observation_failed: 'Recording interrupted',
 }
 const parameterLabels: Record<string, string> = {
@@ -46,6 +47,7 @@ const parameterLabels: Record<string, string> = {
 const reasons: Record<string, string> = {
   calculation_failed: 'The calculation failed during this attempt.',
   cancellation_requested: 'Cancellation was requested.',
+  pause_requested: 'Progress saved at your request.',
   worker_shutdown: 'The calculation worker stopped.',
   worker_lost: 'The calculation worker was no longer available. Its end time was not observed.',
   observation_failed: 'Activity recording stopped. Completion could not be established here.',

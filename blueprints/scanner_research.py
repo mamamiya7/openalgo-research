@@ -997,6 +997,11 @@ def cancel(job_id):
     return jsonify(service.cancel(store(), session["user"], job_id))
 
 
+@scanner_research_bp.post("/jobs/<job_id>/pause")
+def pause(job_id):
+    return jsonify(service.pause(store(), session["user"], job_id))
+
+
 @scanner_research_bp.get("/jobs/<job_id>/export")
 def export(job_id):
     job = service.get_job(store(), session["user"], job_id)

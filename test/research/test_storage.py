@@ -230,7 +230,7 @@ class StorageTest(unittest.TestCase):
             backup_store(self.store, self.root / "blocked")
         with self.store.sessions.begin() as db:
             db.get(ResearchWorker, 1).heartbeat = 0
-        for status in ("queued", "running", "cancelling"):
+        for status in ("queued", "running", "pausing", "cancelling"):
             with self.store.sessions.begin() as db:
                 db.get(ResearchJob, "job").status = status
             with self.assertRaisesRegex(ValueError, "jobs"):

@@ -52,9 +52,7 @@ def maintenance(store):
             select(func.count()).select_from(ResearchJob).where(ResearchJob.status.in_(ACTIVE))
         )
         if active:
-            raise ValueError(
-                "Research has queued, running or cancelling jobs; finish or cancel them first"
-            )
+            raise ValueError("Research has active jobs; finish, pause or cancel them first")
         worker.token, worker.heartbeat = token, now
     last_refresh = now
 
@@ -1463,7 +1461,7 @@ def restore_store(backup_directory, destination):
                 raise ValueError("Backup artifact list does not match the referenced closure")
             with engine.begin() as db:
                 if db.exec_driver_sql(
-                    "SELECT COUNT(*) FROM research_jobs WHERE status IN ('queued','running','cancelling')"
+                    "SELECT COUNT(*) FROM research_jobs WHERE status IN ('queued','running','pausing','cancelling')"
                 ).scalar():
                     raise ValueError("Backup contains unfinished jobs")
                 db.execute(text("UPDATE research_worker SET token=NULL, heartbeat=0 WHERE id=1"))

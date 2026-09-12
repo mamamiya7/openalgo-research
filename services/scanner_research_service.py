@@ -31,7 +31,7 @@ CHUNK_ARTIFACT_BYTES = 256 * 1024
 MAX_ARTIFACT_NODES = 100000
 MAX_MANAGED_ENTRIES = 100000
 CHUNK_FORMAT = "research-chunks-v1"
-ACTIVE = ("queued", "running", "cancelling")
+ACTIVE = ("queued", "running", "pausing", "cancelling")
 _artifact_publication = ContextVar("research_artifact_publication", default=None)
 
 
@@ -1026,6 +1026,23 @@ def list_jobs(store, owner, *, page_size=30, cursor=None, query="", kind=None, s
     }
 
 
+def _pausable(job, experiment):
+    """Cheap capability hint from the last atomically published checkpoint metadata."""
+    validation = (
+        json.loads(experiment.specification).get("portfolio", {}).get("validation")
+        if experiment
+        else None
+    )
+    return bool(
+        experiment
+        and experiment.kind == "portfolio_optimize"
+        and experiment.checkpoint
+        and job.status in ("queued", "running")
+        and json.loads(experiment.counts).get("stage") in ("backtest", "optimization")
+        and (not validation or validation.get("mode", "evaluate") == "reserve")
+    )
+
+
 def job_receipt(store, job, include_result=False, *, experiment_id=None):
     value = {
         key: getattr(job, key)
@@ -1048,8 +1065,9 @@ def job_receipt(store, job, include_result=False, *, experiment_id=None):
             resumable=bool(
                 experiment
                 and experiment.checkpoint
-                and job.status in ("interrupted", "failed", "cancelled")
+                and job.status in ("interrupted", "failed", "cancelled", "paused")
             ),
+            pausable=_pausable(job, experiment),
         )
         if experiment and experiment.kind in ("portfolio_backtest", "portfolio_optimize"):
             from research.result_descriptor import display_result
@@ -1173,7 +1191,7 @@ def resume(store, owner, job_id):
         if current.status in ACTIVE:
             return job_receipt(store, current)
         if (
-            current.status not in ("interrupted", "failed", "cancelled")
+            current.status not in ("interrupted", "failed", "cancelled", "paused")
             or not experiment
             or not experiment.checkpoint
         ):
@@ -1211,12 +1229,45 @@ def cancel(store, owner, job_id):
     with store.sessions.begin() as db:
         db.execute(
             update(ResearchJob)
-            .where(ResearchJob.id == job_id, ResearchJob.status == "queued")
+            .where(ResearchJob.id == job_id, ResearchJob.status.in_(("queued", "paused")))
             .values(status="cancelled", updated_at=time.time())
         )
         db.execute(
             update(ResearchJob)
-            .where(ResearchJob.id == job_id, ResearchJob.status == "running")
+            .where(ResearchJob.id == job_id, ResearchJob.status.in_(("running", "pausing")))
             .values(status="cancelling", updated_at=time.time())
         )
+    return job_receipt(store, get_job(store, owner, job_id))
+
+
+def pause(store, owner, job_id):
+    """Request a pause only after optimization has retained its calculation inputs.
+
+    The worker finishes the admitted proposal and publishes its checkpoint before
+    acknowledging a running pause. A queued resume already has a safe boundary.
+    """
+    with store.sessions.begin() as db:
+        write_guard(db)
+        job = db.get(ResearchJob, job_id)
+        if job is None or job.owner != owner:
+            raise LookupError("Run not found")
+        experiment = db.get(ResearchExperiment, job_id)
+        if experiment is None or experiment.kind != "portfolio_optimize":
+            raise ValueError("Pause is available for optimization runs")
+        if job.status not in ("queued", "running"):
+            # Retried requests never restart a stopped/completed run or undo Stop.
+            return job_receipt(store, job)
+        if not _pausable(job, experiment):
+            raise ValueError("This study cannot be paused at its current stage")
+        saved = read_artifact(store, experiment.checkpoint)
+        state = saved.get("state")
+        if (
+            saved.get("identity") != experiment.identity
+            or not isinstance(state, dict)
+            or state.get("phase") != "calculation"
+            or not isinstance(state.get("inputs_artifact"), str)
+        ):
+            raise ValueError("Saved calculation inputs could not be verified")
+        job.status = "paused" if job.status == "queued" else "pausing"
+        job.error, job.updated_at = None, time.time()
     return job_receipt(store, get_job(store, owner, job_id))

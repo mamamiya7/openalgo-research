@@ -417,6 +417,7 @@ def run_search(
     record_timing=False,
     observe=None,
     continuation_from=None,
+    boundary=None,
 ):
     """Run joint grid/TPE proposals through one shared-capital engine callback.
 
@@ -754,10 +755,15 @@ def run_search(
     notify()
 
     while len(trials) < budget:
+        if boundary:
+            boundary()
         if progress:
             progress(len(trials), budget)
         notify(active_trial=len(trials) + 1)
         execute()
+        # Persist the completed counter with the checkpoint even when this is a
+        # user-requested pause boundary. No next proposal has been admitted yet.
+        notify()
         if checkpoint:
             payload = {
                 "binding": binding,
@@ -779,7 +785,6 @@ def run_search(
                 copy.deepcopy(payload),
                 {"stage": "search", "completed": len(trials), "total": budget},
             )
-        notify()
         if progress:
             progress(len(trials), budget)
     if winner_row is None or not isinstance(winner_report, dict):

@@ -65,7 +65,7 @@ The outcome is one installable OpenAlgo Research distribution in which a person 
 2. **Make the Library and Experiment the organizing layer.** Backtests, actual Optuna studies, candidates, comparisons and decisions belong to an experiment. Preserve existing run/evidence identities below it.
 3. **Reuse native OpenAlgo and engine features.** OpenAlgo supplies account, broker services and Historify; VectorBT/Nautilus calculate; Optuna searches and supplies analysis. Our work is requirements translation, adapters, persistence, orchestration and native presentation.
 4. **Select data from the entire accepted request.** Use signal timing, execution rules, lookbacks, all allowed search values, contract history and engine requirements. Reuse matching native data, fetch missing coverage once, freeze inputs, then calculate. Material unresolved intent is a specific question; it is not guessed into a different financial experiment.
-5. **Retain exact history while enabling change.** A view change stays a view change. Edited assumptions create a child version. A new data download creates new evidence. An unchanged study can receive another recorded execution budget once that continuation contract is implemented.
+5. **Retain exact history while enabling change.** A view change stays a view change. Edited assumptions create a child version. A new data download creates new evidence. An unchanged completed study can receive another recorded execution budget through Add trials; calculation-stage Pause/Resume retains exact committed work.
 6. **Keep healthy UI quiet.** Relevant fields, one primary action per context, focused result tabs and contextual drawers. No new dashboard of every diagnostic, metric or engine option.
 7. **Validate the claimed combination.** Asset, venue, broker/history capability, engine, runtime and interval all contribute to support. A supported library or installed broker plugin alone does not establish that combination.
 8. **Release in usable increments.** The first complete public research milestone covers the existing cash-equity scope. Advanced research, each asset family and ongoing review follow as named increments through the same release checks.
@@ -553,9 +553,10 @@ recoverable.
 These are bounded increments, not one feature bundle. A–C provide their identity
 and return context; existing native lifecycle/report contracts provide the base.
 
-D2's completed-study continuation foundation is implemented in the development
-checkout; see [its receipt](#study-continuation-foundation--12-september-2026).
-The remaining D2 stages and the full automatic research protocol are still pending.
+D2's completed-study continuation foundation is installed; see
+[its receipt](#study-continuation-foundation--12-september-2026). Cooperative
+calculation-stage Pause/Resume is implemented. Partial results, a frozen multi-stage
+recipe and the full automatic research protocol are still pending.
 
 1. **Data recovery:** concise auth/calendar/quota/runtime issue, affected dates
    and instruments, saved work, direct repair destination and return to the same
@@ -655,7 +656,7 @@ changed contracts, user interactions and saved-evidence compatibility are checke
 | C2 Return, refresh and source replacement | C1 | Reopen without downloads; explicitly test new data/CSV, retain the prior result and show the change. Preserve cross-session edits. | Manual CSV reuse implemented and checked; related Chartink capture refresh inheritance remains pending |
 | C3 Contextual navigation | A1, working B/C destinations | Five primary destinations with versions in Setup and review actions in context; preserve old links and history. | Implemented for existing destinations; five primary tabs and old deep links checked |
 | D1 Data recovery | A2 and native job lifecycle | Repair the actual broker/calendar/quota/runtime issue and return to compatible saved progress. Accept cold/warm and changed-holding behavior on the ordinary installation. | Planned |
-| D2 Study continuation | Scientific identity separated from execution budget | Durable segments and sampler state precede Pause/Resume, Stop/partial results, Add trials and refined/manual child hypotheses. | Planned |
+| D2 Study continuation | Scientific identity separated from execution budget | Add trials and cooperative calculation-stage Pause/Resume retain sampler history and committed work. Frozen multi-stage recipes and Stop/partial-result publication remain. | Foundation implemented |
 | D3 Exact trade investigation | A1 and existing R2 evidence | Explain the selected trade's modeled candle/fill/rule/cost and return to the original drawdown or month. | Planned |
 | D4 Native benchmark | Frozen independent benchmark acquisition/return basis | Compare to an appropriate retained benchmark; explicit overlays for old reports, no replacement price source. | Planned |
 | E1 Portable presentation | B/C retained decisions and existing export | Readable standalone HTML/print report with optional study/comparison/decision appendix; separately evaluate QS-01. | Planned |
@@ -964,7 +965,7 @@ DataFrame was introduced. Client requests abort on close/unmount/identity change
 This is static resource review plus native lifecycle/restore checks, not a measured
 long-duration leak test.
 
-**Remaining:** genuine pause/partial results and the frozen multi-stage research
+**Remaining after this slice:** partial results and the frozen multi-stage research
 recipe still precede automatic reliability selection. Benchmark/warmup contracts,
 causal indicators/regimes, robust validation and automatic findings remain planned.
 Later-period exposure is not reset: the existing account-wide calculation-overlap
@@ -981,3 +982,66 @@ Account configuration, broker/history code and local UI customizations match
 their pre-install hashes. The worker is online, the new continuation endpoints
 enforce authentication/CSRF, and the served library bundle contains Add trials
 and Previous study. This smoke check did not start a broker calculation.
+
+## Cooperative study pause — 12 September 2026
+
+**Implemented and installed in the normal application.** Pause is available once a normal or reserve-period
+portfolio optimization has durably saved its calculation inputs. A queued resume
+can pause immediately; a running study moves through pausing, finishes the admitted
+proposal, and atomically saves its checkpoint, completed counters and paused
+execution before unwinding. A boundary before each new proposal prevents admitting
+more work after an already-observed pause request. Resume queues the same exact job.
+
+The prior sampler, frozen prices, parent report and retained results stay intact.
+Paused jobs remain at rest through worker restart and populated backup/restore.
+Stop can supersede a pending pause. Lease loss, shutdown and failed artifact
+publication retain their existing recoverable failure states; the UI never calls
+an unsaved step paused. Final result publication can win a simultaneous last-step
+pause request. No schema migration or dependency was added.
+
+The interface shows a compact Pause action, a pending saving state and Resume run.
+Actual counters and score history remain visible. Motion continues while the
+current step finishes, stops when paused and respects the existing reduced-motion
+styles. Actions retain the current return route, suppress duplicate clicks, abort
+on unmount/account/run changes and ignore late responses. Archived work remains
+read-only in the interface. Normal library navigation reopens paused checkpoints.
+
+This deliberately excludes price preparation and old embedded train/test studies:
+their later-period calculation does not have a resumable proposal checkpoint.
+The stored partial search state is not presented as a completed tear sheet. D2's
+frozen multi-stage recipe and explicit partial-result publication remain next.
+
+**Verification:** 319 distinct backend checks pass with ten POSIX-only supervisor
+skips on Windows. The real grid/TPE cases prove equivalence to an uninterrupted
+study, no repeated completed evaluations, frozen parent/reservation preservation,
+owner/CSRF gates, queued checkpoints, Stop/shutdown/lease races, failed publication,
+and populated paused backup/restore. Original acquisition, library, MCP and worker
+lifecycle regressions also pass. The complete workflow interface command passes
+506 checks in 42 suites; type checking, production build, scoped lint and all
+117 compatibility gates pass.
+
+The final controlled native browser run extended a six-proposal study to twenty,
+paused after eleven, reopened it in a fresh tab and resumed to 20/20. Both pause
+and completion attempts, fourteen new observations, the original six carried
+trials and the preserved return route were visible. The fixture used actual
+VectorBT/Optuna on synthetic prices with a four-second observation delay per new
+evaluation; this is not a speed benchmark. Desktop screenshots were reviewed.
+Mobile viewport controls were unavailable in this browser session; existing
+responsive/reduced-motion styles and component coverage remain, without claiming
+a new mobile visual check. Both controlled test workers were stopped afterward.
+
+**Installation:** fifteen runtime files and the production interface were installed
+after confirming no active calculations. The customized legacy scanner page
+received only pausing/paused status handling; its other bytes were preserved.
+All 57 saved runs and complete research metadata remain unchanged. Existing
+account, broker/history code and protected UI customizations match their prior
+hashes. Source/entry-page and local metadata backups remain in ignored locations.
+The worker, authentication/CSRF gates and the actual served Pause interface were
+verified. The versioned preview.4 download is still an older asset; these changes
+are a newer source checkpoint, with remote CI recorded separately.
+
+**Resource audit:** new request and boundary sessions are context-managed; existing
+artifact publication and joined heartbeat ownership are retained. There are no
+new worker pools, caches, registries or retained result frames. Client actions
+abort on identity changes/unmount. Existing connection-return and lifecycle tests
+passed; no long-duration RSS/handle measurement is claimed.

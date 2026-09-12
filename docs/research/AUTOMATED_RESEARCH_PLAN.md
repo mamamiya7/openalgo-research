@@ -9,6 +9,8 @@ Implementation has started with its D2 dependency: completed-study **Add trials*
 now separates scientific identity from execution budget and retains exact saved
 prices/checkpoints in linked continuation results. This foundation does not enable
 the automatic research action described below. See [current status](STATUS.md).
+Cooperative Pause/Resume now retains the current completed proposal and its exact
+checkpoint. A frozen multi-stage recipe and partial-result publication still follow.
 
 ## Product outcome
 
@@ -38,8 +40,9 @@ execution, frozen shared-account calculations, retained studies/candidate report
 later-period evaluation, comparisons, decisions and chosen setup reuse. It does
 not execute RSI/EMA/Bollinger/relative-strength/regime filters from the research
 request. Its price planner currently requests no indicator warmup. Native
-independent benchmark reporting, general walk-forward and durable study extension
-remain planned. A chart indicator elsewhere in OpenAlgo is not evidence that the
+independent benchmark reporting and general walk-forward remain planned. Completed
+study extension and calculation-stage Pause/Resume are implemented; the complete
+multi-stage research protocol remains planned. A chart indicator elsewhere in OpenAlgo is not evidence that the
 research worker can reproduce that indicator over historical signals.
 
 Sources: [Optuna adapter](../../research/connectors/optuna_portfolio.py),

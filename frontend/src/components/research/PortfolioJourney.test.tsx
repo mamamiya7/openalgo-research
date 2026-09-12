@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { axe } from 'jest-axe'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   type PortfolioCapabilities,
@@ -35,6 +35,7 @@ vi.mock('@/api/portfolioResearch', () => ({
     job: vi.fn(),
     jobs: vi.fn(),
     cancel: vi.fn(),
+    pause: vi.fn(),
     resume: vi.fn(),
     rerun: vi.fn(),
     analysis: vi.fn().mockResolvedValue({ status: 'missing' }),
@@ -157,6 +158,9 @@ const running: PortfolioJob = {
   progress: 39,
 }
 const clients: QueryClient[] = []
+function RunLocation() {
+  return <output data-testid="run-location">{useLocation().search}</output>
+}
 function mount(path = '/scanner-research', onLegacyJob?: (id: string) => void) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -166,6 +170,7 @@ function mount(path = '/scanner-research', onLegacyJob?: (id: string) => void) {
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[path]}>
         <PortfolioResearch onLegacyJob={onLegacyJob} />
+        <RunLocation />
       </MemoryRouter>
     </QueryClientProvider>
   )
@@ -724,7 +729,7 @@ describe('native portfolio consumer journey', () => {
     })
     const first = mount('/scanner-research?job=running-job')
     await userEvent.click(await screen.findByRole('button', { name: 'Cancel run' }))
-    expect(portfolioResearch.cancel).toHaveBeenCalledWith('running-job')
+    expect(portfolioResearch.cancel).toHaveBeenCalledWith('running-job', expect.any(AbortSignal))
     first.unmount()
     vi.mocked(portfolioResearch.job).mockResolvedValue({
       ...running,
@@ -734,7 +739,166 @@ describe('native portfolio consumer journey', () => {
     vi.mocked(portfolioResearch.resume).mockResolvedValue(running)
     mount('/scanner-research?job=running-job')
     await userEvent.click(await screen.findByRole('button', { name: 'Resume run' }))
-    expect(portfolioResearch.resume).toHaveBeenCalledWith('running-job')
+    expect(portfolioResearch.resume).toHaveBeenCalledWith('running-job', expect.any(AbortSignal))
+  })
+
+  it('pauses a ready study, keeps checking while saving, and resumes the same saved run', async () => {
+    const ready = { ...running, kind: 'portfolio_optimize', pausable: true }
+    const pausing = { ...ready, status: 'pausing', pausable: false }
+    const paused = { ...pausing, status: 'paused', resumable: true }
+    vi.mocked(portfolioResearch.job).mockResolvedValue(ready)
+    vi.mocked(portfolioResearch.pause).mockImplementation(async () => {
+      vi.mocked(portfolioResearch.job).mockResolvedValue(pausing)
+      return pausing
+    })
+    const route = '?job=running-job&return_research=experiment%3Doriginal%26view%3Dstudies'
+    mount(`/scanner-research${route}`)
+    await userEvent.click(await screen.findByRole('button', { name: 'Pause', exact: true }))
+    expect(portfolioResearch.pause).toHaveBeenCalledWith('running-job', expect.any(AbortSignal))
+    expect(await screen.findByRole('button', { name: 'Pausing…' })).toBeDisabled()
+    expect(screen.getByTestId('run-location')).toHaveTextContent(route)
+    expect(screen.getByRole('button', { name: 'Cancel run' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: 'Resume run' })).not.toBeInTheDocument()
+    vi.mocked(portfolioResearch.job).mockResolvedValue(paused)
+    await act(async () => {
+      await clients.at(-1)!.invalidateQueries({ queryKey: ['portfolio-job'] })
+    })
+    expect(await screen.findByText('Progress saved. Resume whenever you’re ready.')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Pause', exact: true })).not.toBeInTheDocument()
+    vi.mocked(portfolioResearch.resume).mockImplementation(async () => {
+      vi.mocked(portfolioResearch.job).mockResolvedValue(ready)
+      return ready
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'Resume run' }))
+    expect(portfolioResearch.resume).toHaveBeenCalledWith('running-job', expect.any(AbortSignal))
+    expect(await screen.findByRole('button', { name: 'Pause', exact: true })).toBeEnabled()
+    expect(screen.getByTestId('run-location')).toHaveTextContent(route)
+    expect(portfolioResearch.submit).not.toHaveBeenCalled()
+    expect(portfolioResearch.preflight).not.toHaveBeenCalled()
+  })
+
+  it('offers pause only when the server confirms a durable study checkpoint', async () => {
+    vi.mocked(portfolioResearch.job).mockResolvedValue({
+      ...running,
+      kind: 'portfolio_optimize',
+      pausable: false,
+    })
+    mount('/scanner-research?job=running-job')
+    await screen.findByRole('button', { name: 'Cancel run' })
+    expect(screen.queryByRole('button', { name: 'Pause', exact: true })).not.toBeInTheDocument()
+    expect(portfolioResearch.pause).not.toHaveBeenCalled()
+  })
+
+  it('permits a safe pause retry after a lost response and does not submit a second study', async () => {
+    vi.mocked(portfolioResearch.job).mockResolvedValue({
+      ...running,
+      kind: 'portfolio_optimize',
+      pausable: true,
+    })
+    vi.mocked(portfolioResearch.pause).mockRejectedValueOnce(new Error('Connection interrupted'))
+    mount('/scanner-research?job=running-job')
+    await userEvent.click(await screen.findByRole('button', { name: 'Pause', exact: true }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Connection interrupted')
+    const paused = { ...running, kind: 'portfolio_optimize', status: 'paused', resumable: true }
+    vi.mocked(portfolioResearch.pause).mockResolvedValueOnce(paused)
+    vi.mocked(portfolioResearch.job).mockResolvedValue(paused)
+    await userEvent.click(screen.getByRole('button', { name: 'Pause', exact: true }))
+    await screen.findByRole('button', { name: 'Resume run' })
+    expect(vi.mocked(portfolioResearch.pause).mock.calls.map(([id]) => id)).toEqual([
+      'running-job',
+      'running-job',
+    ])
+    expect(portfolioResearch.submit).not.toHaveBeenCalled()
+  })
+
+  it('aborts a pending pause request on unmount and ignores its late response', async () => {
+    vi.mocked(portfolioResearch.job).mockResolvedValue({
+      ...running,
+      kind: 'portfolio_optimize',
+      pausable: true,
+    })
+    let finish!: (job: PortfolioJob) => void
+    vi.mocked(portfolioResearch.pause).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    const view = mount('/scanner-research?job=running-job')
+    await userEvent.click(await screen.findByRole('button', { name: 'Pause', exact: true }))
+    expect(screen.getByRole('button', { name: 'Pause', exact: true })).toBeDisabled()
+    const signal = vi.mocked(portfolioResearch.pause).mock.calls[0][1]!
+    view.unmount()
+    expect(signal.aborted).toBe(true)
+    await act(async () => {
+      finish({ ...running, status: 'paused', resumable: true })
+    })
+    expect(
+      clients.at(-1)!.getQueryData<PortfolioJob>(['portfolio-job', 'account', 'running-job'])
+        ?.status
+    ).toBe('running')
+  })
+
+  it('ignores a pause response after the account changes', async () => {
+    vi.mocked(portfolioResearch.job).mockResolvedValue({
+      ...running,
+      kind: 'portfolio_optimize',
+      pausable: true,
+    })
+    let finish!: (job: PortfolioJob) => void
+    vi.mocked(portfolioResearch.pause).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    mount('/scanner-research?job=running-job')
+    await userEvent.click(await screen.findByRole('button', { name: 'Pause', exact: true }))
+    const signal = vi.mocked(portfolioResearch.pause).mock.calls[0][1]!
+    act(() => {
+      useAuthStore.setState({
+        user: { username: 'different-account', broker: null, isLoggedIn: true, loginTime: null },
+      })
+    })
+    expect(signal.aborted).toBe(true)
+    await act(async () => {
+      finish({ ...running, status: 'paused', resumable: true })
+    })
+    expect(screen.queryByText('Study paused')).not.toBeInTheDocument()
+    expect(
+      clients.at(-1)!.getQueryData<PortfolioJob>(['portfolio-job', 'account', 'running-job'])
+        ?.status
+    ).toBe('running')
+  })
+
+  it('keeps an archived study read-only while showing its saved progress', async () => {
+    vi.mocked(portfolioResearch.job).mockResolvedValue({
+      ...running,
+      kind: 'portfolio_optimize',
+      pausable: true,
+    })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    clients.push(client)
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/scanner-research?job=running-job']}>
+          <PortfolioResearch
+            workspace={{
+              draft: draft(),
+              onChange: vi.fn(),
+              onRun: vi.fn(),
+              onOpenJob: vi.fn(),
+              readOnly: true,
+            }}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
+    await screen.findByRole('region', { name: 'Portfolio run progress' })
+    expect(
+      screen.queryByRole('button', { name: /Pause|Resume run|Cancel run/ })
+    ).not.toBeInTheDocument()
+    expect(portfolioResearch.pause).not.toHaveBeenCalled()
   })
 
   it('opens saved portfolios and routes earlier runs through the legacy callback', async () => {

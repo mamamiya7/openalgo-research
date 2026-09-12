@@ -41,6 +41,7 @@ from utils.logging import get_logger
 logger = get_logger(__name__)
 LEASE_SECONDS = 120
 NETWORK_HEARTBEAT_SECONDS = 1
+WORKING = ("running", "pausing")
 
 
 class Cancelled(Exception):
@@ -49,6 +50,10 @@ class Cancelled(Exception):
 
 class Interrupted(Exception):
     pass
+
+
+class Paused(Exception):
+    """The job and its last complete calculation checkpoint were saved together."""
 
 
 def acquire(store, token):
@@ -67,7 +72,7 @@ def acquire(store, token):
         study_activity.reconcile(db, now)
         db.execute(
             update(ResearchJob)
-            .where(ResearchJob.status.in_(("running", "cancelling")))
+            .where(ResearchJob.status.in_((*WORKING, "cancelling")))
             .values(
                 status="interrupted",
                 error="Worker stopped before publication; resume a verified checkpoint when available.",
@@ -98,7 +103,7 @@ def network_lease(store, token, job_id, stop_requested=None):
             raise Interrupted("Worker shutdown requested")
         with store.sessions.begin() as db:
             lease, job = db.get(ResearchWorker, 1), db.get(ResearchJob, job_id)
-            if lease.token != token or job.status != "running":
+            if lease.token != token or job.status not in WORKING or job.worker != token:
                 raise Cancelled("Cancellation requested or worker lease lost")
             lease.heartbeat = job.updated_at = time.time()
 
@@ -182,7 +187,7 @@ def run_one(store, token, stop_requested=None):
             if (
                 lease.token != token
                 or current.worker != token
-                or current.status not in ("running", "cancelling")
+                or current.status not in (*WORKING, "cancelling")
             ):
                 return
             if study_observer:
@@ -221,7 +226,7 @@ def run_one(store, token, stop_requested=None):
         with store.sessions.begin() as db:
             lease = db.get(ResearchWorker, 1)
             current = db.get(ResearchJob, job.id)
-            if lease.token != token or current.status != "running" or current.worker != token:
+            if lease.token != token or current.status not in WORKING or current.worker != token:
                 raise Cancelled("Cancellation requested or worker lease lost")
             receipt = db.get(ResearchExperiment, job.id)
             counts = json.loads(receipt.counts)
@@ -250,11 +255,35 @@ def run_one(store, token, stop_requested=None):
         with store.sessions.begin() as db:
             lease = db.get(ResearchWorker, 1)
             current = db.get(ResearchJob, job.id)
-            if lease.token != token or current.status != "running":
+            if lease.token != token or current.status not in WORKING or current.worker != token:
                 raise Cancelled("Cancellation requested or worker lease lost")
             lease.heartbeat = time.time()
             current.progress = min(99, int(100 * completed / max(1, total)))
             current.updated_at = time.time()
+
+    def acknowledge_pause(db, current):
+        """Called only at a completed-calculation boundary under the claim fence."""
+        if current.status != "pausing":
+            return False
+        if study_observer:
+            study_observer.finish(db, "paused", "pause_requested")
+        current.status, current.worker, current.error = "paused", None, None
+        current.updated_at = time.time()
+        return True
+
+    def calculation_boundary():
+        # No engine call has started at this boundary. Its existing checkpoint
+        # already contains all admitted work, including an empty frozen seed.
+        if stop_requested and stop_requested():
+            raise Interrupted("Worker shutdown requested")
+        with store.sessions.begin() as db:
+            db.execute(update(ResearchWorker).where(ResearchWorker.id == 1).values(id=1))
+            lease, current = db.get(ResearchWorker, 1), db.get(ResearchJob, job.id)
+            if lease.token != token or current.worker != token or current.status not in WORKING:
+                raise Cancelled("Cancellation requested or worker lease lost")
+            paused = acknowledge_pause(db, current)
+        if paused:
+            raise Paused()
 
     def checkpoint(state, counts):
         # New checkpoint bytes are admitted under the artifact publication lock
@@ -268,7 +297,7 @@ def run_one(store, token, stop_requested=None):
             db.execute(update(ResearchWorker).where(ResearchWorker.id == 1).values(id=1))
             current = db.get(ResearchJob, job.id)
             lease = db.get(ResearchWorker, 1)
-            if current.status != "running" or lease.token != token or current.worker != token:
+            if current.status not in WORKING or lease.token != token or current.worker != token:
                 raise Cancelled("Cancellation requested before checkpoint publication")
             if study_observer:
                 study_observer.checkpoint(db, state)
@@ -276,6 +305,14 @@ def run_one(store, token, stop_requested=None):
             display_counts = {**counts, **({"activity": activity_state} if activity_state else {})}
             receipt.checkpoint, receipt.counts = artifact, encoded(display_counts).decode()
             current.progress = min(99, int(100 * counts["completed"] / max(1, counts["total"])))
+            paused = (
+                acknowledge_pause(db, current)
+                if kind == "portfolio_optimize" and state.get("phase") == "calculation"
+                else False
+            )
+        # Unwind only after the checkpoint, coverage and terminal execution commit.
+        if paused:
+            raise Paused()
 
     history_record = None
     parent_result_artifact = None
@@ -351,7 +388,11 @@ def run_one(store, token, stop_requested=None):
                     progress=progress,
                     cancelled=cancelled,
                     activity=activity,
-                    **({"observe": observe} if study_observer else {}),
+                    **(
+                        {"observe": observe, "boundary": calculation_boundary}
+                        if study_observer
+                        else {}
+                    ),
                 )
         elif kind in ("prepare", "acquire"):
             if kind == "acquire":
@@ -556,7 +597,7 @@ def run_one(store, token, stop_requested=None):
                 update(ResearchJob)
                 .where(
                     ResearchJob.id == job.id,
-                    ResearchJob.status == "running",
+                    ResearchJob.status.in_(WORKING),
                     ResearchJob.worker == token,
                 )
                 .values(
@@ -617,6 +658,8 @@ def run_one(store, token, stop_requested=None):
                         counts["activity"] = activity_state
                         receipt.counts = encoded(counts).decode()
                 current.updated_at = time.time()
+    except Paused:
+        pass
     except Interrupted:
         finish_job(
             "interrupted",
@@ -657,7 +700,7 @@ def release(store, token):
         study_activity.reconcile(db, time.time(), token=token)
         db.execute(
             update(ResearchJob)
-            .where(ResearchJob.worker == token, ResearchJob.status.in_(("running", "cancelling")))
+            .where(ResearchJob.worker == token, ResearchJob.status.in_((*WORKING, "cancelling")))
             .values(
                 status="interrupted",
                 error="Worker stopped before completion",

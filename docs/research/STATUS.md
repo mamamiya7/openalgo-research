@@ -17,7 +17,7 @@ existing and total trials, retains exact retry requests, and supports keyboard
 and mobile use. A continued study links back to its previous study.
 
 This is a completed-study continuation slice, not the full D2/automatic mode.
-Genuine pause/partial-result publication, a multi-stage frozen recipe, benchmark
+Partial-result publication, a multi-stage frozen recipe, benchmark
 and indicator warmup, causal conditions and automatic reliability/final checks
 remain pending. Existing scalar ranking is unchanged. A continuation never makes
 previously used later data unseen. See the [implementation receipt](DELIVERY_PLAN.md#study-continuation-foundation--12-september-2026).
@@ -25,6 +25,29 @@ This increment is installed in the normal application. All 57 saved runs and
 research metadata are unchanged; account settings, broker/history adapters and
 local interface customizations are preserved. The worker and new served assets
 are verified. Source publication is recorded in the local installation receipt.
+
+## Cooperative study pause — installed 12 September 2026
+
+Optimization now offers **Pause** once its calculation inputs are saved. It finishes
+the current proposal, commits its checkpoint and acknowledges **Study paused**.
+**Resume run** restores the exact study; completed proposals are not evaluated
+again. Paused studies stay saved across worker restarts and backup/restore and
+remain accessible from the research library. Pause/Resume preserve the original
+return route and ignore stale client responses after account/navigation changes.
+
+Preparation and old combined train/test studies do not offer Pause. A failing
+calculation, publication failure or lost worker keeps its existing recovery behavior;
+Pause never invents a completed report. The D2 frozen recipe and partial results
+remain pending. See the [implementation receipt](DELIVERY_PLAN.md#cooperative-study-pause--12-september-2026).
+
+The normal application now serves this update with its existing account and all
+57 saved runs unchanged. Fifteen runtime files and the production interface were
+installed; only the new status handling was merged into the locally customized
+legacy scanner page. **319 backend checks** pass (ten POSIX-only skips on Windows),
+**506 frontend checks across 42 suites** pass, and **117 compatibility gates** pass.
+The controlled browser journey extended six trials to twenty, paused at eleven,
+reopened the same saved study and resumed to 20/20 with distinct paused/completed
+activity records. No new broker calculation was started in the normal app.
 
 ## Latest native installation — 12 September 2026
 

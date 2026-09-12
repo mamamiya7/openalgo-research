@@ -41,7 +41,7 @@ import {
 import { useAuthStore } from '@/stores/authStore'
 
 const active = (status?: string) =>
-  ['queued', 'running', 'cancelling', 'cancel_requested'].includes(status || '')
+  ['queued', 'running', 'pausing', 'cancelling', 'cancel_requested'].includes(status || '')
 const names: Record<string, string> = {
   evaluated_all_passes: 'Distinct settings tested across the investigation',
   evaluated_this_pass: 'Settings tested in this pass',
@@ -1820,11 +1820,18 @@ export default function ScannerResearch() {
                   }}
                 >
                   <option value="">All statuses</option>
-                  {['queued', 'running', 'completed', 'failed', 'cancelled', 'interrupted'].map(
-                    (status) => (
-                      <option key={status}>{status}</option>
-                    )
-                  )}
+                  {[
+                    'queued',
+                    'running',
+                    'pausing',
+                    'paused',
+                    'completed',
+                    'failed',
+                    'cancelled',
+                    'interrupted',
+                  ].map((status) => (
+                    <option key={status}>{status}</option>
+                  ))}
                 </select>
               </div>
             </div>

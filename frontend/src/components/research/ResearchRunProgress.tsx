@@ -100,6 +100,10 @@ function statusTitle(job: ProgressJob, optimizing: boolean) {
       return stageTitle(job.activity, optimizing)
     case 'queued':
       return job.activity?.batch_count ? 'Waiting to continue' : 'Waiting to start'
+    case 'pausing':
+      return 'Saving progress before pausing…'
+    case 'paused':
+      return 'Study paused'
     case 'cancelling':
     case 'cancel_requested':
       return 'Stopping your run…'
@@ -329,7 +333,7 @@ function Details({ activity }: { activity: ResearchActivity }) {
 export function ResearchRunProgress({ job }: { job: ProgressJob }) {
   const activity = job.activity?.version === 1 ? job.activity : undefined
   const optimizing = job.kind === 'portfolio_optimize'
-  const running = job.status === 'running'
+  const running = job.status === 'running' || job.status === 'pausing'
   const current = job.status === 'completed' ? 4 : stepIndex(activity?.stage)
   const title = researchRunStatus(job)
   const inputs = activity?.inputs
@@ -404,6 +408,16 @@ export function ResearchRunProgress({ job }: { job: ProgressJob }) {
           </output>
           <Elapsed activity={activity} running={running} />
         </div>
+        {job.status === 'pausing' && (
+          <p className="text-sm text-muted-foreground">
+            Finishing the current step and saving your trials.
+          </p>
+        )}
+        {job.status === 'paused' && (
+          <p className="text-sm text-muted-foreground">
+            Progress saved. Resume whenever you’re ready.
+          </p>
+        )}
         {job.status === 'queued' && (
           <p className="text-sm text-muted-foreground">
             {activity?.batch_count

@@ -110,6 +110,7 @@ def _job_receipt(value):
         "kind",
         "counts",
         "resumable",
+        "pausable",
         "queue_position",
         "evidence_id",
     )

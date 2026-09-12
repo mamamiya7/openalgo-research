@@ -14,7 +14,14 @@ export interface StudyExecution {
   started_at: number
   finished_at: number | null
   observed_at: number
-  state: 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted' | 'observation_failed'
+  state:
+    | 'running'
+    | 'completed'
+    | 'failed'
+    | 'cancelled'
+    | 'paused'
+    | 'interrupted'
+    | 'observation_failed'
   reason_code: string | null
   proposal_budget: number
   replayed: number

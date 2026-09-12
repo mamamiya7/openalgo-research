@@ -428,6 +428,7 @@ def run(
     cancelled,
     activity=None,
     observe=None,
+    boundary=None,
 ):
     validate_submission(
         evidence,
@@ -468,6 +469,8 @@ def run(
             {"phase": "calculation", "inputs_artifact": inputs_id, "calculation": None},
             {"completed": 60, "total": 100, "stage": "backtest"},
         )
+    if boundary:
+        boundary()
     if activity:
         # Frozen replays need no archive check or broker download. Only report
         # quantities actually present in the retained input evidence.
@@ -577,7 +580,10 @@ def run(
             record_timing=True,
             **({"activity": activity} if activity else {}),
             **({"observe": observe} if observe else {}),
+            **({"boundary": boundary} if boundary else {}),
         )
+        if boundary:
+            boundary()
         from research.study_analysis import build_study_analysis
 
         result["experiment"]["study_analysis"] = build_study_analysis(
@@ -596,6 +602,8 @@ def run(
             progress=calculation_progress,
         )
     if validation_evidence is not None:
+        if boundary:
+            boundary()
         if activity:
             activity({"stage": "validation"})
         selected = {row["id"]: row for row in result["strategies"]}

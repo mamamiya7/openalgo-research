@@ -54,8 +54,9 @@ const date = (time: number | string) => {
 }
 const count = (value: number, word: string) => `${value} ${word}${value === 1 ? '' : 's'}`
 const active = (job: PortfolioJob) =>
-  ['queued', 'running', 'cancelling', 'cancel_requested'].includes(job.status)
-const stopped = (job: PortfolioJob) => ['interrupted', 'failed', 'cancelled'].includes(job.status)
+  ['queued', 'running', 'pausing', 'cancelling', 'cancel_requested'].includes(job.status)
+const stopped = (job: PortfolioJob) =>
+  ['paused', 'interrupted', 'failed', 'cancelled'].includes(job.status)
 const jobCreatedAt = (job: PortfolioJob) => {
   const value =
     typeof job.created_at === 'number' ? job.created_at * 1000 : Date.parse(job.created_at)

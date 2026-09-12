@@ -40,6 +40,7 @@ PROPOSAL_STATES = (
 )
 EXECUTION_STATES = (
     "running",
+    "paused",
     "completed",
     "failed",
     "cancelled",
@@ -47,6 +48,7 @@ EXECUTION_STATES = (
     "observation_failed",
 )
 REASONS = (
+    "pause_requested",
     "calculation_failed",
     "cancellation_requested",
     "worker_shutdown",
@@ -92,7 +94,7 @@ def _fence(db, token, job_id, *, terminal=False):
     # stale observer can never update after a fenced successor has acquired it.
     db.execute(update(ResearchWorker).where(ResearchWorker.id == 1).values(id=1))
     lease, job = db.get(ResearchWorker, 1), db.get(ResearchJob, job_id)
-    states = ("running", "cancelling") if terminal else ("running",)
+    states = ("running", "pausing", "cancelling") if terminal else ("running", "pausing")
     if (
         lease is None
         or lease.token != token
@@ -364,7 +366,7 @@ class StudyObserver:
         # A later publication failure cannot turn a completed native outcome into
         # a failed trial. Close only the proposal we actually observed open.
         proposal_state = "interrupted" if state == "observation_failed" else state
-        if proposal_state == "completed":
+        if proposal_state in ("completed", "paused"):
             proposal_state = "interrupted"
         db.execute(
             update(ResearchStudyProposal)

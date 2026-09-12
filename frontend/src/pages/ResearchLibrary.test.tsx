@@ -175,6 +175,7 @@ describe('research library navigation and lost-work boundaries', () => {
     'failed',
     'interrupted',
     'cancelled',
+    'paused',
   ])('offers the newest %s checkpoint ahead of an older result without automatically resuming', async (status) => {
     const data = blank()
     data.jobs = [

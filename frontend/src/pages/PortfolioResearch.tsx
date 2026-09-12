@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
+import { Pause, Play } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { type PortfolioJob, type PortfolioSource, portfolioResearch } from '@/api/portfolioResearch'
@@ -29,7 +30,7 @@ import { researchNavigationReturn } from '@/hooks/useResearchNavigation'
 import { useAuthStore } from '@/stores/authStore'
 
 const active = (status?: string) =>
-  ['queued', 'running', 'cancelling', 'cancel_requested'].includes(status ?? '')
+  ['queued', 'running', 'pausing', 'cancelling', 'cancel_requested'].includes(status ?? '')
 const isPortfolio = (job: PortfolioJob) =>
   ['portfolio_backtest', 'portfolio_optimize'].includes(job.kind ?? '')
 function message(error: unknown): string {
@@ -130,6 +131,19 @@ export default function PortfolioResearch({
   const [busy, setBusy] = useState(false)
   const [activityIdentity, setActivityIdentity] = useState<string | null>(null)
   const reportRequest = useRef<AbortController | null>(null)
+  const actionRequest = useRef<AbortController | null>(null)
+  const actionKey = JSON.stringify([owner, jobId, Boolean(workspace?.readOnly)])
+  const actionIdentity = useRef(actionKey)
+  actionIdentity.current = actionKey
+  // biome-ignore lint/correctness/useExhaustiveDependencies: account/run/archive changes own the request lifetime.
+  useEffect(() => {
+    setBusy(false)
+    setError(null)
+    return () => {
+      actionRequest.current?.abort()
+      actionRequest.current = null
+    }
+  }, [actionKey])
   // Cancel an old report lookup when its account or originating study changes.
   // biome-ignore lint/correctness/useExhaustiveDependencies: these identities define the request lifetime.
   useEffect(
@@ -307,8 +321,18 @@ export default function PortfolioResearch({
       setBusy(false)
     }
   }
-  async function jobAction(action: 'cancel' | 'resume' | 'rerun' | 'evaluate', trialId?: string) {
-    if (!jobId) return
+  async function jobAction(
+    action: 'pause' | 'cancel' | 'resume' | 'rerun' | 'evaluate',
+    trialId?: string
+  ) {
+    if (!jobId || workspace?.readOnly || actionRequest.current) return
+    const request = new AbortController()
+    actionRequest.current = request
+    const identity = actionKey
+    const stillCurrent = () =>
+      !request.signal.aborted &&
+      actionRequest.current === request &&
+      actionIdentity.current === identity
     setError(null)
     setBusy(true)
     try {
@@ -326,8 +350,14 @@ export default function PortfolioResearch({
                 trialId,
                 action === 'evaluate' ? 'evaluation' : undefined
               )
-          : await portfolioResearch[action](jobId)
-      openJob(job)
+          : await portfolioResearch[action](jobId, request.signal)
+      if (!stillCurrent()) return
+      if (action === 'pause' || action === 'cancel' || action === 'resume') {
+        // Run controls keep the exact report/library return route in place.
+        queryClient.setQueryData(['portfolio-job', owner, job.id], job)
+        void queryClient.invalidateQueries({ queryKey: ['portfolio-job', owner, job.id] })
+        void queryClient.invalidateQueries({ queryKey: ['portfolio-jobs', owner] })
+      } else openJob(job)
       if (action === 'rerun' || action === 'evaluate') {
         try {
           sessionStorage.removeItem(`portfolio-request:${owner}`)
@@ -336,9 +366,12 @@ export default function PortfolioResearch({
         }
       }
     } catch (cause) {
-      setError(message(cause))
+      if (stillCurrent()) setError(message(cause))
     } finally {
-      setBusy(false)
+      if (stillCurrent()) {
+        actionRequest.current = null
+        setBusy(false)
+      }
     }
   }
   function newRun() {
@@ -537,18 +570,37 @@ export default function PortfolioResearch({
             {job.specification?.portfolio?.name ?? 'Portfolio run'}
           </h2>
           <ResearchRunProgress job={job} />
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {active(job.status) ? (
-              <Button
-                type="button"
-                variant="outline"
-                disabled={busy || job.status === 'cancel_requested' || job.status === 'cancelling'}
-                onClick={() => {
-                  void jobAction('cancel')
-                }}
-              >
-                Cancel run
-              </Button>
+              <>
+                {(job.pausable || job.status === 'pausing') && !workspace?.readOnly && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={busy || job.status === 'pausing'}
+                    onClick={() => {
+                      void jobAction('pause')
+                    }}
+                  >
+                    <Pause className="size-4" aria-hidden="true" />
+                    {job.status === 'pausing' ? 'Pausing…' : 'Pause'}
+                  </Button>
+                )}
+                {!workspace?.readOnly && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={
+                      busy || job.status === 'cancel_requested' || job.status === 'cancelling'
+                    }
+                    onClick={() => {
+                      void jobAction('cancel')
+                    }}
+                  >
+                    Cancel run
+                  </Button>
+                )}
+              </>
             ) : (
               <>
                 {job.resumable && !workspace?.readOnly && (
@@ -559,6 +611,7 @@ export default function PortfolioResearch({
                       void jobAction('resume')
                     }}
                   >
+                    {job.status === 'paused' && <Play className="size-4" aria-hidden="true" />}
                     Resume run
                   </Button>
                 )}

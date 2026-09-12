@@ -313,6 +313,7 @@ describe('Research progress journey', () => {
     ['failed', 'Run stopped'],
     ['interrupted', 'Run interrupted'],
     ['cancelled', 'Run cancelled'],
+    ['paused', 'Study paused'],
   ])('overrides stale activity with %s and stops the active animation', (status, title) => {
     const { container } = render(
       <ResearchRunProgress job={job({ ...base, stage: 'download', batch_count: 2 }, status)} />
@@ -323,6 +324,32 @@ describe('Research progress journey', () => {
     expect(container.firstChild).toHaveAttribute('data-running', 'false')
     if (status === 'queued')
       expect(screen.getByText('Saved progress will continue automatically.')).toBeVisible()
+  })
+
+  it('keeps real work animated while pausing, then freezes saved counts and history', () => {
+    const activity = {
+      ...base,
+      stage: 'optimizing' as const,
+      trials: { total: 25, completed: 3, active_trial: 4, history: [{ trial: 3, score: 0.5 }] },
+    }
+    const { container, rerender } = render(<ResearchRunProgress job={job(activity, 'pausing')} />)
+    expect(screen.getByRole('status')).toHaveTextContent('Saving progress before pausing…')
+    expect(screen.getByText('Finishing the current step and saving your trials.')).toBeVisible()
+    expect(container.firstChild).toHaveAttribute('data-running', 'true')
+    expect(screen.getByText('Testing trial 4')).toBeVisible()
+    rerender(
+      <ResearchRunProgress
+        job={job(
+          { ...activity, trials: { ...activity.trials, completed: 4, active_trial: null } },
+          'paused'
+        )}
+      />
+    )
+    expect(container.firstChild).toHaveAttribute('data-running', 'false')
+    expect(screen.getByText('Progress saved. Resume whenever you’re ready.')).toBeVisible()
+    expect(screen.queryByText(/Testing trial/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
+    expect(screen.getByRole('img')).toHaveAccessibleName('Trial score history; latest score 0.500')
   })
 
   it('waits for durable completed status before marking all stages complete', () => {
