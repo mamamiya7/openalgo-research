@@ -25,6 +25,13 @@ Execution has started. The [implementation checkpoint](EXECUTION_STATUS.md)
 records the working library/draft/version increment and result-to-study links,
 with explicit remaining work and evidence boundaries.
 
+**12 September execution update:** the [connected-study receipt](REPORT_EXPERIENCE_PLAN.md#14-connected-study-and-exact-candidate-reports--12-september-2026)
+records native chart-to-trial navigation, sortable original proposals, exact
+candidate reports and return/library integration, observed with controlled native
+calculations. R4 remains implementing because durable activity/failure capture
+is still pending. The next dependency is that separate observation contract;
+R5 then uses stable candidate identities for shortlist and fair comparison.
+
 The outcome is one installable OpenAlgo Research distribution in which a person can develop a research idea, test it using the connected broker's native historical data, understand and improve it through established engines, make a supported decision, and return to the saved work. The existing distribution remains the delivery vehicle. No second research account, general calculation engine or broker downloader is planned.
 
 ## 1. Delivery decisions
@@ -55,7 +62,7 @@ Evidence labels:
 | Market data | Daily/minute planning, Historify reuse, missing-only acquisition, frozen snapshots, automatic continuation, accurate candle counters and daily request batching | Calendar maintenance, broader broker/venue coverage, additional historical streams and production performance evidence | C/H for bounded Fyers cases and controlled batching/reuse; no universal broker or live speed claim |
 | Research records | Named experiments, server drafts, immutable setup versions, search/notes/tags/pins, linked runs, archive/restore | Persistent candidate shortlist, comparisons, decisions and complete last-view restoration | C/H for core library; report R5 and remaining M1 add the missing records |
 | Results | Continuous report/risk depth, account-saved report preferences, month/drawdown investigation, report/period/candidate and evaluation-basis identities, native statistics, trial settings/Columns, frozen replay and evidence export | Native benchmark, connected candidate/comparison journey, complete context restoration and portable presentation export | C/H plus bounded controlled-engine/browser receipts for R0–R2 slices; normal-app acceptance pending |
-| Trial evidence | Original completed/pruned proposals and repeats, distinct ranked configurations, full scalar analysis for new distinct trials, native Optuna figures | Connected study dashboard, full proposal navigation, candidate links and durable real activity/failure/timing capture | C/H for saved analysis; absent old observations stay unknown; report R4/M3 extend the contract |
+| Trial evidence | Original proposals/repeats, sortable distinct/all-proposal views, scalar analysis, connected native Optuna figures, exact retained candidate reports and study return context | Durable real activity/failure capture, shortlist, full view restoration and broader runtime/owner acceptance | C/H plus controlled connected-journey observation; absent old observations stay unknown; report R4/R5/M3 extend the contract |
 | Continuation | Version-bound JSON replay and interrupted-job recovery | Pause UX and compatible extension of a completed study | C/H for recovery; current identity includes total trial budget, so M3 splits scientific identity from execution budget |
 | Validation | Fixed legacy earlier/later split plus frozen optional reserve mode before baseline/search; explicit chosen-candidate later evaluation, linked history and exact period identity | Fair cohort comparison, visible evidence-use history, rolling/scenario analysis and saved decisions | Controlled baseline/optimization/evaluation/replay ancestry checks passed; broader M2/M4 decision journey remains open |
 | Interface | Native React, continuous report, library/experiment navigation, server autosave/conflict recovery, compact progress and paginated trial metrics | Dedicated study workspace, contextual data/activity views, server-saved preferences and full navigation restoration | C/H and bounded report desktop/mobile receipt; ordinary-app acceptance of the newest increment pending |
@@ -241,7 +248,7 @@ original receipt; this review adds no new O evidence.
 | J10 Optimize settings | C/H search and result-to-optimization transition | M2.1/M3 | Baseline-linked study with full request planning |
 | J11 Optimize allocations | C/H joint core | M3/M4b.3 | Feasible allocations compared on shared-account results |
 | J12 Monitor/pause | C/H progress/recovery; pause P | M3.3 | Honest state, safe pause and preserved completed work |
-| J13 Explore parameters | C/H native plots and configurable trials; connected dashboard P | M3.2/M5.2 / report R4 | Actual trials support contextual native plots |
+| J13 Explore parameters | C/H native plots and configurable trials; connected study/candidate journey observed on controlled data | M3.2/M5.2 / report R4 | Actual trial identity reaches retained report; durable failure/activity capture and broader acceptance remain |
 | J14 Manual hypothesis | P | M3.4 | Validated settings become recorded manual trial |
 | J15 Extend study | Recovery exists; budget is identity-bound | M3.4 | Compatible extra-budget segment preserves history |
 | J16 Refine search | C/H setup restoration/child lineage; study-native refinement partial | M3.4 | Changed search is a linked child with preserved parent |

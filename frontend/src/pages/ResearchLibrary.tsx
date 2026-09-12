@@ -659,18 +659,27 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
   const runRequest = useRef<{ revision: number; id: string } | null>(null)
   const copyRequests = useRef<{ key: string; id: string } | null>(null)
   const dirty = model.state !== 'saved'
+  useEffect(() => {
+    if (jobId || !['overview', 'backtests', 'studies'].includes(view)) return
+    void model.refreshJobs().catch((cause: unknown) => {
+      if ((useAuthStore.getState().user?.username ?? 'account') === owner)
+        setError(researchError(cause))
+    })
+  }, [jobId, view, owner, model.refreshJobs])
   function changeView(nextView: string, job?: string) {
     const next = new URLSearchParams(params)
     next.set('view', nextView)
     next.delete('job')
     next.delete('version')
     next.delete('return_job')
+    next.delete('report')
     if (job) next.set('job', job)
     setParams(next)
   }
   function library() {
     const next = new URLSearchParams(params)
-    for (const key of ['experiment', 'job', 'view', 'version', 'return_job']) next.delete(key)
+    for (const key of ['experiment', 'job', 'view', 'version', 'return_job', 'report'])
+      next.delete(key)
     setParams(next)
   }
   async function operation<T>(fn: () => Promise<T>): Promise<T> {
@@ -984,18 +993,22 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
               onReplay: (origin, trialId, period) =>
                 operation(() => replay(origin, trialId, period)),
               onJobUpdate: model.reflectJob,
-              onOpenJob: (job) => {
+              onOpenJob: (job, returnStudyId) => {
                 if (
-                  view === 'studies' &&
-                  jobId &&
-                  job.id !== jobId &&
+                  (returnStudyId || (view === 'studies' && jobId)) &&
+                  job.id !== (returnStudyId || jobId) &&
                   job.kind !== 'portfolio_optimize'
                 ) {
                   const next = new URLSearchParams(params)
                   next.set('job', job.id)
                   next.set('view', 'backtests')
-                  next.set('return_job', jobId)
+                  next.set('return_job', returnStudyId || jobId!)
+                  next.delete('report')
                   setParams(next)
+                  void model.refreshJobs().catch((cause: unknown) => {
+                    if ((useAuthStore.getState().user?.username ?? 'account') === owner)
+                      setError(researchError(cause))
+                  })
                 } else
                   changeView(job.kind === 'portfolio_optimize' ? 'studies' : 'backtests', job.id)
               },

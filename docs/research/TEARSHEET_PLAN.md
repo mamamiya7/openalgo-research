@@ -2,8 +2,10 @@
 
 **Next presentation increment:** [Report experience and study journey](REPORT_EXPERIENCE_PLAN.md)
 specifies the QuantStats-inspired continuous report, Optuna dashboard, candidate
-links, comparisons and validation. That work is planned; the implemented foundation
-and its historical acceptance below remain separate.
+links, comparisons and validation. The continuous Report and connected
+study/candidate slices now have implementation receipts in that document;
+benchmarks, comparison and remaining activity/export work retain their planned
+status. The foundation and its historical acceptance below remain separate.
 
 Implemented 11 September 2026. This expands the native Research reporting layer while
 retaining VectorBT/Nautilus simulation and Optuna optimization. The extension is

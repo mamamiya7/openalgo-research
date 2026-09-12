@@ -14,6 +14,11 @@ export function researchError(error: unknown): string {
 }
 type SaveState = 'saved' | 'unsaved' | 'saving' | 'conflict' | 'error'
 const serialized = (draft: PortfolioDraft) => JSON.stringify(draft)
+const savedTime = (value: number | string | undefined) => {
+  if (value == null) return 0
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : Date.parse(String(value)) / 1000 || 0
+}
 export function useResearchExperiment(initial: ResearchExperiment, owner: string) {
   const key = `research-edit:${owner}:${initial.id}`
   const [server, setServer] = useState(initial)
@@ -27,6 +32,7 @@ export function useResearchExperiment(initial: ResearchExperiment, owner: string
   const generation = useRef(0)
   const inFlight = useRef<Promise<ResearchExperiment> | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const jobsRequest = useRef<AbortController | null>(null)
   const mounted = useRef(true)
   const ownerMatches = useCallback(
     () => (useAuthStore.getState().user?.username ?? 'account') === owner,
@@ -185,6 +191,7 @@ export function useResearchExperiment(initial: ResearchExperiment, owner: string
     window.addEventListener('beforeunload', beforeUnload)
     return () => {
       mounted.current = false
+      jobsRequest.current?.abort()
       window.removeEventListener('beforeunload', beforeUnload)
       if (timer.current) clearTimeout(timer.current)
       if (ownerMatches()) void flush().catch(() => {})
@@ -219,5 +226,59 @@ export function useResearchExperiment(initial: ResearchExperiment, owner: string
     serverRef.current = { ...before, jobs }
     if (mounted.current) setServer(serverRef.current)
   }, [])
-  return { server, draft, state, error, change, flush, accept, reload, reject, reflectJob }
+  const refreshJobs = useCallback(async () => {
+    if (!mounted.current || !ownerMatches()) return
+    jobsRequest.current?.abort()
+    const controller = new AbortController()
+    jobsRequest.current = controller
+    try {
+      const next = await researchLibrary.get(initial.id, controller.signal)
+      if (controller.signal.aborted || !mounted.current || !ownerMatches()) return
+      const before = serverRef.current
+      // A new candidate changes library membership, not the editable setup.
+      // Preserve the draft, revision/conflict and any newer polled job receipt.
+      const known = new Map(before.jobs.map((job) => [job.id, job]))
+      for (const job of next.jobs) {
+        const previous = known.get(job.id)
+        if (
+          !previous ||
+          savedTime(job.updated_at ?? job.created_at) >=
+            savedTime(previous.updated_at ?? previous.created_at)
+        )
+          known.set(job.id, job)
+      }
+      const jobs = [...known.values()]
+        .sort(
+          (left, right) =>
+            savedTime(right.created_at) - savedTime(left.created_at) ||
+            left.id.localeCompare(right.id)
+        )
+        .slice(0, Math.max(20, before.jobs.length, next.jobs.length))
+      serverRef.current = {
+        ...before,
+        jobs,
+        job_count: next.job_count,
+        active_job_count: next.active_job_count,
+        jobs_next_offset: next.jobs_next_offset,
+      }
+      setServer(serverRef.current)
+    } catch (cause) {
+      if (!controller.signal.aborted && mounted.current && ownerMatches()) throw cause
+    } finally {
+      if (jobsRequest.current === controller) jobsRequest.current = null
+    }
+  }, [initial.id, ownerMatches])
+  return {
+    server,
+    draft,
+    state,
+    error,
+    change,
+    flush,
+    accept,
+    reload,
+    reject,
+    reflectJob,
+    refreshJobs,
+  }
 }

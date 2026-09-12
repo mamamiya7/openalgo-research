@@ -1,14 +1,14 @@
 # Reading optimization trials
 
-Updated 11 September 2026. The native Research portfolio workflow now includes the [full tear-sheet analysis](TEARSHEET_PLAN.md).
+Updated 12 September 2026. The native Research workflow includes the [full tear-sheet analysis](TEARSHEET_PLAN.md) and [connected study/candidate workspace](REPORT_EXPERIENCE_PLAN.md#14-connected-study-and-exact-candidate-reports--12-september-2026).
 
 ## What the user sees
 
-**View settings** opens the exact trial in a bounded dialog. It starts with focus on its title, works with multiple strategies, and returns focus to the same row on closing. Opening settings never launches a calculation. **Backtest this** remains an explicit action for that candidate.
+**View details** opens the exact trial's saved settings and statistics in a bounded dialog. Opening it never launches a calculation. The objective winner is labelled **Best by objective**, separately from the candidate being inspected. Its report opens immediately. Other candidates offer **Prepare report** once, using their saved prices and exact settings, then **Open report**. The original study remains unchanged. **Adjust & test** makes an explicit edited setup. Standalone legacy result embeds retain their existing View settings/Backtest this actions.
 
-The table shows 25 distinct configurations per page, keeps its header and trial identity visible during scrolling, and retains its page when switching result tabs. Repeated Optuna proposals are reported separately from distinct evaluated configurations.
+The table shows 25 distinct configurations per page, keeps its header and trial identity visible during scrolling, and restores its scope/sort/page and selected trial on return. **All proposals** shows actual saved proposal records, including repeated configurations and excluded allocations. Missing older history is not synthesized from summary counts. A displayed trial number is its stored number plus one; repeats retain their own actual proposal identity and link to the original configuration.
 
-**Columns** opens a small chooser with Apply, Cancel and Reset to default. The default columns are Return, Max drawdown, Win rate, Profit factor and Closed trades. Choices are stored per account in this browser, not inside immutable research evidence. Older studies show only fields they actually saved. Missing, null or non-finite values display `—`; real zero remains zero.
+**Columns** opens a small chooser with Apply, Cancel and Reset to default. Defaults include Score, Return, Max drawdown, saved account Sharpe, Win rate, Profit factor and Closed trades. Numeric columns sort on full saved values with missing values last in either direction. Choices are stored per account in this browser, outside immutable research evidence. Older studies show only fields they actually saved. Missing, null or non-finite values display `—`; real zero remains zero.
 
 ## Calculated versus displayed
 
@@ -18,6 +18,7 @@ Both portfolio engines retain their unchanged shared `_summary` and separate Opt
 | --- | --- |
 | Return | Marked equity change over the tested period, not annualized |
 | Max drawdown | Largest percentage fall from the running equity peak |
+| Sharpe | Recorded annualized Sharpe of daily marked account returns, using 252 sessions and zero risk-free rate; unavailable when the saved analysis cannot support it |
 | Win rate | Profitable closed trades divided by all closed trades |
 | Profit factor | Closed-trade profits divided by losses; `—` when losses are zero |
 | Net P&L | Final marked equity minus starting capital, including open positions |

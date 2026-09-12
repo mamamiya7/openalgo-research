@@ -194,6 +194,16 @@ export interface PortfolioTrial {
   stage: string
   analysis?: ScalarAnalysis
 }
+export interface PortfolioProposal {
+  number: number
+  params: Record<string, number>
+  config_id: string
+  state: 'complete' | 'pruned'
+  value: number | null
+  reused: boolean
+  datetime_start?: string
+  datetime_complete?: string
+}
 export interface PortfolioResult {
   report_context?: PortfolioReportContext
   evaluation_basis?: EvaluationBasis
@@ -249,6 +259,7 @@ export interface PortfolioResult {
     kind: 'portfolio_optimize'
     evaluation_basis_id?: string
     rows: PortfolioTrial[]
+    trials?: PortfolioProposal[]
     recommendation_id: string
     selected_strategies: PortfolioSettings[]
     optimizer: { sampler: string; objective_definition: string; version: string }
@@ -256,10 +267,11 @@ export interface PortfolioResult {
     counts: Record<string, number>
     analysis_catalog?: AnalysisMetric[]
     study_analysis?: StudyAnalysis
-    search_space?: { axes: Record<string, PortfolioRange> }
+    search_space?: { axes: Record<string, PortfolioRange>; proposal_budget?: number }
   }
 }
 export interface PortfolioJob {
+  updated_at?: number | string
   activity?: ResearchActivity
   id: string
   status: string

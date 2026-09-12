@@ -174,6 +174,19 @@ class ResearchReportPreferences(Base):
     updated_at = Column(Float, nullable=False)
 
 
+class ResearchCandidateReport(Base):
+    """One retained report per immutable study configuration and recorded period."""
+
+    __tablename__ = "research_candidate_reports"
+    owner = Column(String(255), primary_key=True)
+    study_job_id = Column(String(64), primary_key=True)
+    config_id = Column(String(64), primary_key=True)
+    period = Column(String(16), primary_key=True)
+    parent_result_artifact = Column(String(64), nullable=False)
+    report_job_id = Column(String(64), nullable=False, unique=True)
+    created_at = Column(Float, nullable=False)
+
+
 class ResearchStore:
     def __init__(self, root=None):
         self.root = Path(root or os.getenv("RESEARCH_DATA_DIR", "research_data")).resolve()

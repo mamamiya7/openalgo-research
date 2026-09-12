@@ -1123,6 +1123,7 @@ def job_receipt(store, job, include_result=False):
 
 def resume(store, owner, job_id):
     from research.connectors.registry import policy_for_request, validate_capabilities
+    from services.research_candidates import guard_resume
 
     job = get_job(store, owner, job_id)
     evidence = source_for(store, owner, job.source_id)
@@ -1140,6 +1141,7 @@ def resume(store, owner, job_id):
     policy = policy_for_request(evidence["snapshot"], saved_spec)
     with store.sessions.begin() as db:
         write_guard(db)
+        guard_resume(db, owner, job_id)
         current = db.get(ResearchJob, job_id)
         experiment = db.get(ResearchExperiment, job_id)
         if current.status in ACTIVE:

@@ -112,6 +112,10 @@ jobs:
           npm run test:run --
           src/components/research/PortfolioJourney.test.tsx
           src/components/research/PortfolioTrials.test.tsx
+          src/components/research/studyTrialView.test.ts
+          src/components/research/studyPresentation.test.ts
+          src/components/research/useStudyWorkspaceView.test.tsx
+          src/components/research/PortfolioStudyWorkspace.test.tsx
           src/components/research/PortfolioAnalysis.test.tsx
           src/components/research/PortfolioContinuousReport.test.tsx
           src/components/research/ReportInvestigation.test.tsx

@@ -631,4 +631,8 @@ def run(
             later["analysis"] = add_price_charts(
                 later["analysis"], later, validation_evidence["snapshot"]
             )
+    if evidence.get("candidate_report"):
+        from services.research_candidates import verify_reconstruction
+
+        verify_reconstruction(evidence, result)
     return result, evidence

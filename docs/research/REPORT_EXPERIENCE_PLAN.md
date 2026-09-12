@@ -542,6 +542,86 @@ are not cumulative. CI now includes continuous report, investigation and prefere
 tests. Source publication retains `0.1.0-preview.4` as the latest packaged release;
 no new release tag, downloadable app bundle or Web Store submission is implied.
 
+## 14. Connected study and exact candidate reports — 12 September 2026
+
+**State: connected exploration/candidate slice journey-observed on controlled data;
+R4 as a whole remains implementing.** This builds on the report/evaluation basis
+contracts rather than changing price ownership, engine calculations or optimizer
+selection. The normal installation and published preview are unchanged by this
+development slice.
+
+| User outcome | Implemented behavior |
+|---|---|
+| Read the study | Dedicated Overview, Parameters, Trials and Activity sections. Objective, direction, period, saved proposal budget, distinct configurations, reused proposals and best score remain separate. No baseline or Pareto interpretation is invented. |
+| Explore native plots | History and return/drawdown appear together; importance/slice and contour are coordinated by two readable parameter selections. Parallel coordinates, rank and EDF stay under Advanced. These are native saved Optuna figures with presentation labels and interaction added to copies. |
+| Inspect a real observation | History uses recorded numbers, slices validate native trial colors/axes/score, rank validates native hover identities/axes, and contour markers match recorded parameter pairs. Overlapping contour observations ask which actual proposal to inspect. Interpolation and best-so-far lines never become candidates. Older plots without actual proposal history stay readable without guessed click identity. |
+| Browse evidence | Distinct configurations by default; All proposals uses original records, including reuse and excluded allocations. Numeric sorting uses full values, nulls last and stable original identities. Columns include objective, return, drawdown, saved daily-account Sharpe, win rate, profit factor and closed trades; browser column choices are preserved. |
+| Open a candidate report | The winner's existing report is immediate. Other trials show their actual saved scalars/settings and an explicit Prepare report action. One durable identity admits one bounded fixed-configuration job using frozen inputs; no new broker acquisition/search. Failed preparation opens the existing run; mismatch cannot publish a substituted report. |
+| Keep and return | Candidate jobs are linked to the source study/library and retained through backup. Best report URL state survives refresh and browser Back. Returning from a child restores section, table scope/sort/page, parameters, advanced expansion and selected proposal. Library membership refresh preserves a dirty draft/conflict. |
+
+Candidate completion verifies original summary, available native scalar analysis
+and recorded evaluation basis against the new result before exposing it. Older
+results without a basis retain that unknown status. Missing frozen evidence or an
+incompatible recorded engine produces a precise unavailable receipt; the original
+winner/statistics remain readable. Account authorization, CSRF, maintenance fence,
+queue capacity and archive gates apply, including direct resume requests.
+
+Verification includes native VectorBT/Optuna reserved/full-period replay, concurrent
+admission, original-evidence checks, failure/checkpoint resume, archive/restore,
+populated metadata upgrade and backup/restore. Frontend checks cover sorting,
+100 proposals / 65 configurations / 35 reused, click identity, missing evidence,
+candidate dialog, explicit preparation, return state, dirty draft and request
+cleanup. Production build and source/release checks pass.
+
+The controlled Chromium journey exercised a real 20-configuration grid requested
+with a budget of 100 (displayed correctly as 20/20), physical native-point click,
+Best report/reload/browser Back, candidate preparation/open/return, library
+membership and 390px mobile layout. The candidate action was the only write in
+the observed journey; original study export hash was unchanged. Screenshots and
+exact receipts stay under ignored `.agent-native/study-workspace/`. No production
+broker, normal-account browser or native Nautilus execution is claimed here.
+
+Resource review: database work uses scoped/context-managed sessions and the
+existing atomic publisher/worker; no new executor, network client or result cache.
+Repeated availability/admission tests verify database connections return after
+each request. React lookups abort on replacement/unmount/account changes, pending
+report polling ends at a terminal state, and navigation storage is capped at 20
+account/job/artifact entries. This is bounded lifecycle testing, not a production
+memory soak test.
+
+**Remaining R4:** separate versioned capture of actual running/failed/interrupted
+trial activity without changing sampler recovery. Activity currently shows only
+recorded outcomes and native timing when it exists; it does not fabricate older
+times/states. Exact scroll/zoom restoration and cross-device study-navigation
+preferences remain later refinements. R5 shortlist/comparison/decisions and
+evidence-use history, R3 benchmark evidence, R6 exports and M3 genuine pause/extend
+retain their prerequisites. No new package version or public release is implied.
+
+## 15. Existing-app study update and source publication — 12 September 2026
+
+The owner explicitly requested updating the full app and pushing the source.
+The 20-file native study overlay was built against the existing installation's
+frontend/dependencies before downtime. The existing supervisor restarted the app
+and research worker after verifying no active calculation or saved scheduled
+strategy/Flow startup. No separate account or isolated replacement app was used.
+
+All 57 saved jobs (50 completed, seven previously failed) and fingerprints of all
+pre-existing research metadata tables were preserved. Native initialization added
+the empty candidate-report table. The current study bundle is served, the existing
+account is recognized, and the worker heartbeat is current. Anonymous candidate
+reads require login; native CSRF middleware rejects unauthorized preparation.
+Configuration, broker/history source, package locks and local legacy/market-status
+customizations remain unchanged. Rollback source/entry copies and exact receipts
+are ignored under `.agent-native/study-app-update/`.
+
+The publication review found no blocking code/private-data issue, verified all new
+required-file and CI entries, and retained the previously passed 126 frontend and
+93 backend/package checks (one Windows environment skip). The prebuilt interface
+is included with the source update so the entry page cannot reference omitted
+ignored bundles. This updates repository source and the existing app; it does not
+create a new versioned release, Chrome Web Store submission or claim a fresh
+normal-account broker calculation/Nautilus acceptance.
+
 ## References
 
 - [Visual reference](https://github.com/ranaroussi/quantstats/blob/main/docs/report.webp):

@@ -101,7 +101,7 @@ export default function PortfolioResearch({
     draft: PortfolioDraft
     onChange: (draft: PortfolioDraft) => void
     onRun: () => Promise<PortfolioJob>
-    onOpenJob: (job: PortfolioJob) => void
+    onOpenJob: (job: PortfolioJob, returnStudyId?: string) => void
     onReplay?: (
       jobId: string,
       trialId?: string,
@@ -125,6 +125,15 @@ export default function PortfolioResearch({
   const priorOwner = useRef(owner)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const reportRequest = useRef<AbortController | null>(null)
+  // Cancel an old report lookup when its account or originating study changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: these identities define the request lifetime.
+  useEffect(
+    () => () => {
+      reportRequest.current?.abort()
+    },
+    [owner, jobId]
+  )
   const [uploading, setUploading] = useState(false)
   const [uploadActivity, setUploadActivity] = useState<ResearchUploadActivity | undefined>()
   const [savedOpen, setSavedOpen] = useState(false)
@@ -218,12 +227,12 @@ export default function PortfolioResearch({
     changeDraft(addPortfolioSource(draftRef.current, source, sourceName(source)))
     setSourcesOpen(false)
   }
-  function openJob(job: PortfolioJob) {
+  function openJob(job: PortfolioJob, returnStudyId?: string) {
     setError(null)
     setSavedOpen(false)
     queryClient.setQueryData(['portfolio-job', owner, job.id], job)
-    if (workspace) workspace.onOpenJob(job)
-    else setParams({ job: job.id })
+    if (workspace) workspace.onOpenJob(job, returnStudyId)
+    else setParams({ job: job.id, ...(returnStudyId ? { return_job: returnStudyId } : {}) })
     void queryClient.invalidateQueries({ queryKey: ['portfolio-job', owner, job.id] })
     void queryClient.invalidateQueries({ queryKey: ['portfolio-jobs', owner] })
   }
@@ -379,6 +388,11 @@ export default function PortfolioResearch({
           '@media (prefers-reduced-motion: reduce) { [data-slot="sheet-overlay"], [data-slot="sheet-content"], [data-slot="dialog-overlay"], [data-slot="dialog-content"] { animation: none !important; transition: none !important; } }'
         }
       </style>
+      {!workspace && params.get('return_job') && (
+        <Button variant="ghost" onClick={() => setParams({ job: params.get('return_job')! })}>
+          Back to study
+        </Button>
+      )}
       {!workspace && (
         <header className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">Backtest & Optimize</h1>
@@ -447,6 +461,33 @@ export default function PortfolioResearch({
           key={job.id}
           job={job}
           result={job.result}
+          studyReport={params.get('report') === 'best'}
+          onStudyReportChange={(open) => {
+            const next = new URLSearchParams(params)
+            if (open) next.set('report', 'best')
+            else next.delete('report')
+            setParams(next)
+          }}
+          onOpenReport={(reportJobId) => {
+            reportRequest.current?.abort()
+            const controller = new AbortController()
+            reportRequest.current = controller
+            void portfolioResearch
+              .job(reportJobId, controller.signal)
+              .then((reportJob) => {
+                if (controller.signal.aborted) return
+                openJob(reportJob, job.id)
+              })
+              .catch((reason) => {
+                if (!controller.signal.aborted)
+                  setError(
+                    reason instanceof Error ? reason.message : 'The report could not be opened.'
+                  )
+              })
+              .finally(() => {
+                if (reportRequest.current === controller) reportRequest.current = null
+              })
+          }}
           embedded={Boolean(workspace)}
           onEvaluate={() => {
             void jobAction('evaluate')
@@ -493,7 +534,7 @@ export default function PortfolioResearch({
               </Button>
             ) : (
               <>
-                {job.resumable && (
+                {job.resumable && !workspace?.readOnly && (
                   <Button
                     type="button"
                     disabled={busy}
@@ -504,9 +545,11 @@ export default function PortfolioResearch({
                     Resume run
                   </Button>
                 )}
-                <Button type="button" variant="outline" onClick={editSetup}>
-                  Edit setup
-                </Button>
+                {!workspace?.readOnly && (
+                  <Button type="button" variant="outline" onClick={editSetup}>
+                    Edit setup
+                  </Button>
+                )}
               </>
             )}
           </div>

@@ -1,6 +1,6 @@
 # OpenAlgo Research status
 
-Updated: 11 September 2026. Published preview: **`0.1.0-preview.4`**, targeting OpenAlgo 2.0.2.2.
+Updated: 12 September 2026. Published preview: **`0.1.0-preview.4`**, targeting OpenAlgo 2.0.2.2.
 
 ## Current development increment
 
@@ -59,16 +59,40 @@ Automated Chrome interaction stopped because the browser address could not be
 reliably identified; no fresh signed-in click-through is claimed. Optional
 Nautilus acceptance and a versioned release of these increments remain pending.
 
-**Next work:** the connected study/candidate workspace and independently frozen
-benchmark evidence, with full reference-field mapping and normal-app acceptance
-continuing alongside them.
+The next R4 slice is now implemented and observed in the controlled browser:
+**Study Overview / Parameters / Trials / Activity**, linked native observations,
+sortable scalar columns, distinct portfolios versus actual proposals, and exact
+candidate reports. The best report opens immediately; other candidates prepare
+once from retained prices/settings through the bounded worker. Original summaries,
+native statistics and evaluation basis are checked before publication of a child
+report. Study exports and ranking do not change. Reports are library-linked and
+survive restart/backup. Candidate admission/resume respects archive state.
+Study section, table scope/sort/page, chosen parameters and selected trial return
+with the user; the best report has its own URL state and browser-history entry.
+Library job refresh preserves unsaved setup edits and conflict state.
+See [the R4 receipt and precise limits](REPORT_EXPERIENCE_PLAN.md#14-connected-study-and-exact-candidate-reports--12-september-2026).
+
+**Next work:** finish R4's separate durable activity/failure/interruption records
+without changing scientific checkpoint replay, then R5 shortlist/comparison on
+the established candidate/report identities. R3 independently frozen benchmark
+evidence can proceed separately. Full reference-field mapping, real optional
+Nautilus acceptance and broader normal-account journey acceptance remain open.
 The [report experience specification](REPORT_EXPERIENCE_PLAN.md)
 defines a continuous tear sheet, connected Optuna study dashboard, candidate reports,
 benchmark comparison, shortlist and saved validation/decisions. It records exact
 page contents, score/count semantics, data ownership and R0–R6 acceptance. The
 optional QuantStats connector is pinned there as **QS-01**, to evaluate before
 choosing the final report export implementation. R0–R2 have the bounded
-implementation receipts above; they are not claimed fully accepted. R3–R6 remain open.
+implementation receipts above; they are not claimed fully accepted. R4's connected
+study/candidate slice is journey-observed on controlled data; the full R3–R6
+packages remain open. On 12 September, the authorized 20-file study update was
+built against and installed into the existing app. All 57 saved jobs and every
+pre-existing research-table fingerprint were preserved; the candidate table was
+added, the app/worker restarted, the current bundle is served, and native login/
+CSRF protection was verified. Configuration and local UI customizations remain
+unchanged. This is installation smoke acceptance alongside the controlled browser
+journey, not a new normal-account calculation. Source publication includes the
+complete prebuilt UI; the packaged release remains preview.4.
 
 The full [tear-sheet increment](TEARSHEET_PLAN.md) is implemented: 121 VectorBT
 and 88 Nautilus catalog entries, extended scalar metrics saved per distinct new

@@ -6,6 +6,14 @@ type Metric = Omit<AnalysisMetric, 'source'> & { source?: string }
 // Do not derive winner-only values from the selected report for other trials.
 export const trialMetrics: readonly Metric[] = [
   {
+    key: 'objective_score',
+    label: 'Score',
+    group: 'Performance',
+    format: 'number',
+    description:
+      'The saved optimization score used to rank trials. Higher is better for the chosen objective.',
+  },
+  {
     key: 'net_return_pct',
     label: 'Return',
     group: 'Performance',
@@ -18,6 +26,14 @@ export const trialMetrics: readonly Metric[] = [
     group: 'Performance',
     format: 'percent',
     description: 'Largest peak-to-trough decline in marked equity.',
+  },
+  {
+    key: 'account_sharpe_ratio',
+    label: 'Sharpe ratio',
+    group: 'Performance',
+    format: 'number',
+    description:
+      'Daily marked-account excess-return mean / sample standard deviation × sqrt(252); risk-free return 0.',
   },
   {
     key: 'win_rate_pct',
@@ -39,14 +55,6 @@ export const trialMetrics: readonly Metric[] = [
     group: 'Performance',
     format: 'money',
     description: 'Final marked equity minus starting capital, including open positions.',
-  },
-  {
-    key: 'objective_score',
-    label: 'Objective score',
-    group: 'Performance',
-    format: 'number',
-    description:
-      'The saved optimization score used to rank trials. Higher is better for the chosen objective.',
   },
   {
     key: 'final_equity',
@@ -122,8 +130,10 @@ export const trialMetrics: readonly Metric[] = [
 ]
 
 export const defaultTrialColumns = [
+  'objective_score',
   'net_return_pct',
   'max_drawdown_pct',
+  'account_sharpe_ratio',
   'win_rate_pct',
   'profit_factor',
   'closed_trades',

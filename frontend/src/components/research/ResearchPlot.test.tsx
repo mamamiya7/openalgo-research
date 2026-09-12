@@ -27,6 +27,32 @@ beforeEach(() => {
 })
 
 describe('research chart presentation', () => {
+  it('labels native slice colors from one without changing candidate identifiers', () => {
+    const chart: AnalysisChart = {
+      id: 'slice',
+      title: 'Slice',
+      status: 'available',
+      figure: {
+        data: [
+          {
+            type: 'scatter',
+            mode: 'markers',
+            x: [1, 2],
+            y: [5, 6],
+            marker: { color: [0, 1] },
+            customdata: [{ research_trials: [0] }, { research_trials: [1] }],
+          },
+        ],
+        layout: {},
+      },
+    }
+    const saved = JSON.stringify(chart)
+    render(<ResearchPlot chart={chart} />)
+    const props = observed.plot.mock.lastCall![0]
+    expect(props.data[0].marker.color).toEqual([1, 2])
+    expect(props.data[0].customdata).toEqual([{ research_trials: [0] }, { research_trials: [1] }])
+    expect(JSON.stringify(chart)).toBe(saved)
+  })
   it('forwards original heatmap coordinates without changing the saved evidence', () => {
     const chart: AnalysisChart = {
       id: 'monthly-returns',

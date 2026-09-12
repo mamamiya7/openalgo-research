@@ -4,6 +4,7 @@ from flask import Blueprint, Response, current_app, jsonify, request, session
 from sqlalchemy import func, select
 
 from database.research_db import ResearchJob, ResearchStore, ResearchWorker
+from services import research_candidates as candidates
 from services import research_chartink as chartink
 from services import research_library as library
 from services import research_preferences as preferences
@@ -62,6 +63,30 @@ def chartink_too_large(error):
 
 def store():
     return current_app.extensions["research_store"]
+
+
+@scanner_research_bp.get("/portfolio/jobs/<job_id>/candidates")
+def portfolio_candidate_reports(job_id):
+    return jsonify(candidates.availability(store(), session["user"], job_id))
+
+
+@scanner_research_bp.post("/portfolio/jobs/<job_id>/candidates/<config_id>/report")
+def prepare_candidate_report(job_id, config_id):
+    if (request.content_length or 0) > 1024:
+        raise ValueError("Candidate report request exceeds its size limit")
+    if not request.is_json:
+        raise ValueError("Supply an empty JSON object to prepare this exact candidate")
+    raw = request.stream.read(1025)
+    if len(raw) > 1024:
+        raise ValueError("Candidate report request exceeds its size limit")
+    try:
+        data = current_app.json.loads(raw)
+    except (ValueError, UnicodeDecodeError):
+        raise ValueError("Supply an empty JSON object to prepare this exact candidate") from None
+    if data != {}:
+        raise ValueError("Candidate reports use only their saved settings")
+    result = candidates.prepare(store(), session["user"], job_id, config_id)
+    return jsonify(result), 202 if result["status"] in ("queued", "running") else 200
 
 
 @scanner_research_bp.get("/imports/chartink/capabilities")

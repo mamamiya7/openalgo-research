@@ -75,6 +75,16 @@ export default function ResearchPlot({
           )
       }
     }
+    if (chart.id === 'slice') {
+      for (const trace of copy.data) {
+        // Native slice colors encode the trial number, so their colorbar must use
+        // the same one-based labels as history, tables and candidate dialogs.
+        if (Array.isArray(trace.marker?.color))
+          trace.marker.color = trace.marker.color.map((value: unknown) =>
+            typeof value === 'number' && Number.isInteger(value) ? value + 1 : value
+          )
+      }
+    }
     const color = dark ? '#e4e4e7' : '#27272a'
     const gridcolor = dark ? '#303036' : '#e4e4e7'
     const layout: Record<string, any> = {

@@ -116,6 +116,7 @@ def _references(engine):
         history = _rows(db, "research_history", ("job_id",))
         attempts = _rows(db, "research_attempts", ("job_id", "previous_job_id", "root_job_id"))
         library_roots = _library_references(db, tables)
+        candidate_roots = _candidate_references(db)
     source_ids, job_ids = {row[0] for row in sources}, {row[0] for row in jobs}
     if any(row[1] not in source_ids for row in jobs):
         raise ValueError("Research job references a missing source")
@@ -130,7 +131,39 @@ def _references(engine):
         | {row[2] for row in jobs if row[2]}
         | {row[1] for row in experiments if row[1]}
         | library_roots
+        | candidate_roots
     )
+
+
+def _candidate_references(db):
+    """An absent additive table is valid for older backups."""
+    rows = _rows(
+        db,
+        "research_candidate_reports",
+        ("owner", "study_job_id", "config_id", "period", "parent_result_artifact", "report_job_id"),
+    )
+    if not rows:
+        return set()
+    jobs = {
+        row[0]: row[1:] for row in _rows(db, "research_jobs", ("id", "owner", "result_artifact"))
+    }
+    experiments = {
+        row[0]: row[1:]
+        for row in _rows(db, "research_experiments", ("job_id", "kind", "parent_job_id"))
+    }
+    for owner, study, config, period, artifact, child in rows:
+        if (
+            study not in jobs
+            or child not in jobs
+            or jobs[study] != (owner, artifact)
+            or jobs[child][0] != owner
+            or period not in ("full", "selection")
+            or not re.fullmatch(r"[a-f0-9]{64}", config)
+            or experiments.get(study, (None,))[0] != "portfolio_optimize"
+            or experiments.get(child) != ("portfolio_backtest", study)
+        ):
+            raise ValueError("Candidate report references missing or incompatible study evidence")
+    return {row[4] for row in rows}
 
 
 def _library_references(db, tables):

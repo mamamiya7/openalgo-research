@@ -25,9 +25,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuthStore } from '@/stores/authStore'
 import { PortfolioStudyAnalysis } from './PortfolioAnalysis'
 import { PortfolioContinuousReport } from './PortfolioContinuousReport'
+import { BackToStudy, PortfolioStudyWorkspace } from './PortfolioStudyWorkspace'
 import { PortfolioTrials } from './PortfolioTrials'
 import { usePortfolioAnalysis } from './usePortfolioAnalysis'
 import { useReportPreferences } from './useReportPreferences'
+import { readStudyView, writeStudyView } from './useStudyWorkspaceView'
 
 const number = (value: unknown, suffix = '') =>
   typeof value === 'number' && Number.isFinite(value)
@@ -122,11 +124,49 @@ interface ResultProps {
   onEvaluate?: () => void
   embedded?: boolean
   readOnly?: boolean
+  onOpenReport?: (jobId: string) => void
+  studyReport?: boolean
+  onStudyReportChange?: (open: boolean) => void
 }
 export function PortfolioResults(props: ResultProps) {
+  const owner = useAuthStore((state) => state.user?.username ?? 'account')
+  const identity = JSON.stringify([
+    owner,
+    props.job.id,
+    props.result.report_context?.result_artifact ?? props.job.id,
+  ])
   const [period, setPeriod] = useState<'earlier' | 'later'>('earlier')
+  const [localReport, updateShowReport] = useState(
+    () => readStudyView(identity).surface === 'report'
+  )
+  const showReport = props.studyReport ?? localReport
+  function setShowReport(open: boolean) {
+    writeStudyView(identity, { ...readStudyView(identity), surface: open ? 'report' : 'study' })
+    updateShowReport(open)
+    props.onStudyReportChange?.(open)
+  }
+  const connectedStudy = Boolean(props.result.experiment && props.onOpenReport)
   const validation = props.result.validation
-  if (!validation) return <PortfolioReport {...props} />
+  if (connectedStudy && !showReport)
+    return (
+      <PortfolioStudyWorkspace
+        {...props}
+        readOnly={props.readOnly ?? false}
+        renderSettings={(strategy) => <StrategySettings strategy={strategy} />}
+        onOpenReport={(jobId) => {
+          if (jobId === props.job.id) setShowReport(true)
+          else props.onOpenReport?.(jobId)
+        }}
+      />
+    )
+  const back = connectedStudy ? <BackToStudy onClick={() => setShowReport(false)} /> : null
+  if (!validation)
+    return (
+      <div>
+        {back}
+        <PortfolioReport {...props} hideStudyTabs={connectedStudy} />
+      </div>
+    )
   const result =
     period === 'later'
       ? {
@@ -137,6 +177,7 @@ export function PortfolioResults(props: ResultProps) {
       : props.result
   return (
     <div className="space-y-5">
+      {back}
       <fieldset className="inline-flex rounded-lg bg-muted p-1" aria-label="Evaluation period">
         {(['earlier', 'later'] as const).map((value) => (
           <Button
@@ -151,7 +192,13 @@ export function PortfolioResults(props: ResultProps) {
           </Button>
         ))}
       </fieldset>
-      <PortfolioReport key={period} {...props} result={result} laterPeriod={period === 'later'} />
+      <PortfolioReport
+        key={period}
+        {...props}
+        result={result}
+        laterPeriod={period === 'later'}
+        hideStudyTabs={connectedStudy}
+      />
     </div>
   )
 }
@@ -167,7 +214,8 @@ function PortfolioReport({
   embedded = false,
   readOnly = false,
   laterPeriod = false,
-}: ResultProps & { laterPeriod?: boolean }) {
+  hideStudyTabs = false,
+}: ResultProps & { laterPeriod?: boolean; hideStudyTabs?: boolean }) {
   const owner = useAuthStore((state) => state.user?.username)
   const preferences = useReportPreferences(owner)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -374,8 +422,8 @@ function PortfolioReport({
           <TabsTrigger value="report">Report</TabsTrigger>
           <TabsTrigger value="trades">Trades</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
-          {experiment && <TabsTrigger value="trials">Trials</TabsTrigger>}
-          {experiment && <TabsTrigger value="study">Study analysis</TabsTrigger>}
+          {experiment && !hideStudyTabs && <TabsTrigger value="trials">Trials</TabsTrigger>}
+          {experiment && !hideStudyTabs && <TabsTrigger value="study">Study analysis</TabsTrigger>}
         </TabsList>
         <TabsContent value="report" className="pt-3">
           <PortfolioContinuousReport

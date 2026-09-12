@@ -60,6 +60,127 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 describe('durable research draft lifecycle', () => {
+  it('refreshes new candidate jobs without changing a dirty draft or its conflict revision', async () => {
+    const seed = experiment()
+    const hook = renderHook(() => useResearchExperiment(seed, 'account'))
+    act(() => hook.result.current.change({ ...seed.draft, optimizing: true }))
+    vi.mocked(researchLibrary.saveDraft).mockRejectedValueOnce(conflict())
+    await act(async () => {
+      await hook.result.current.flush().catch(() => {})
+    })
+    const candidate = {
+      id: 'candidate-1',
+      status: 'queued',
+      kind: 'portfolio_backtest',
+      progress: 0,
+      created_at: 2,
+      updated_at: 2,
+      experiment_id: seed.id,
+      role: 'candidate',
+    }
+    vi.mocked(researchLibrary.get).mockResolvedValue({
+      ...seed,
+      revision: 9,
+      draft: freshPortfolioDraft(),
+      jobs: [candidate],
+      job_count: 1,
+    })
+    await act(async () => {
+      await hook.result.current.refreshJobs()
+    })
+    expect(hook.result.current.server.jobs).toEqual([candidate])
+    expect(hook.result.current.server.job_count).toBe(1)
+    expect(hook.result.current.server.revision).toBe(1)
+    expect(hook.result.current.draft.optimizing).toBe(true)
+    expect(hook.result.current.state).toBe('conflict')
+    expect(researchLibrary.saveDraft).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(sessionStorage.getItem('research-edit:account:research-1')!)).toMatchObject({
+      revision: 1,
+      draft: { optimizing: true },
+    })
+  })
+  it('retains newer polled status and cancels superseded job refreshes', async () => {
+    const seed = experiment()
+    const candidate = {
+      id: 'candidate-1',
+      status: 'queued',
+      kind: 'portfolio_backtest',
+      progress: 0,
+      created_at: 2,
+      updated_at: 2,
+      experiment_id: seed.id,
+      role: 'candidate',
+    }
+    seed.jobs = [candidate]
+    seed.job_count = 1
+    const first = deferred<ResearchExperiment>()
+    const second = deferred<ResearchExperiment>()
+    vi.mocked(researchLibrary.get)
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+    const hook = renderHook(() => useResearchExperiment(seed, 'account'))
+    let old!: Promise<void>
+    let latest!: Promise<void>
+    act(() => {
+      old = hook.result.current.refreshJobs()
+      latest = hook.result.current.refreshJobs()
+    })
+    expect(vi.mocked(researchLibrary.get).mock.calls[0][1]?.aborted).toBe(true)
+    act(() =>
+      hook.result.current.reflectJob({
+        ...candidate,
+        status: 'completed',
+        progress: 100,
+        updated_at: 3,
+      })
+    )
+    await act(async () => {
+      second.resolve(seed)
+      await latest
+    })
+    await act(async () => {
+      first.resolve({ ...seed, jobs: [] })
+      await old
+    })
+    expect(hook.result.current.server.jobs[0]).toMatchObject({ status: 'completed', updated_at: 3 })
+  })
+  it('discards old-owner job responses and aborts metadata requests on unmount', async () => {
+    const seed = experiment()
+    const pending = deferred<ResearchExperiment>()
+    vi.mocked(researchLibrary.get).mockReturnValue(pending.promise)
+    const hook = renderHook(() => useResearchExperiment(seed, 'account'))
+    let reading!: Promise<void>
+    act(() => {
+      reading = hook.result.current.refreshJobs()
+    })
+    useAuthStore.setState({
+      user: { username: 'someone-else', broker: null, isLoggedIn: true, loginTime: null },
+    })
+    await act(async () => {
+      pending.resolve({ ...seed, job_count: 99 })
+      await reading
+    })
+    expect(hook.result.current.server.job_count).toBe(0)
+    useAuthStore.setState({ user: null })
+    const second = deferred<ResearchExperiment>()
+    vi.mocked(researchLibrary.get).mockReturnValueOnce(second.promise)
+    act(() => {
+      reading = hook.result.current.refreshJobs()
+    })
+    hook.unmount()
+    expect(vi.mocked(researchLibrary.get).mock.calls[1][1]?.aborted).toBe(true)
+    second.reject(new Error('Disconnected'))
+    await expect(reading).resolves.toBeUndefined()
+  })
+  it('reports metadata failure without discarding the saved library or changing draft state', async () => {
+    const seed = experiment()
+    const hook = renderHook(() => useResearchExperiment(seed, 'account'))
+    vi.mocked(researchLibrary.get).mockRejectedValueOnce(new Error('Library unavailable'))
+    await expect(hook.result.current.refreshJobs()).rejects.toThrow('Library unavailable')
+    expect(hook.result.current.server).toEqual(seed)
+    expect(hook.result.current.state).toBe('saved')
+    expect(hook.result.current.error).toBeNull()
+  })
   it('acknowledges server persistence and reopens the accepted version', async () => {
     const seed = experiment()
     const hook = renderHook(() => useResearchExperiment(seed, 'account'))
