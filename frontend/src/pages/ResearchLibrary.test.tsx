@@ -93,6 +93,11 @@ vi.mock('@/components/research/ResearchComparisons', () => ({
     <output>Saved comparisons {readOnly ? 'read only' : 'editable'}</output>
   ),
 }))
+vi.mock('@/components/research/ResearchDecisions', () => ({
+  ResearchDecisions: ({ readOnly }: { readOnly: boolean }) => (
+    <output>Saved decisions {readOnly ? 'read only' : 'editable'}</output>
+  ),
+}))
 const blank = (): ResearchExperiment => ({
   id: 'experiment-1',
   name: 'Breakout research',
@@ -260,6 +265,22 @@ describe('research library navigation and lost-work boundaries', () => {
     show('/scanner-research?experiment=experiment-1&view=unsupported')
     expect(await screen.findByRole('button', { name: 'Add signals' })).toBeVisible()
     expect(screen.getByRole('button', { name: 'Overview' })).toHaveAttribute('aria-current', 'page')
+  })
+  it('opens decisions inside the experiment and clears old evidence links when changing tabs', async () => {
+    show(
+      '/scanner-research?experiment=experiment-1&view=decisions&decision=d&decision_event=old&decision_report=selection&return_decision=d'
+    )
+    expect(await screen.findByText('Saved decisions editable')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Decisions', exact: true })).toHaveAttribute(
+      'aria-current',
+      'page'
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Comparisons', exact: true }))
+    expect(await screen.findByText('Saved comparisons editable')).toBeVisible()
+    expect(screen.getByTestId('location')).not.toHaveTextContent('decision_event')
+    expect(screen.getByTestId('location')).not.toHaveTextContent('decision_report')
+    expect(researchLibrary.run).not.toHaveBeenCalled()
+    expect(researchLibrary.saveDraft).not.toHaveBeenCalled()
   })
   it('reveals the active experiment tab horizontally without scrolling the page', async () => {
     const geometry = vi

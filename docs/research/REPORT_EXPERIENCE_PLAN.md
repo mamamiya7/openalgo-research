@@ -872,6 +872,98 @@ and comparison writes retain CSRF protection. Configuration, broker/history data
 and local UI customizations were preserved. This is native installation smoke
 acceptance alongside the controlled browser journey, not a new user-data run.
 
+## 20. Saved decisions and evidence use — 12 September 2026
+
+**Graph-first plan:** refreshed all 35 pending sources (30 code, five documents)
+from the installed comparison checkpoint. The full graph has 33,375 nodes and
+76,075 edges; the research view has 3,377 nodes and 9,501 edges. Unchanged IDs were
+preserved, 15 retrieval paths and four HTML scripts passed, and the manifest was
+published before development. A bounded query using actual graph vocabulary
+selected decisions on retained comparison evidence as the next dependency.
+These are navigation checks, not runtime acceptance.
+
+**Implemented journey:** saved comparison → Decision on a member → Keep, Reject
+or Revisit with an optional reason → Decisions → revision history → open exact
+selection/full or attached later report → return and revise. Every change appends
+a revision. The same original candidate in two comparisons shares a history;
+different source artifacts/configurations/periods remain distinct. A user choice
+never replaces Optuna's objective winner, and multiple candidates may be kept.
+
+Existing later evaluations are offered only when native lineage proves the exact
+original source artifact, candidate settings and reserved prices/signals. Legacy
+embedded later results belong only to the actually evaluated winner/fixed setup,
+never another trial. Attached later report/analysis versions are pinned; null
+analysis remains original. Renaming a comparison, removing its shortlist bookmark
+or updating current result/analysis pointers cannot rewrite a past decision.
+Missing evidence retains the choice/history and shows report unavailability.
+
+Evidence history distinguishes recorded calculation, an explicit successful
+**Open report** action and later evidence used in decisions. Opening the decision
+dialog does not record a report opening. GET, prefetch and reload remain read-only;
+only a visible report reached through an explicit action acknowledges **Opened**.
+Repeated acknowledgements deduplicate exact evidence. Archived report openings
+may append observations; archived choices cannot change. Ordinary/legacy report
+opening history remains unknown. Full-period baseline overlap is identified from
+native calculation history; absent overlap never proves untouched data.
+
+Native SQLAlchemy records have independent revisions, atomic request receipts,
+owner/experiment scoping and native CSRF. Accepted retries return the original
+event even after supersession/archive. Four additive tables retain current heads,
+append-only events, first openings and retry receipts. No metrics, charts or
+prices are copied into decision records. Lists/history read metadata only; costly
+context/report discovery starts on demand. Saving/opening never starts a broker,
+optimizer, report-preparation or execution job.
+
+**Verification:** 18 semantic/retention tests, six independent HTTP/resource checks
+and 157 existing comparison/report/candidate/library/storage regressions passed.
+Cases include actual nonwinner later evaluation, winner-only legacy later results,
+changed origin/prices, pinned analysis, concurrent retries, supersession, archive,
+pointer changes, populated/old backup and tamper rejection. Testing exposed an
+existing backup gap: native later-evaluation submissions use request kind
+`validation`; storage now validates it with the same required version and exact
+library job link as replay. Populated later-evidence backup exercises that path.
+All 378 checks in the 33-file frontend workflow, TypeScript, scoped formatting/lint
+and production build passed. Distribution/package/worker checks passed 42, with
+the Windows symlink-creation test skipped.
+
+A controlled native browser journey used a real 20-configuration VectorBT/Optuna
+study, prepared alternative, full-period baseline and explicit later evaluation.
+Attach later evidence → Keep → reopen both reports → Revisit → open the old revision
+→ rename comparison/remove bookmark → leave/filter/reload passed. Four jobs stayed
+four; no calculation/analysis request started and original study export/comparison
+statistics stayed unchanged. Desktop light, 390px dark and the small decision
+dialog were inspected with no page exceptions or horizontal page overflow.
+Screenshots wait for native theme colors to settle. Revising from history opens
+the newly accepted revision; older revisions retain their original URLs/evidence.
+
+Resource review covered scoped NullPool sessions, abortable reads/writes, removed
+visibility listeners, bounded pages and streaming backup validation. One hundred
+successful reads and 100 conflicts returned active connections to zero after each
+call. Later admission releases full report arrays before loading another retained
+input. No cache, executor, broker client or worker was introduced. This is bounded
+acceptance, not a production memory soak or new broker verification.
+
+**Next:** explicit comparison-to-validation launch using the canonical original
+study/configuration and frozen reservation, then the chosen immutable setup link.
+A prepared candidate child has had its split removed, so its generic replay is
+not a valid substitute. Existing later-evaluation launch remains in its original
+report journey. Ordinary report-wide opening instrumentation, cross-experiment
+period-use navigation and independent fresh-period design are follow-ons; this
+slice does not certify an untouched holdout or finish all R5. R3 benchmark, genuine
+pause/extension, QS-01/export and wider broker/asset/runtime acceptance retain their
+dependencies. The published version remains preview.4; this is a source/app
+increment, not a new versioned release. Post-plan source edits are explicitly
+queued for the next Graphify extraction.
+
+The user-authorized update is now installed into the existing port-5000 app.
+Eleven runtime files and a build made against its local customizations were
+installed after a fresh zero-active-job check and graceful supervisor restart.
+All 57 existing jobs and every prior research-table fingerprint were preserved;
+the four additive decision/evidence tables start empty. Native HTTP, exact served
+assets, worker heartbeat, ownership/CSRF and existing-account checks passed.
+Configuration, broker/history and local UI customizations retained their hashes.
+This installation smoke check did not submit a user-data calculation or download.
+
 ## References
 
 - [Visual reference](https://github.com/ranaroussi/quantstats/blob/main/docs/report.webp):

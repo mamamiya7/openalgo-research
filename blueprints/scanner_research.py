@@ -7,6 +7,7 @@ from database.research_db import ResearchJob, ResearchStore, ResearchWorker
 from services import research_candidates as candidates
 from services import research_chartink as chartink
 from services import research_comparisons as comparisons
+from services import research_decisions as decisions
 from services import research_library as library
 from services import research_preferences as preferences
 from services import research_shortlist as shortlist
@@ -71,6 +72,23 @@ def report_preferences_conflict(error):
     return jsonify(
         message=str(error), code="report_preferences_conflict", current=error.current
     ), 409
+
+
+@scanner_research_bp.errorhandler(decisions.DecisionConflict)
+def decision_revision_conflict(error):
+    return jsonify(
+        message=str(error), code="decision_revision_conflict", current=error.current
+    ), 409
+
+
+@scanner_research_bp.errorhandler(decisions.DecisionRequestConflict)
+def decision_request_conflict(error):
+    return jsonify(message=str(error), code="decision_request_conflict"), 409
+
+
+@scanner_research_bp.errorhandler(decisions.DecisionEvidenceChanged)
+def decision_evidence_changed(error):
+    return jsonify(message=str(error), code="decision_evidence_changed"), 409
 
 
 @scanner_research_bp.errorhandler(chartink.ImportConflict)
@@ -289,6 +307,119 @@ def library_comparison_member(experiment_id, comparison_id, member_id):
         comparisons.get_member_report(
             store(), session["user"], experiment_id, comparison_id, member_id
         )
+    )
+
+
+@scanner_research_bp.get(
+    "/library/experiments/<experiment_id>/comparisons/<comparison_id>/members/<member_id>/decision"
+)
+def library_decision_context(experiment_id, comparison_id, member_id):
+    if set(request.args) - {"limit", "offset"}:
+        raise ValueError("Invalid decision context query")
+    return jsonify(
+        decisions.decision_context(
+            store(), session["user"], experiment_id, comparison_id, member_id, **decision_page()
+        )
+    )
+
+
+def decision_page():
+    if any(len(request.args.getlist(key)) != 1 for key in request.args):
+        raise ValueError("Supply each decision query setting once")
+    return {
+        "limit": int(request.args.get("limit", "20")),
+        "offset": int(request.args.get("offset", "0")),
+    }
+
+
+@scanner_research_bp.post(
+    "/library/experiments/<experiment_id>/comparisons/<comparison_id>/members/<member_id>/decisions"
+)
+def library_save_decision(experiment_id, comparison_id, member_id):
+    if request.args:
+        raise ValueError("Invalid decision query")
+    result = decisions.save_decision(
+        store(), session["user"], experiment_id, comparison_id, member_id, shortlist_body()
+    )
+    return jsonify(result), 200 if result["reused"] else 201
+
+
+@scanner_research_bp.get(
+    "/library/experiments/<experiment_id>/comparisons/<comparison_id>/members/<member_id>/decision/evaluations/<evaluation_id>"
+)
+def library_decision_evaluation(experiment_id, comparison_id, member_id, evaluation_id):
+    if request.args:
+        raise ValueError("Invalid later evidence query")
+    return jsonify(
+        decisions.preview_evaluation(
+            store(), session["user"], experiment_id, comparison_id, member_id, evaluation_id
+        )
+    )
+
+
+@scanner_research_bp.get("/library/experiments/<experiment_id>/decisions")
+def library_decisions(experiment_id):
+    if set(request.args) - {"state", "limit", "offset"}:
+        raise ValueError("Invalid decisions query")
+    return jsonify(
+        decisions.list_decisions(
+            store(),
+            session["user"],
+            experiment_id,
+            state=request.args.get("state"),
+            **decision_page(),
+        )
+    )
+
+
+@scanner_research_bp.get("/library/experiments/<experiment_id>/decisions/<decision_id>/history")
+def library_decision_history(experiment_id, decision_id):
+    if set(request.args) - {"limit", "offset"}:
+        raise ValueError("Invalid decision history query")
+    return jsonify(
+        decisions.decision_history(
+            store(), session["user"], experiment_id, decision_id, **decision_page()
+        )
+    )
+
+
+@scanner_research_bp.get(
+    "/library/experiments/<experiment_id>/decisions/<decision_id>/events/<event_id>"
+)
+def library_decision_event(experiment_id, decision_id, event_id):
+    if request.args:
+        raise ValueError("Invalid decision entry query")
+    return jsonify(
+        decisions.get_event(store(), session["user"], experiment_id, decision_id, event_id)
+    )
+
+
+@scanner_research_bp.get(
+    "/library/experiments/<experiment_id>/decisions/<decision_id>/events/<event_id>/report"
+)
+def library_decision_report(experiment_id, decision_id, event_id):
+    if set(request.args) - {"evidence"} or any(
+        len(request.args.getlist(key)) != 1 for key in request.args
+    ):
+        raise ValueError("Invalid decision report query")
+    return jsonify(
+        decisions.event_report(
+            store(),
+            session["user"],
+            experiment_id,
+            decision_id,
+            event_id,
+            evidence=request.args.get("evidence", "selection"),
+        )
+    )
+
+
+@scanner_research_bp.post("/library/experiments/<experiment_id>/evidence/opened")
+def library_evidence_opened(experiment_id):
+    if request.args:
+        raise ValueError("Invalid report opening query")
+    return jsonify(
+        decisions.acknowledge_open(store(), session["user"], experiment_id, shortlist_body())
     )
 
 

@@ -10,6 +10,7 @@ import {
   researchComparisons,
   type SavedComparison,
 } from '@/api/researchComparisons'
+import { researchDecisions } from '@/api/researchDecisions'
 import { useAuthStore } from '@/stores/authStore'
 import { PortfolioResults } from './PortfolioResults'
 import {
@@ -24,6 +25,10 @@ vi.mock('@/api/researchComparisons', async (original) => ({
 }))
 vi.mock('./PortfolioResults', () => ({
   PortfolioResults: vi.fn(() => <div>Exact frozen report</div>),
+}))
+vi.mock('@/api/researchDecisions', async (original) => ({
+  ...(await original<typeof import('@/api/researchDecisions')>()),
+  researchDecisions: { context: vi.fn(), opened: vi.fn() },
 }))
 vi.mock('./AnalysisCharts', () => ({
   AnalysisFigure: ({ chart }: { chart: unknown }) => (
@@ -133,6 +138,7 @@ function mount(url = '/?experiment=e&view=comparisons&comparison=c', readOnly = 
 }
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.mocked(researchDecisions.opened).mockResolvedValue({ opened_at: 1, reused: false })
   useAuthStore.setState({ user: { username: 'owner' } })
   vi.mocked(researchComparisons.get).mockResolvedValue(saved())
   vi.mocked(researchComparisons.list).mockResolvedValue({
@@ -194,6 +200,8 @@ describe('saved comparisons journey', () => {
     expect(screen.getByLabelText('Saved comparison curve')).toHaveTextContent('"y":[2,3]')
     expect(screen.getByRole('heading', { name: 'Cumulative return' })).toBeVisible()
     expect(researchComparisons.member).not.toHaveBeenCalled()
+    expect(researchDecisions.context).not.toHaveBeenCalled()
+    expect(researchDecisions.opened).not.toHaveBeenCalled()
     await act(async () => {
       expect((await axe(document.body)).violations).toEqual([])
     })
@@ -220,6 +228,15 @@ describe('saved comparisons journey', () => {
       await screen.findByRole('button', { name: 'Open report for Candidate report' })
     )
     await screen.findByText('Exact frozen report')
+    await waitFor(() => expect(researchDecisions.opened).toHaveBeenCalledTimes(1))
+    expect(researchDecisions.opened).toHaveBeenLastCalledWith(
+      'e',
+      {
+        request_id: expect.any(String),
+        target: { kind: 'comparison_member', comparison_id: 'c', member_id: 'b' },
+      },
+      expect.any(AbortSignal)
+    )
     expect(researchComparisons.member).toHaveBeenCalledWith('e', 'c', 'b', expect.any(AbortSignal))
     const props = vi.mocked(PortfolioResults).mock.calls.at(-1)![0]
     expect(props).toMatchObject({
@@ -244,6 +261,17 @@ describe('saved comparisons journey', () => {
     expect(researchComparisons.get).not.toHaveBeenCalled()
     expect(researchComparisons.list).not.toHaveBeenCalled()
     expect(researchComparisons.member).toHaveBeenCalledTimes(1)
+    expect(researchDecisions.opened).not.toHaveBeenCalled()
+  })
+  it('returns from the original comparison to its exact decision event', async () => {
+    mount(
+      '/?experiment=e&view=comparisons&comparison=c&return_decision=d&return_decision_event=old-event&decision_offset=20'
+    )
+    await userEvent.click(await screen.findByRole('button', { name: 'Back to decision' }))
+    expect(screen.getByTestId('url')).toHaveTextContent('view=decisions')
+    expect(screen.getByTestId('url')).toHaveTextContent('decision_event=old-event')
+    expect(screen.getByTestId('url')).toHaveTextContent('decision_offset=20')
+    expect(researchDecisions.opened).not.toHaveBeenCalled()
   })
   it('preserves the draft note on a revision conflict until explicit reload', async () => {
     const error = new AxiosError('conflict')

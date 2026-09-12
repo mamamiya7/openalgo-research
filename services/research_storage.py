@@ -120,6 +120,7 @@ def _references(engine):
         candidate_roots = _candidate_references(db)
         shortlist_roots = _shortlist_references(db, tables)
         comparison_roots = _comparison_references(db, tables)
+        decision_roots = _decision_references(db, tables)
         _study_activity_references(db, tables)
     source_ids, job_ids = {row[0] for row in sources}, {row[0] for row in jobs}
     if any(row[1] not in source_ids for row in jobs):
@@ -138,6 +139,7 @@ def _references(engine):
         | candidate_roots
         | shortlist_roots
         | comparison_roots
+        | decision_roots
     )
 
 
@@ -457,6 +459,312 @@ def _comparison_references(db, tables):
     return roots
 
 
+def _decision_references(connection, tables):
+    """Stream bounded decision history; preserve exact report pins without recalculation."""
+    from sqlalchemy.orm import Session
+
+    from database.research_db import (
+        ResearchDecision,
+        ResearchDecisionEvent,
+        ResearchDecisionRequest,
+        ResearchEvidenceOpen,
+        ResearchLibraryExperiment,
+    )
+    from services import research_decisions as decisions
+    from services import research_library as library
+
+    required = {
+        "research_decisions",
+        "research_decision_events",
+        "research_decision_requests",
+        "research_evidence_opens",
+    }
+    if not required.intersection(tables):
+        return set()
+    if not required.issubset(tables):
+        raise ValueError("Decision metadata tables are incomplete")
+    for table in sorted(required):
+        if (
+            connection.exec_driver_sql(f"SELECT count(*) FROM {table}").scalar()
+            > decisions.MAX_ROWS
+        ):
+            raise ValueError("Decision history exceeds the maintenance row bound")
+    for table, clause, bound in (
+        (
+            "research_decision_events",
+            "length(CAST(evaluation_pin AS BLOB)) > ? OR length(evidence_use) > 4096 OR length(reason) > 2000 OR length(candidate_name) > 120 OR length(comparison_name) > 120",
+            decisions.MAX_SNAPSHOT_BYTES,
+        ),
+        (
+            "research_evidence_opens",
+            "length(CAST(report_pin AS BLOB)) > ? OR length(target) > 2048",
+            decisions.MAX_SNAPSHOT_BYTES,
+        ),
+        (
+            "research_decision_requests",
+            "length(CAST(payload AS BLOB)) > ?",
+            decisions.MAX_BODY_BYTES,
+        ),
+    ):
+        if connection.exec_driver_sql(
+            f"SELECT 1 FROM {table} WHERE {clause} LIMIT 1", (bound,)
+        ).first():
+            raise ValueError("Decision metadata exceeds its size limit")
+    if connection.exec_driver_sql(
+        "SELECT 1 FROM research_decisions GROUP BY experiment_id HAVING count(*) > ? LIMIT 1",
+        (decisions.MAX_PER_EXPERIMENT,),
+    ).first():
+        raise ValueError("Experiment decisions exceed their limit")
+    roots = set()
+
+    def stamp(value):
+        return type(value) in (int, float) and math.isfinite(value) and value > 0
+
+    def identity(value, size=32):
+        return isinstance(value, str) and re.fullmatch(f"[a-f0-9]{{{size}}}", value)
+
+    def pin_roots(db, owner, pin, member=None, *, later=False):
+        decisions.validate_pin(pin)
+        if not decisions._pin_owned(db, owner, pin):
+            raise ValueError("Decision report references foreign jobs or analysis")
+        if later:
+            origin = pin["origin"]
+            if (
+                not origin
+                or not member
+                or any(
+                    origin.get(key) != member[key]
+                    for key in ("source_job_id", "source_result_artifact", "config_id")
+                )
+                or member["period"] != "selection"
+            ):
+                raise ValueError("Decision later evidence belongs to another candidate")
+        elif member and pin != decisions._selection_pin(member):
+            raise ValueError("Decision selection pin differs from its saved comparison")
+        roots.update(
+            pin[key]
+            for key in ("result_artifact", "inputs_artifact", "analysis_artifact")
+            if pin.get(key)
+        )
+        if pin["origin"]:
+            roots.add(pin["origin"]["source_result_artifact"])
+
+    with Session(bind=connection) as db:
+        for head in db.scalars(select(ResearchDecision).order_by(ResearchDecision.id)).yield_per(
+            20
+        ):
+            experiment = db.get(ResearchLibraryExperiment, head.experiment_id)
+            current = db.get(ResearchDecisionEvent, head.current_event_id)
+            count, maximum = db.execute(
+                select(func.count(), func.max(ResearchDecisionEvent.revision)).where(
+                    ResearchDecisionEvent.decision_id == head.id
+                )
+            ).one()
+            if (
+                not experiment
+                or experiment.owner != head.owner
+                or not identity(head.id)
+                or not identity(head.source_job_id)
+                or not identity(head.source_result_artifact, 64)
+                or not identity(head.config_id, 64)
+                or head.period not in ("full", "selection")
+                or type(head.revision) is not int
+                or not 1 <= head.revision <= decisions.MAX_EVENTS
+                or count != head.revision
+                or maximum != head.revision
+                or not current
+                or current.decision_id != head.id
+                or current.revision != head.revision
+                or not stamp(head.created_at)
+                or not stamp(head.updated_at)
+                or head.updated_at < head.created_at
+            ):
+                raise ValueError("Decision head has invalid or foreign history")
+        for item in db.scalars(
+            select(ResearchDecisionEvent).order_by(
+                ResearchDecisionEvent.decision_id, ResearchDecisionEvent.revision
+            )
+        ).yield_per(8):
+            head = db.get(ResearchDecision, item.decision_id)
+            if (
+                not head
+                or item.owner != head.owner
+                or item.experiment_id != head.experiment_id
+                or not identity(item.id)
+                or type(item.revision) is not int
+                or not 1 <= item.revision <= head.revision
+                or item.state not in decisions.STATES
+                or not stamp(item.created_at)
+                or item.created_at < head.created_at
+            ):
+                raise ValueError("Decision event has invalid or foreign metadata")
+            previous = (
+                db.get(ResearchDecisionEvent, item.supersedes_event_id)
+                if item.supersedes_event_id
+                else None
+            )
+            if (
+                item.revision == 1
+                and previous is not None
+                or item.revision > 1
+                and (
+                    not previous
+                    or previous.decision_id != head.id
+                    or previous.revision != item.revision - 1
+                    or previous.created_at > item.created_at
+                )
+                or item.revision == 1
+                and item.supersedes_event_id is not None
+            ):
+                raise ValueError("Decision supersession chain is invalid")
+            _, _, member = decisions._member(
+                db, item.owner, item.experiment_id, item.comparison_id, item.member_id
+            )
+            if any(getattr(head, key) != member[key] for key in decisions.IDENTITY):
+                raise ValueError("Decision was retargeted to a different candidate")
+            library._text(item.reason, 2000, "Decision reason", empty=True)
+            library._text(item.candidate_name, 120, "Decision candidate")
+            library._text(item.comparison_name, 120, "Decision comparison")
+            use = json.loads(item.evidence_use)
+            decisions.validate_use(use)
+            if item.evaluation_pin:
+                pin = json.loads(item.evaluation_pin)
+                pin_roots(db, item.owner, pin, member, later=True)
+                if (
+                    not use["later_used_for_decision"]
+                    or use["reservation"] != pin["origin"]["reservation"]
+                ):
+                    raise ValueError("Decision evidence use differs from attached later period")
+            if (
+                db.scalar(
+                    select(func.count())
+                    .select_from(ResearchDecisionRequest)
+                    .where(
+                        ResearchDecisionRequest.kind == "decision",
+                        ResearchDecisionRequest.result_id == item.id,
+                    )
+                )
+                != 1
+            ):
+                raise ValueError("Decision event has no unique accepted request")
+        for opened in db.scalars(select(ResearchEvidenceOpen)).yield_per(8):
+            experiment = db.get(ResearchLibraryExperiment, opened.experiment_id)
+            pin, target = json.loads(opened.report_pin), json.loads(opened.target)
+            if (
+                not experiment
+                or experiment.owner != opened.owner
+                or not identity(opened.id)
+                or not stamp(opened.opened_at)
+                or decisions.fingerprint(pin) != opened.evidence_id
+            ):
+                raise ValueError("Report opening has invalid or foreign metadata")
+            member = _decision_open_member(
+                db, decisions, opened.owner, opened.experiment_id, target, pin
+            )
+            pin_roots(
+                db, opened.owner, pin, member, later=pin["report_context"]["period"] == "evaluation"
+            )
+            if not db.scalar(
+                select(ResearchDecisionRequest.token)
+                .where(
+                    ResearchDecisionRequest.kind == "opened",
+                    ResearchDecisionRequest.result_id == opened.id,
+                )
+                .limit(1)
+            ):
+                raise ValueError("Report opening has no accepted request")
+        for request in db.scalars(select(ResearchDecisionRequest)).yield_per(20):
+            payload = json.loads(request.payload)
+            if (
+                request.kind not in ("decision", "opened")
+                or not re.fullmatch(r"[A-Za-z0-9_-]{8,128}", request.token)
+                or not isinstance(payload, dict)
+                or payload.get("kind") != request.kind
+                or payload.get("experiment_id") != request.experiment_id
+                or hashlib.sha256(encoded(payload)).hexdigest() != request.payload_hash
+            ):
+                raise ValueError("Decision retry receipt has invalid binding")
+            if request.kind == "decision":
+                item = db.get(ResearchDecisionEvent, request.result_id)
+                pin = json.loads(item.evaluation_pin) if item and item.evaluation_pin else None
+                expected = {
+                    "kind": "decision",
+                    "experiment_id": request.experiment_id,
+                    "comparison_id": item.comparison_id if item else None,
+                    "member_id": item.member_id if item else None,
+                    "revision": item.revision - 1 if item else None,
+                    "state": item.state if item else None,
+                    "reason": item.reason if item else None,
+                    "evaluation_id": decisions._pin_id(pin) if pin else None,
+                }
+                if (
+                    not item
+                    or item.owner != request.owner
+                    or item.experiment_id != request.experiment_id
+                    or payload != expected
+                ):
+                    raise ValueError("Decision retry receipt points to different evidence")
+            else:
+                item = db.get(ResearchEvidenceOpen, request.result_id)
+                if (
+                    not item
+                    or item.owner != request.owner
+                    or item.experiment_id != request.experiment_id
+                    or set(payload) != {"kind", "experiment_id", "target"}
+                ):
+                    raise ValueError("Opening retry receipt has invalid ownership")
+                _decision_open_member(
+                    db,
+                    decisions,
+                    request.owner,
+                    request.experiment_id,
+                    payload["target"],
+                    json.loads(item.report_pin),
+                )
+    return roots
+
+
+def _decision_open_member(db, decisions, owner, experiment_id, target, pin):
+    """Verify an opening's exact server link without reading result artifacts."""
+    if not isinstance(target, dict):
+        raise ValueError("Invalid report opening target")
+    if target.get("kind") == "comparison_member":
+        if set(target) - {"kind", "comparison_id", "member_id", "evaluation_id"}:
+            raise ValueError("Invalid comparison opening target")
+        _, _, member = decisions._member(
+            db, owner, experiment_id, target.get("comparison_id"), target.get("member_id")
+        )
+        if target.get("evaluation_id"):
+            if (
+                decisions._pin_id(pin) != target["evaluation_id"]
+                or pin["report_context"]["period"] != "evaluation"
+            ):
+                raise ValueError("Opened later report does not match its target")
+        elif pin != decisions._selection_pin(member):
+            raise ValueError("Opened comparison report differs from its pin")
+    elif target.get("kind") == "decision_event":
+        if set(target) != {"kind", "decision_id", "event_id", "evidence"} or target[
+            "evidence"
+        ] not in ("selection", "evaluation"):
+            raise ValueError("Invalid decision opening target")
+        _, _, item = decisions._event(
+            db, owner, experiment_id, target["decision_id"], target["event_id"]
+        )
+        _, _, member = decisions._member(
+            db, owner, experiment_id, item.comparison_id, item.member_id
+        )
+        expected = (
+            json.loads(item.evaluation_pin)
+            if target["evidence"] == "evaluation" and item.evaluation_pin
+            else (decisions._selection_pin(member) if target["evidence"] == "selection" else None)
+        )
+        if pin != expected:
+            raise ValueError("Opened decision report differs from its saved evidence")
+    else:
+        raise ValueError("Invalid saved opening target")
+    return member
+
+
 def _shortlist_references(db, tables):
     """Retain exact bookmark roots; older backups may omit this additive table."""
     from services import research_library as library
@@ -699,16 +1007,17 @@ def _library_references(db, tables):
         if container(experiment_id)[1] != owner:
             raise ValueError("Research library request belongs to another account")
         if (
-            kind not in ("run", "replay", "from_job")
+            kind not in ("run", "replay", "validation", "from_job")
             or not job_id
-            or (kind in ("run", "replay") and not version_id)
+            or (kind in ("run", "replay", "validation") and not version_id)
         ):
             raise ValueError("Research library request has incomplete accepted work")
         job_owner(job_id, owner)
         if version_id:
             version_owner(version_id, experiment_id)
         if (experiment_id, job_id) not in linked_versions or (
-            kind in ("run", "replay") and linked_versions[(experiment_id, job_id)] != version_id
+            kind in ("run", "replay", "validation")
+            and linked_versions[(experiment_id, job_id)] != version_id
         ):
             raise ValueError("Research library request is missing its accepted job link")
     for owner, experiment_id, source_id, parent_id in _rows(

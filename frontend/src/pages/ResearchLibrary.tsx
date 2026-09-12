@@ -14,6 +14,7 @@ import { ChartinkImport } from '@/components/research/ChartinkImport'
 import { ChartinkSource } from '@/components/research/ChartinkSource'
 import { addPortfolioSource, freshPortfolioDraft } from '@/components/research/PortfolioBuilder'
 import { ResearchComparisons } from '@/components/research/ResearchComparisons'
+import { ResearchDecisions } from '@/components/research/ResearchDecisions'
 import { researchRunStatus } from '@/components/research/ResearchRunProgress'
 import { ResearchShortlist } from '@/components/research/ResearchShortlist'
 import { Button } from '@/components/ui/button'
@@ -637,6 +638,7 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
     'setups',
     'shortlist',
     'comparisons',
+    'decisions',
   ].includes(requestedView)
     ? requestedView
     : 'overview'
@@ -668,7 +670,7 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
     queryKey: ['research-experiment-activity', owner, server.id, activeJobIds],
     queryFn: ({ signal }) =>
       Promise.all(activeJobIds.map((id) => portfolioResearch.job(id, signal))),
-    enabled: !jobId && view !== 'comparisons' && activeJobIds.length > 0,
+    enabled: !jobId && !['comparisons', 'decisions'].includes(view) && activeJobIds.length > 0,
     refetchInterval: 3000,
     staleTime: 0,
     retry: false,
@@ -707,6 +709,15 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
     next.delete('shortlist')
     next.delete('comparison')
     next.delete('comparison_member')
+    for (const key of [
+      'decision',
+      'decision_event',
+      'decision_report',
+      'decision_history_offset',
+      'return_decision',
+      'return_decision_event',
+    ])
+      next.delete(key)
     if (job) next.set('job', job)
     setParams(next)
   }
@@ -728,6 +739,14 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
       'compare_candidates',
       'compare_reference',
       'compare_request',
+      'decision',
+      'decision_event',
+      'decision_report',
+      'decision_offset',
+      'decision_history_offset',
+      'decision_state',
+      'return_decision',
+      'return_decision_event',
     ])
       next.delete(key)
     setParams(next)
@@ -1003,6 +1022,7 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
             'studies',
             'shortlist',
             'comparisons',
+            'decisions',
             'setups',
           ] as const
         ).map((item) => (
@@ -1139,6 +1159,9 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
       )}
       {!jobId && view === 'comparisons' && (
         <ResearchComparisons experimentId={server.id} readOnly={server.archived} />
+      )}
+      {!jobId && view === 'decisions' && (
+        <ResearchDecisions experimentId={server.id} readOnly={server.archived} />
       )}
       {!jobId && view === 'overview' && (
         <div className="space-y-7">

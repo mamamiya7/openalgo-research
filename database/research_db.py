@@ -242,6 +242,77 @@ class ResearchComparison(Base):
     updated_at = Column(Float, nullable=False)
 
 
+class ResearchDecision(Base):
+    """Current user judgement around an immutable candidate, separate from ranking."""
+
+    __tablename__ = "research_decisions"
+    __table_args__ = (
+        UniqueConstraint(
+            "experiment_id", "source_job_id", "source_result_artifact", "config_id", "period"
+        ),
+    )
+    id = Column(String(32), primary_key=True)
+    owner = Column(String(255), nullable=False, index=True)
+    experiment_id = Column(String(64), nullable=False, index=True)
+    source_job_id = Column(String(64), nullable=False)
+    source_result_artifact = Column(String(64), nullable=False)
+    config_id = Column(String(64), nullable=False)
+    period = Column(String(16), nullable=False)
+    revision = Column(Integer, nullable=False)
+    current_event_id = Column(String(32), nullable=False)
+    created_at = Column(Float, nullable=False)
+    updated_at = Column(Float, nullable=False)
+
+
+class ResearchDecisionEvent(Base):
+    """Append-only decisions; exact comparisons own selection financial evidence."""
+
+    __tablename__ = "research_decision_events"
+    __table_args__ = (UniqueConstraint("decision_id", "revision"),)
+    id = Column(String(32), primary_key=True)
+    owner = Column(String(255), nullable=False, index=True)
+    experiment_id = Column(String(64), nullable=False, index=True)
+    decision_id = Column(String(32), nullable=False, index=True)
+    revision = Column(Integer, nullable=False)
+    supersedes_event_id = Column(String(32))
+    state = Column(String(16), nullable=False, index=True)
+    reason = Column(String(2000), nullable=False, default="")
+    comparison_id = Column(String(32), nullable=False, index=True)
+    member_id = Column(String(32), nullable=False)
+    candidate_name = Column(String(120), nullable=False)
+    comparison_name = Column(String(120), nullable=False)
+    evaluation_pin = Column(Text)
+    evidence_use = Column(Text, nullable=False)
+    created_at = Column(Float, nullable=False)
+
+
+class ResearchEvidenceOpen(Base):
+    """First explicitly acknowledged opening of exact report evidence."""
+
+    __tablename__ = "research_evidence_opens"
+    __table_args__ = (UniqueConstraint("owner", "experiment_id", "evidence_id"),)
+    id = Column(String(32), primary_key=True)
+    owner = Column(String(255), nullable=False, index=True)
+    experiment_id = Column(String(64), nullable=False, index=True)
+    evidence_id = Column(String(64), nullable=False)
+    target = Column(Text, nullable=False)
+    report_pin = Column(Text, nullable=False)
+    opened_at = Column(Float, nullable=False)
+
+
+class ResearchDecisionRequest(Base):
+    """Bounded retry receipts survive supersession and duplicate opening requests."""
+
+    __tablename__ = "research_decision_requests"
+    owner = Column(String(255), primary_key=True)
+    token = Column(String(128), primary_key=True)
+    experiment_id = Column(String(64), nullable=False, index=True)
+    kind = Column(String(16), nullable=False)
+    result_id = Column(String(32), nullable=False)
+    payload = Column(Text, nullable=False)
+    payload_hash = Column(String(64), nullable=False)
+
+
 class ResearchStudyExecution(Base):
     """Observed search passes, independent of scientific checkpoint identity."""
 

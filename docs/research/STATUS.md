@@ -111,10 +111,24 @@ All 57 prior jobs and research-table fingerprints were preserved; current assets
 worker heartbeat, native authentication and CSRF checks passed. Configuration,
 broker/history data and local UI customizations remain intact.
 
-**Next work:** R5 decisions and visible evidence-use history on the now-saved
-candidate/comparison/report identities. R3 independently frozen benchmark
-evidence can proceed separately. Full reference-field mapping, real optional
-Nautilus acceptance and broader normal-account journey acceptance remain open.
+The next R5 slice adds **Decisions**: Keep, Reject or Revisit an exact comparison
+member, attach its existing verified later result, add a reason and reopen every
+revision with its original reports. Explicit report openings and recorded period
+use are distinguished from unknown earlier viewing. Native retries, archive and
+backup preserve this history. The controlled four-job browser journey created no
+new calculations and preserved original financial evidence. See the
+[decision receipt and limits](REPORT_EXPERIENCE_PLAN.md#20-saved-decisions-and-evidence-use--12-september-2026).
+The decision increment is installed in the normal app: 11 runtime files and its
+matching interface, four additive tables, current worker/assets and native
+authentication/CSRF. All 57 saved jobs and prior metadata fingerprints were
+preserved, with configuration, broker/history and local customizations unchanged.
+
+**Next work:** comparison-to-validation launch using the canonical original
+study/configuration and frozen reservation, then the chosen immutable setup link.
+Ordinary report-wide opening history and independent-period work remain distinct
+follow-ons. R3 independently frozen benchmark evidence can proceed separately.
+Full reference-field mapping, real optional Nautilus acceptance and broader
+normal-account journey acceptance remain open.
 The [report experience specification](REPORT_EXPERIENCE_PLAN.md)
 defines a continuous tear sheet, connected Optuna study dashboard, candidate reports,
 benchmark comparison, shortlist and saved validation/decisions. It records exact
@@ -122,7 +136,7 @@ page contents, score/count semantics, data ownership and R0–R6 acceptance. The
 optional QuantStats connector is pinned there as **QS-01**, to evaluate before
 choosing the final report export implementation. R0–R2 have the bounded
 implementation receipts above; they are not claimed fully accepted. R4's connected
-study/candidate and durable-activity slices, and R5 shortlists/comparisons, are
+study/candidate and durable-activity slices, and R5 shortlists/comparisons/decisions, are
 journey-observed on controlled data; broader acceptance and the full R3/R5/R6
 packages remain open. On 12 September,
 the authorized 20-file study update was

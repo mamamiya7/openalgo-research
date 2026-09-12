@@ -293,3 +293,24 @@ This cannot prove that data was never seen outside this store.
 
 See [EXECUTION.md](EXECUTION.md) for financial semantics and corrections.
 [STATUS.md](STATUS.md) records measured verification and external limitations.
+
+## Decisions and evidence use
+
+Saved comparison members are the first decision entry point. Native Decisions
+store Keep/Reject/Revisit choices with optional reasons and append-only revisions.
+Exact source/configuration/period identifies the candidate; comparison and optional
+later report/analysis pins identify each revision's supporting versions. A user
+choice does not change the optimizer winner or launch a worker.
+
+Later evidence admission verifies original lineage and retained reserved prices
+and signals. Decision context is requested on demand; list/history use metadata.
+Successful explicit report actions acknowledge Opened through a CSRF-protected
+POST, separate from read-only GET and legacy unknown viewing. Archived choices
+remain readable; report opening observations may still be recorded. Changing a
+choice requires a new revision and stable retry token.
+
+Four additive tables and retained artifact roots support populated backup and
+old-store restore. The validator accepts native `validation` requests with the
+same exact version/job linkage required for replay. Limits, tested boundaries and
+the deferred canonical comparison-to-validation adapter are in
+[the decision receipt](REPORT_EXPERIENCE_PLAN.md#20-saved-decisions-and-evidence-use--12-september-2026).

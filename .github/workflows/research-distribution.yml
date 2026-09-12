@@ -122,6 +122,8 @@ jobs:
           src/components/research/ResearchShortlist.test.tsx
           src/components/research/SaveToShortlist.test.tsx
           src/api/researchComparisons.test.ts
+          src/api/researchDecisions.test.ts
+          src/components/research/ResearchDecisions.test.tsx
           src/components/research/ResearchComparisons.test.tsx
           src/components/research/ShortlistCompare.test.tsx
           src/components/research/PortfolioAnalysis.test.tsx

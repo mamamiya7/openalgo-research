@@ -11,6 +11,7 @@ import {
   researchComparisons,
   type SavedComparison,
 } from '@/api/researchComparisons'
+import type { EvidenceOpeningIntent } from '@/api/researchDecisions'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -24,6 +25,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useAuthStore } from '@/stores/authStore'
 import { AnalysisFigure } from './AnalysisCharts'
+import { CandidateDecision } from './CandidateDecision'
+import { EvidenceOpened } from './DecisionEvidence'
 import { PortfolioResults } from './PortfolioResults'
 import { ReportCurrency, reportMoney } from './ReportCurrency'
 
@@ -104,6 +107,10 @@ function Comparisons({
   const [params, setParams] = useSearchParams()
   const id = params.get('comparison')
   const memberId = params.get('comparison_member')
+  const [opening, setOpening] = useState<EvidenceOpeningIntent | null>(null)
+  useEffect(() => {
+    if (!memberId) setOpening(null)
+  }, [memberId])
   const rawOffset = Number(params.get('comparison_offset') ?? 0)
   const offset =
     Number.isSafeInteger(rawOffset) && rawOffset >= 0 && rawOffset <= 100000 ? rawOffset : 0
@@ -143,6 +150,13 @@ function Comparisons({
         id={id}
         memberId={memberId}
         readOnly={readOnly}
+        intent={
+          opening?.target.kind === 'comparison_member' &&
+          opening.target.comparison_id === id &&
+          opening.target.member_id === memberId
+            ? opening
+            : null
+        }
         onBack={() => navigate(id)}
       />
     )
@@ -156,7 +170,36 @@ function Comparisons({
         readOnly={readOnly}
         onBack={() => navigate(null)}
         onShortlist={backShortlist}
-        onOpenMember={(member) => navigate(id, member)}
+        onOpenMember={(member) => {
+          setOpening({
+            request_id: crypto.randomUUID(),
+            target: { kind: 'comparison_member', comparison_id: id, member_id: member },
+          })
+          navigate(id, member)
+        }}
+        onDecisionHistory={(decision, eventId) => {
+          const next = new URLSearchParams(params)
+          next.set('view', 'decisions')
+          next.set('decision', decision)
+          next.set('decision_event', eventId)
+          next.delete('decision_report')
+          next.delete('decision_history_offset')
+          setParams(next)
+        }}
+        onBackDecision={
+          params.get('return_decision') && params.get('return_decision_event')
+            ? () => {
+                const next = new URLSearchParams(params)
+                next.set('view', 'decisions')
+                next.set('decision', params.get('return_decision')!)
+                next.set('decision_event', params.get('return_decision_event')!)
+                next.delete('decision_report')
+                next.delete('return_decision')
+                next.delete('return_decision_event')
+                setParams(next)
+              }
+            : undefined
+        }
       />
     )
   return (
@@ -248,6 +291,8 @@ function ComparisonDetail({
   onBack,
   onShortlist,
   onOpenMember,
+  onDecisionHistory,
+  onBackDecision,
 }: {
   owner: string
   experimentId: string
@@ -256,6 +301,8 @@ function ComparisonDetail({
   onBack: () => void
   onShortlist: () => void
   onOpenMember: (id: string) => void
+  onDecisionHistory: (id: string, eventId: string) => void
+  onBackDecision?: () => void
 }) {
   const client = useQueryClient()
   const key = [...comparisonKey(owner, experimentId), 'detail', id, readOnly]
@@ -310,6 +357,11 @@ function ComparisonDetail({
   return (
     <section className="space-y-6" aria-label="Saved comparison">
       <div className="flex flex-wrap items-center justify-between gap-3">
+        {onBackDecision && (
+          <Button size="sm" variant="ghost" onClick={onBackDecision}>
+            Back to decision
+          </Button>
+        )}
         <Button size="sm" variant="ghost" onClick={onBack}>
           <ArrowLeft className="mr-2 size-4" />
           Back to comparisons
@@ -378,6 +430,7 @@ function ComparisonDetail({
             saved={saved}
             metrics={saved.metrics.filter((metric) => metric.source === 'summary')}
             onOpenMember={onOpenMember}
+            decision={{ experimentId, readOnly: archived, onHistory: onDecisionHistory }}
           />
           {saved.compatible &&
             saved.cumulative.status === 'available' &&
@@ -529,10 +582,16 @@ function MetricTable({
   saved,
   metrics,
   onOpenMember,
+  decision,
 }: {
   saved: SavedComparison
   metrics: ComparisonMetric[]
   onOpenMember?: (id: string) => void
+  decision?: {
+    experimentId: string
+    readOnly: boolean
+    onHistory: (id: string, eventId: string) => void
+  }
 }) {
   return (
     <div className="overflow-x-auto rounded-lg border">
@@ -576,6 +635,17 @@ function MetricTable({
                   <p className="mt-1 text-xs font-normal text-muted-foreground">
                     {member.error ?? 'Saved report unavailable'}
                   </p>
+                )}
+                {decision && (
+                  <div className="mt-1">
+                    <CandidateDecision
+                      experimentId={decision.experimentId}
+                      target={{ comparison_id: saved.id, member_id: member.id }}
+                      name={member.name}
+                      readOnly={decision.readOnly}
+                      onHistory={decision.onHistory}
+                    />
+                  </div>
                 )}
               </th>
             ))}
@@ -640,6 +710,7 @@ function FrozenMember({
   memberId,
   readOnly,
   onBack,
+  intent,
 }: {
   owner: string
   experimentId: string
@@ -647,6 +718,7 @@ function FrozenMember({
   memberId: string
   readOnly: boolean
   onBack: () => void
+  intent: EvidenceOpeningIntent | null
 }) {
   const report = useQuery({
     queryKey: [...comparisonKey(owner, experimentId), 'member', id, memberId, readOnly],
@@ -700,6 +772,7 @@ function FrozenMember({
               rerunning={false}
             />
           </ReportCurrency.Provider>
+          <EvidenceOpened owner={owner} experimentId={experimentId} intent={intent} />
         </>
       )}
     </section>
