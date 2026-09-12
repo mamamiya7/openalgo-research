@@ -2,6 +2,25 @@
 
 Updated: 12 September 2026. Published preview: **`0.1.0-preview.4`**, targeting OpenAlgo 2.0.2.2.
 
+## Latest trader audit and next priority
+
+The [12 September pro-trader audit](PRO_TRADER_AUDIT.md) and its
+[26-screen walkthrough](pro-trader-audit.html) distinguish fresh controlled UI
+observations from code-only or untested journeys across J01–J34. The installed
+runtime checkpoint `52ee878` was verified against its 11 installed source hashes,
+healthy web/worker and 57 retained jobs; it already matched `origin/main` when
+this audit began. No additional runtime feature or broker calculation was deployed
+as part of the audit.
+
+The [revised execution order](DELIVERY_PLAN.md#10-trader-audit-priorities--12-september-2026)
+starts with canonical result/period identity, understandable rules and forward/back
+navigation; then exact chosen-candidate validation and direct single-result
+decisions; then chosen reusable setup and repeat-use. Lifecycle, investigation,
+native benchmark, portable handoff and exact-release acceptance follow their
+dependencies. Existing engine/report/study/shortlist/decision work remains credited.
+The audit and proposed UI structure are not shipped product changes or claims of
+fresh broker, extension, multi-asset or unaided-user acceptance.
+
 ## Current development increment
 
 The [consolidated backlog and delivery sequence](DELIVERY_PLAN.md#9-execution-order-and-completion-reporting)

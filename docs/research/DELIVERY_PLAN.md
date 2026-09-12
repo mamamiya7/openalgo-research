@@ -1,5 +1,11 @@
 # OpenAlgo Research — integrated delivery plan
 
+**Latest prioritization: 12 September 2026.** The [fresh pro-trader audit](PRO_TRADER_AUDIT.md)
+reviews the current app through 26 controlled screenshots and reconciles all 34
+journeys against current source. **Section 10 owns the next execution order** where
+it refines the older “Now” labels or sequence below. Existing M/R packages remain
+the implementation contracts; no new product or second roadmap is introduced.
+
 **Planning baseline: 10 September 2026, source revision `94d1043fa6f7b1a75cec22ca0a4fd093e288464b`.** This plan connects the [intended journeys](PRODUCT_JOURNEY_MAP.md), [asset profiles](ASSET_PROFILES.md), [source review](JOURNEYS.md) and [recorded delivery status](STATUS.md). It is the implementation sequence and acceptance contract; it does not mark proposed features as shipped.
 
 **Backlog reconciliation: 11 September 2026.** Sections 2, 5 and 9 now account for
@@ -427,3 +433,186 @@ For each package, maintain one state: **not started → implementing → compone
 **Review result:** this document is the integrated delivery plan and reconciled
 backlog index. Current foundations are credited using their recorded evidence;
 remaining journeys are not implemented or newly accepted by this documentation update.
+
+## 10. Trader audit priorities — 12 September 2026
+
+The current native calculation, report, study, shortlist, comparison and decision
+foundations remain. The [audit](PRO_TRADER_AUDIT.md) identifies incomplete user
+transitions and distinguishes fresh controlled observation from code, history and
+unverified broker/release behavior. It does not authorize an unsupported asset
+claim or treat a working library API as a complete trader journey.
+
+Two paths must be usable: **CSV → rules → baseline → direct decision/export →
+reopen**, and **baseline → study → candidate → optional comparison → reserved
+evaluation → decision → chosen setup/review**. Comparison and optimization are
+optional branches, not requirements for retaining one result.
+
+### A. Establish identity and context before adding more destinations
+
+Dependencies: current M1/M2, R0/R4/R5 identity and frozen evidence contracts.
+
+- Define one canonical displayed result descriptor: role (baseline, candidate,
+  later evaluation, refreshed result), actual source/trial, setup version, exact
+  effective dates/cohort, account/currency, interval and calculation identity.
+  Reuse the current backend resolver; do not infer identity from titles or create
+  another data planner.
+- Expose the compact source/rules/actual-date summary before Run. Resolve daily
+  versus minute and all allowed search windows automatically. Show modeled cost,
+  sizing and fill assumptions on demand; ask only for material unresolved intent.
+- Define the matched-baseline recipe against the study's frozen eligible cohort
+  before offering **Create matching baseline**. Preserve the earlier baseline and
+  record the new calculation. Curve cropping does not produce a valid baseline.
+- Forward navigation to a different report opens its identity; Back restores its
+  originating trial, axes, filters, page and scroll. One component owns the parent
+  link and working context. Overview becomes **Continue research** based on the
+  current task; lists distinguish same-day results and show meaningful version
+  changes before reuse.
+- Reconcile equivalent metric concepts by definition/unit/account/period, retain
+  engine provenance and old values, and remove duplicate user choices. Do not
+  deduplicate merely by display label or change stored arithmetic.
+
+**Acceptance:** a trader distinguishes baseline/candidate/later results without
+opening each; explains input dates, execution rules, sizing basis and reservation
+before Run; a scrolled chart opens an identified report and returns to the same
+trial. Metric search has one choice per equivalent concept, while differing
+definitions remain named. No broker download or calculation occurs on inspection.
+
+**First implementation slice:** canonical result descriptor plus forward/back
+context and result/version list presentation, with a compact actual-date setup
+summary using the existing requirements/period contract. Lock the candidate and
+cohort fields needed by B before building its new actions.
+
+### B. Close exact candidate validation and direct decisions
+
+Depends on A's canonical source/config/period contract; extends R5/M4a and preserves
+the existing decision history. This is the next scientific workflow dependency.
+
+- From an original study, prepared nonwinner, shortlist or comparison, resolve
+  the original accepted candidate and reservation. Open matching retained later
+  evidence when it exists, or explicitly prepare it through native jobs when it
+  does not. Never use the prepared child's stripped validation as the source.
+- Show actual selection/reserved dates, recorded calculation/opening/decision
+  use, unknown earlier history and fresh-cash/no-position-carry basis before the
+  consequential evaluation action. Mere context lookup/prefetch is read-only.
+- Let one exact baseline/candidate receive Keep/Reject/Revisit without creating
+  a two-member comparison. Evolve the target contract with backward-compatible
+  comparison evidence; preserve artifact pins, revisions, idempotency and owners.
+- Carry the existing current decision into candidate/report/comparison surfaces.
+  A Keep choice does not replace the optimizer's mathematical winner or imply
+  validation passed. Provide a precise path back from later report to selection
+  and a decision; avoid making re-optimization the dominant evaluation outcome.
+
+**Acceptance:** choose an actual repeated nonwinner, prepare/open its original
+report, explicitly test its canonical reserved dates, decide and reopen the same
+evidence. A single baseline can be rejected or retained. Old comparison decisions
+survive upgrade, bookmark removal and later analysis. Already-used/unknown data
+never becomes “untouched” because a history row is absent.
+
+### C. Make the chosen setup reusable and returning work coherent
+
+Depends on B's exact decision target and A's navigation. Extends M1/M7 entry and
+review contracts without silently activating any execution integration.
+
+- Deliberately promote an exact retained configuration to a named chosen setup.
+  Distinguish several retained candidates from the experiment's current choice;
+  show its linked evidence and relevant rule differences in Library/Overview.
+- Reuse the chosen setup without copying parameters. Preserve original sources
+  and versions when another scanner capture or changed CSV arrives; make the
+  relationship to existing research explicit.
+- Separate **Replay exact**, **Test newer data** and **Refine search**. New data or
+  changed assumptions create new evidence with a compact diff. Reopening never
+  silently refreshes prices or rewrites a decision.
+- Consolidate navigation around Overview, Setup, Backtests, Studies and Review.
+  Put versions with Setup and shortlist/comparison/validation/decision views in
+  contextual Review. Preserve existing deep links and history; do not migrate
+  storage merely to reduce tab count. Add each destination with working content.
+
+**Acceptance:** leave and reopen another authenticated session; find the exact
+chosen setup, replay without broker requests, deliberately use newer data, compare
+the change and retain the earlier conclusion. A new source can use the saved rules
+without making the user reconstruct a strategy. Conflicting draft edits remain
+recoverable.
+
+### D. Finish operating and investigative journeys
+
+These are bounded increments, not one feature bundle. A–C provide their identity
+and return context; existing native lifecycle/report contracts provide the base.
+
+1. **Data recovery:** concise auth/calendar/quota/runtime issue, affected dates
+   and instruments, saved work, direct repair destination and return to the same
+   compatible run. Verify maintained calendar and native reuse boundaries.
+2. **Study operation (M3):** separate scientific identity from execution budget;
+   retain sampler state and immutable execution segments before implementing
+   genuine Pause/Resume, Stop, partial-result inspection and Add trials. Prove
+   unsupported mid-call recovery honestly. Refined/manual searches have their
+   own provenance and do not mix changed hypotheses into prior score history.
+3. **Loss investigation (R2):** connect exact trade → existing price/fill/rule/cost
+   context → original window/trial. Show daily OHLC assumptions as a model.
+4. **Benchmark (R3):** separately acquire/freeze a valid native benchmark and
+   align return basis; old reports receive an explicit overlay. Its absence must
+   not block the independent decision flow or lead to synthetic substitute data.
+
+**Acceptance:** controlled interruption preserves real completed work; a declared
+compatible continuation does not duplicate outcomes. A trader explains a losing
+fill and returns to the exact investigation. Benchmark comparisons retain their
+own evidence and definitions. Broker throughput/cache claims require the separate
+authorized ordinary-installation cold/warm and changed-holding tests.
+
+### E. Complete the public handoff and accept the exact release
+
+Release engineering R runs throughout A–D. The user-facing handoff closes after
+those records/actions can be exported coherently.
+
+- Complete R6 readable standalone HTML/print output, with optional study,
+  comparison, decision and assumptions appendix. Keep reproducible evidence
+  export separate. Evaluate parked QS-01 against the frozen return contract
+  before choosing a connector; engine-native charts already present stay useful.
+- On the actual packaged artifact, verify Windows/Linux and each claimed Docker
+  path, populated upgrade/rollback, restart/restore and old report retention.
+- Exercise the normal authenticated app, first cold data preparation, warm rerun,
+  longer holding window and broker auth/rate-limit recovery. State support by
+  broker/profile/interval actually accepted; another broker's credentials/access
+  are a verification dependency, not permission to copy credentials.
+- Observe an unaided user completing the two paths at the start of this section.
+  Check desktop/mobile, keyboard, focus, chart alternatives, zoom and reduced
+  motion. Mobile trial rows need risk and a visible action without traversing a
+  wide desktop table; keep advanced table browsing available.
+- Publish a compatible app before promoting the extension. Extension submission,
+  store assets, permissions/session/HTTPS/fresh-profile checks and policy/support
+  remain in their separate publishing contract; no store submission is implied.
+
+**Acceptance:** a second person can install the declared release, finish a daily
+and required-minute research journey, leave/reopen and read exported results
+without developer instructions. Retained evidence and account boundaries survive
+the upgrade. A preview may ship earlier with honest incomplete-journey labels;
+it is not the first complete public milestone merely because Git is current.
+
+### F. Retained professional and asset roadmap
+
+After the complete cash-equity loop, continue M4b/M5: recorded cost/slippage/delay
+and parameter-neighborhood scenarios; rolling/expanding walk-forward with frozen
+window and carry/reset rules; saved strategy-component portfolios and meaningful
+concentration/capacity; exact engine disagreement diagnosis; causal rule/templates,
+versioned outside-research import, conditional/manual and multi-objective search
+where actual observations support it.
+
+M6 feasibility may proceed independently. Admit broader cash/ETFs, shorts, futures,
+options/multi-leg, currency/commodity products, crypto, FX, and separately assessed
+cashflow products one profile at a time through the existing asset contract.
+Enable select → native data → account/engine calculation → diagnosis → comparison
+→ save/replay only when proved. Keep all unsupported choices out of the ordinary
+setup until that admission; do not build a broad menu first.
+
+M7 then adds optional scheduled review and exact paper/live observation connectors.
+These are research/observation flows with explicit execution boundaries. A saved
+decision never places orders. Optional Optuna Dashboard embedding remains dependent
+on the actual storage/auth lifecycle and a demonstrated missing journey.
+
+### Reporting and acceptance discipline
+
+This section supersedes the earlier generic forward sequence for the **next**
+development work; section 9 remains the comprehensive backlog index and M/R
+sections remain the detailed contracts. Do not independently maintain competing
+“next” lists. Record code-backed, controlled-observed, broker-observed and exact
+release acceptance separately. The audit's screenshots are not an all-broker,
+all-asset, unaided-user, accessibility or financial-model certification.
