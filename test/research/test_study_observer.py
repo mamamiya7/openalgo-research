@@ -7,7 +7,12 @@ import json
 import pytest
 from test_optuna_portfolio import engine, search_request  # noqa: F401
 
-from research.connectors.optuna_portfolio import run_search
+from research.connectors.optuna_portfolio import (
+    SEARCH_IDENTITY_VERSION,
+    _fingerprint,
+    run_search,
+    validate_checkpoint,
+)
 
 
 @pytest.mark.parametrize("sampler", ["grid", "tpe"])
@@ -31,7 +36,17 @@ def test_observing_native_search_preserves_report_and_checkpoint_bytes(search_re
         expected_checkpoints, sort_keys=True, allow_nan=False
     )
     trials = actual["experiment"]["trials"]
-    assert events[0] == {"kind": "search_started", "proposal_budget": len(trials), "replayed": 0}
+    identity = actual_checkpoints[0][0]["search_identity"]
+    assert len(identity) == 64 and all(character in "0123456789abcdef" for character in identity)
+    assert all(state["search_identity"] == identity for state, _ in actual_checkpoints)
+    assert events[0] == {
+        "kind": "search_started",
+        "proposal_budget": len(trials),
+        "replayed": 0,
+        "restored_evaluations": 0,
+        "search_identity": identity,
+        "search_identity_version": SEARCH_IDENTITY_VERSION,
+    }
     assert len(events) == 1 + 2 * len(trials)
     for trial, start, finish in zip(trials, events[1::2], events[2::2], strict=True):
         assert start == {
@@ -65,7 +80,14 @@ def test_resume_records_only_fresh_proposals_and_preserves_adaptive_sequence(sea
             observe=events.append,
         )
         assert actual == expected
-        assert events[0] == {"kind": "search_started", "proposal_budget": 19, "replayed": completed}
+        assert events[0] == {
+            "kind": "search_started",
+            "proposal_budget": 19,
+            "replayed": completed,
+            "restored_evaluations": len(checkpoints[completed - 1]["rows"]),
+            "search_identity": checkpoints[completed - 1]["search_identity"],
+            "search_identity_version": SEARCH_IDENTITY_VERSION,
+        }
         assert [event["number"] for event in events if event["kind"] == "proposal_started"] == list(
             range(completed, 19)
         )
@@ -95,16 +117,38 @@ def test_observer_cannot_mutate_parameters_or_scientific_checkpoint(search_reque
     assert run_search(**search_request, evaluate=engine, observe=mutate) == expected
 
 
-def test_rejected_replay_never_announces_a_new_execution(search_request):
+@pytest.mark.parametrize(
+    "tamper, message",
+    [
+        ("malformed", "Invalid bounded portfolio checkpoint"),
+        ("integrity", "checkpoint evidence changed"),
+        ("inputs", "checkpoint inputs"),
+    ],
+)
+def test_rejected_replay_never_announces_a_new_execution(search_request, tamper, message):
     checkpoints = []
     run_search(
         **search_request, evaluate=engine, checkpoint=lambda state, _: checkpoints.append(state)
     )
     saved = copy.deepcopy(checkpoints[0])
-    saved["binding"] = "changed"
+    saved["binding"] = ("0" if saved["binding"][0] != "0" else "1") + saved["binding"][1:]
+    if tamper == "malformed":
+        saved["binding"] = "changed"
+    elif tamper == "inputs":
+        # Preserve structural integrity so this case exercises scientific input
+        # validation, independently of malformed or corrupted checkpoint bytes.
+        saved["checkpoint_id"] = _fingerprint(
+            {key: value for key, value in saved.items() if key != "checkpoint_id"}
+        )
+        validate_checkpoint(saved)
     events = []
-    with pytest.raises(ValueError, match="checkpoint inputs"):
-        run_search(**search_request, evaluate=engine, saved=saved, observe=events.append)
+    with pytest.raises(ValueError, match=message):
+        run_search(
+            **search_request,
+            evaluate=lambda *args, **kwargs: pytest.fail("Rejected replay started a calculation"),
+            saved=saved,
+            observe=events.append,
+        )
     assert events == []
 
 

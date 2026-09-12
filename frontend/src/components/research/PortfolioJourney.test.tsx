@@ -222,6 +222,67 @@ afterEach(() => {
 })
 
 describe('native portfolio consumer journey', () => {
+  it('runs automatic research without manual axes and keeps financial inputs unchanged', async () => {
+    const original = draft()
+    original.optimizing = true
+    original.portfolio.automatic_research = { version: 'automatic-trade-management-v1' }
+    original.portfolio.validation = { train_pct: 80, mode: 'reserve' }
+    original.optimization.trials = 123
+    original.portfolio.strategies[0].config.cost_bps = 7
+    savedDraft(original)
+    mount()
+    const start = await screen.findByRole('button', { name: 'Research settings' })
+    expect(screen.queryByRole('region', { name: 'Optimization ranges' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('spinbutton', { name: 'Trials' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Reserve a later period')).not.toBeInTheDocument()
+    expect(portfolioDraftIssue(original)).toBeNull()
+    await userEvent.click(start)
+    await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
+    const sent = vi.mocked(portfolioResearch.submit).mock.calls[0][0]
+    expect(sent.automatic_research).toEqual({ version: 'automatic-trade-management-v1' })
+    expect(sent.optimization).toBeUndefined()
+    expect(sent.validation).toBeUndefined()
+    expect(sent.strategies[0].search).toEqual({})
+    expect(sent.capital).toBe(original.portfolio.capital)
+    expect(sent.strategies[0].config).toEqual({
+      ...original.portfolio.strategies[0].config,
+      initial_capital: original.portfolio.capital,
+    })
+    expect(sent.strategies[0].allocation_pct).toBe(original.portfolio.strategies[0].allocation_pct)
+  })
+
+  it('keeps saved custom ranges and reservation when switching research approaches', async () => {
+    const original = applySuggestedSearch({ ...draft(), optimizing: true })
+    original.optimization.trials = 61
+    original.portfolio.validation = { train_pct: 80, mode: 'reserve' }
+    savedDraft(original)
+    mount()
+    await userEvent.click(await screen.findByRole('button', { name: 'Automatic research' }))
+    expect(screen.getByRole('button', { name: 'Research settings' })).toBeVisible()
+    await userEvent.click(screen.getByRole('button', { name: 'Settings for Breakout' }))
+    expect(screen.queryByLabelText('Optimize Stop loss (%)')).not.toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+    await userEvent.click(screen.getByRole('button', { name: 'Custom search' }))
+    expect(screen.getByRole('spinbutton', { name: 'Trials' })).toHaveValue(61)
+    expect(screen.getByLabelText('Reserve a later period')).toBeChecked()
+    await userEvent.click(screen.getByRole('button', { name: 'Run optimization' }))
+    await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
+    const sent = vi.mocked(portfolioResearch.submit).mock.calls[0][0]
+    expect(sent.automatic_research).toBeUndefined()
+    expect(sent.strategies[0].search).toEqual(original.portfolio.strategies[0].search)
+    expect(sent.optimization?.trials).toBe(61)
+    expect(sent.validation).toEqual(original.portfolio.validation)
+  })
+
+  it('removes the automatic recipe from a backtest while preserving the saved draft', () => {
+    const original = draft()
+    original.portfolio.automatic_research = { version: 'automatic-trade-management-v1' }
+    const payload = portfolioPayload(original)
+    expect(payload.automatic_research).toBeUndefined()
+    expect(payload.optimization).toBeUndefined()
+    expect(original.portfolio.automatic_research).toBeDefined()
+  })
+
   it.each([
     'running',
     'failed',
@@ -966,6 +1027,65 @@ describe('native portfolio consumer journey', () => {
 })
 
 describe('portfolio engine capabilities', () => {
+  it('routes an automatic finding to an exact backtest before offering saved-setup decisions', async () => {
+    const automaticResult: PortfolioResult = {
+      ...result,
+      report_context: {
+        version: 'research-report-context-v1',
+        report_id: 'report',
+        job_id: 'auto',
+        result_artifact: 'artifact',
+        inputs_artifact: 'inputs',
+        config_id: 'baseline',
+        period: 'selection',
+        period_label: 'Search period',
+        dates: { from: '2026-01-01', to: '2026-05-31' },
+        analysis_version: null,
+        analysis_artifact: null,
+      },
+      automatic_research: {
+        version: 'automatic-trade-management-v1',
+        status: 'not_supported',
+        headline: 'No reliable improvement over unchanged settings',
+        selected_config_id: 'baseline',
+        selected_is_baseline: true,
+        selection_basis: 'Baseline retained.',
+        recipe: {
+          version: 'automatic-trade-management-v1',
+          periods: {
+            search: { from: '2026-01-01', to: '2026-05-31' },
+            check1: { from: '2026-06-01', to: '2026-06-30' },
+            check2: { from: '2026-07-01', to: '2026-07-31' },
+            final: { from: '2026-08-01', to: '2026-09-10' },
+          },
+        },
+        baseline: {},
+        checks: [],
+        final: null,
+        counts: { proposals: 50, simulations: 60, finalists: 3 },
+        unsupported_families: [],
+      },
+    }
+    const replay = vi.fn()
+    render(
+      <PortfolioResults
+        job={{ ...finished, kind: 'portfolio_optimize', result: automaticResult }}
+        result={automaticResult}
+        experimentId="saved-research"
+        onRerun={replay}
+        onOptimize={vi.fn()}
+        onAdjust={vi.fn()}
+        rerunning={false}
+        exportUrl="/export"
+      />
+    )
+    expect(
+      screen.queryByRole('button', { name: /Save|Optimize this|Adjust & test|Keep|Compare|Choose/ })
+    ).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Backtest these settings' }))
+    expect(replay).toHaveBeenCalledWith()
+  })
+
   function allowNautilus() {
     vi.mocked(portfolioResearch.capabilities).mockResolvedValue({
       ...capabilities,

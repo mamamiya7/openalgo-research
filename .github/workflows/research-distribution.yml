@@ -116,6 +116,7 @@ jobs:
           src/components/research/studyPresentation.test.ts
           src/components/research/useStudyWorkspaceView.test.tsx
           src/components/research/PortfolioStudyWorkspace.test.tsx
+          src/components/research/AutomaticResearchFindings.test.tsx
           src/components/research/StudyActivity.test.tsx
           src/api/researchStudyActivity.test.ts
           src/api/researchShortlist.test.ts

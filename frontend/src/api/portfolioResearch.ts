@@ -175,6 +175,7 @@ export interface PortfolioRequest {
   capital: number
   engine: 'vectorbt' | 'nautilus'
   strategies: PortfolioStrategy[]
+  automatic_research?: { version: 'automatic-trade-management-v1' }
   optimization?: {
     sampler: 'tpe' | 'grid'
     trials: number
@@ -205,6 +206,7 @@ export interface PortfolioProposal {
   datetime_complete?: string
 }
 export interface PortfolioResult {
+  automatic_research?: AutomaticResearchFindings
   study_continuation?: {
     version: string
     parent_job_id: string
@@ -278,6 +280,7 @@ export interface PortfolioResult {
     rows: PortfolioTrial[]
     trials?: PortfolioProposal[]
     recommendation_id: string
+    objective_winner_id?: string
     selected_strategies: PortfolioSettings[]
     optimizer: { sampler: string; objective_definition: string; version: string }
     specification: NonNullable<PortfolioRequest['optimization']>
@@ -286,6 +289,47 @@ export interface PortfolioResult {
     study_analysis?: StudyAnalysis
     search_space?: { axes: Record<string, PortfolioRange>; proposal_budget?: number }
   }
+}
+export interface AutomaticResearchFindings {
+  version: string
+  status: 'supported' | 'not_supported' | 'inconclusive'
+  selected_config_id: string
+  selected_is_baseline: boolean
+  headline: string
+  selection_basis: string
+  recipe: {
+    version: string
+    periods: Record<'search' | 'check1' | 'check2' | 'final', { from: string; to: string }>
+    [key: string]: unknown
+  }
+  baseline: Record<string, unknown>
+  checks: Array<{
+    config_id: string
+    trial_number: number
+    eligible: boolean
+    reasons: string[]
+    windows: Array<{
+      period: string
+      summary: Record<string, number | string | null>
+      baseline_summary: Record<string, number | string | null>
+      score_delta: number | null
+    }>
+    stress: {
+      summary: Record<string, number | string | null>
+      baseline_summary: Record<string, number | string | null>
+      score_delta: number | null
+    }
+    selection_score: number | null
+  }>
+  final: {
+    summary: Record<string, number | string | null>
+    baseline_summary: Record<string, number | string | null>
+    score_delta: number | null
+    supports: boolean
+    reasons?: string[]
+  } | null
+  counts: { proposals: number; simulations: number; finalists: number }
+  unsupported_families: string[]
 }
 export interface ResearchResultDescriptor {
   version: 'research-result-descriptor-v1'

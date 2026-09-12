@@ -71,6 +71,8 @@ REQUIRED_RESEARCH_FILES = {
     "research/portfolio_validation.py",
     "research/connectors/vectorbt_portfolio.py",
     "research/connectors/optuna_portfolio.py",
+    "research/automatic_protocol.py",
+    "research/automatic_research.py",
     "research/connectors/nautilus_portfolio.py",
     "research/connectors/nautilus_runtime.py",
     "research/runtimes/nautilus/pyproject.toml",

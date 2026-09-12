@@ -202,13 +202,19 @@ export function returnDrawdownChart(experiment: Experiment): AnalysisChart {
           customdata: rows.map((row) => ({ research_config: row.config_id })),
           text: rows.map(
             (row) =>
-              `Trial ${row.trial_number + 1}${row.config_id === experiment.recommendation_id ? ' · Best by objective' : ''}`
+              `Trial ${row.trial_number + 1}${row.config_id === (experiment.objective_winner_id ?? experiment.recommendation_id) ? ' · Best by objective' : ''}`
           ),
           hovertemplate: '%{text}<br>Return %{y:.2f}%<br>Drawdown %{x:.2f}%<extra></extra>',
           marker: {
-            size: rows.map((row) => (row.config_id === experiment.recommendation_id ? 13 : 8)),
+            size: rows.map((row) =>
+              row.config_id === (experiment.objective_winner_id ?? experiment.recommendation_id)
+                ? 13
+                : 8
+            ),
             color: rows.map((row) =>
-              row.config_id === experiment.recommendation_id ? '#22c55e' : '#60a5fa'
+              row.config_id === (experiment.objective_winner_id ?? experiment.recommendation_id)
+                ? '#22c55e'
+                : '#60a5fa'
             ),
             opacity: 0.8,
           },

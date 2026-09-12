@@ -179,7 +179,10 @@ def replay_inputs(store, owner, job_id, *, trial_id=None, period="selection"):
         raise ValueError("Choose a completed portfolio run")
     evidence = service.read_artifact(store, bundle["inputs_artifact"])
     report = bundle["result"]
-    has_split = bool(evidence.get("portfolio", {}).get("validation"))
+    has_split = bool(
+        evidence.get("portfolio", {}).get("validation")
+        or evidence.get("portfolio", {}).get("automatic_research")
+    )
     if period == "evaluation" and not has_split:
         raise ValueError(
             "This run has no reserved later period. Choose a run with saved evaluation dates."
@@ -211,6 +214,7 @@ def replay_inputs(store, owner, job_id, *, trial_id=None, period="selection"):
         raise ValueError("Saved strategy identities do not match")
     portfolio.pop("optimization", None)
     portfolio.pop("validation", None)
+    portfolio.pop("automatic_research", None)
     for item in portfolio["strategies"]:
         chosen = definitions[item["id"]]
         item.update(config=chosen["config"], allocation_pct=chosen["allocation_pct"], search={})
@@ -332,6 +336,20 @@ def _prepare_prices(
             _save_receipt(receipts_dir, item["receipt"])
     plan = contract.price_plan(evidence["portfolio"], evidence["strategies"], calendar)
     interval = plan["interval"]
+    if evidence["portfolio"].get("automatic_research"):
+        from research.automatic_protocol import compile_recipe
+
+        # Reject insufficient chronology before spending broker requests. The
+        # final recipe is frozen again with the actual admitted prices below.
+        compile_recipe(
+            {
+                **evidence,
+                "snapshot": {
+                    **calendar,
+                    "provenance": {**calendar.get("provenance", {}), "interval": interval},
+                },
+            }
+        )
     from research.connectors.vectorbt_portfolio import MAX_MATRIX_CELLS
 
     cells = len(plan.get("timeline", calendar["sessions"])) * len(evidence["signals"])
@@ -448,6 +466,10 @@ def run(
             check_saved_calendar(evidence["snapshot"])
         inputs_id = saved["inputs_artifact"]
     elif evidence.get("frozen_prices"):
+        if portfolio.get("automatic_research"):
+            from research.automatic_protocol import compile_recipe
+
+            evidence = {**evidence, "automatic_recipe": compile_recipe(evidence)}
         inputs_id = service.save_artifact(store, evidence)
         checkpoint(
             {"phase": "calculation", "inputs_artifact": inputs_id, "calculation": None},
@@ -464,6 +486,10 @@ def run(
             cancelled=cancelled,
             **({"activity": activity} if activity else {}),
         )
+        if portfolio.get("automatic_research"):
+            from research.automatic_protocol import compile_recipe
+
+            evidence = {**evidence, "automatic_recipe": compile_recipe(evidence)}
         inputs_id = service.save_artifact(store, evidence)
         checkpoint(
             {"phase": "calculation", "inputs_artifact": inputs_id, "calculation": None},
@@ -484,6 +510,33 @@ def run(
         from research.connectors.nautilus_runtime import evaluate
     else:
         from research.connectors.vectorbt_portfolio import evaluate
+
+    if portfolio.get("automatic_research"):
+        from research.automatic_research import run as automatic_run
+
+        def persist_automatic(state, counts):
+            checkpoint(
+                {"phase": "calculation", "inputs_artifact": inputs_id, "calculation": state},
+                {
+                    **counts,
+                    "completed": 60 + 40 * counts["completed"] / max(1, counts["total"]),
+                    "total": 100,
+                    "stage": "optimization",
+                },
+            )
+
+        result = automatic_run(
+            evidence,
+            evaluate=evaluate,
+            saved=(saved or {}).get("calculation"),
+            checkpoint=persist_automatic,
+            progress=lambda done, total: progress(60 + 40 * done / max(1, total), 100),
+            cancelled=cancelled,
+            activity=activity,
+            observe=observe,
+            boundary=boundary,
+        )
+        return result, evidence
 
     calculation_evidence = evidence
     validation_evidence = None

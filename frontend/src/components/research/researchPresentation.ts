@@ -45,7 +45,12 @@ export function researchResultRole(job: PortfolioJob, report = false): string {
       ? 'evaluation'
       : (job.display?.role ?? (job.kind === 'portfolio_optimize' ? 'optimization' : 'backtest'))
   const candidate = context?.candidate ?? job.display?.candidate
-  const title = report && role === 'optimization' ? 'Best by objective' : roles[role]
+  const title =
+    report && role === 'optimization'
+      ? job.result?.automatic_research
+        ? 'Search period report'
+        : 'Best by objective'
+      : roles[role]
   const trial = candidate?.trial_number
   return `${title}${trial != null && (role !== 'optimization' || report) ? ` · Trial ${trial + 1}` : ''}`
 }

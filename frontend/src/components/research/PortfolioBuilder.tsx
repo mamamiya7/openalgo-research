@@ -1,4 +1,4 @@
-import { FileSpreadsheet, Plus, Settings2, Trash2 } from 'lucide-react'
+import { FileSpreadsheet, Plus, Settings2, Sparkles, Trash2 } from 'lucide-react'
 import { useRef, useState } from 'react'
 import type {
   PortfolioAxis,
@@ -166,16 +166,23 @@ export function addPortfolioSource(
   }
 }
 export function portfolioPayload(draft: PortfolioDraft): PortfolioRequest {
-  const { optimization: _discarded, validation, ...portfolio } = draft.portfolio
+  const { optimization: _discarded, validation, automatic_research, ...portfolio } = draft.portfolio
+  const automatic = draft.optimizing && Boolean(automatic_research)
   return {
     ...portfolio,
     strategies: portfolio.strategies.map((strategy) => ({
       ...strategy,
       config: { ...strategy.config, initial_capital: portfolio.capital },
-      search: draft.optimizing ? activeSearch(strategy) : {},
+      search: draft.optimizing && !automatic ? activeSearch(strategy) : {},
     })),
-    ...(draft.optimizing ? { optimization: draft.optimization } : {}),
-    ...(validation && (draft.optimizing || validation.mode === 'reserve') ? { validation } : {}),
+    ...(automatic
+      ? { automatic_research }
+      : draft.optimizing
+        ? { optimization: draft.optimization }
+        : {}),
+    ...(!automatic && validation && (draft.optimizing || validation.mode === 'reserve')
+      ? { validation }
+      : {}),
   }
 }
 export function portfolioDraftIssue(draft: PortfolioDraft): string | null {
@@ -191,6 +198,7 @@ export function portfolioDraftIssue(draft: PortfolioDraft): string | null {
     return 'Give each strategy a name.'
   if (
     draft.optimizing &&
+    !portfolio.automatic_research &&
     !portfolio.strategies.some((strategy) => Object.keys(activeSearch(strategy)).length)
   )
     return 'Choose at least one setting to optimize in a strategy’s Settings.'
@@ -253,6 +261,8 @@ export function PortfolioBuilder({
     setSettingsId(id)
   }
   const portfolio = draft.portfolio
+  const automatic = draft.optimizing && Boolean(portfolio.automatic_research)
+  const manualSearch = draft.optimizing && !automatic
   const update = (changes: Partial<PortfolioRequest>) =>
     onChange({ ...draft, portfolio: { ...portfolio, ...changes } })
   const allocation = portfolio.strategies.reduce((sum, item) => sum + item.allocation_pct, 0)
@@ -384,7 +394,7 @@ export function PortfolioBuilder({
             <div className="divide-y rounded-xl border">
               {portfolio.strategies.map((strategy, index) => {
                 const source = draft.sources[strategy.source_id]
-                const range = draft.optimizing ? strategy.search.allocation_pct : undefined
+                const range = manualSearch ? strategy.search.allocation_pct : undefined
                 return (
                   <div
                     key={strategy.id}
@@ -409,13 +419,13 @@ export function PortfolioBuilder({
                         className={`text-xs text-muted-foreground ${source?.receipt.chartink ? '' : 'truncate'}`}
                       >
                         {sourceSummary(source)}
-                        {draft.optimizing && Object.keys(activeSearch(strategy)).length
+                        {manualSearch && Object.keys(activeSearch(strategy)).length
                           ? ` · ${Object.keys(activeSearch(strategy)).length} settings vary`
                           : ''}
                       </p>
                       <ChartinkSource source={source?.receipt.chartink} />
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {strategyRuleSummary(strategy, draft.optimizing)}
+                        {strategyRuleSummary(strategy, manualSearch)}
                       </p>
                     </div>
                     {range ? (
@@ -525,6 +535,53 @@ export function PortfolioBuilder({
             ))}
           </fieldset>
           {draft.optimizing && (
+            <fieldset
+              className="flex flex-wrap items-center gap-2"
+              aria-label="Optimization approach"
+            >
+              {([true, false] as const).map((enabled) => (
+                <Button
+                  key={String(enabled)}
+                  type="button"
+                  size="sm"
+                  variant={automatic === enabled ? 'secondary' : 'ghost'}
+                  aria-pressed={automatic === enabled}
+                  onClick={() =>
+                    update({
+                      automatic_research: enabled
+                        ? { version: 'automatic-trade-management-v1' }
+                        : undefined,
+                    })
+                  }
+                >
+                  {enabled && <Sparkles className="size-4" aria-hidden="true" />}
+                  {enabled ? 'Automatic research' : 'Custom search'}
+                </Button>
+              ))}
+            </fieldset>
+          )}
+          {automatic && (
+            <div className="relative overflow-hidden rounded-xl border border-cyan-500/20 bg-gradient-to-br from-cyan-500/5 via-background to-violet-500/5 p-5 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300">
+              <p className="text-sm font-medium">Find stronger trading settings</p>
+              <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                Tests exits and holding periods, then checks later dates and higher costs.
+              </p>
+              <ol
+                aria-label="Automatic research stages"
+                className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-muted-foreground"
+              >
+                {['Baseline', 'Search', 'Check', 'Findings'].map((stage, index) => (
+                  <li key={stage} className="flex items-center gap-2">
+                    <span className="flex size-5 items-center justify-center rounded-full border border-cyan-500/25 text-foreground">
+                      {index + 1}
+                    </span>
+                    {stage}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+          {manualSearch && (
             <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_160px] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150">
               {portfolio.strategies.length > 0 && (
                 <section aria-label="Optimization ranges" className="space-y-3 sm:col-span-2">
@@ -609,35 +666,37 @@ export function PortfolioBuilder({
               </div>
             </div>
           )}
-          <div className="space-y-1">
-            <label className="flex cursor-pointer items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="h-4 w-4 accent-primary"
-                checked={Boolean(
-                  portfolio.validation &&
-                    (draft.optimizing || portfolio.validation.mode === 'reserve')
+          {!automatic && (
+            <div className="space-y-1">
+              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-primary"
+                  checked={Boolean(
+                    portfolio.validation &&
+                      (draft.optimizing || portfolio.validation.mode === 'reserve')
+                  )}
+                  onChange={(event) =>
+                    update({
+                      validation: event.target.checked
+                        ? { train_pct: 80, mode: 'reserve' }
+                        : undefined,
+                    })
+                  }
+                />
+                {draft.optimizing && portfolio.validation && portfolio.validation.mode !== 'reserve'
+                  ? 'Check a later period'
+                  : 'Reserve a later period'}
+              </label>
+              {portfolio.validation &&
+                draft.optimizing &&
+                portfolio.validation.mode !== 'reserve' && (
+                  <p className="pl-6 text-xs text-muted-foreground">
+                    This saved setup checks both periods during the run.
+                  </p>
                 )}
-                onChange={(event) =>
-                  update({
-                    validation: event.target.checked
-                      ? { train_pct: 80, mode: 'reserve' }
-                      : undefined,
-                  })
-                }
-              />
-              {draft.optimizing && portfolio.validation && portfolio.validation.mode !== 'reserve'
-                ? 'Check a later period'
-                : 'Reserve a later period'}
-            </label>
-            {portfolio.validation &&
-              draft.optimizing &&
-              portfolio.validation.mode !== 'reserve' && (
-                <p className="pl-6 text-xs text-muted-foreground">
-                  This saved setup checks both periods during the run.
-                </p>
-              )}
-          </div>
+            </div>
+          )}
           <PortfolioSetupReview draft={draft} />
           <details className="text-sm">
             <summary className="cursor-pointer text-muted-foreground">More settings</summary>
@@ -655,7 +714,7 @@ export function PortfolioBuilder({
                   />
                 </div>
               ))}
-              {draft.optimizing && (
+              {manualSearch && (
                 <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="portfolio-sampler">Search method</Label>
                   <select
@@ -727,14 +786,16 @@ export function PortfolioBuilder({
             : uploading
               ? 'Adding strategies…'
               : draft.optimizing
-                ? 'Run optimization'
+                ? automatic
+                  ? 'Research settings'
+                  : 'Run optimization'
                 : 'Run backtest'}
         </Button>
       </div>
       <PortfolioStrategySettings
         strategy={activeStrategy}
         source={activeStrategy ? draft.sources[activeStrategy.source_id] : undefined}
-        optimizing={draft.optimizing}
+        optimizing={manualSearch}
         onClose={() => setSettingsId(null)}
         onRestoreFocus={() => settingsOpener.current?.focus()}
         onChange={(strategy, allocationChanged) =>

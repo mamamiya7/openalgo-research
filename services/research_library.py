@@ -138,6 +138,7 @@ def normalize_draft(store, owner, raw):
             "strategies",
             "optimization",
             "validation",
+            "automatic_research",
             "date_from",
             "date_to",
         },
@@ -167,6 +168,11 @@ def normalize_draft(store, owner, raw):
         _number_shape(portfolio["validation"].get("train_pct"), "Draft training share")
         if portfolio["validation"].get("mode", "evaluate") not in ("reserve", "evaluate"):
             raise ValueError("Choose reserve or evaluate for the later period")
+    if portfolio.get("automatic_research") is not None:
+        from research.automatic_protocol import VERSION as AUTOMATIC_VERSION
+
+        if portfolio["automatic_research"] != {"version": AUTOMATIC_VERSION}:
+            raise ValueError("Choose a supported automatic research preset")
     rows = portfolio.get("strategies")
     if not isinstance(rows, list) or len(rows) > 8:
         raise ValueError("A draft can contain at most eight strategies")
@@ -242,6 +248,7 @@ def portfolio_payload(draft):
     portfolio = deepcopy(draft["portfolio"])
     portfolio.pop("optimization", None)
     validation = portfolio.pop("validation", None)
+    automatic = portfolio.pop("automatic_research", None)
     for strategy in portfolio["strategies"]:
         strategy["config"]["initial_capital"] = portfolio["capital"]
         search = strategy["search"] if draft["optimizing"] else {}
@@ -253,6 +260,11 @@ def portfolio_payload(draft):
         if not cfg.get("trailing_enabled"):
             search.pop("trailing_pct", None)
         strategy["search"] = search
+    if draft["optimizing"] and automatic:
+        portfolio["automatic_research"] = automatic
+        for strategy in portfolio["strategies"]:
+            strategy["search"] = {}
+        return portfolio
     if draft["optimizing"]:
         portfolio["optimization"] = deepcopy(draft["optimization"])
     if validation is not None and (draft["optimizing"] or validation.get("mode") == "reserve"):

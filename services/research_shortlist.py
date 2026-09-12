@@ -126,6 +126,11 @@ def _evidence(store, job, config_id=None, proposal_number=None):
     kind = bundle.get("kind")
     if kind not in ("portfolio_optimize", "portfolio_backtest") or not isinstance(result, dict):
         raise ValueError("Choose a completed backtest or optimization study")
+    if result.get("automatic_research"):
+        raise ValueError(
+            "Open an exact backtest of these settings before saving or comparing "
+            "this automatic research choice."
+        )
     if kind == "portfolio_optimize":
         study = result.get("experiment", {})
         if (

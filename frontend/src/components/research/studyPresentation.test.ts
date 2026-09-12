@@ -339,6 +339,19 @@ describe('native study evidence presentation', () => {
     })
   })
 
+  it('keeps the objective chart winner distinct from a settings choice made after later checks', () => {
+    const evidence = study()
+    evidence.objective_winner_id = 'a'
+    evidence.recommendation_id = 'b'
+    const scatter = returnDrawdownChart(evidence)
+    expect(scatter.figure!.data[0].text).toEqual(['Trial 4 · Best by objective', 'Trial 9'])
+    evidence.recommendation_id = 'baseline-outside-search'
+    expect(returnDrawdownChart(evidence).figure!.data[0].text).toEqual([
+      'Trial 4 · Best by objective',
+      'Trial 9',
+    ])
+  })
+
   it('counts actual recorded proposals and unique configurations, falling back only to saved counters when history is absent', () => {
     const evidence = study()
     evidence.rows.push({ ...evidence.rows[0] })

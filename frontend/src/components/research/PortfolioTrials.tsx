@@ -379,9 +379,16 @@ function TrialTable({
                     className={`${cell} sticky left-0 z-10 bg-background font-normal`}
                   >
                     {row.number + 1}
-                    {row.candidate && row.configId === experiment.recommendation_id && (
-                      <span className="ml-2 text-xs text-primary">Best by objective</span>
-                    )}
+                    {row.candidate &&
+                      experiment.objective_winner_id &&
+                      row.configId === experiment.recommendation_id && (
+                        <span className="ml-2 text-xs text-primary">Selected after checks</span>
+                      )}
+                    {row.candidate &&
+                      row.configId ===
+                        (experiment.objective_winner_id ?? experiment.recommendation_id) && (
+                        <span className="ml-2 text-xs text-primary">Best by objective</span>
+                      )}
                   </th>
                   {view.scope === 'all' && (
                     <td className={cell}>

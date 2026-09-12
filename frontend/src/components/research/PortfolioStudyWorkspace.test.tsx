@@ -245,6 +245,51 @@ afterEach(() => {
 })
 
 describe('connected study exploration', () => {
+  it('opens a retained baseline report even when automatic checks select no searched candidate', async () => {
+    const data = result()
+    data.experiment!.objective_winner_id = 'config-0'
+    data.experiment!.recommendation_id = 'baseline-outside-search'
+    data.automatic_research = {
+      version: 'automatic-trade-management-v1',
+      status: 'not_supported',
+      headline: 'No reliable improvement over unchanged settings',
+      selected_config_id: 'baseline-outside-search',
+      selected_is_baseline: true,
+      selection_basis: 'Original settings retained after later checks.',
+      recipe: {
+        version: 'automatic-trade-management-v1',
+        periods: {
+          search: { from: '2026-01-01', to: '2026-04-30' },
+          check1: { from: '2026-05-01', to: '2026-05-31' },
+          check2: { from: '2026-06-01', to: '2026-06-30' },
+          final: { from: '2026-07-01', to: '2026-08-31' },
+        },
+      },
+      baseline: {},
+      checks: [],
+      final: null,
+      counts: { proposals: 50, simulations: 61, finalists: 3 },
+      unsupported_families: [],
+    }
+    const { onOpenReport, onRerun } = mount({ data, experimentId: 'saved-experiment' })
+    expect(screen.getByRole('region', { name: 'Automatic research findings' })).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Best report' })).not.toBeInTheDocument()
+    expect(screen.getByText('Best objective score').parentElement).toHaveTextContent('3')
+    expect(researchCandidates.get).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Add trials' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Backtest these settings' }))
+    expect(onRerun).toHaveBeenCalledWith()
+    await userEvent.click(screen.getByRole('button', { name: 'Selected settings report' }))
+    expect(onOpenReport).toHaveBeenCalledWith(studyId)
+    await userEvent.click(screen.getByRole('button', { name: 'Point in history' }))
+    const dialog = screen.getByRole('dialog')
+    expect(
+      within(dialog).queryByRole('button', { name: /Save|Prepare report|Adjust & test/ })
+    ).not.toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Backtest these settings' }))
+    expect(onRerun).toHaveBeenLastCalledWith('config-1')
+  })
+
   it('loads durable activity only on the Activity tab and retains the native timeline', async () => {
     mount()
     expect(researchStudyActivity.get).not.toHaveBeenCalled()

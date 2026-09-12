@@ -315,6 +315,12 @@ class StudyObserver:
         calculation = state.get("calculation")
         if not isinstance(calculation, dict):
             return
+        if calculation.get("version") == "automatic-trade-management-v1":
+            calculation = calculation.get("search_checkpoint") or (
+                calculation.get("search_result") or {}
+            ).get("experiment")
+            if calculation is None:
+                return
         _fence(db, self.token, self.job_id)
         trials = calculation.get("trials")
         try:

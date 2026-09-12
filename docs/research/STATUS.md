@@ -2,6 +2,41 @@
 
 Updated: 12 September 2026. Published preview: **`0.1.0-preview.4`**, targeting OpenAlgo 2.0.2.2.
 
+## Automatic trade-management research — installed 12 September 2026
+
+The substantive first automatic mode is installed in the normal app. **Optimize
+→ Automatic → Research settings** resolves supported exit/holding ranges, freezes
+the source/price/settings recipe, runs real Optuna and native portfolio simulations,
+checks up to three candidates on two later development windows and at higher costs,
+then evaluates the fixed choice on the final period. It can retain the unchanged
+baseline or report insufficient evidence. Trial count, actual simulation count and
+final-period comparison are distinct. Progress survives native Pause/Resume.
+
+This is automatic **trade management**, not indicator/regime discovery. The recipe
+uses 50 proposals and at most 70 simulations, fixed capital/sizing/cost assumptions,
+100 or more exchange sessions and maximum-horizon purging. The final choice is
+committed before final-period outcomes are evaluated; the last period never
+re-ranks the candidates. An exact backtest connects the choice to the existing
+shortlist/decision journey without inventing a baseline trial. Details and the
+remaining boundaries are in [the automatic research plan](AUTOMATED_RESEARCH_PLAN.md#first-executable-mode--12-september-2026).
+
+The update applied 19 runtime source files and the production interface built
+against the installation's frontend dependencies. All 57 saved runs and research
+metadata fingerprints are unchanged; the account, broker/history code, configuration
+and local UI customizations are preserved. No schema migration was needed. The
+worker, served automatic-mode assets and authentication/CSRF gates are verified.
+This installation check did not launch a new broker calculation.
+
+The implementation passes **261 distinct backend checks**, **517 frontend checks
+across 43 suites**, **119 compatibility gates**, TypeScript, production build and
+scoped lint. Exact native replay and the saved decision/shortlist bridge were
+exercised on deterministic prices. A separate 59-check continuation/activity/native
+automatic regression passes, overlapping those checks. It repairs the six stale
+test-contract failures from the preceding GitHub run without changing production
+calculations; remote CI must validate this new source checkpoint. Source publication is being prepared; the
+versioned preview ZIP remains **preview.4**. Older receipts below describe the
+preceding increments. Broader consumer/broker acceptance remains open.
+
 ## Study continuation foundation — installed 12 September 2026
 
 The first D2 dependency for automatic research is implemented: **Add trials** on
@@ -17,8 +52,8 @@ existing and total trials, retains exact retry requests, and supports keyboard
 and mobile use. A continued study links back to its previous study.
 
 This is a completed-study continuation slice, not the full D2/automatic mode.
-Partial-result publication, a multi-stage frozen recipe, benchmark
-and indicator warmup, causal conditions and automatic reliability/final checks
+Partial-result publication, benchmark
+and indicator warmup, causal conditions and the broader automatic protocol
 remain pending. Existing scalar ranking is unchanged. A continuation never makes
 previously used later data unseen. See the [implementation receipt](DELIVERY_PLAN.md#study-continuation-foundation--12-september-2026).
 This increment is installed in the normal application. All 57 saved runs and
@@ -37,7 +72,7 @@ return route and ignore stale client responses after account/navigation changes.
 
 Preparation and old combined train/test studies do not offer Pause. A failing
 calculation, publication failure or lost worker keeps its existing recovery behavior;
-Pause never invents a completed report. The D2 frozen recipe and partial results
+Pause never invents a completed report. The broader D2 protocol and partial results
 remain pending. See the [implementation receipt](DELIVERY_PLAN.md#cooperative-study-pause--12-september-2026).
 
 The normal application now serves this update with its existing account and all

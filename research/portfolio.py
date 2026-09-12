@@ -42,6 +42,7 @@ def normalize(raw):
         "date_from",
         "date_to",
         "validation",
+        "automatic_research",
     }:
         raise ValueError("Invalid portfolio settings")
     if raw.get("version", VERSION) != VERSION:
@@ -149,6 +150,13 @@ def normalize(raw):
             result[key] = value
     if result.get("date_from", "") > result.get("date_to", "9999-12-31"):
         raise ValueError("The start date must come before the end date")
+    if raw.get("automatic_research") is not None:
+        from research.automatic_protocol import automatic_portfolio
+
+        if raw.get("validation") is not None:
+            raise ValueError("Automatic research sets its own chronological checks")
+        result["automatic_research"] = deepcopy(raw["automatic_research"])
+        return automatic_portfolio(result)
     if raw.get("optimization") is not None:
         from research.connectors.optuna_portfolio import validate_specification
 
@@ -338,6 +346,8 @@ def execution_versions(portfolio, recorded=None):
         "policy_version": POLICY_VERSION,
         "portfolio_version": VERSION,
     }
+    if portfolio.get("automatic_research"):
+        versions["automatic_research_version"] = portfolio["automatic_research"]["version"]
     for name in (engine, "optuna") if portfolio.get("optimization") else (engine,):
         if name == "nautilus":
             versions["engine_version"] = runtime["tested_version"]

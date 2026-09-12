@@ -82,6 +82,27 @@ def partition(evidence, *, prepare_period="both"):
 
     if prepare_period not in ("both", "selection", "evaluation"):
         raise ValueError("Choose a recorded calculation period")
+    if evidence.get("portfolio", {}).get("automatic_research"):
+        from research.automatic_protocol import slice_period
+
+        # Automatic research reserves separate development checks between these
+        # periods. Exact replay must not reintroduce them into the search sample.
+        earlier = slice_period(evidence, "search") if prepare_period != "evaluation" else None
+        later = slice_period(evidence, "final") if prepare_period != "selection" else None
+        periods = evidence["automatic_recipe"]["periods"]
+        return (
+            earlier,
+            later,
+            {
+                "label": "Final later-period check",
+                "train_from": periods["search"]["from"],
+                "train_to": periods["search"]["to"],
+                "test_from": periods["final"]["from"],
+                "test_to": periods["final"]["to"],
+                "selection_basis": "Automatic research with separate development checks",
+                "shared_positions_across_periods": False,
+            },
+        )
     train_end, test_start = split_date(evidence)
     snapshot = evidence["snapshot"]
     minute = snapshot["provenance"]["interval"] == "1m"

@@ -87,6 +87,11 @@ def canonical_source(store, owner, experiment_id, job_id, config_id=None):
             raise ValueError("The saved result does not retain a native portfolio")
         origin = result.get("replay_origin")
         if not origin and not candidate_edge:
+            if result.get("automatic_research"):
+                raise ValueError(
+                    "Open an exact backtest of these settings before saving or comparing "
+                    "this automatic research choice."
+                )
             if bundle["kind"] == "portfolio_optimize":
                 study = result.get("experiment", {})
                 config_id = config_id or study.get("recommendation_id")
@@ -146,11 +151,30 @@ def canonical_source(store, owner, experiment_id, job_id, config_id=None):
             or not inputs.get("frozen_prices")
         ):
             raise ValueError("The saved replay inputs do not match their exact source")
+        automatic_bridge = (
+            bundle["kind"] == "portfolio_backtest"
+            and not candidate_edge
+            and replay_edge
+            and replay_edge[0] == "replay"
+            and origin["period"] == "selection"
+            and inputs.get("automatic_recipe", {}).get("version") == "automatic-trade-management-v1"
+        )
         del inputs, bundle, result
         with store.sessions() as db:
             _, parent = shortlist._linked(db, owner, experiment_id, parent_id)
             if parent.status != "completed" or parent.result_artifact != parent_artifact:
                 raise ValueError("The original saved result changed; reopen it before continuing")
+        if automatic_bridge:
+            parent_bundle = service.read_artifact(store, parent_artifact)
+            if (
+                parent_bundle.get("kind") == "portfolio_optimize"
+                and parent_bundle.get("result", {}).get("automatic_research", {}).get("version")
+                == "automatic-trade-management-v1"
+            ):
+                # The automatic finding is not an ordinary objective-winning
+                # trial. Its exact fixed replay is a real backtest, with its own
+                # report identity and decisions; do not invent a trial for it.
+                return job, config_id
         job_id = parent_id
     raise ValueError("The saved replay lineage is too long to verify")
 

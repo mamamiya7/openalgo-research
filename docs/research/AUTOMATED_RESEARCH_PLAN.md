@@ -1,16 +1,82 @@
 # One-click strategy research
 
-**Proposed product contract, 12 September 2026. Not implemented.** Requested after
-the chosen-setup increment. This specifies the automatic mode of Optimize within
+**Product contract, 12 September 2026. First trade-management mode installed;
+broader indicator/regime protocol remains planned.** Requested after the
+chosen-setup increment. This specifies the automatic mode of Optimize within
 OpenAlgo Research; it is not another application or a replacement calculation
 engine. [DELIVERY_PLAN.md](DELIVERY_PLAN.md) owns implementation order.
 
-Implementation has started with its D2 dependency: completed-study **Add trials**
-now separates scientific identity from execution budget and retains exact saved
-prices/checkpoints in linked continuation results. This foundation does not enable
-the automatic research action described below. See [current status](STATUS.md).
-Cooperative Pause/Resume now retains the current completed proposal and its exact
-checkpoint. A frozen multi-stage recipe and partial-result publication still follow.
+Its D2 dependency, completed-study **Add trials**, separates scientific identity
+from execution budget and retains exact saved prices/checkpoints in linked
+continuation results. Cooperative Pause/Resume retains the current completed
+proposal and its exact checkpoint. The first executable trade-management recipe
+below is now installed; the full indicator/regime protocol and partial-result
+publication still follow. See [current status](STATUS.md).
+
+## First executable mode — 12 September 2026
+
+**Installed in the normal app; source publication being prepared.** Automatic research now
+uses the native queue, account-owned library, data preparation and bounded worker:
+
+1. Resolve at most seven values for each supported target, stop, active holding
+   limit and already-enabled trailing distance. Preserve original settings as the
+   baseline; capital, order sizing, allocations, costs and slippage stay fixed.
+2. Split recorded exchange sessions between the first and last signal into 60%
+   search, two 10% development checks and 20% final check. Require at least 100
+   sessions and enough room for the largest allowed hold. Purge all outcomes that
+   cross each boundary, including the final boundary. Do not split by stock or row.
+3. Evaluate the unchanged baseline and 50 seeded Optuna TPE proposals on the search
+   period, reusing repeated proposals. Retain up to three non-baseline configurations
+   by the original return-minus-drawdown objective. This is a finite search, not an
+   exhaustive search of indicators or all numerical combinations.
+4. Test candidates against unchanged settings on both development windows. Require
+   five closed trades on five distinct entry dates, positive net return, drawdown
+   no greater than 25%, and a strictly better return-minus-drawdown score in each
+   window. Different dates are not a claim of statistical independence.
+5. Candidates passing both checks face higher costs on the second window, also
+   against a baseline at those same higher costs. The stress uses
+   `max(2 * cost_bps, cost_bps + 5)` with unchanged slippage. The preset accepts
+   starting costs up to 250 bps to keep stress within the engine's bound.
+6. Select the candidate with the best weakest-window improvement among those
+   passing; ties use exact configuration identity. Otherwise retain the baseline.
+   Commit this choice before evaluating the final period. Report the later result
+   without re-ranking, adapting the search or automatically changing the chosen setup.
+
+The versioned recipe and checkpoints bind all settings, prices, windows and engine
+versions. The 70-simulation ceiling includes baseline, search, checks, stress and
+exact selected-report reconstruction; repeated proposals count separately from
+native simulations. Every completed step is saved. Native Pause/Resume and ordinary
+failure recovery preserve it, while incomplete engine calls can be retried. An
+automatic study cannot add trials after consuming its final check.
+
+The native interface has one **Research settings** action and a compact findings
+panel with the original and selected settings on identical final dates. Detailed
+rules, rejected checks and dates stay collapsed. **Backtest these settings** creates
+an exact fixed backtest before entering existing shortlist, comparison and decision
+workflows. A baseline fallback has no invented Optuna trial. Original trial scores
+remain separate from the later research choice.
+
+Validation includes real VectorBT/Optuna native jobs, checkpoint recovery at all
+stages, final-outcome changes that cannot affect selection, zero-trade/crowded-date
+rejection, original exports, exact search/final replay, native pause and a saved
+decision/shortlist after exact replay. Controlled browser findings use genuine
+native calculations over deterministic prices, not a live broker acceptance claim.
+
+Installation applied 19 runtime source files and the rebuilt production interface.
+All 57 saved runs and research metadata fingerprints, account configuration,
+broker/history adapters and local UI customizations are preserved. The worker,
+served automatic-mode assets and authentication/CSRF gates are verified; no schema
+migration or new broker calculation was needed. The release ZIP remains preview.4.
+
+**Still open:** independently sourced benchmark/idle-cash report series, price
+warmup and causal indicator/regime filters, parameter-neighbourhood stability,
+general expanding walk-forward, concentration/exposure acceptance policies,
+cross-run final-period-use admission, partial findings when a required window is
+unusable, independent observed Nautilus acceptance for this new protocol, and
+broader consumer/broker acceptance. This mode labels findings exploratory;
+it is not a probability-of-future-profit claim. A source with insufficient history
+or a required window with no complete outcomes stops clearly rather than producing
+a recommendation. The broader contract below remains the product target.
 
 ## Product outcome
 
@@ -23,12 +89,13 @@ run a bounded research process and answer:
 
 An unchanged baseline, an inconclusive finding, or no reliable improvement is a
 valid result. The product does not promise a profitable setting or exhaust every
-possible mathematical rule. The complete automatic protocol is new work; existing
-Optimize currently searches user-specified trading settings.
+possible mathematical rule. The complete automatic protocol remains future work;
+the installed automatic recipe searches bounded trade-management settings, while
+manual Optimize searches user-specified trading settings.
 
 ## Current foundation and actual gap
 
-Current source supports seven numeric axes: target, stop, holding sessions,
+Manual search supports seven numeric axes: target, stop, holding sessions,
 holding minutes, trailing distance, order size and allocation. Not every axis is
 active for every strategy. Optuna uses TPE or grid and one scalar objective:
 return, negative drawdown, or return minus drawdown. The fresh UI starts at 25
@@ -41,8 +108,9 @@ later-period evaluation, comparisons, decisions and chosen setup reuse. It does
 not execute RSI/EMA/Bollinger/relative-strength/regime filters from the research
 request. Its price planner currently requests no indicator warmup. Native
 independent benchmark reporting and general walk-forward remain planned. Completed
-study extension and calculation-stage Pause/Resume are implemented; the complete
-multi-stage research protocol remains planned. A chart indicator elsewhere in OpenAlgo is not evidence that the
+study extension, calculation-stage Pause/Resume and the bounded automatic
+trade-management protocol above are implemented. The broader conditional research
+protocol remains planned. A chart indicator elsewhere in OpenAlgo is not evidence that the
 research worker can reproduce that indicator over historical signals.
 
 Sources: [Optuna adapter](../../research/connectors/optuna_portfolio.py),

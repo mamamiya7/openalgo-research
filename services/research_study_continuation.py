@@ -33,6 +33,10 @@ def _recipe(store, parent, native):
     if not native.checkpoint:
         raise ValueError("This older study has no saved search checkpoint. Start a new search.")
     bundle = service.read_artifact(store, parent.result_artifact)
+    if bundle.get("result", {}).get("automatic_research"):
+        raise ValueError(
+            "Automatic research has a frozen final check. Start a new research run to change its search."
+        )
     envelope = service.read_artifact(store, native.checkpoint)
     state = envelope.get("state", {})
     if (

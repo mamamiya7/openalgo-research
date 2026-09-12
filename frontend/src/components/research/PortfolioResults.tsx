@@ -23,6 +23,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuthStore } from '@/stores/authStore'
+import { AutomaticResearchFindings } from './AutomaticResearchFindings'
 import { PortfolioStudyAnalysis } from './PortfolioAnalysis'
 import { PortfolioContinuousReport } from './PortfolioContinuousReport'
 import { BackToStudy, PortfolioStudyWorkspace } from './PortfolioStudyWorkspace'
@@ -218,7 +219,13 @@ export function PortfolioResults(props: ResultProps) {
             aria-pressed={period === value}
             onClick={() => setPeriod(value)}
           >
-            {value === 'earlier' ? 'Earlier period' : 'Later period'}
+            {props.result.automatic_research
+              ? value === 'earlier'
+                ? 'Search period'
+                : 'Final check'
+              : value === 'earlier'
+                ? 'Earlier period'
+                : 'Later period'}
           </Button>
         ))}
       </fieldset>
@@ -267,6 +274,7 @@ function PortfolioReport({
     freezeAnalysis
   )
   const result = analysis.result
+  const automatic = Boolean(result.automatic_research || job.result?.automatic_research)
   const currency = useReportCurrency()
   const money = (value: unknown) => reportMoney(value, currency)
   const analysisActions = {
@@ -345,7 +353,13 @@ function PortfolioReport({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {automatic && !laterPeriod && !readOnly && (
+            <Button disabled={rerunning} onClick={() => onRerun()}>
+              {rerunning ? 'Starting…' : 'Backtest these settings'}
+            </Button>
+          )}
           {!laterPeriod &&
+            !automatic &&
             result.report_context?.period !== 'evaluation' &&
             onOptimize &&
             !readOnly && (
@@ -354,6 +368,7 @@ function PortfolioReport({
               </Button>
             )}
           {!laterPeriod &&
+            !automatic &&
             result.report_context?.period !== 'evaluation' &&
             onAdjust &&
             !readOnly && (
@@ -366,21 +381,24 @@ function PortfolioReport({
                 Adjust & test
               </Button>
             )}
-          {!laterPeriod && result.report_context?.period !== 'evaluation' && experimentId && (
-            <SaveToShortlist
-              experimentId={experimentId}
-              jobId={job.id}
-              configId={
-                result.experiment
-                  ? (result.report_context?.config_id ?? result.experiment.recommendation_id)
-                  : undefined
-              }
-              proposalNumber={
-                result.experiment ? result.report_context?.candidate?.trial_number : undefined
-              }
-              readOnly={readOnly}
-            />
-          )}
+          {!automatic &&
+            !laterPeriod &&
+            result.report_context?.period !== 'evaluation' &&
+            experimentId && (
+              <SaveToShortlist
+                experimentId={experimentId}
+                jobId={job.id}
+                configId={
+                  result.experiment
+                    ? (result.report_context?.config_id ?? result.experiment.recommendation_id)
+                    : undefined
+                }
+                proposalNumber={
+                  result.experiment ? result.report_context?.candidate?.trial_number : undefined
+                }
+                readOnly={readOnly}
+              />
+            )}
           {!freezeAnalysis && (
             <Button variant="ghost" asChild>
               <a href={exportUrl} download>
@@ -388,7 +406,7 @@ function PortfolioReport({
               </a>
             </Button>
           )}
-          {!laterPeriod && !readOnly && (
+          {!automatic && !laterPeriod && !readOnly && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button type="button" size="icon" variant="ghost" aria-label="More report actions">
@@ -404,7 +422,15 @@ function PortfolioReport({
           )}
         </div>
       </div>
-      {experimentId && result.report_context && !freezeAnalysis && (
+      {result.automatic_research && (
+        <AutomaticResearchFindings findings={result.automatic_research} />
+      )}
+      {automatic && !laterPeriod && !readOnly && (
+        <p className="text-xs text-muted-foreground">
+          Open an exact backtest to compare or save this setup.
+        </p>
+      )}
+      {!automatic && experimentId && result.report_context && !freezeAnalysis && (
         <ResearchResultReview
           experimentId={experimentId}
           job={job}
@@ -478,8 +504,8 @@ function PortfolioReport({
       {experiment && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
           <span className="font-medium">
-            Best by objective · {new Set(experiment.rows.map((row) => row.config_id)).size} tested
-            portfolios
+            {result.automatic_research ? 'Search period report' : 'Best by objective'} ·{' '}
+            {new Set(experiment.rows.map((row) => row.config_id)).size} tested portfolios
           </span>
           <span className="text-muted-foreground">
             {experiment.specification.objective === 'return'
