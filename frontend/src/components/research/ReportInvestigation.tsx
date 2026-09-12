@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { AnalysisFigure } from './AnalysisCharts'
+import { reportMoney, useReportCurrency } from './ReportCurrency'
 import { reportChartView } from './reportChartPresentation'
 import {
   type InvestigationContext,
@@ -23,14 +24,6 @@ export { availableMonthSelections, monthSelectionFromPoint } from './reportInves
 const PAGE_SIZE = 20
 const number = (value: number | null, suffix = '') =>
   value === null ? '—' : `${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}${suffix}`
-const money = (value: number | null) =>
-  value === null
-    ? '—'
-    : value.toLocaleString('en-IN', {
-        style: 'currency',
-        currency: 'INR',
-        maximumFractionDigits: 2,
-      })
 
 export function ReportInvestigation({
   result,
@@ -106,6 +99,8 @@ function InvestigationBody({
   onTrades?: (symbol?: string) => void
 }) {
   const [page, setPage] = useState(0)
+  const currency = useReportCurrency()
+  const money = (value: number | null) => reportMoney(value, currency)
   const rows = context.trades.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
   return (
     <div className="min-w-0 space-y-6">

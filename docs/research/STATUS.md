@@ -97,8 +97,22 @@ activity/shortlist tables start empty, the worker is online, and authentication
 and CSRF checks passed. Configuration, broker/history data and local UI
 customizations remain intact. See the [installation receipt](REPORT_EXPERIENCE_PLAN.md#18-activity-and-shortlist-installation--12-september-2026).
 
-**Next work:** R5 fair comparison and decisions on the now-saved candidate/report
-identities, with evidence-use history. R3 independently frozen benchmark
+The next R5 slice now adds **Comparisons**: choose two to four ready shortlisted
+reports and a reference, save the group, inspect its original statistics and open
+each exact report. Matching test conditions enable original return curves and
+differences; mismatches remain inspection-only. Saved membership and report/analysis
+versions survive later bookmark changes and analysis updates. Name/note revisions,
+archive, retries and backup retention are covered. The native browser journey
+created no new calculation and preserved the original export; see the
+[comparison receipt](REPORT_EXPERIENCE_PLAN.md#19-saved-fair-comparisons--12-september-2026).
+It was then installed into the existing app on 12 September: 22 runtime files,
+the main-compatible frontend build and one empty additive comparison table.
+All 57 prior jobs and research-table fingerprints were preserved; current assets,
+worker heartbeat, native authentication and CSRF checks passed. Configuration,
+broker/history data and local UI customizations remain intact.
+
+**Next work:** R5 decisions and visible evidence-use history on the now-saved
+candidate/comparison/report identities. R3 independently frozen benchmark
 evidence can proceed separately. Full reference-field mapping, real optional
 Nautilus acceptance and broader normal-account journey acceptance remain open.
 The [report experience specification](REPORT_EXPERIENCE_PLAN.md)
@@ -108,7 +122,7 @@ page contents, score/count semantics, data ownership and R0–R6 acceptance. The
 optional QuantStats connector is pinned there as **QS-01**, to evaluate before
 choosing the final report export implementation. R0–R2 have the bounded
 implementation receipts above; they are not claimed fully accepted. R4's connected
-study/candidate and durable-activity slices, and R5 saved shortlists, are
+study/candidate and durable-activity slices, and R5 shortlists/comparisons, are
 journey-observed on controlled data; broader acceptance and the full R3/R5/R6
 packages remain open. On 12 September,
 the authorized 20-file study update was

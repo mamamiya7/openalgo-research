@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { AnalysisMetric, ScalarAnalysis } from '@/api/portfolioResearch'
 import { Input } from '@/components/ui/input'
 import { trialMetricText } from './portfolioTrialMetrics'
+import { useReportCurrency } from './ReportCurrency'
 
 export function AnalysisMetricTable({
   catalog,
@@ -11,10 +12,11 @@ export function AnalysisMetricTable({
   analysis: ScalarAnalysis
 }) {
   const [query, setQuery] = useState('')
+  const currency = useReportCurrency()
   const [group, setGroup] = useState('all')
   const groups = useMemo(() => [...new Set(catalog.map((metric) => metric.group))], [catalog])
   const availableCount = catalog.filter(
-    (metric) => trialMetricText(metric, analysis.metrics[metric.key]) !== '—'
+    (metric) => trialMetricText(metric, analysis.metrics[metric.key], currency) !== '—'
   ).length
   const metrics = catalog.filter(
     (metric) =>
@@ -86,7 +88,7 @@ export function AnalysisMetricTable({
                 </th>
                 <td className="max-w-sm px-4 py-3 text-right tabular-nums">
                   <span title={analysis.unavailable[metric.key]}>
-                    {trialMetricText(metric, analysis.metrics[metric.key])}
+                    {trialMetricText(metric, analysis.metrics[metric.key], currency)}
                   </span>
                 </td>
               </tr>

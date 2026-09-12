@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from database.research_db import ResearchJob, ResearchStore, ResearchWorker
 from services import research_candidates as candidates
 from services import research_chartink as chartink
+from services import research_comparisons as comparisons
 from services import research_library as library
 from services import research_preferences as preferences
 from services import research_shortlist as shortlist
@@ -51,6 +52,18 @@ def shortlist_conflict(error):
     return jsonify(
         message=str(error), code="shortlist_revision_conflict", current=error.current
     ), 409
+
+
+@scanner_research_bp.errorhandler(comparisons.ComparisonConflict)
+def comparison_conflict(error):
+    return jsonify(
+        message=str(error), code="comparison_revision_conflict", current=error.current
+    ), 409
+
+
+@scanner_research_bp.errorhandler(comparisons.ComparisonRequestConflict)
+def comparison_request_conflict(error):
+    return jsonify(message=str(error), code="comparison_request_conflict"), 409
 
 
 @scanner_research_bp.errorhandler(preferences.PreferencesConflict)
@@ -222,6 +235,60 @@ def library_shortlist_candidate(experiment_id, candidate_id):
     )
     return jsonify(
         operation(store(), session["user"], experiment_id, candidate_id, shortlist_body())
+    )
+
+
+@scanner_research_bp.route(
+    "/library/experiments/<experiment_id>/comparisons", methods=["GET", "POST"]
+)
+def library_comparisons(experiment_id):
+    if request.method == "POST":
+        result = comparisons.create_comparison(
+            store(), session["user"], experiment_id, shortlist_body()
+        )
+        return jsonify(result), 200 if result["reused"] else 201
+    if set(request.args) - {"limit", "offset"} or any(
+        len(request.args.getlist(key)) != 1 for key in request.args
+    ):
+        raise ValueError("Invalid saved comparison query")
+    return jsonify(
+        comparisons.list_comparisons(
+            store(),
+            session["user"],
+            experiment_id,
+            limit=int(request.args.get("limit", "20")),
+            offset=int(request.args.get("offset", "0")),
+        )
+    )
+
+
+@scanner_research_bp.route(
+    "/library/experiments/<experiment_id>/comparisons/<comparison_id>", methods=["GET", "PATCH"]
+)
+def library_comparison(experiment_id, comparison_id):
+    if request.args:
+        raise ValueError("Invalid saved comparison query")
+    if request.method == "GET":
+        return jsonify(
+            comparisons.get_comparison(store(), session["user"], experiment_id, comparison_id)
+        )
+    return jsonify(
+        comparisons.update_comparison(
+            store(), session["user"], experiment_id, comparison_id, shortlist_body()
+        )
+    )
+
+
+@scanner_research_bp.get(
+    "/library/experiments/<experiment_id>/comparisons/<comparison_id>/members/<member_id>"
+)
+def library_comparison_member(experiment_id, comparison_id, member_id):
+    if request.args:
+        raise ValueError("Invalid saved comparison member query")
+    return jsonify(
+        comparisons.get_member_report(
+            store(), session["user"], experiment_id, comparison_id, member_id
+        )
     )
 
 

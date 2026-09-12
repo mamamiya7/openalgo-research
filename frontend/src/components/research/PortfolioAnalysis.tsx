@@ -16,6 +16,7 @@ export interface AnalysisActions {
   onPrepare: (parameters?: string[], symbol?: string) => void
   readOnly: boolean
   exportUrl: string
+  freezeAnalysis?: boolean
 }
 
 export function AnalysisPreparation({

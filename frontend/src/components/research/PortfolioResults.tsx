@@ -27,6 +27,7 @@ import { PortfolioStudyAnalysis } from './PortfolioAnalysis'
 import { PortfolioContinuousReport } from './PortfolioContinuousReport'
 import { BackToStudy, PortfolioStudyWorkspace } from './PortfolioStudyWorkspace'
 import { PortfolioTrials } from './PortfolioTrials'
+import { reportMoney, useReportCurrency } from './ReportCurrency'
 import { SaveToShortlist } from './SaveToShortlist'
 import { usePortfolioAnalysis } from './usePortfolioAnalysis'
 import { useReportPreferences } from './useReportPreferences'
@@ -129,6 +130,7 @@ interface ResultProps {
   studyReport?: boolean
   onStudyReportChange?: (open: boolean) => void
   experimentId?: string
+  freezeAnalysis?: boolean
 }
 export function PortfolioResults(props: ResultProps) {
   const owner = useAuthStore((state) => state.user?.username ?? 'account')
@@ -149,6 +151,25 @@ export function PortfolioResults(props: ResultProps) {
   }
   const connectedStudy = Boolean(props.result.experiment && props.onOpenReport)
   const validation = props.result.validation
+  if (props.freezeAnalysis)
+    return (
+      <PortfolioReport
+        {...props}
+        result={{
+          ...props.result,
+          experiment: undefined,
+          validation: undefined,
+          reserved_evaluation: undefined,
+        }}
+        readOnly
+        hideStudyTabs
+        freezeAnalysis
+        onAdjust={undefined}
+        onOptimize={undefined}
+        onEvaluate={undefined}
+        experimentId={undefined}
+      />
+    )
   if (connectedStudy && !showReport)
     return (
       <PortfolioStudyWorkspace
@@ -218,6 +239,7 @@ function PortfolioReport({
   laterPeriod = false,
   hideStudyTabs = false,
   experimentId,
+  freezeAnalysis = false,
 }: ResultProps & { laterPeriod?: boolean; hideStudyTabs?: boolean }) {
   const owner = useAuthStore((state) => state.user?.username)
   const preferences = useReportPreferences(owner)
@@ -234,14 +256,18 @@ function PortfolioReport({
     job.id,
     initialResult,
     tab === 'report' || tab === 'study',
-    laterPeriod
+    laterPeriod,
+    freezeAnalysis
   )
   const result = analysis.result
+  const currency = useReportCurrency()
+  const money = (value: unknown) => reportMoney(value, currency)
   const analysisActions = {
     busy: analysis.busy,
     response: analysis.response,
     onPrepare: analysis.prepare,
     readOnly,
+    freezeAnalysis,
     exportUrl: portfolioResearch.analysisExportUrl(job.id),
   }
   const summary = result.summary
@@ -266,7 +292,7 @@ function PortfolioReport({
   const settingsContent = (
     <>
       <div className="space-y-1 border-b pb-4 text-sm">
-        <p>Shared starting cash: {portfolioMoney(summary.initial_capital)}</p>
+        <p>Shared starting cash: {money(summary.initial_capital)}</p>
         <p className="text-muted-foreground">
           {(result.execution?.engine ?? result.portfolio?.engine) === 'nautilus'
             ? 'NautilusTrader'
@@ -336,11 +362,13 @@ function PortfolioReport({
               readOnly={readOnly}
             />
           )}
-          <Button variant="ghost" asChild>
-            <a href={exportUrl} download>
-              Export
-            </a>
-          </Button>
+          {!freezeAnalysis && (
+            <Button variant="ghost" asChild>
+              <a href={exportUrl} download>
+                Export
+              </a>
+            </Button>
+          )}
           {!laterPeriod && !readOnly && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -556,17 +584,17 @@ function PortfolioReport({
                     <td className={td}>
                       {stamp(trade.entry_timestamp ?? trade.entry_date)}
                       <span className="block text-xs text-muted-foreground">
-                        {portfolioMoney(trade.entry_price)}
+                        {money(trade.entry_price)}
                       </span>
                     </td>
                     <td className={td}>
                       {stamp(trade.exit_timestamp ?? trade.exit_date)}
                       <span className="block text-xs text-muted-foreground">
-                        {portfolioMoney(trade.exit_price)}
+                        {money(trade.exit_price)}
                       </span>
                     </td>
                     <td className={td}>{number(trade.quantity)}</td>
-                    <td className={td}>{portfolioMoney(trade.pnl)}</td>
+                    <td className={td}>{money(trade.pnl)}</td>
                     <td className={td}>
                       <details>
                         <summary className="cursor-pointer capitalize">{trade.status}</summary>

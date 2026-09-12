@@ -89,10 +89,31 @@ def saved_overlay(store, parent, result):
     extra = bundle["result"]
     if extra.get("version") not in READABLE_VERSIONS:
         return result
+    return _merge_overlay(result, extra, analysis_job.result_artifact)
+
+
+def pinned_overlay(store, result, *, parent_result_artifact, analysis_artifact):
+    """Use one explicitly pinned analysis; null always means the original report."""
+    if analysis_artifact is None:
+        return result
+    bundle = service.read_artifact(store, analysis_artifact)
+    extra = bundle.get("result")
+    if (
+        bundle.get("kind") != "portfolio_analysis"
+        or bundle.get("parent_result_artifact") != parent_result_artifact
+        or not isinstance(extra, dict)
+        or extra.get("version") not in READABLE_VERSIONS
+        or not isinstance(extra.get("analysis"), dict)
+    ):
+        raise ValueError("The pinned analysis does not match this saved report")
+    return _merge_overlay(result, extra, analysis_artifact)
+
+
+def _merge_overlay(result, extra, analysis_artifact):
     enriched = {
         **result,
         "analysis": extra["analysis"],
-        "report_context": {"analysis_artifact": analysis_job.result_artifact},
+        "report_context": {"analysis_artifact": analysis_artifact},
     }
     if result.get("experiment"):
         study = {**result["experiment"], **extra.get("experiment", {})}
@@ -110,7 +131,7 @@ def saved_overlay(store, parent, result):
             "result": {
                 **result["validation"]["result"],
                 "analysis": extra["validation"],
-                "report_context": {"analysis_artifact": analysis_job.result_artifact},
+                "report_context": {"analysis_artifact": analysis_artifact},
             },
         }
     return enriched

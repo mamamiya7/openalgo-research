@@ -26,6 +26,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useAuthStore } from '@/stores/authStore'
 import { AnalysisMetricTable } from './AnalysisMetricTable'
 import { StrategySettings } from './PortfolioResults'
+import { comparisonSelection, ShortlistCompare } from './ShortlistCompare'
 
 const number = (value: unknown, suffix = '') =>
   typeof value === 'number' && Number.isFinite(value)
@@ -51,17 +52,25 @@ interface Props {
   experimentId: string
   readOnly: boolean
   onOpenReport: (jobId: string, candidate: ShortlistCandidate) => void
+  onOpenComparison?: (id: string) => void
 }
 export function ResearchShortlist(props: Props) {
   const owner = useAuthStore((state) => state.user?.username ?? 'account')
   return <Shortlist key={`${owner}:${props.experimentId}`} {...props} owner={owner} />
 }
-function Shortlist({ experimentId, readOnly, onOpenReport, owner }: Props & { owner: string }) {
+function Shortlist({
+  experimentId,
+  readOnly,
+  onOpenReport,
+  onOpenComparison,
+  owner,
+}: Props & { owner: string }) {
   const [params, setParams] = useSearchParams()
   const rawOffset = Number(params.get('shortlist_offset') ?? 0)
   const offset =
     Number.isSafeInteger(rawOffset) && rawOffset >= 0 && rawOffset <= 100000 ? rawOffset : 0
   const selected = params.get('shortlist')
+  const compared = comparisonSelection(params)
   const opener = useRef<HTMLElement | null>(null)
   const list = useQuery({
     queryKey: [...shortlistKey(owner, experimentId), 'page', offset, readOnly],
@@ -72,6 +81,15 @@ function Shortlist({ experimentId, readOnly, onOpenReport, owner }: Props & { ow
     refetchInterval: (query) =>
       query.state.data?.items.some((item) => pending(item.report.status)) ? 1500 : false,
   })
+  const archived = readOnly || Boolean(list.data?.archived)
+  function compare(id: string, checked: boolean) {
+    const ids = checked ? [...compared, id].slice(0, 4) : compared.filter((item) => item !== id)
+    const next = new URLSearchParams(params)
+    next.set('compare_candidates', ids.join(','))
+    next.delete('compare_request')
+    if (!ids.includes(next.get('compare_reference') ?? '')) next.delete('compare_reference')
+    setParams(next, { replace: true })
+  }
   function choose(id: string | null) {
     const next = new URLSearchParams(params)
     if (id) {
@@ -98,6 +116,15 @@ function Shortlist({ experimentId, readOnly, onOpenReport, owner }: Props & { ow
           <span className="text-xs text-muted-foreground">{list.data.total} saved</span>
         )}
       </div>
+      {onOpenComparison && !archived && (
+        <ShortlistCompare
+          key={compared.join(',')}
+          owner={owner}
+          experimentId={experimentId}
+          readOnly={archived}
+          onOpen={onOpenComparison}
+        />
+      )}
       {list.isPending && <p className="py-8 text-sm text-muted-foreground">Loading shortlist…</p>}
       {list.isError && (
         <div className="flex items-center gap-3">
@@ -128,6 +155,11 @@ function Shortlist({ experimentId, readOnly, onOpenReport, owner }: Props & { ow
             <caption className="sr-only">Saved candidates and their original results</caption>
             <thead className="bg-muted/50 text-xs text-muted-foreground">
               <tr>
+                {onOpenComparison && !archived && (
+                  <th scope="col" className="px-4">
+                    <span className="sr-only">Select for comparison</span>
+                  </th>
+                )}
                 {['Candidate', 'Return', 'Max drawdown', 'Closed trades', 'Report'].map((label) => (
                   <th
                     key={label}
@@ -142,6 +174,21 @@ function Shortlist({ experimentId, readOnly, onOpenReport, owner }: Props & { ow
             <tbody className="divide-y">
               {list.data?.items.map((item) => (
                 <tr key={item.id}>
+                  {onOpenComparison && !archived && (
+                    <td className="pl-4">
+                      <input
+                        type="checkbox"
+                        aria-label={`Compare ${item.name}`}
+                        checked={compared.includes(item.id)}
+                        disabled={
+                          item.report.status !== 'ready' ||
+                          (!compared.includes(item.id) && compared.length >= 4)
+                        }
+                        onChange={(event) => compare(item.id, event.target.checked)}
+                        className="size-4 accent-primary"
+                      />
+                    </td>
+                  )}
                   <th scope="row" className="min-w-56 max-w-sm px-4 py-4 text-left font-normal">
                     <button
                       id={`shortlist-open-${item.id}`}

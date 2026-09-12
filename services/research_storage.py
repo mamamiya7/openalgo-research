@@ -119,6 +119,7 @@ def _references(engine):
         library_roots = _library_references(db, tables)
         candidate_roots = _candidate_references(db)
         shortlist_roots = _shortlist_references(db, tables)
+        comparison_roots = _comparison_references(db, tables)
         _study_activity_references(db, tables)
     source_ids, job_ids = {row[0] for row in sources}, {row[0] for row in jobs}
     if any(row[1] not in source_ids for row in jobs):
@@ -136,6 +137,7 @@ def _references(engine):
         | library_roots
         | candidate_roots
         | shortlist_roots
+        | comparison_roots
     )
 
 
@@ -303,6 +305,156 @@ def _study_activity_references(db, tables):
         count > 1 for count in open_counts.values()
     ):
         raise ValueError("Research study proposal bound exceeded")
+
+
+def _comparison_references(db, tables):
+    """Pinned comparison roots survive source bookmark removal and later overlays."""
+    from services import research_library as library
+    from services.research_comparisons import (
+        MAX_PER_EXPERIMENT,
+        MAX_ROWS,
+        MAX_SNAPSHOT_BYTES,
+        validate_snapshot,
+    )
+
+    table = "research_comparisons"
+    if table not in tables:
+        return set()
+    if db.exec_driver_sql(f"SELECT count(*) FROM {table}").scalar() > MAX_ROWS:
+        raise ValueError("Saved comparisons exceed the maintenance row bound")
+    if db.exec_driver_sql(
+        f"SELECT 1 FROM {table} GROUP BY experiment_id HAVING count(*) > ? LIMIT 1",
+        (MAX_PER_EXPERIMENT,),
+    ).first():
+        raise ValueError("Saved comparisons exceed the experiment bound")
+    if db.exec_driver_sql(
+        f"SELECT 1 FROM {table} WHERE length(CAST(snapshot AS BLOB)) > ? OR length(member_names) > 2048 OR length(name) > 120 OR length(note) > 2000 LIMIT 1",
+        (MAX_SNAPSHOT_BYTES,),
+    ).first():
+        raise ValueError("Saved comparison metadata exceeds its size limit")
+    experiments = {
+        row[0]: row[1] for row in _rows(db, "research_library_experiments", ("id", "owner"))
+    }
+    jobs = {row[0]: row[1] for row in _rows(db, "research_jobs", ("id", "owner"))}
+    kinds = {
+        row[0]: row[1:]
+        for row in _rows(db, "research_experiments", ("job_id", "kind", "parent_job_id"))
+    }
+    roots, requests, numbers = set(), set(), set()
+    with db.exec_driver_sql(
+        f"SELECT id,owner,experiment_id,number,name,note,revision,request_id,request_hash,member_count,member_names,reference_member_id,compatible,currency,snapshot,created_at,updated_at FROM {table}"
+    ) as cursor:
+        while rows := cursor.fetchmany(8):
+            for (
+                identifier,
+                owner,
+                experiment,
+                number,
+                name,
+                note,
+                revision,
+                request_id,
+                digest,
+                member_count,
+                member_names,
+                reference,
+                compatible,
+                currency,
+                raw,
+                created,
+                updated,
+            ) in rows:
+                if (
+                    experiments.get(experiment) != owner
+                    or not isinstance(identifier, str)
+                    or not re.fullmatch(r"[a-f0-9]{32}", identifier)
+                    or type(number) is not int
+                    or number < 1
+                    or type(revision) is not int
+                    or revision < 1
+                    or not isinstance(request_id, str)
+                    or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", request_id)
+                    or not isinstance(digest, str)
+                    or not re.fullmatch(r"[a-f0-9]{64}", digest)
+                    or (owner, request_id) in requests
+                    or (experiment, number) in numbers
+                    or any(
+                        not isinstance(value, (int, float))
+                        or not math.isfinite(value)
+                        or value <= 0
+                        for value in (created, updated)
+                    )
+                    or updated < created
+                ):
+                    raise ValueError("Saved comparison has invalid or foreign metadata")
+                library._text(name, 120, "Comparison name")
+                library._text(note, 2000, "Comparison note", empty=True)
+                try:
+                    snapshot = json.loads(raw)
+                    validate_snapshot(snapshot)
+                    members = snapshot["members"]
+                    if (
+                        member_count != len(members)
+                        or json.loads(member_names) != [item["name"] for item in members]
+                        or reference not in {item["id"] for item in members}
+                        or reference != snapshot["reference_member_id"]
+                        or compatible != snapshot["presentation"]["compatible"]
+                        or currency != snapshot["presentation"]["currency"]
+                    ):
+                        raise ValueError()
+                    if (
+                        hashlib.sha256(
+                            encoded(
+                                {
+                                    "experiment_id": experiment,
+                                    "candidate_ids": [item["id"] for item in members],
+                                    "reference_candidate_id": reference,
+                                }
+                            )
+                        ).hexdigest()
+                        != digest
+                    ):
+                        raise ValueError()
+                except (ValueError, TypeError, KeyError, RecursionError):
+                    raise ValueError("Saved comparison has invalid snapshot metadata") from None
+                for member in members:
+                    source_kind = (
+                        "portfolio_optimize"
+                        if member["origin_kind"] == "study"
+                        else "portfolio_backtest"
+                    )
+                    report_kind = (
+                        source_kind
+                        if member["source_job_id"] == member["report_job_id"]
+                        else "portfolio_backtest"
+                    )
+                    if (
+                        any(
+                            jobs.get(member[key]) != owner
+                            for key in ("source_job_id", "report_job_id")
+                        )
+                        or kinds.get(member["source_job_id"], (None,))[0] != source_kind
+                        or kinds.get(member["report_job_id"], (None,))[0] != report_kind
+                    ):
+                        raise ValueError("Saved comparison references foreign or invalid reports")
+                    if member["analysis_job_id"] and (
+                        jobs.get(member["analysis_job_id"]) != owner
+                        or kinds.get(member["analysis_job_id"])
+                        != ("portfolio_analysis", member["report_job_id"])
+                    ):
+                        raise ValueError("Saved comparison references foreign or invalid analysis")
+                    roots.update(
+                        member[key]
+                        for key in (
+                            "source_result_artifact",
+                            "report_result_artifact",
+                            "analysis_artifact",
+                        )
+                        if member.get(key)
+                    )
+                requests.add((owner, request_id))
+                numbers.add((experiment, number))
+    return roots
 
 
 def _shortlist_references(db, tables):

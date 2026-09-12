@@ -784,6 +784,94 @@ local customizations were preserved. No user-data calculation or download was
 started. This is installation smoke acceptance alongside the controlled browser
 journeys above; the versioned packaged release remains preview.4.
 
+## 19. Saved fair comparisons — 12 September 2026
+
+The installed activity/shortlist checkpoint was published to the public research
+repository. Graphify then incrementally indexed 24 changed sources, preserving
+unchanged identities: 33,245 nodes / 75,652 links, with 3,247 / 9,078 in the focused
+research graph. Eleven retrieval checks confirmed the dependency path from
+shortlist through evaluation basis, report context, retained analysis and storage.
+The query made one prerequisite explicit: a saved comparison must never follow
+the normal report's latest-analysis pointer when reopened.
+
+**Chosen slice:** Shortlist → select two to four ready reports → choose a reference
+→ save comparison → inspect/open its exact member reports → return/reopen. The
+comparison retains ordered membership, member names and proposal identities,
+source/report artifacts and the actual analysis version selected at creation.
+Renaming/removing a shortlist bookmark or updating analysis later cannot change
+those saved values. Name and note have an independent revision. Archive is
+readable. No price download, optimizer, engine or report preparation starts from
+this journey; missing detailed reports keep their explicit Prepare report action.
+
+Matching currency is required for monetary comparison. Known different currencies
+reject admission; missing currency allows inspection without monetary values.
+The existing evaluation-basis gate checks source/cohort, observations, prices,
+calendar, instruments, period, capital, execution and costs. Any mismatch blocks
+all group deltas and the combined curve, while retaining side-by-side inspection.
+Compatible curves copy the existing saved cumulative-return samples; statistics
+come from original summaries and versioned scalar analysis, never those samples.
+Analysis deltas additionally require matching versions and metric definitions.
+
+The first comparison record deliberately has no independent deletion operation:
+future decisions will reference its evidence, and removal needs a retained retry
+receipt and reference policy. The experiment can be archived. Changing membership
+or the reference creates another comparison instead of rewriting a saved one.
+
+**Acceptance:** 132 native backend checks and 25 pure presentation checks passed.
+They cover actual prepared candidates, full/selection mismatch, source and analysis
+version retention, undefined statistics, currency handling, admission races,
+account isolation, archive, CSRF, independent revisions, idempotent retries and
+populated backup/restore. Malformed or oversized saved charts remain unavailable;
+they cannot supply invented performance statistics. Existing analysis/period,
+candidate, shortlist, library and storage regressions passed.
+
+The 31-suite public research UI check passed all 358 tests, including the new
+comparison API, selection/reference/retry, edit conflict and frozen report paths.
+TypeScript, scoped lint and the production build passed. Distribution/package and
+worker CLI checks passed 42, with the symlink-creation check skipped because this
+Windows host does not permit it. Source compatibility remains preview.4.
+
+A native browser journey used a real 20-configuration VectorBT/Optuna study,
+prepared alternative and fixed baseline on controlled prices. Explicit reference,
+original metrics and percentage-point differences, name/note reload, frozen
+member opening/return and comparison-library navigation passed. A later bookmark
+rename/removal left captured member names, statistics, curves and report access
+unchanged. A full-period baseline versus selection-period winner correctly
+remained inspection-only. Archive was readable without edit actions. No latest
+analysis request or calculation started; the job count stayed at three and the
+original study export SHA-256 stayed unchanged. Desktop light and 390px dark
+screens had no page exceptions or horizontal page overflow. Final visual review
+replaced the cramped mobile legend with one below the full-width plot, kept
+statistic labels visible during horizontal scrolling and revealed the active
+experiment tab without moving the page. Nineteen focused checks and a rebuilt
+native browser check passed; the original curve coordinates stayed unchanged.
+
+Resource review covered scoped native NullPool sessions and backup cursors,
+bounded sequential report admission, a 1 MiB comparison snapshot, four members,
+512 statistics and 1,200 saved points per member. One hundred successful reads
+and 100 conflict responses returned active connections to zero after every call.
+There are no new calculation workers, broker clients, persistent caches or pools.
+This is bounded lifecycle acceptance, not a production memory soak or new broker
+acceptance. The planning graph above is the actual pre-development extraction;
+subsequent source edits are queued explicitly for the next Graphify refresh.
+
+**Next:** Keep/Reject/Revisit decisions, visible evidence-use history and their
+validation links, using these immutable candidate/comparison/report identities.
+Benchmark acquisition, genuine study pause/extension and portable presentation
+exports retain their separate prerequisites. This slice does not complete the
+whole R5 package or publish a new versioned release.
+
+Following the user's installation/publication request, the comparison update was
+staged and built against the existing installation and its local customizations.
+All 22 runtime files matched their expected previous sources and zero calculations
+were active. The native supervisor restarted the app/worker after installation.
+All 57 saved jobs and every pre-existing research-table fingerprint were preserved;
+the additive comparison table starts empty. The exact staged interface is served,
+the worker heartbeat is current, anonymous comparison/member reads are rejected
+and comparison writes retain CSRF protection. Configuration, broker/history data
+and local UI customizations were preserved. This is native installation smoke
+acceptance alongside the controlled browser journey, not a new user-data run.
+
 ## References
 
 - [Visual reference](https://github.com/ranaroussi/quantstats/blob/main/docs/report.webp):

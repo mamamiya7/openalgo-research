@@ -13,6 +13,7 @@ import {
 import { ChartinkImport } from '@/components/research/ChartinkImport'
 import { ChartinkSource } from '@/components/research/ChartinkSource'
 import { addPortfolioSource, freshPortfolioDraft } from '@/components/research/PortfolioBuilder'
+import { ResearchComparisons } from '@/components/research/ResearchComparisons'
 import { researchRunStatus } from '@/components/research/ResearchRunProgress'
 import { ResearchShortlist } from '@/components/research/ResearchShortlist'
 import { Button } from '@/components/ui/button'
@@ -628,11 +629,37 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
   const queryClient = useQueryClient()
   const jobId = params.get('job')
   const requestedView = params.get('view') ?? 'overview'
-  const view = ['overview', 'setup', 'backtests', 'studies', 'setups', 'shortlist'].includes(
-    requestedView
-  )
+  const view = [
+    'overview',
+    'setup',
+    'backtests',
+    'studies',
+    'setups',
+    'shortlist',
+    'comparisons',
+  ].includes(requestedView)
     ? requestedView
     : 'overview'
+  const experimentNav = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    const nav = experimentNav.current
+    if (!nav || jobId) return
+    const revealActive = () => {
+      const selected = nav.querySelector<HTMLElement>(
+        `[data-experiment-view="${view}"][aria-current="page"]`
+      )
+      if (!selected) return
+      const frame = nav.getBoundingClientRect()
+      const button = selected.getBoundingClientRect()
+      if (button.left < frame.left) nav.scrollLeft += button.left - frame.left
+      else if (button.right > frame.right) nav.scrollLeft += button.right - frame.right
+    }
+    revealActive()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(revealActive)
+    observer.observe(nav)
+    return () => observer.disconnect()
+  }, [view, jobId])
   const activeJobIds = server.jobs
     .filter(active)
     .map((job) => job.id)
@@ -641,7 +668,7 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
     queryKey: ['research-experiment-activity', owner, server.id, activeJobIds],
     queryFn: ({ signal }) =>
       Promise.all(activeJobIds.map((id) => portfolioResearch.job(id, signal))),
-    enabled: !jobId && activeJobIds.length > 0,
+    enabled: !jobId && view !== 'comparisons' && activeJobIds.length > 0,
     refetchInterval: 3000,
     staleTime: 0,
     retry: false,
@@ -678,7 +705,8 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
     next.delete('report')
     next.delete('return_shortlist')
     next.delete('shortlist')
-    if (nextView !== 'shortlist') next.delete('shortlist_offset')
+    next.delete('comparison')
+    next.delete('comparison_member')
     if (job) next.set('job', job)
     setParams(next)
   }
@@ -694,6 +722,12 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
       'shortlist',
       'shortlist_offset',
       'return_shortlist',
+      'comparison',
+      'comparison_member',
+      'comparison_offset',
+      'compare_candidates',
+      'compare_reference',
+      'compare_request',
     ])
       next.delete(key)
     setParams(next)
@@ -956,27 +990,40 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
           </Button>
         </div>
       )}
-      <nav aria-label="Experiment" className="flex gap-1 overflow-x-auto border-b pb-2">
-        {(['overview', 'setup', 'backtests', 'studies', 'shortlist', 'setups'] as const).map(
-          (item) => (
-            <Button
-              key={item}
-              variant={!jobId && view === item ? 'secondary' : 'ghost'}
-              size="sm"
-              className="shrink-0"
-              aria-current={!jobId && view === item ? 'page' : undefined}
-              disabled={busy}
-              onClick={() => {
-                void action(async () => {
-                  await model.flush()
-                  changeView(item)
-                })
-              }}
-            >
-              {item === 'setups' ? 'Saved setups' : item.charAt(0).toUpperCase() + item.slice(1)}
-            </Button>
-          )
-        )}
+      <nav
+        ref={experimentNav}
+        aria-label="Experiment"
+        className="flex gap-1 overflow-x-auto border-b pb-2"
+      >
+        {(
+          [
+            'overview',
+            'setup',
+            'backtests',
+            'studies',
+            'shortlist',
+            'comparisons',
+            'setups',
+          ] as const
+        ).map((item) => (
+          <Button
+            key={item}
+            variant={!jobId && view === item ? 'secondary' : 'ghost'}
+            size="sm"
+            className="shrink-0"
+            aria-current={!jobId && view === item ? 'page' : undefined}
+            data-experiment-view={item}
+            disabled={busy}
+            onClick={() => {
+              void action(async () => {
+                await model.flush()
+                changeView(item)
+              })
+            }}
+          >
+            {item === 'setups' ? 'Saved setups' : item.charAt(0).toUpperCase() + item.slice(1)}
+          </Button>
+        ))}
       </nav>
       {jobId && (
         <div className="flex items-center justify-between gap-3">
@@ -1063,6 +1110,14 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
         <ResearchShortlist
           experimentId={server.id}
           readOnly={server.archived}
+          onOpenComparison={(id) => {
+            const next = new URLSearchParams(params)
+            next.set('view', 'comparisons')
+            next.set('comparison', id)
+            next.delete('comparison_member')
+            next.delete('shortlist')
+            setParams(next)
+          }}
           onOpenReport={(reportId, candidate) => {
             const next = new URLSearchParams(params)
             next.set('job', reportId)
@@ -1081,6 +1136,9 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
             setParams(next)
           }}
         />
+      )}
+      {!jobId && view === 'comparisons' && (
+        <ResearchComparisons experimentId={server.id} readOnly={server.archived} />
       )}
       {!jobId && view === 'overview' && (
         <div className="space-y-7">

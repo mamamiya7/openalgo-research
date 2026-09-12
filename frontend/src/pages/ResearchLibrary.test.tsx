@@ -51,9 +51,16 @@ vi.mock('@/pages/PortfolioResearch', () => ({
     ),
 }))
 vi.mock('@/components/research/ResearchShortlist', () => ({
-  ResearchShortlist: ({ onOpenReport, readOnly }: ComponentProps<typeof ResearchShortlist>) => (
+  ResearchShortlist: ({
+    onOpenReport,
+    onOpenComparison,
+    readOnly,
+  }: ComponentProps<typeof ResearchShortlist>) => (
     <div>
       <output>Saved shortlist {readOnly ? 'read only' : 'editable'}</output>
+      <button type="button" onClick={() => onOpenComparison?.('saved-comparison')}>
+        Compare ready candidates
+      </button>
       <button
         type="button"
         onClick={() =>
@@ -79,6 +86,11 @@ vi.mock('@/components/research/ResearchShortlist', () => ({
         Open saved candidate report
       </button>
     </div>
+  ),
+}))
+vi.mock('@/components/research/ResearchComparisons', () => ({
+  ResearchComparisons: ({ readOnly }: { readOnly: boolean }) => (
+    <output>Saved comparisons {readOnly ? 'read only' : 'editable'}</output>
   ),
 }))
 const blank = (): ResearchExperiment => ({
@@ -248,6 +260,68 @@ describe('research library navigation and lost-work boundaries', () => {
     show('/scanner-research?experiment=experiment-1&view=unsupported')
     expect(await screen.findByRole('button', { name: 'Add signals' })).toBeVisible()
     expect(screen.getByRole('button', { name: 'Overview' })).toHaveAttribute('aria-current', 'page')
+  })
+  it('reveals the active experiment tab horizontally without scrolling the page', async () => {
+    const geometry = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        if (this.getAttribute('aria-label') === 'Experiment')
+          return {
+            left: 0,
+            right: 320,
+            top: 200,
+            bottom: 240,
+            x: 0,
+            y: 200,
+            width: 320,
+            height: 40,
+            toJSON: () => ({}),
+          }
+        if (this.getAttribute('aria-current') === 'page' && this.textContent === 'Comparisons')
+          return {
+            left: 450,
+            right: 550,
+            top: 200,
+            bottom: 240,
+            x: 450,
+            y: 200,
+            width: 100,
+            height: 40,
+            toJSON: () => ({}),
+          }
+        return {
+          left: 0,
+          right: 0,
+          top: 0,
+          bottom: 0,
+          x: 0,
+          y: 0,
+          width: 0,
+          height: 0,
+          toJSON: () => ({}),
+        }
+      })
+    try {
+      show('/scanner-research?experiment=experiment-1&view=comparisons')
+      await screen.findByText('Saved comparisons editable')
+      expect(screen.getByRole('navigation', { name: 'Experiment' }).scrollLeft).toBe(230)
+      expect(window.scrollTo).not.toHaveBeenCalled()
+    } finally {
+      geometry.mockRestore()
+    }
+  })
+  it('opens a saved comparison inside the experiment without a job or setup mutation', async () => {
+    show(
+      '/scanner-research?experiment=experiment-1&view=shortlist&shortlist_offset=20&compare_candidates=a,b&compare_reference=a'
+    )
+    await userEvent.click(await screen.findByRole('button', { name: 'Compare ready candidates' }))
+    expect(await screen.findByText('Saved comparisons editable')).toBeVisible()
+    expect(screen.getByTestId('location')).toHaveTextContent('comparison=saved-comparison')
+    expect(screen.getByTestId('location')).toHaveTextContent('compare_reference=a')
+    expect(screen.getByTestId('location')).toHaveTextContent('shortlist_offset=20')
+    expect(screen.queryByRole('button', { name: 'Start calculation' })).not.toBeInTheDocument()
+    expect(researchLibrary.saveDraft).not.toHaveBeenCalled()
+    expect(researchLibrary.run).not.toHaveBeenCalled()
   })
   it('opens the saved winner report and returns to the same shortlist detail and page', async () => {
     show(

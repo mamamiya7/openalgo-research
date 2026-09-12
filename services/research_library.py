@@ -19,6 +19,7 @@ from sqlalchemy import delete, func, or_, select, update
 
 from database.research_db import (
     ResearchChartinkImport,
+    ResearchComparison,
     ResearchExperiment,
     ResearchJob,
     ResearchLibraryExperiment,
@@ -1046,7 +1047,18 @@ def delete_experiment(store, owner, identifier, data):
             .select_from(ResearchShortlistCandidate)
             .where(ResearchShortlistCandidate.experiment_id == identifier)
         )
-        if has_jobs or has_versions or has_candidates or any(getattr(row, key) for key in PARENTS):
+        has_comparisons = db.scalar(
+            select(func.count())
+            .select_from(ResearchComparison)
+            .where(ResearchComparison.experiment_id == identifier)
+        )
+        if (
+            has_jobs
+            or has_versions
+            or has_candidates
+            or has_comparisons
+            or any(getattr(row, key) for key in PARENTS)
+        ):
             raise ValueError(
                 "This experiment retains saved evidence or setup versions. Archive it instead."
             )

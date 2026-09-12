@@ -23,6 +23,73 @@ afterEach(() => {
 })
 
 describe('saved analysis lifecycle', () => {
+  it('freezes the original analysis when the same job previously loaded newer analysis', async () => {
+    const newer = { ...result, summary: { net_return_pct: 99 } }
+    vi.mocked(portfolioResearch.analysis).mockResolvedValue({
+      status: 'complete',
+      job: { id: 'job', status: 'completed', progress: 100, created_at: 0, result: newer },
+    })
+    const { result: state, rerender } = renderHook(
+      ({ frozen }) => usePortfolioAnalysis('job', result, true, false, frozen),
+      { initialProps: { frozen: false } }
+    )
+    await act(async () => {})
+    expect(state.current.result).toBe(newer)
+    const stalePrepare = state.current.prepare
+    rerender({ frozen: true })
+    expect(state.current.result).toBe(result)
+    await act(async () => {
+      await stalePrepare()
+      await state.current.prepare()
+      await vi.advanceTimersByTimeAsync(6000)
+    })
+    expect(portfolioResearch.analysis).toHaveBeenCalledTimes(1)
+    expect(portfolioResearch.prepareAnalysis).not.toHaveBeenCalled()
+    expect(state.current.busy).toBe(false)
+  })
+
+  it('stops queued polling and ignores pending responses when switching to a frozen report', async () => {
+    vi.mocked(portfolioResearch.analysis).mockResolvedValueOnce({ status: 'queued' })
+    let resolve!: (value: Awaited<ReturnType<typeof portfolioResearch.analysis>>) => void
+    vi.mocked(portfolioResearch.analysis).mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done
+        })
+    )
+    const { result: state, rerender } = renderHook(
+      ({ frozen }) => usePortfolioAnalysis('job', result, true, true, frozen),
+      { initialProps: { frozen: false } }
+    )
+    await act(async () => {})
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500)
+    })
+    const signal = vi.mocked(portfolioResearch.analysis).mock.calls[1][1]!
+    rerender({ frozen: true })
+    expect(signal.aborted).toBe(true)
+    await act(async () => {
+      resolve({ status: 'queued' })
+      await vi.advanceTimersByTimeAsync(5000)
+    })
+    expect(state.current.result).toBe(result)
+    expect(state.current.busy).toBe(false)
+    expect(vi.getTimerCount()).toBe(0)
+    expect(portfolioResearch.analysis).toHaveBeenCalledTimes(2)
+  })
+
+  it('never checks or prepares latest analysis for an initially frozen report', async () => {
+    const { result: state } = renderHook(() =>
+      usePortfolioAnalysis('job', result, true, false, true)
+    )
+    await act(async () => {
+      await state.current.prepare()
+      await vi.advanceTimersByTimeAsync(5000)
+    })
+    expect(state.current.result).toBe(result)
+    expect(portfolioResearch.analysis).not.toHaveBeenCalled()
+    expect(portfolioResearch.prepareAnalysis).not.toHaveBeenCalled()
+  })
   it('polls queued work, overlays completed analysis, and never alters the initial report', async () => {
     const enriched = {
       ...result,

@@ -1,4 +1,5 @@
 import type { AnalysisMetric, PortfolioTrial } from '@/api/portfolioResearch'
+import { reportMoney } from './ReportCurrency'
 
 type Metric = Omit<AnalysisMetric, 'source'> & { source?: string }
 
@@ -139,11 +140,15 @@ export const defaultTrialColumns = [
   'closed_trades',
 ]
 
-export function trialMetricText(metric: Metric, value: unknown): string {
+export function trialMetricText(
+  metric: Metric,
+  value: unknown,
+  currency: string | null = 'INR'
+): string {
   if (metric.format === 'text') return typeof value === 'string' && value ? value : '—'
   if (typeof value !== 'number' || !Number.isFinite(value)) return '—'
   if (metric.format === 'money') {
-    return value.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })
+    return reportMoney(value, currency)
   }
   return `${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}${metric.format === 'percent' ? '%' : ''}`
 }

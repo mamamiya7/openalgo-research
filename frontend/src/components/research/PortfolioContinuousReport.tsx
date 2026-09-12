@@ -31,7 +31,7 @@ import {
   reportMetrics,
   reportMetricText,
 } from './portfolioReportMetrics'
-import { trialMetricText } from './portfolioTrialMetrics'
+import { reportMoney, useReportCurrency } from './ReportCurrency'
 import { ReportCustomize } from './ReportCustomize'
 import { ReportDrawdowns } from './ReportDrawdowns'
 import {
@@ -45,7 +45,6 @@ import { monthLabel } from './reportInvestigationEvidence'
 import type { ReportPreferenceController } from './useReportPreferences'
 
 const sections = ['Performance', 'Consistency', 'Risk', 'Trades', 'All statistics'] as const
-const cash = (value: unknown) => trialMetricText(reportMetrics[1], value)
 const number = (value: unknown, suffix = '') =>
   typeof value === 'number' && Number.isFinite(value)
     ? `${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}${suffix}`
@@ -129,6 +128,7 @@ function SummaryStatistics({
   metrics: ReportMetric[]
 }) {
   const groups = [...new Set(metrics.map((metric) => metric.group))]
+  const currency = useReportCurrency()
   return (
     <section className="min-w-0 space-y-5 lg:border-l lg:pl-6" aria-label="Account statistics">
       {groups.map((group) => (
@@ -153,7 +153,7 @@ function SummaryStatistics({
                       </details>
                     </dt>
                     <dd className="whitespace-nowrap text-right tabular-nums">
-                      {reportMetricText(result, metric)}
+                      {reportMetricText(result, metric, currency)}
                     </dd>
                   </div>
                 )
@@ -178,6 +178,8 @@ export function PortfolioContinuousReport({
   preferences?: ReportPreferenceController
 }) {
   const id = useId()
+  const currency = useReportCurrency()
+  const cash = (value: unknown) => reportMoney(value, currency)
   const analysis = result.analysis
   const [investigation, setInvestigation] = useState<InvestigationSelection | null>(null)
   const months = useMemo(() => availableMonthSelections(result), [result])
@@ -220,6 +222,19 @@ export function PortfolioContinuousReport({
     const available = new Map(
       (analysis?.charts ?? [])
         .filter((chart) => chart.status === 'available' && chart.figure)
+        .filter(
+          (chart) =>
+            currency !== null ||
+            (![
+              'bars-with-fills',
+              'trade-pnl-distribution',
+              'equity-curve',
+              'report-equity',
+            ].includes(chart.id) &&
+              !/\bINR\b|₹|\b(?:price|cash|equity|pnl|p&l)\b/i.test(
+                JSON.stringify(chart.figure?.layout)
+              ))
+        )
         .map((chart) => [chart.id, chart])
     )
     // Older evidence already has marked equity. Transform its coordinates only;
@@ -265,21 +280,22 @@ export function PortfolioContinuousReport({
           )
         )
       // An equity view contains account equity only. Cash has its own capital row.
-      available.set(
-        'report-equity',
-        base(
+      if (currency)
+        available.set(
           'report-equity',
-          'Account equity',
-          curve.map((point) => point.equity),
-          'INR'
+          base(
+            'report-equity',
+            'Account equity',
+            curve.map((point) => point.equity),
+            currency
+          )
         )
-      )
     }
     return available
-  }, [analysis?.charts, result.equity_curve, result.summary.initial_capital])
+  }, [analysis?.charts, result.equity_curve, result.summary.initial_capital, currency])
   const cumulative = charts.get('account-cumulative')
   const equity = charts.get('report-equity')
-  const performance = scale === 'return' && cumulative ? cumulative : equity
+  const performance = (scale === 'return' && cumulative ? cumulative : equity) ?? cumulative
   const canLog =
     performance?.id === 'report-equity' &&
     result.equity_curve.length > 0 &&
@@ -360,7 +376,7 @@ export function PortfolioContinuousReport({
           <div key={metric.key} title={reportMetricDescription(result, metric)}>
             <dt className="mb-1 text-xs text-muted-foreground">{reportMetricLabel(metric)}</dt>
             <dd className="text-xl font-semibold tabular-nums tracking-tight">
-              {reportMetricText(result, metric)}
+              {reportMetricText(result, metric, currency)}
             </dd>
           </div>
         ))}
@@ -596,7 +612,7 @@ export function PortfolioContinuousReport({
             .map((metric) => (
               <div key={metric.key}>
                 <dt className="text-xs text-muted-foreground">{metric.label}</dt>
-                <dd className="mt-1 tabular-nums">{reportMetricText(result, metric)}</dd>
+                <dd className="mt-1 tabular-nums">{reportMetricText(result, metric, currency)}</dd>
               </div>
             ))}
         </dl>
@@ -738,7 +754,7 @@ export function PortfolioContinuousReport({
             <div className="space-y-4 pt-3">
               <AnalysisMetricTable catalog={analysis.catalog} analysis={analysis} />
               <AnalysisBasis analysis={analysis} />
-              {actions.response.status === 'complete' && (
+              {actions.response.status === 'complete' && !actions.freezeAnalysis && (
                 <Button asChild variant="ghost" size="sm">
                   <a href={actions.exportUrl} download>
                     Export analysis
@@ -753,7 +769,7 @@ export function PortfolioContinuousReport({
             </p>
           )}
         </details>
-        {result.engine_records && (
+        {result.engine_records && currency !== null && (
           <NativeRecords
             records={result.engine_records}
             expanded={view.expanded_sections.includes('engine_records')}

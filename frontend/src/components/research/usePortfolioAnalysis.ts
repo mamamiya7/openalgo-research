@@ -9,13 +9,16 @@ export function usePortfolioAnalysis(
   id: string,
   initialResult: PortfolioResult,
   enabled: boolean,
-  laterPeriod: boolean
+  laterPeriod: boolean,
+  freezeAnalysis = false
 ) {
   const [response, setResponse] = useState<PortfolioAnalysisStatus>({ status: 'missing' })
   const [loaded, setLoaded] = useState<{ id: string; result: PortfolioResult } | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const generation = useRef(0)
   const alive = useRef(true)
+  const frozen = useRef(freezeAnalysis)
+  frozen.current = freezeAnalysis
   useEffect(() => {
     alive.current = true
     return () => {
@@ -33,11 +36,11 @@ export function usePortfolioAnalysis(
   useEffect(() => {
     generation.current += 1
     setResponse({ status: 'missing' })
-    setLoaded((value) => (value?.id === id ? value : null))
+    setLoaded((value) => (!freezeAnalysis && value?.id === id ? value : null))
     setSubmitting(false)
-  }, [id])
+  }, [id, freezeAnalysis])
   useEffect(() => {
-    if (!enabled) return
+    if (!enabled || freezeAnalysis) return
     const controller = new AbortController()
     const current = generation.current
     portfolioResearch.analysis(id, controller.signal).then(
@@ -49,10 +52,11 @@ export function usePortfolioAnalysis(
       }
     )
     return () => controller.abort()
-  }, [id, enabled, receive])
-  const busy = submitting || response.status === 'queued' || response.status === 'running'
+  }, [id, enabled, receive, freezeAnalysis])
+  const busy =
+    !freezeAnalysis && (submitting || response.status === 'queued' || response.status === 'running')
   useEffect(() => {
-    if (!busy || submitting) return
+    if (freezeAnalysis || !busy || submitting) return
     const controller = new AbortController()
     const current = generation.current
     let timer: ReturnType<typeof setTimeout>
@@ -80,9 +84,9 @@ export function usePortfolioAnalysis(
       clearTimeout(timer)
       controller.abort()
     }
-  }, [busy, submitting, id, receive])
+  }, [busy, submitting, id, receive, freezeAnalysis])
   const prepare = async (parameters?: string[], symbol?: string) => {
-    if (busy) return
+    if (busy || frozen.current) return
     const current = ++generation.current
     setSubmitting(true)
     setResponse({ status: 'queued' })
@@ -102,7 +106,12 @@ export function usePortfolioAnalysis(
       if (alive.current && generation.current === current) setSubmitting(false)
     }
   }
-  const fullResult = loaded?.id === id ? loaded.result : undefined
+  const fullResult = !freezeAnalysis && loaded?.id === id ? loaded.result : undefined
   const result = (laterPeriod ? fullResult?.validation?.result : fullResult) ?? initialResult
-  return { result, busy, response, prepare }
+  return {
+    result: freezeAnalysis ? initialResult : result,
+    busy,
+    response: freezeAnalysis ? { status: 'complete' as const } : response,
+    prepare,
+  }
 }

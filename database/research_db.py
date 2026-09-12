@@ -215,6 +215,33 @@ class ResearchShortlistCandidate(Base):
     updated_at = Column(Float, nullable=False)
 
 
+class ResearchComparison(Base):
+    """Named immutable comparison evidence, independent of removable bookmarks."""
+
+    __tablename__ = "research_comparisons"
+    __table_args__ = (
+        UniqueConstraint("owner", "request_id"),
+        UniqueConstraint("experiment_id", "number"),
+    )
+    id = Column(String(32), primary_key=True)
+    owner = Column(String(255), nullable=False, index=True)
+    experiment_id = Column(String(64), nullable=False, index=True)
+    number = Column(Integer, nullable=False)
+    name = Column(String(120), nullable=False)
+    note = Column(String(2000), nullable=False, default="")
+    revision = Column(Integer, nullable=False, default=1)
+    request_id = Column(String(128), nullable=False)
+    request_hash = Column(String(64), nullable=False)
+    member_count = Column(Integer, nullable=False)
+    member_names = Column(Text, nullable=False)
+    reference_member_id = Column(String(32), nullable=False)
+    compatible = Column(Boolean, nullable=False)
+    currency = Column(String(16))
+    snapshot = Column(Text, nullable=False)
+    created_at = Column(Float, nullable=False)
+    updated_at = Column(Float, nullable=False)
+
+
 class ResearchStudyExecution(Base):
     """Observed search passes, independent of scientific checkpoint identity."""
 

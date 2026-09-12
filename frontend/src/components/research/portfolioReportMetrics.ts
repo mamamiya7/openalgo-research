@@ -166,8 +166,12 @@ export function reportMetricValue(result: PortfolioResult, metric: ReportMetric)
   return undefined
 }
 
-export function reportMetricText(result: PortfolioResult, metric: ReportMetric) {
-  return trialMetricText(metric, reportMetricValue(result, metric))
+export function reportMetricText(
+  result: PortfolioResult,
+  metric: ReportMetric,
+  currency: string | null = 'INR'
+) {
+  return trialMetricText(metric, reportMetricValue(result, metric), currency)
 }
 
 export function reportMetricDescription(result: PortfolioResult, metric: ReportMetric) {

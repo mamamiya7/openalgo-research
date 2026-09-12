@@ -23,6 +23,7 @@ import {
   suggestedStrategySearch,
 } from './PortfolioBuilder'
 import { PortfolioResults } from './PortfolioResults'
+import { ReportCurrency } from './ReportCurrency'
 
 vi.mock('@/api/portfolioResearch', () => ({
   portfolioResearch: {
@@ -898,6 +899,102 @@ describe('portfolio engine capabilities', () => {
 })
 
 describe('portfolio result reading', () => {
+  it('keeps a frozen comparison member on its primary saved period without latest-analysis or study actions', async () => {
+    const frozen = {
+      ...result,
+      analysis: {
+        version: 'research-analysis-v1',
+        metrics: {},
+        unavailable: {},
+        catalog: [],
+        charts: [],
+        basis: [],
+      },
+      validation: {
+        train_from: '2026-01-01',
+        train_to: '2026-01-20',
+        test_from: '2026-02-01',
+        test_to: '2026-02-10',
+        training_signals: 20,
+        testing_signals: 5,
+        label: 'Later period',
+        selection_basis: 'Earlier only',
+        result: { ...result, summary: { net_return_pct: 99 } },
+      },
+      reserved_evaluation: {
+        version: 'research-period-plan-v1' as const,
+        status: 'reserved' as const,
+        selection: { from: '2026-01-01', to: '2026-01-20' },
+        evaluation: { from: '2026-02-01', to: '2026-02-10' },
+      },
+      experiment: {
+        kind: 'portfolio_optimize' as const,
+        rows: [],
+        recommendation_id: 'c',
+        selected_strategies: [strategy],
+        specification: {
+          sampler: 'tpe' as const,
+          trials: 10,
+          objective: 'balanced' as const,
+          seed: 0,
+        },
+        optimizer: { sampler: 'TPE', objective_definition: 'balanced', version: '5' },
+        counts: {},
+      },
+    }
+    render(
+      <PortfolioResults
+        job={{ ...finished, kind: 'portfolio_optimize' }}
+        result={frozen}
+        freezeAnalysis
+        exportUrl="/latest-export"
+        onRerun={vi.fn()}
+        onOpenReport={vi.fn()}
+        onEvaluate={vi.fn()}
+        onOptimize={vi.fn()}
+        rerunning={false}
+      />
+    )
+    expect(screen.getByRole('tab', { name: 'Report' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.queryByRole('tab', { name: /Study|Trials/ })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Evaluation period')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', {
+        name: /Replay|Optimize|Test later|Update report|Expand analysis|Prepare analysis/,
+      })
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Export/ })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByText('All statistics', { selector: 'summary' }))
+    expect(screen.queryByRole('link', { name: 'Export analysis' })).not.toBeInTheDocument()
+    expect(portfolioResearch.analysis).not.toHaveBeenCalled()
+    expect(portfolioResearch.prepareAnalysis).not.toHaveBeenCalled()
+    expect(researchStudyActivity.get).not.toHaveBeenCalled()
+  })
+
+  it('withholds unknown-currency cash and monetary charts in a frozen report', async () => {
+    render(
+      <ReportCurrency.Provider value={null}>
+        <PortfolioResults
+          job={finished}
+          result={result}
+          freezeAnalysis
+          exportUrl="/export"
+          onRerun={vi.fn()}
+          rerunning={false}
+        />
+      </ReportCurrency.Provider>
+    )
+    expect(
+      screen.getByText('Final equity', { selector: 'summary' }).closest('dt')?.parentElement
+    ).toHaveTextContent('—')
+    expect(await screen.findByLabelText('account-cumulative')).toBeVisible()
+    expect(document.body.textContent).not.toMatch(/₹|\bINR\b/)
+    expect(screen.getByRole('button', { name: 'Equity', exact: true })).toBeDisabled()
+    await userEvent.click(screen.getByRole('tab', { name: 'Trades' }))
+    expect(document.body.textContent).not.toMatch(/₹|\bINR\b/)
+    await userEvent.click(screen.getByRole('tab', { name: 'Settings' }))
+    expect(screen.getByText('Shared starting cash: —')).toBeVisible()
+  })
   it('keeps reserved dates and exact later evaluation separate from the displayed baseline', async () => {
     const evaluate = vi.fn()
     const view = render(
