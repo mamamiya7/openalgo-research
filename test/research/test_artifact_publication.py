@@ -197,11 +197,22 @@ def test_failed_temporary_file_remains_reserved_if_caller_catches_error(store, m
 def test_concurrent_publishers_serialize_quota_and_duplicate_admission(
     store, monkeypatch, same_value
 ):
-    monkeypatch.setenv("RESEARCH_QUOTA_MB", "1")
     monkeypatch.setattr(service, "CHUNK_ARTIFACT_BYTES", 2 * 1024**2)
+    # Include SQLite's live write journal in the baseline, just as admission
+    # does. Schema growth must not turn this into two individually oversized
+    # artifacts before the concurrent quota/duplicate checks can run.
+    with store.sessions.begin() as db:
+        service.write_guard(db)
+        baseline = service.managed_storage_bytes(store)
+    quota_mb = (baseline + 1024**2 - 1) // 1024**2 + 1
+    quota = quota_mb * 1024**2
+    monkeypatch.setenv("RESEARCH_QUOTA_MB", str(quota_mb))
+    payload_bytes = (quota - baseline) * 2 // 3
     rng = random.Random(1904)
-    first = base64.b64encode(rng.randbytes(600_000)).decode("ascii")
-    second = first if same_value else base64.b64encode(rng.randbytes(600_000)).decode("ascii")
+    first = base64.b64encode(rng.randbytes(payload_bytes)).decode("ascii")
+    second = first if same_value else base64.b64encode(rng.randbytes(payload_bytes)).decode("ascii")
+    sizes = compressed_bytes(first), compressed_bytes(second)
+    assert baseline + max(sizes) <= quota < baseline + sum(sizes)
     # Both callers pass the initial absent-file check before either acquires the
     # SQL guard. This exercises the second existence check after lock admission.
     barrier, compress = Barrier(2), service.gzip.compress
@@ -236,7 +247,7 @@ def test_concurrent_publishers_serialize_quota_and_duplicate_admission(
         assert "storage is full" in next(value for status, value in results if status == "error")
     files = list((store.root / "artifacts").iterdir())
     assert len(files) == 1
-    assert service.managed_storage_bytes(store) <= 1024**2
+    assert service.managed_storage_bytes(store) <= quota
     for status, key in results:
         if status == "ok":
             assert service.read_artifact(store, key) in (first, second)

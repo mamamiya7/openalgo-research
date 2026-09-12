@@ -17,6 +17,7 @@ from time import monotonic
 from research.engine import validate_config
 
 ADAPTER_VERSION = "openalgo-optuna-portfolio-v1"
+SEARCH_IDENTITY_VERSION = "portfolio-scientific-search-v1"
 TESTED_OPTUNA_VERSION = "5.0.0"
 MAX_STRATEGIES = 8
 MAX_TRIALS = 1000
@@ -156,9 +157,7 @@ def _values(axis):
     return [float(start + i * step) for i in range(int((stop - start) / step) + 1)]
 
 
-def validate_specification(specification, strategies):
-    """Validate the complete search union without importing numerical packages."""
-    _, axes = _prepare(strategies)
+def _specification(specification):
     specification = {} if specification is None else specification
     if not isinstance(specification, dict) or set(specification) - {
         "sampler",
@@ -177,12 +176,91 @@ def validate_specification(specification, strategies):
         raise ValueError("Choose TPE or grid search and a supported portfolio objective")
     trials = _number(specification.get("trials", 50), 1, MAX_TRIALS, "Search trials", integer=True)
     seed = _number(specification.get("seed", 0), 0, 2147483647, "Search seed", integer=True)
+    return {"sampler": sampler, "trials": trials, "objective": objective, "seed": seed}
+
+
+def validate_specification(specification, strategies):
+    """Validate the complete search union without importing numerical packages."""
+    _, axes = _prepare(strategies)
+    spec = _specification(specification)
     total = math.prod(len(_values(axis)) for axis in axes.values())
-    if sampler == "grid" and total > MAX_GRID:
+    if spec["sampler"] == "grid" and total > MAX_GRID:
         raise ValueError(
             f"Grid search exceeds {MAX_GRID} combinations; narrow the ranges or use adaptive search"
         )
-    return {"sampler": sampler, "trials": trials, "objective": objective, "seed": seed}
+    return spec
+
+
+def validate_checkpoint(saved):
+    """Check bounded checkpoint integrity without importing or executing Optuna.
+
+    This permits a read-only continuation preview. It does not certify the
+    scientific inputs: run_search verifies their binding and replays every
+    proposal before allowing a new engine evaluation. Legacy checkpoints remain
+    valid, with unavailable identity/specification fields returned as None.
+    """
+    if not isinstance(saved, dict):
+        raise ValueError("Invalid bounded portfolio checkpoint")
+    trials, rows = saved.get("trials"), saved.get("rows")
+    if (
+        not isinstance(trials, list)
+        or not 1 <= len(trials) <= MAX_TRIALS
+        or not isinstance(rows, list)
+        or len(rows) > len(trials)
+        or not isinstance(saved.get("optimizer"), dict)
+        or not isinstance(saved.get("binding"), str)
+        or not re.fullmatch(r"[0-9a-f]{64}", saved["binding"])
+    ):
+        raise ValueError("Invalid bounded portfolio checkpoint")
+    payload = {key: value for key, value in saved.items() if key != "checkpoint_id"}
+    try:
+        identity = _fingerprint(payload, max_bytes=MAX_CHECKPOINT_BYTES)
+    except (TypeError, OverflowError) as error:
+        raise ValueError("Invalid bounded portfolio checkpoint") from error
+    if saved.get("checkpoint_id") != identity:
+        raise ValueError("Portfolio checkpoint evidence changed")
+    for number, trial in enumerate(trials):
+        if (
+            not isinstance(trial, dict)
+            or isinstance(trial.get("number"), bool)
+            or trial.get("number") != number
+            or not isinstance(trial.get("params"), dict)
+            or trial.get("state") not in ("complete", "pruned")
+            or not isinstance(trial.get("reused"), bool)
+            or not isinstance(trial.get("config_id"), str)
+            or not re.fullmatch(r"[0-9a-f]{64}", trial["config_id"])
+        ):
+            raise ValueError("Invalid portfolio checkpoint trial")
+    row_ids = [row.get("config_id") if isinstance(row, dict) else None for row in rows]
+    if any(
+        not isinstance(key, str) or not re.fullmatch(r"[0-9a-f]{64}", key) for key in row_ids
+    ) or len(set(row_ids)) != len(row_ids):
+        raise ValueError("Duplicate or invalid portfolio checkpoint rows")
+    metadata = {"search_identity_version", "search_identity", "specification", "proposal_budget"}
+    spec = budget = search_identity = None
+    if metadata.intersection(saved):
+        if not metadata.issubset(saved):
+            raise ValueError("Incomplete portfolio checkpoint search identity")
+        spec = _specification(saved["specification"])
+        budget = _number(
+            saved["proposal_budget"], 1, spec["trials"], "Proposal budget", integer=True
+        )
+        search_identity = saved["search_identity"]
+        if (
+            saved["search_identity_version"] != SEARCH_IDENTITY_VERSION
+            or saved["specification"] != spec
+            or not isinstance(search_identity, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", search_identity)
+            or len(trials) > budget
+        ):
+            raise ValueError("Invalid portfolio checkpoint search identity")
+    return {
+        "completed": len(trials),
+        "evaluated": len(rows),
+        "search_identity": search_identity,
+        "specification": spec,
+        "proposal_budget": budget,
+    }
 
 
 def requirement_strategies(strategies, specification=None):
@@ -338,6 +416,7 @@ def run_search(
     activity=None,
     record_timing=False,
     observe=None,
+    continuation_from=None,
 ):
     """Run joint grid/TPE proposals through one shared-capital engine callback.
 
@@ -346,6 +425,10 @@ def run_search(
     feasible configuration. TPE uses a feasible lower-corner first trial, ten
     startup observations, then Optuna's adaptive proposals. Resume replays all
     completed/pruned trial proposals and scores through the same seeded sampler.
+    A caller may explicitly extend a frozen search by supplying its previous
+    canonical specification in continuation_from and its saved checkpoint. Only
+    the total proposal budget can increase. Ordinary resume stays exact; actual
+    segment work is reported through observations, outside scientific evidence.
     """
     spec = validate_specification(specification, strategies)
     base, axes = _prepare(strategies)
@@ -356,6 +439,17 @@ def run_search(
         strategy["config"]["initial_capital"] = float(capital)
     plan = describe_search(base, spec)
     budget = plan["proposal_budget"]
+    previous_spec = None
+    if continuation_from is not None:
+        if saved is None:
+            raise ValueError("Portfolio continuation needs its saved checkpoint")
+        previous_spec = validate_specification(continuation_from, base)
+        if any(previous_spec[key] != spec[key] for key in spec if key != "trials"):
+            raise ValueError("Portfolio continuation cannot change scientific search settings")
+        if spec["trials"] <= previous_spec["trials"]:
+            raise ValueError("Portfolio continuation needs a larger total trial budget")
+        if budget <= describe_search(base, previous_spec)["proposal_budget"]:
+            raise ValueError("The declared portfolio search has no remaining proposals")
     if not isinstance(execution, dict) or not execution:
         raise ValueError("Portfolio optimization needs resolved engine version metadata")
     if progress:
@@ -376,14 +470,22 @@ def run_search(
         "objective_definition": OBJECTIVES[spec["objective"]],
         "first_trial": "feasible lower corner" if spec["sampler"] == "tpe" else "seeded grid order",
     }
-    binding = _fingerprint(
+    scientific_inputs = {
+        "strategies": base,
+        "snapshot": snapshot,
+        "capital": capital,
+        "execution": execution,
+        "optimizer": optimizer,
+    }
+    # Keep the old budget-bound fingerprint for exact legacy replay. The new
+    # scientific identity removes only trials; data, order, costs and every
+    # supported scientific setting remain bound, including engine versions.
+    binding = _fingerprint({**scientific_inputs, "specification": spec})
+    search_identity = _fingerprint(
         {
-            "strategies": base,
-            "snapshot": snapshot,
-            "capital": capital,
-            "specification": spec,
-            "execution": execution,
-            "optimizer": optimizer,
+            **scientific_inputs,
+            "identity_version": SEARCH_IDENTITY_VERSION,
+            "specification": {key: value for key, value in spec.items() if key != "trials"},
         }
     )
     sampler = (
@@ -580,8 +682,22 @@ def run_search(
         trials.append(record)
 
     if saved is not None:
-        if not isinstance(saved, dict) or saved.get("binding") != binding:
+        saved_info = validate_checkpoint(saved)
+        expected_spec = previous_spec or spec
+        expected_binding = (
+            _fingerprint({**scientific_inputs, "specification": previous_spec})
+            if previous_spec is not None
+            else binding
+        )
+        if saved.get("binding") != expected_binding:
             raise ValueError("Portfolio checkpoint inputs, settings or engine versions changed")
+        if saved_info["specification"] is not None and (
+            saved_info["specification"] != expected_spec
+            or saved_info["search_identity"] != search_identity
+            or saved_info["proposal_budget"]
+            != describe_search(base, expected_spec)["proposal_budget"]
+        ):
+            raise ValueError("Portfolio checkpoint search identity or proposal budget changed")
         old_trials, old_rows = saved.get("trials"), saved.get("rows")
         if (
             not isinstance(old_trials, list)
@@ -591,9 +707,6 @@ def run_search(
             or saved.get("optimizer") != optimizer
         ):
             raise ValueError("Invalid bounded portfolio checkpoint")
-        payload = {key: value for key, value in saved.items() if key != "checkpoint_id"}
-        if saved.get("checkpoint_id") != _fingerprint(payload, max_bytes=MAX_CHECKPOINT_BYTES):
-            raise ValueError("Portfolio checkpoint evidence changed")
         restored = {
             row["config_id"]: row
             for row in old_rows
@@ -617,6 +730,7 @@ def run_search(
         if winner_row is not None and (
             not isinstance(winner_report, dict)
             or winner_report.get("summary") != winner_row["summary"]
+            or winner_report.get("strategies") != winner_row["strategies"]
             or saved.get("winner_config_id") != winner_row["config_id"]
         ):
             raise ValueError("Portfolio checkpoint is missing its exact winning report")
@@ -625,8 +739,18 @@ def run_search(
         ):
             raise ValueError("Rejected portfolio trials cannot have a winning report")
 
+    replayed_proposals, restored_evaluations = len(trials), len(rows)
     if observe:
-        observe({"kind": "search_started", "proposal_budget": budget, "replayed": len(trials)})
+        observe(
+            {
+                "kind": "search_started",
+                "proposal_budget": budget,
+                "replayed": replayed_proposals,
+                "restored_evaluations": restored_evaluations,
+                "search_identity": search_identity,
+                "search_identity_version": SEARCH_IDENTITY_VERSION,
+            }
+        )
     notify()
 
     while len(trials) < budget:
@@ -637,6 +761,10 @@ def run_search(
         if checkpoint:
             payload = {
                 "binding": binding,
+                "search_identity_version": SEARCH_IDENTITY_VERSION,
+                "search_identity": search_identity,
+                "specification": spec,
+                "proposal_budget": budget,
                 "optimizer": optimizer,
                 "rows": list(rows.values()),
                 "trials": trials,

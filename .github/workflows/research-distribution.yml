@@ -140,6 +140,8 @@ jobs:
           src/components/research/usePortfolioAnalysis.test.tsx
           src/components/research/ChartinkImport.test.tsx
           src/components/research/ResearchRunProgress.test.tsx
+          src/components/research/StudyContinuationDialog.test.tsx
+          src/components/research/StudyContinuation.test.tsx
           src/components/research/ConnectorSettings.test.tsx
           src/components/research/PreflightReview.test.tsx
           src/components/layout/ResearchLayout.test.tsx

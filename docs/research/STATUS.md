@@ -2,6 +2,30 @@
 
 Updated: 12 September 2026. Published preview: **`0.1.0-preview.4`**, targeting OpenAlgo 2.0.2.2.
 
+## Study continuation foundation — installed 12 September 2026
+
+The first D2 dependency for automatic research is implemented: **Add trials** on
+a completed library study creates a linked saved continuation. It restores the
+exact sampler history and frozen prices, evaluates only new configurations, and
+preserves the previous result, setup, reservation and current draft. Scientific
+search identity is now separate from proposal budget. Old compatible checkpoints
+remain usable; interrupted children resume from their own durable work.
+
+The progress interface has subtle cyan/violet stage accents and motion tied to
+real activity, with reduced-motion styles. The compact continuation dialog shows
+existing and total trials, retains exact retry requests, and supports keyboard
+and mobile use. A continued study links back to its previous study.
+
+This is a completed-study continuation slice, not the full D2/automatic mode.
+Genuine pause/partial-result publication, a multi-stage frozen recipe, benchmark
+and indicator warmup, causal conditions and automatic reliability/final checks
+remain pending. Existing scalar ranking is unchanged. A continuation never makes
+previously used later data unseen. See the [implementation receipt](DELIVERY_PLAN.md#study-continuation-foundation--12-september-2026).
+This increment is installed in the normal application. All 57 saved runs and
+research metadata are unchanged; account settings, broker/history adapters and
+local interface customizations are preserved. The worker and new served assets
+are verified. Source publication is recorded in the local installation receipt.
+
 ## Latest native installation — 12 September 2026
 
 The A1–A4, B1–B3, C1/manual-CSV C2 and C3 increments below are now installed in

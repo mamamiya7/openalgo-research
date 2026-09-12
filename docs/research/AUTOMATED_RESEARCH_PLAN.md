@@ -5,6 +5,11 @@ the chosen-setup increment. This specifies the automatic mode of Optimize within
 OpenAlgo Research; it is not another application or a replacement calculation
 engine. [DELIVERY_PLAN.md](DELIVERY_PLAN.md) owns implementation order.
 
+Implementation has started with its D2 dependency: completed-study **Add trials**
+now separates scientific identity from execution budget and retains exact saved
+prices/checkpoints in linked continuation results. This foundation does not enable
+the automatic research action described below. See [current status](STATUS.md).
+
 ## Product outcome
 
 From a signal CSV and the account's saved research assumptions, one click should

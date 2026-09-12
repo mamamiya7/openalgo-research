@@ -151,7 +151,7 @@ function Elapsed({ activity, running }: { activity?: ResearchActivity; running: 
 function Metric({ label, value }: { label: string; value?: number }) {
   if (!valid(value)) return null
   return (
-    <div>
+    <div className="research-progress-metric">
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="mt-1 text-lg font-medium tabular-nums">{count(value)}</dd>
     </div>
@@ -186,7 +186,7 @@ function PriceProgress({
     <div className="space-y-4">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         {valid(available) && (
-          <p className="text-2xl font-semibold tracking-tight tabular-nums">
+          <p className="research-progress-number text-3xl font-semibold tracking-tight tabular-nums">
             {count(available)}
             {knownTotal && (
               <span className="text-base font-normal text-muted-foreground">
@@ -261,7 +261,7 @@ function TrialHistory({ history }: { history?: ResearchActivity['trials'] }) {
         role="img"
         aria-label={`Trial score history; latest score ${scores[scores.length - 1].toFixed(3)}`}
         viewBox="0 0 400 64"
-        className="h-16 w-full overflow-visible text-primary"
+        className="research-trial-history h-16 w-full overflow-visible"
         preserveAspectRatio="none"
       >
         <title>Actual trial scores</title>
@@ -365,7 +365,11 @@ export function ResearchRunProgress({ job }: { job: ProgressJob }) {
     { name: 'Results', Icon: Flag, summary: current === 4 ? 'Ready' : undefined },
   ]
   return (
-    <div className="research-run-progress space-y-7" data-running={running}>
+    <div
+      className="research-run-progress space-y-7"
+      data-running={running}
+      data-stage={activity?.stage ?? 'unknown'}
+    >
       <ol aria-label="Run stages" className="research-stage-track">
         {steps.map(({ name, Icon, summary, dates }, index) => {
           const done = current > index
@@ -388,9 +392,14 @@ export function ResearchRunProgress({ job }: { job: ProgressJob }) {
           )
         })}
       </ol>
-      <div className="research-active-stage space-y-5 rounded-xl border bg-card p-5 sm:p-6">
+      <div className="research-active-stage space-y-5 rounded-2xl border bg-card p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <output aria-live="polite" aria-atomic="true" className="font-medium">
+          <output
+            aria-live="polite"
+            aria-atomic="true"
+            className="research-stage-title font-medium"
+          >
+            <span className="research-stage-beacon" aria-hidden="true" />
             {title}
           </output>
           <Elapsed activity={activity} running={running} />
@@ -421,7 +430,7 @@ export function ResearchRunProgress({ job }: { job: ProgressJob }) {
         {showTrials && (
           <div className="space-y-4">
             {valid(trials?.completed) && valid(trials?.total) && (
-              <p className="text-2xl font-semibold tabular-nums">
+              <p className="research-progress-number text-3xl font-semibold tracking-tight tabular-nums">
                 {count(trials.completed)}{' '}
                 <span className="text-base font-normal text-muted-foreground">
                   / {count(trials.total)} trials{' '}

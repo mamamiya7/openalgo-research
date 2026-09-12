@@ -542,6 +542,13 @@ def run(
     if portfolio.get("optimization"):
         from research.connectors.optuna_portfolio import run_search
 
+        calculation_saved = (saved or {}).get("calculation")
+        continuation_from = None
+        if evidence.get("study_continuation") and not calculation_saved:
+            from services.research_study_continuation import seed
+
+            calculation_saved, continuation_from = seed(store, evidence["study_continuation"])
+
         def persist_calculation(state, counts):
             checkpoint(
                 {"phase": "calculation", "inputs_artifact": inputs_id, "calculation": state},
@@ -565,7 +572,8 @@ def run(
             execution=spec["versions"],
             progress=calculation_progress,
             checkpoint=persist_calculation,
-            saved=(saved or {}).get("calculation"),
+            saved=calculation_saved,
+            **({"continuation_from": continuation_from} if continuation_from else {}),
             record_timing=True,
             **({"activity": activity} if activity else {}),
             **({"observe": observe} if observe else {}),
@@ -578,6 +586,8 @@ def run(
         # Every candidate uses the same prepared cohort and price observations.
         # Compact rows reference the study-level basis instead of copying it.
         result["experiment"]["evaluation_basis_id"] = calculation_basis["evidence_id"]
+        if evidence.get("study_continuation"):
+            result["study_continuation"] = deepcopy(evidence["study_continuation"])
     else:
         result = evaluate(
             calculation_evidence["strategies"],

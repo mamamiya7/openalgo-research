@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router'
 import {
   type AnalysisChart,
   type PortfolioJob,
@@ -26,6 +27,7 @@ import { PortfolioTrials } from './PortfolioTrials'
 import { availableTrialMetrics, trialMetricText, trialMetricValue } from './portfolioTrialMetrics'
 import { SaveToShortlist } from './SaveToShortlist'
 import { StudyActivity } from './StudyActivity'
+import { StudyContinuation } from './StudyContinuation'
 import {
   connectedStudyChart,
   pointsFromChart,
@@ -271,8 +273,39 @@ function StudyWorkspace({
               {result.report_context.dates.from} – {result.report_context.dates.to}
             </p>
           )}
+          {result.study_continuation && experimentId && (
+            <p className="text-xs text-muted-foreground">
+              {number(result.study_continuation.replayed_proposals)} trials carried forward{' · '}
+              <Link
+                className="underline underline-offset-4 hover:text-foreground"
+                to={`?${new URLSearchParams({
+                  experiment: experimentId,
+                  view: 'studies',
+                  job: result.study_continuation.parent_job_id,
+                  return_research: new URLSearchParams({
+                    experiment: experimentId,
+                    view: 'studies',
+                    job: job.id,
+                  }).toString(),
+                })}`}
+              >
+                Previous study
+              </Link>
+            </p>
+          )}
         </div>
-        {winner && <Button onClick={() => onOpenReport(job.id)}>Best report</Button>}
+        <div className="flex flex-wrap items-start gap-2">
+          {experimentId && result.report_context?.result_artifact && (
+            <StudyContinuation
+              experimentId={experimentId}
+              jobId={job.id}
+              resultArtifact={result.report_context.result_artifact}
+              studyName={result.portfolio?.name ?? 'Optimization study'}
+              readOnly={readOnly}
+            />
+          )}
+          {winner && <Button onClick={() => onOpenReport(job.id)}>Best report</Button>}
+        </div>
       </header>
       <dl className="grid grid-cols-2 gap-5 border-y py-5 sm:grid-cols-4">
         {[

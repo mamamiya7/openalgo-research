@@ -108,6 +108,25 @@ def store():
     return current_app.extensions["research_store"]
 
 
+@scanner_research_bp.route(
+    "/library/experiments/<experiment_id>/studies/<job_id>/continue", methods=["GET", "POST"]
+)
+def continue_study(experiment_id, job_id):
+    from services import research_study_continuation as continuation
+
+    if request.method == "GET":
+        if request.args:
+            raise ValueError("Unexpected study continuation query")
+        return jsonify(continuation.context(store(), session["user"], experiment_id, job_id))
+    if (request.content_length or 0) > 2048:
+        raise ValueError("Study continuation request exceeds its size limit")
+    return jsonify(
+        continuation.extend(
+            store(), session["user"], experiment_id, job_id, request.get_json(silent=True)
+        )
+    )
+
+
 @scanner_research_bp.get("/portfolio/jobs/<job_id>/activity")
 def portfolio_study_activity(job_id):
     if set(request.args) - {"limit", "before", "execution"} or any(

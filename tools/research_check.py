@@ -60,6 +60,7 @@ REQUIRED_RESEARCH_FILES = {
     "services/research_comparisons.py",
     "services/research_decisions.py",
     "services/research_baselines.py",
+    "services/research_study_continuation.py",
     "services/research_chosen_setups.py",
     "services/research_decision_targets.py",
     "services/research_result_identity.py",

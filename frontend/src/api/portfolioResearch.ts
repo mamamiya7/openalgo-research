@@ -205,6 +205,15 @@ export interface PortfolioProposal {
   datetime_complete?: string
 }
 export interface PortfolioResult {
+  study_continuation?: {
+    version: string
+    parent_job_id: string
+    parent_result_artifact: string
+    replayed_proposals: number
+    retained_portfolios: number
+    total_proposals: number
+    additional_proposals: number
+  }
   matched_baseline_origin?: {
     version: string
     study_job_id: string

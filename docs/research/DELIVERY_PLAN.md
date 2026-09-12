@@ -553,6 +553,10 @@ recoverable.
 These are bounded increments, not one feature bundle. A–C provide their identity
 and return context; existing native lifecycle/report contracts provide the base.
 
+D2's completed-study continuation foundation is implemented in the development
+checkout; see [its receipt](#study-continuation-foundation--12-september-2026).
+The remaining D2 stages and the full automatic research protocol are still pending.
+
 1. **Data recovery:** concise auth/calendar/quota/runtime issue, affected dates
    and instruments, saved work, direct repair destination and return to the same
    compatible run. Verify maintained calendar and native reuse boundaries.
@@ -901,3 +905,79 @@ the exact remote commit and Graphify source hashes are recorded in the local
 completion receipt after publication. The existing versioned preview.4 asset is
 not overwritten or represented as containing this newer code. This installation
 does not establish a fresh all-broker, all-asset or complete public-release check.
+
+## Study continuation foundation — 12 September 2026
+
+**Implemented and installed in the normal app.** The first D2 slice
+separates scientific search identity from the proposal budget. A completed library
+study can explicitly **Add trials**, creating a new immutable linked setup/run on
+its existing prices, eligible cohort, costs, ranges, objective and sampler seed.
+The original result, checkpoint, chosen setup and current draft are preserved.
+The new study restores accepted proposals and configuration results; only new
+configurations reach the engine. A short carried-forward count and Previous study
+link keep the lineage visible. No broker or Historify request occurs on this path.
+
+The connector admits legacy checkpoints by proving their original exact binding,
+then writes a versioned budget-independent identity. It rejects scientific/data/
+engine changes, invalid checkpoints, exhausted grids and budgets above 1,000.
+The worker restores the parent seed if interrupted before its first new calculation
+checkpoint; subsequent recovery uses its own committed state. Work interrupted
+inside an engine call may repeat that incomplete call. Native execution/proposal
+observations remain separate from calculation evidence and record new work only.
+
+The native Add trials dialog reviews existing/total proposals, owns one explicit
+request, retains an uncertain request's exact amount/body/identity, aborts stale
+client work and restores source navigation. Definitive rejection permits a fresh
+review; an accepted response followed by metadata refresh failure reuses that
+accepted job. The progress screen uses scoped cyan/violet accents, active-stage
+orbit/rail motion, actual trial scores and counters, with reduced-motion styling
+and static non-running states. No additional settings questionnaire was added.
+
+**Verification:** 90 connector checks (56 existing, 34 continuation checks), five
+native continuation/backup checks and six native interruption/CSRF checks passed.
+They cover TPE and grid against uninterrupted calculations, no repeat of completed
+evaluations, owner/revision/request/result fences, parent evidence retention,
+reserved-period preservation, initial-empty and later committed child recovery,
+and a populated backup/restore retaining the pinned checkpoint after its old
+metadata pointer is removed. The real VectorBT engine uses controlled prices.
+
+The integrated interface set passed **137 checks across six suites**, including
+exact retry/recovery and accessible dialog interactions. Type checking, production
+build, scoped lint and **117 compatibility checks** pass; packaging/distribution
+passes **38 checks**, with one Windows symlink-permission skip. The packaging guard
+requires the new service and CI includes both new interface suites.
+
+Controlled native browser acceptance covered light/dark dialogs, a 390 px layout
+(358 px dialog, no horizontal overflow), a saved study extended from six to twenty
+proposals, real active-stage motion, actual counters, a carried-forward caption
+and return to the original six-proposal study. No browser errors were recorded.
+The final visual fixture introduced a 1.5-second delay around real evaluations so
+progress could be inspected; it is not a speed benchmark. Reduced-motion behavior
+was checked in scoped styles/tests, not by changing the user's OS preference.
+The test server and worker were stopped after verification.
+
+**Resource audit:** new service sessions are context-managed on success, failure
+and retry; artifact I/O uses the existing bounded content-addressed store. The
+source pins its parent checkpoint through the existing storage closure, including
+backup/pruning. No new pool, thread, process manager, global result cache or retained
+DataFrame was introduced. Client requests abort on close/unmount/identity changes.
+This is static resource review plus native lifecycle/restore checks, not a measured
+long-duration leak test.
+
+**Remaining:** genuine pause/partial results and the frozen multi-stage research
+recipe still precede automatic reliability selection. Benchmark/warmup contracts,
+causal indicators/regimes, robust validation and automatic findings remain planned.
+Later-period exposure is not reset: the existing account-wide calculation-overlap
+history still applies. Old embedded train/test studies require a new refined search;
+Add trials does not silently run another later test. Scalar objective/ranking and
+older reports are unchanged. This completes a D2 foundation, not all D2 or the
+one-click automatic-research product contract.
+
+**Native installation:** twelve runtime files and a production interface built
+against the existing installation were installed after confirming no active runs.
+All 57 jobs (50 completed, seven failed) and the complete research metadata were
+preserved. Source/entry-page backups and a local metadata backup were retained.
+Account configuration, broker/history code and local UI customizations match
+their pre-install hashes. The worker is online, the new continuation endpoints
+enforce authentication/CSRF, and the served library bundle contains Add trials
+and Previous study. This smoke check did not start a broker calculation.
