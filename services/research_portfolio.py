@@ -179,6 +179,12 @@ def replay_inputs(store, owner, job_id, *, trial_id=None, period="selection"):
         raise ValueError("Choose a completed portfolio run")
     evidence = service.read_artifact(store, bundle["inputs_artifact"])
     report = bundle["result"]
+    if evidence.get("condition_replay"):
+        from services.research_condition_replay import verify
+
+        verify(store, evidence)
+        if trial_id is not None or period != "selection":
+            raise ValueError("Replay this saved condition test on its recorded period")
     has_split = bool(
         evidence.get("portfolio", {}).get("validation")
         or evidence.get("portfolio", {}).get("automatic_research")
@@ -464,8 +470,20 @@ def run(
             from research.calendar_coverage import check_saved_calendar
 
             check_saved_calendar(evidence["snapshot"])
+        if evidence.get("condition_replay"):
+            from services.research_condition_replay import prepare as prepare_condition
+
+            cancelled()
+            evidence = prepare_condition(store, evidence)
+            cancelled()
         inputs_id = saved["inputs_artifact"]
     elif evidence.get("frozen_prices"):
+        if evidence.get("condition_replay"):
+            from services.research_condition_replay import prepare as prepare_condition
+
+            cancelled()
+            evidence = prepare_condition(store, evidence)
+            cancelled()
         if portfolio.get("automatic_research"):
             from research.automatic_protocol import compile_recipe
 
@@ -497,6 +515,10 @@ def run(
         )
     if boundary:
         boundary()
+    if evidence.get("condition_replay"):
+        from services.research_condition_replay import verify
+
+        verify(store, evidence)
     if activity:
         # Frozen replays need no archive check or broker download. Only report
         # quantities actually present in the retained input evidence.
@@ -723,4 +745,8 @@ def run(
         from services.research_baselines import verify_reconstruction as verify_baseline
 
         verify_baseline(evidence, result)
+    if evidence.get("condition_replay"):
+        from services.research_condition_replay import enrich
+
+        enrich(result, evidence)
     return result, evidence

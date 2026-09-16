@@ -58,6 +58,8 @@ export interface StudyAnalysis {
   parameters?: string[]
 }
 export interface PortfolioAnalysis extends ScalarAnalysis, StudyAnalysis {
+  benchmark?: BenchmarkAnalysis
+  market_conditions?: MarketConditionsAnalysis
   catalog: AnalysisMetric[]
   price_symbols?: string[]
   price_symbol?: string
@@ -108,6 +110,102 @@ export interface PortfolioAnalysis extends ScalarAnalysis, StudyAnalysis {
       sortino_definition: string
     }
   }
+}
+export interface BenchmarkRequest {
+  symbol: 'NIFTY'
+  exchange: 'NSE_INDEX'
+  interval: 'D'
+  role: 'benchmark'
+}
+export interface BenchmarkAnalysis {
+  version: string
+  status: 'available' | 'partial' | 'unavailable'
+  descriptor: { symbol: string; exchange: string; interval: string; role: 'benchmark' }
+  dates: { from: string | null; to: string | null }
+  observations: number
+  omitted_sessions: number
+  metrics: {
+    portfolio_return_pct: number | null
+    benchmark_return_pct: number | null
+    excess_return_pct: number | null
+    beta: number | null
+    alpha_pct: number | null
+    correlation: number | null
+    tracking_error_pct: number | null
+    information_ratio: number | null
+  }
+  reason?: string
+  basis: string[]
+}
+export interface MarketConditionsAnalysis {
+  version: 'research-market-conditions-v1'
+  status: 'available' | 'partial' | 'unavailable'
+  descriptor: BenchmarkAnalysis['descriptor']
+  dates: { from: string | null; to: string | null }
+  coverage: {
+    total_sessions: number
+    classified_sessions: number
+    closed_trades: number
+    classified_trades: number
+    unclassified_trades: number
+  }
+  timeline: Array<{
+    date: string
+    trend: 'up' | 'down' | 'range' | 'unknown'
+    volatility: 'low' | 'normal' | 'high' | 'unknown'
+    stress: 'normal' | 'elevated' | 'unknown'
+    observed_through: string | null
+  }>
+  cohorts: Array<{
+    strategy_id: string
+    strategy_name: string
+    dimension: 'trend' | 'volatility'
+    regime: string
+    label: string
+    closed_trades: number
+    entry_sessions: number
+    average_net_return_pct: number | null
+    win_rate_pct: number | null
+    net_pnl: number
+    evidence: 'limited' | 'descriptive'
+  }>
+  finding: { status: 'observed' | 'insufficient'; text: string; next_step: string }
+  basis: string[]
+  recipe: Record<string, unknown>
+}
+export interface ConditionSelection {
+  strategy_id: string
+  dimension: 'trend' | 'volatility'
+  regime: 'up' | 'down' | 'range' | 'normal' | 'high'
+}
+export interface ConditionReplayRequest extends ConditionSelection {
+  analysis_artifact: string
+  period: 'selection' | 'validation'
+  request_id: string
+}
+export interface ConditionReplayResult {
+  version: string
+  id: string
+  condition: ConditionSelection & { label: string }
+  parent_job_id: string
+  parent_result_artifact: string
+  analysis_artifact: string
+  period: 'selection' | 'validation'
+  counts: {
+    allowed: number
+    filtered: number
+    unknown: number
+    original_excluded: number
+    pending: number
+    unaffected: number
+  }
+  baseline: { summary: Record<string, number | string | null>; evaluation_basis?: EvaluationBasis }
+  delta: {
+    net_return_pct: number | null
+    max_drawdown_pct: number | null
+    closed_trades: number | null
+  }
+  basis: string[]
 }
 export interface PortfolioPeriodPlan {
   version: 'research-period-plan-v1'
@@ -206,6 +304,7 @@ export interface PortfolioProposal {
   datetime_complete?: string
 }
 export interface PortfolioResult {
+  condition_replay?: ConditionReplayResult
   automatic_research?: AutomaticResearchFindings
   study_continuation?: {
     version: string
@@ -390,6 +489,10 @@ export interface PortfolioPreview {
   versions: Record<string, string>
 }
 export interface PortfolioAnalysisStatus {
+  benchmark?: BenchmarkRequest
+  requested_benchmark?: BenchmarkRequest
+  market_conditions?: true
+  requested_market_conditions?: true
   status: 'queued' | 'running' | 'complete' | 'failed' | 'missing'
   error?: string
   job?: PortfolioJob
@@ -401,6 +504,22 @@ export type PortfolioSource = ResearchSource & {
 }
 const base = '/scanner-research/api'
 export const portfolioResearch = {
+  async conditionReplay(
+    id: string,
+    request: ConditionReplayRequest,
+    signal?: AbortSignal
+  ): Promise<PortfolioJob> {
+    return (
+      await webClient.post(
+        `${base}/portfolio/jobs/${encodeURIComponent(id)}/condition-replay`,
+        request,
+        {
+          signal,
+          timeout: 30000,
+        }
+      )
+    ).data
+  },
   async sources(
     offset = 0,
     signal?: AbortSignal
@@ -493,7 +612,9 @@ export const portfolioResearch = {
     id: string,
     parameters?: string[],
     symbol?: string,
-    period?: 'selection' | 'validation'
+    period?: 'selection' | 'validation',
+    benchmark?: BenchmarkRequest,
+    marketConditions?: boolean
   ): Promise<PortfolioAnalysisStatus> {
     return (
       await webClient.post(
@@ -502,6 +623,8 @@ export const portfolioResearch = {
           ...(parameters ? { parameters } : {}),
           ...(symbol ? { symbol } : {}),
           ...(period ? { period } : {}),
+          ...(benchmark ? { benchmark } : {}),
+          ...(marketConditions ? { market_conditions: true } : {}),
         },
         { timeout: 30000 }
       )

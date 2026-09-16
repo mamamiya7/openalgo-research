@@ -72,6 +72,57 @@ const actions = (): AnalysisActions => ({
 })
 
 describe('full portfolio analysis', () => {
+  it('offers explicit market conditions with its own preparation state', async () => {
+    const props = actions()
+    const value = result()
+    const { rerender } = render(<PortfolioTearSheet result={value} {...props} />)
+    expect(props.onPrepare).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: 'Analyze market conditions' }))
+    expect(props.onPrepare).toHaveBeenCalledExactlyOnceWith(undefined, undefined, undefined, true)
+    rerender(
+      <PortfolioTearSheet
+        result={value}
+        {...props}
+        busy
+        response={{ status: 'queued', requested_market_conditions: true }}
+      />
+    )
+    expect(screen.getByText('Preparing market conditions…')).toBeVisible()
+    expect(screen.queryByText('Analysis queued…')).not.toBeInTheDocument()
+    expect(screen.queryByText('Preparing benchmark…')).not.toBeInTheDocument()
+  })
+
+  it('offers the benchmark explicitly and does not mix its preparation with no-download analysis copy', async () => {
+    const props = actions()
+    const value = result()
+    const { rerender } = render(<PortfolioTearSheet result={value} {...props} />)
+    expect(props.onPrepare).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: 'Add Nifty 50 benchmark' }))
+    expect(props.onPrepare).toHaveBeenCalledExactlyOnceWith(undefined, undefined, {
+      symbol: 'NIFTY',
+      exchange: 'NSE_INDEX',
+      interval: 'D',
+      role: 'benchmark',
+    })
+    rerender(
+      <PortfolioTearSheet
+        result={value}
+        {...props}
+        busy
+        response={{
+          status: 'queued',
+          requested_benchmark: {
+            symbol: 'NIFTY',
+            exchange: 'NSE_INDEX',
+            interval: 'D',
+            role: 'benchmark',
+          },
+        }}
+      />
+    )
+    expect(screen.getByText('Preparing benchmark…')).toBeVisible()
+    expect(screen.queryByText('Analysis queued…')).not.toBeInTheDocument()
+  })
   it('shows exact values and undefined reasons, and filters native statistics by group or definition', async () => {
     const user = userEvent.setup()
     const value = result().analysis!

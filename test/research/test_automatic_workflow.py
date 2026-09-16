@@ -1,6 +1,7 @@
 # ruff: noqa: F811 -- shared isolated native Flask fixtures
 """Automatic research through native jobs, real VectorBT, activity and replay."""
 
+import sys
 from copy import deepcopy
 
 import pytest
@@ -13,6 +14,12 @@ from research.portfolio_coverage import prepare
 from services import research_portfolio
 from services import scanner_research_service as service
 from services import scanner_research_worker as worker
+
+# This is a correctness journey through 50 real proposals, durable checkpoints
+# and native replays, not an engine-speed benchmark. Hosted Windows CI can take
+# over three minutes while still making steady proposal/checkpoint progress.
+# Keep its bound finite without changing the recipe or bypassing durable writes.
+AUTOMATIC_WORKFLOW_TIMEOUT = 600 if sys.platform == "win32" else 180
 
 
 def request_and_prices(client, monkeypatch):
@@ -51,7 +58,7 @@ def calculate(store, token="automatic-test"):
         worker.release(store, token)
 
 
-@pytest.mark.timeout(180)
+@pytest.mark.timeout(AUTOMATIC_WORKFLOW_TIMEOUT)
 def test_automatic_job_has_real_engine_findings_and_exact_search_and_final_replay(
     app, client, monkeypatch
 ):

@@ -1,6 +1,106 @@
 # OpenAlgo Research status
 
-Updated: 12 September 2026. Published preview: **`0.1.0-preview.4`**, targeting OpenAlgo 2.0.2.2.
+Updated: 16 September 2026. Published preview: **`0.1.0-preview.4`**, targeting OpenAlgo 2.0.2.2.
+
+## Benchmark, market conditions and condition tests — 16 September 2026
+
+The installed update combines the saved Nifty benchmark, historical market-condition
+analysis and **Test condition** in one native research journey. In a saved
+VectorBT report, Performance offers the two analyses. A known trend or volatility
+cohort can launch an exploratory backtest on the same saved prices and period.
+The bounded worker applies the condition before entry to every original signal
+of the chosen strategy and reruns the complete shared cash account. Existing
+price exclusions remain; unavailable conditions exclude entries. Other strategies
+keep their original rules. The new report compares return, drawdown and closed
+trades with the saved original, with entry counts under details.
+
+The test is saved under the same research experiment with pinned inputs,
+condition recipe and analysis. Exact replay retains the condition without another
+download. Condition tests are explicitly exploratory: selecting a condition from
+a viewed report is not untouched validation. Setup restore, copying to an
+optimizer and shortlist promotion are blocked until those contracts can retain
+entry conditions. Original reports and automatic trade-management rankings remain
+unchanged. The next dependency is bounded condition search with a frozen choice
+and genuinely untouched evaluation, followed by optional shadow monitoring.
+
+The normal app received 28 runtime source files and a production interface built
+against its own dependencies. All 57 saved runs and research metadata fingerprints
+are unchanged; account, broker/history code and local customizations are preserved.
+The app and bounded worker are online. The native worker, owner/archive admission,
+atomic library linking, causal gate, backup/restore and exact replay checks pass.
+Controlled browser acceptance covered the condition comparison, reload and 390 px
+light/dark layouts: two history windows prepared context, and neither condition
+replay nor reload downloaded again. Original report/export remained unchanged.
+This fixture uses controlled prices, not real broker or investment validation.
+
+Release receipts live in the ignored workspace. The distribution compatibility
+workflow checks Windows, Linux and packaging for the published commit. The Windows
+automatic-journey timeout correction preserves all 50 proposals and assertions.
+
+## Historical market conditions — implemented 12 September 2026
+
+**Included in the 16 September update described above.** A saved tear sheet offers
+**Analyze market conditions**, with separate historical trend/volatility strips,
+per-strategy entry cohorts and a conservative saved-sample finding. It acquires
+160 preceding daily Nifty sessions through native Historify/history and freezes
+the calendar, recipe, source prices and receipts independently of the original
+backtest and benchmark. Completed reports reopen and survive backup/restore
+without another acquisition. Incomplete or conflicting classifications remain
+visible as partial coverage; known dimensions remain useful.
+
+The classifier uses 150 completed closes and 90 strictly prior feature
+observations. Native SMA20/60, momentum, efficiency, realized volatility and
+drawdown describe market context; they do not forecast a crisis. Trade cohorts
+use prices available before entry and report net trade returns, not simulated
+filtered portfolio returns. Distinct entry dates govern sample checks. Earlier
+and published later periods remain separate, and reserved unpublished final
+periods are not acquired for this analysis.
+
+The full requested direction and delivery gates are in
+[REGIME_RESEARCH_PLAN.md](REGIME_RESEARCH_PLAN.md): actual conditional native
+replay is now implemented, followed next by bounded Optuna condition search and untouched
+validation, then separately gated shadow monitoring and risk controls. This
+increment does not resize positions, place orders, start a schedule or alter
+automatic optimization rankings.
+
+Validation: **84 backend checks** pass across causal features, trade attribution,
+native saved-context acquisition/retry, prior benchmark/analysis, storage,
+report contracts and worker shutdown. This includes a restored partial download
+that preserves 300 committed candles and their receipts despite a changed archive.
+The report frontend passes **182 unique checks across targeted runs**, TypeScript, lint and production
+build; **122 source compatibility checks** pass. Fixtures use deterministic broker
+responses with the native worker and Historify, not real market acceptance.
+
+## Benchmark and warmup foundation — implemented 12 September 2026
+
+**Included in the 16 September update described above.** A saved report now
+offers **Add Nifty 50 benchmark** in Performance. This explicit action prepares
+daily index prices through native Historify/history, freezes separate evidence
+and adds a saved comparison. Opening a report does not download a benchmark.
+The comparison shows matching dates, returns and relative statistics; incomplete
+coverage is labelled, and an unsuccessful preparation keeps the existing report
+readable. Pinned and archived reports remain read-only.
+
+The underlying auxiliary-series contract also supports bounded daily stock
+warmup with recorded session-close availability. It does not add indicators to
+the automatic search yet. Execution prices, original report statistics, saved
+results and Optuna rankings are preserved. The next dependency is causal feature
+calculation and conditional search, followed by the broader reliability checks
+in [the automatic research plan](AUTOMATED_RESEARCH_PLAN.md#benchmark-and-warmup-foundation--12-september-2026).
+
+The complete frontend suite passes **1,941 checks across 114 suites**;
+TypeScript, production build and scoped lint pass. The preceding Windows CI
+failure was a 180-second test timeout during a progressing 50-proposal native
+journey. Its Windows test allowance is now 600 seconds; the actual proposal
+count, persistence and assertions remain unchanged. The three native journey
+checks pass locally. Controlled Chrome acceptance exercised the explicit action,
+135 matched sessions, all eight comparison statistics, refresh without another
+history request and unchanged original report/export. Desktop and 390 px layouts
+were reviewed in light/dark themes without browser errors. Native acquisition,
+math/calendar, saved-overlay and worker regressions pass; exact sets are in
+[the delivery receipt](DELIVERY_PLAN.md#benchmark-and-warmup-foundation--12-september-2026).
+The fixture used deterministic history responses and was stopped after verification;
+no live broker acceptance or new automatic benchmark ranking is claimed.
 
 ## Automatic trade-management research — installed 12 September 2026
 

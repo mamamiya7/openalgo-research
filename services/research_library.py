@@ -633,6 +633,23 @@ def restore_version(store, owner, identifier, version_id, data):
         version = db.get(ResearchSetupVersion, version_id)
         if version is None or version.experiment_id != identifier:
             raise LookupError("Saved setup not found")
+        retained_source = db.scalar(
+            select(ResearchSource.artifact)
+            .join(ResearchJob, ResearchJob.source_id == ResearchSource.id)
+            .join(ResearchLibraryJob, ResearchLibraryJob.job_id == ResearchJob.id)
+            .where(
+                ResearchLibraryJob.experiment_id == identifier,
+                ResearchLibraryJob.version_id == version_id,
+                ResearchJob.owner == owner,
+            )
+            .limit(1)
+        )
+        if retained_source and evidence_service.read_artifact(store, retained_source).get(
+            "condition_replay"
+        ):
+            raise ValueError(
+                "Open this condition test and use Exact replay to retain its entry rule"
+            )
         draft = json.loads(version.draft)
         _check_sources(db, owner, draft)
         _preserve_draft(db, row, draft, "Draft before restoring setup")
@@ -808,7 +825,13 @@ def _enqueue(
                 db,
                 row,
                 draft,
-                name="Exact replay" if role == "replay" else None,
+                name=(
+                    "Condition test · exact replay only"
+                    if evidence.get("condition_replay")
+                    else "Exact replay"
+                    if role == "replay"
+                    else None
+                ),
                 portfolio=portfolio,
                 parents=parents,
             )
@@ -869,6 +892,53 @@ def _enqueue(
                 publication_hook(db, row, version, job_id)
     response = _run_response(store, owner, identifier, version_id, job_id)
     return {**response, "reused": bool(prior)} if with_reuse else response
+
+
+def enqueue_condition_replay(store, owner, parent, evidence, request_id):
+    """Atomically retain a condition test in its original saved experiment."""
+    manifest = evidence["condition_replay"]
+    token, digest = _request(
+        {"request_id": request_id, "parent_job_id": parent.id, "condition_id": manifest["id"]},
+        "condition_replay",
+    )
+    with store.sessions() as db:
+        current = db.get(ResearchJob, parent.id)
+        if current is None or current.owner != owner:
+            raise LookupError("Saved result not found")
+        links = db.scalars(
+            select(ResearchLibraryJob).where(ResearchLibraryJob.job_id == parent.id).limit(2)
+        ).all()
+        if len(links) != 1:
+            raise ValueError("Save this result in the research library before testing a condition")
+        link = links[0]
+        experiment = _owned(db, owner, link.experiment_id)
+        _editable(experiment)
+        if current.status != "completed" or current.result_artifact != parent.result_artifact:
+            raise ValueError("The original saved result changed; reopen it before continuing")
+        identifier, revision, version_id = experiment.id, experiment.revision, link.version_id
+        prior = _previous(db, owner, token, digest)
+        if prior:
+            return _run_response(store, owner, identifier, prior.version_id, prior.job_id)["job"]
+    draft = fresh_draft()
+    draft.update(portfolio=evidence["portfolio"], equalWeights=False)
+    draft = normalize_draft(store, owner, draft)
+    response = _enqueue(
+        store,
+        owner,
+        identifier,
+        {"revision": revision},
+        token,
+        digest,
+        draft,
+        evidence,
+        parents={
+            "parent_job_id": parent.id,
+            "parent_result_artifact": parent.result_artifact,
+            "parent_trial_id": None,
+            "parent_version_id": version_id,
+        },
+    )
+    return response["job"]
 
 
 def replay_experiment(store, owner, identifier, data):
@@ -946,6 +1016,10 @@ def from_job(store, owner, data):
     if bundle.get("kind") not in ("portfolio_backtest", "portfolio_optimize"):
         raise ValueError("Choose a completed portfolio result")
     report = bundle["result"]
+    if report.get("condition_replay"):
+        raise ValueError(
+            "Use Exact replay for this condition test, or adjust the original unfiltered setup"
+        )
     inputs = evidence_service.read_artifact(store, bundle["inputs_artifact"])
     portfolio = deepcopy(report.get("portfolio") or inputs["portfolio"])
     chosen = report["strategies"]

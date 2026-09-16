@@ -131,6 +131,10 @@ def _evidence(store, job, config_id=None, proposal_number=None):
             "Open an exact backtest of these settings before saving or comparing "
             "this automatic research choice."
         )
+    if result.get("condition_replay"):
+        raise ValueError(
+            "This condition test is saved in Backtests. Entry-condition setups are not yet supported in the shortlist."
+        )
     if kind == "portfolio_optimize":
         study = result.get("experiment", {})
         if (

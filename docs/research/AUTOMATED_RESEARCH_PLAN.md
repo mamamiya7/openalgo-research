@@ -6,6 +6,15 @@ chosen-setup increment. This specifies the automatic mode of Optimize within
 OpenAlgo Research; it is not another application or a replacement calculation
 engine. [DELIVERY_PLAN.md](DELIVERY_PLAN.md) owns implementation order.
 
+**Regime extension, 12 September:** [REGIME_RESEARCH_PLAN.md](REGIME_RESEARCH_PLAN.md)
+maps the requested adaptive-trading concept into this existing workflow. Saved
+historical condition attribution uses causal native daily features and independent
+price evidence. **16 September:** actual conditional portfolio replay is also
+implemented: a saved known cohort can run a complete native account comparison
+with its original baseline, without another download. Automatic condition search,
+condition-aware setup reuse and later shadow/live risk controls remain separate
+delivery stages. An exploratory improvement is not proof of future performance.
+
 Its D2 dependency, completed-study **Add trials**, separates scientific identity
 from execution budget and retains exact saved prices/checkpoints in linked
 continuation results. Cooperative Pause/Resume retains the current completed
@@ -68,8 +77,8 @@ broker/history adapters and local UI customizations are preserved. The worker,
 served automatic-mode assets and authentication/CSRF gates are verified; no schema
 migration or new broker calculation was needed. The release ZIP remains preview.4.
 
-**Still open:** independently sourced benchmark/idle-cash report series, price
-warmup and causal indicator/regime filters, parameter-neighbourhood stability,
+**Still open:** benchmark-aware automatic selection and idle-cash comparison,
+causal indicator/regime filters consuming the new warmup contract, parameter-neighbourhood stability,
 general expanding walk-forward, concentration/exposure acceptance policies,
 cross-run final-period-use admission, partial findings when a required window is
 unusable, independent observed Nautilus acceptance for this new protocol, and
@@ -77,6 +86,33 @@ broader consumer/broker acceptance. This mode labels findings exploratory;
 it is not a probability-of-future-profit claim. A source with insufficient history
 or a required window with no complete outcomes stops clearly rather than producing
 a recommendation. The broader contract below remains the product target.
+
+## Benchmark and warmup foundation — 12 September 2026
+
+**Implemented in the worktree; not installed or published.** Auxiliary daily
+series now have explicit instrument/role, recorded sessions, availability at each
+session close, acquisition evidence and frozen identity. Native Historify/history
+supplies missing prices through the existing acquisition path. Bounded stock
+warmup can include up to 252 preceding recorded sessions; an insufficient history
+request fails explicitly. Period slicing excludes later prices and identities.
+No fabricated scanner signals, volume or open-interest observations are added.
+
+The first consumer is reporting: **Add Nifty 50 benchmark** explicitly prepares a
+saved daily-index overlay for an existing report. Portfolio and benchmark returns
+use the same retained contiguous completed-session observations and one preceding
+index close. Missing dates are not filled; a partial comparison declares its
+dates and omitted sessions. Relative statistics use pinned VectorBT return
+accessors. The overlay leaves execution evidence, full-period statistics and
+study selection unchanged.
+
+This completes a reusable data foundation and the first named benchmark report
+journey, not automatic benchmark-aware selection or RSI/EMA/momentum/regime
+discovery. Next build causal feature definitions against this contract, then
+conditional search and its eligibility/validation rules. Broader benchmark
+selection, idle cash, feature consumption, ordinary broker acceptance and the
+remaining reliability protocol still need their own implementation and evidence.
+See the [report receipt](REPORT_EXPERIENCE_PLAN.md#21-explicit-benchmark-comparison--12-september-2026)
+and [delivery receipt](DELIVERY_PLAN.md#benchmark-and-warmup-foundation--12-september-2026).
 
 ## Product outcome
 
@@ -106,8 +142,9 @@ Native research currently supports long NSE cash-equity signals, daily or minute
 execution, frozen shared-account calculations, retained studies/candidate reports,
 later-period evaluation, comparisons, decisions and chosen setup reuse. It does
 not execute RSI/EMA/Bollinger/relative-strength/regime filters from the research
-request. Its price planner currently requests no indicator warmup. Native
-independent benchmark reporting and general walk-forward remain planned. Completed
+request. Auxiliary warmup planning and explicit Nifty 50 benchmark reporting are
+implemented in the worktree; automatic feature consumption and general walk-forward
+remain planned. Completed
 study extension, calculation-stage Pause/Resume and the bounded automatic
 trade-management protocol above are implemented. The broader conditional research
 protocol remains planned. A chart indicator elsewhere in OpenAlgo is not evidence that the

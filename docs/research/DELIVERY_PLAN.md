@@ -1,6 +1,6 @@
 # OpenAlgo Research — integrated delivery plan
 
-**Latest prioritization: 12 September 2026.** The [fresh pro-trader audit](PRO_TRADER_AUDIT.md)
+**Latest prioritization: 16 September 2026.** The [fresh pro-trader audit](PRO_TRADER_AUDIT.md)
 reviews the current app through 26 controlled screenshots and reconciles all 34
 journeys against current source. **Section 10 owns the next execution order** where
 it refines the older “Now” labels or sequence below. Existing M/R packages remain
@@ -14,6 +14,29 @@ increment. It makes D1/D2 recovery, D4 benchmark and the M4b/M5 causal evaluatio
 contracts prerequisites for the automatic mode; it does not bypass them or turn
 the existing scalar search into indicator/regime discovery. Section 10 remains
 the execution owner; the linked contract refines its D/F work and acceptance.
+
+**16 September delivery:** the first automatic trade-management recipe is followed
+by the [benchmark/warmup increment](#benchmark-and-warmup-foundation--12-september-2026),
+saved causal market conditions and native condition tests. This update is installed
+in the normal app and prepared for the public main branch. The test repeats the
+whole cash account using exact saved inputs, links the result to its experiment
+and compares it with the unchanged baseline. It preserves failed price admissions
+and can fund previously skipped signals when filtering frees cash.
+
+**Next regime dependency:** the causal daily feature foundation, saved historical
+market-condition view and explicit condition backtest are implemented.
+[REGIME_RESEARCH_PLAN.md](REGIME_RESEARCH_PLAN.md) specifies the full adaptive
+journey. The next M4b/M5 stage is condition-aware setup identity and reuse, followed
+by bounded Optuna condition search and untouched later-period validation.
+Historical cohort tables alone do not justify live strategy activation or resizing.
+Manual condition testing is exploratory; it does not finish automatic discovery.
+
+Regime increment validation: 84 backend checks (27 classifier, nine cohort,
+10 saved market-context, and 38 existing benchmark/analysis/storage/report/worker
+checks), 182 unique frontend checks across targeted runs, TypeScript/lint/build and 122 source
+compatibility checks pass. Native retry/restore retains exact committed market
+prices and receipts; the fixture history boundary is deterministic. These checks
+do not establish predictive value or complete filtered strategy optimization.
 
 **12 September installation:** the A–C increments recorded below are now installed
 in the ordinary application, with retained records and current served assets
@@ -658,7 +681,7 @@ changed contracts, user interactions and saved-evidence compatibility are checke
 | D1 Data recovery | A2 and native job lifecycle | Repair the actual broker/calendar/quota/runtime issue and return to compatible saved progress. Accept cold/warm and changed-holding behavior on the ordinary installation. | Planned |
 | D2 Study continuation | Scientific identity separated from execution budget | Add trials and cooperative calculation-stage Pause/Resume retain sampler history and committed work. Frozen multi-stage recipes and Stop/partial-result publication remain. | Foundation implemented |
 | D3 Exact trade investigation | A1 and existing R2 evidence | Explain the selected trade's modeled candle/fill/rule/cost and return to the original drawdown or month. | Planned |
-| D4 Native benchmark | Frozen independent benchmark acquisition/return basis | Compare to an appropriate retained benchmark; explicit overlays for old reports, no replacement price source. | Planned |
+| D4 Native benchmark | Frozen independent benchmark acquisition/return basis | Compare to an appropriate retained benchmark; explicit overlays for old reports, no replacement price source. | First Nifty 50 overlay and auxiliary warmup contract implemented in worktree; broader selection and ordinary broker acceptance pending |
 | E1 Portable presentation | B/C retained decisions and existing export | Readable standalone HTML/print report with optional study/comparison/decision appendix; separately evaluate QS-01. | Planned |
 | E2 Exact release acceptance | Release engineering throughout; A–D complete journeys | Populated upgrade/rollback/restore, claimed hosts/brokers/intervals, desktop/mobile/keyboard and unaided-user quick/deep journeys. Extension store work follows its separate contract. | Planned |
 | F1 Professional research depth | Complete cash-equity loop | Stress, walk-forward, saved-component portfolios, exposure/capacity evidence and exact engine disagreement diagnosis. | Planned |
@@ -1045,3 +1068,66 @@ artifact publication and joined heartbeat ownership are retained. There are no
 new worker pools, caches, registries or retained result frames. Client actions
 abort on identity changes/unmount. Existing connection-return and lifecycle tests
 passed; no long-duration RSS/handle measurement is claimed.
+
+## Benchmark and warmup foundation — 12 September 2026
+
+**Implemented in the worktree; not installed or published.** This is the first
+D4/R3 slice and a prerequisite for M4b/M5. Auxiliary daily benchmark/stock-warmup
+series use recorded sessions, native acquisition, bounded preceding history,
+observed session-close availability and a frozen identity separate from execution
+prices. A report's explicit **Add Nifty 50 benchmark** action consumes that contract
+through queued analysis and saves an aligned comparison.
+
+The report shows same-period portfolio/index returns, difference and a paired
+chart; five further relative statistics and their basis stay collapsed. Missing
+sessions produce an explicitly partial or unavailable comparison. Failed requests
+retain the previous report and retry the same selection. Opening a report triggers
+no benchmark acquisition; read-only and pinned reports cannot start preparation.
+Original summaries, execution snapshots, scores, selection and exports are retained.
+See [the report receipt](REPORT_EXPERIENCE_PLAN.md#21-explicit-benchmark-comparison--12-september-2026)
+for exact presentation and [the automatic plan](AUTOMATED_RESEARCH_PLAN.md#benchmark-and-warmup-foundation--12-september-2026)
+for the remaining dependency order.
+
+**Verification:** all **1,941 frontend checks across 114 suites** pass, alongside
+TypeScript, production build and scoped lint. They exercise explicit requests,
+exact retry, stale account/run/period responses, duplicate-action suppression,
+saved/pinned reports and incomplete coverage. Verified backend sets are **130
+acquisition-foundation checks**, **16 benchmark-math/calendar checks**, **49 existing
+analysis/calendar/native checks**, **37 worker/storage/report checks**, and **six
+saved-benchmark integration checks**. A final 44-check math/calendar, analysis,
+storage and report-contract regression also passes. These sets overlap and are not
+summed. All **123 compatibility checks** pass. The saved-overlay cases include
+actual backup/restore/pruning and offline use, reconstruction without the mutable
+receipt cache, 300 retained candles across retry, pinned evidence, separate periods
+and ownership checks.
+
+Controlled Chrome acceptance used a small real native VectorBT/Optuna parent and
+the actual saved-analysis queue, Historify writes/readback and benchmark service.
+Opening the report made no history call. Clicking **Add Nifty 50 benchmark** showed
+preparation, then 135 matched sessions, all eight metrics and the paired chart.
+The only controlled request was NIFTY/NSE_INDEX/D for 2 January–10 July 2026.
+The original summary and raw export bytes remained unchanged; refresh retained
+the comparison with no additional history request. Desktop and 390 px light/dark
+layouts were inspected and no browser errors were recorded. The native fixture's
+history/session boundaries supplied deterministic observations; no live broker
+acceptance is claimed. Its worker/server were stopped, the created tab closed and
+the temporary viewport reset after verification.
+
+The preceding GitHub run `34704144662` passed Ubuntu and exceeded its 180-second
+Windows allowance while still progressing through the real 50-proposal workflow.
+The two complete automatic-journey tests now allow 600 seconds on Windows, retaining
+all proposals, durable writes and assertions; other platforms keep 180 seconds.
+The three native workflow/follow-up checks pass locally. This fixes an inadequate
+test deadline, not application calculation speed; remote CI must confirm the next
+published source.
+
+**Resource review:** the frontend retains one latest request descriptor for retry,
+uses the existing timed HTTP client and keeps polling abort/timer cleanup. No new
+unbounded cache or runtime process is introduced. This is static review and
+lifecycle coverage, not a measured long-duration leak result.
+
+**Next:** consume this price contract in versioned causal feature calculations,
+then bounded conditional search and its eligibility/validation rules. Automatic
+benchmark-aware ranking, idle cash, broader benchmark choices, parameter-neighbourhood
+stability, general walk-forward, cross-run final-period admission, indicator/regime
+findings and ordinary broker acceptance remain pending.

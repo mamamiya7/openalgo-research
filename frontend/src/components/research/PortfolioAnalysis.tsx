@@ -1,6 +1,7 @@
 import { Loader2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type {
+  BenchmarkRequest,
   PortfolioAnalysisStatus,
   PortfolioResult,
   StudyAnalysis,
@@ -9,11 +10,20 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { AnalysisCharts } from './AnalysisCharts'
 import { AnalysisMetricTable } from './AnalysisMetricTable'
+import { BenchmarkComparison } from './BenchmarkComparison'
+import { MarketConditions } from './MarketConditions'
+import type { ConditionReplayActions } from './useConditionReplay'
 
 export interface AnalysisActions {
+  conditionReplay?: ConditionReplayActions
   busy: boolean
   response: PortfolioAnalysisStatus
-  onPrepare: (parameters?: string[], symbol?: string) => void
+  onPrepare: (
+    parameters?: string[],
+    symbol?: string,
+    benchmark?: BenchmarkRequest,
+    marketConditions?: boolean
+  ) => void
   readOnly: boolean
   exportUrl: string
   freezeAnalysis?: boolean
@@ -25,7 +35,9 @@ export function AnalysisPreparation({
   onPrepare,
   readOnly,
   missing,
+  conditionReplay,
 }: AnalysisActions & { missing: boolean }) {
+  if (response.requested_benchmark || response.requested_market_conditions) return null
   if (busy) {
     return (
       <output className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -44,7 +56,12 @@ export function AnalysisPreparation({
             : 'Prepare a tear sheet from the saved results. No price download is needed.')}
       </output>
       {!readOnly && (
-        <Button type="button" variant="outline" onClick={() => onPrepare()}>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={conditionReplay?.busy}
+          onClick={() => onPrepare()}
+        >
           {response.status === 'failed' ? 'Retry analysis' : 'Prepare analysis'}
         </Button>
       )}
@@ -79,10 +96,12 @@ export function PortfolioTearSheet({
   return (
     <div className="min-w-0 space-y-6">
       <AnalysisPreparation {...actions} missing={!analysis} />
+      <BenchmarkComparison analysis={analysis} {...actions} />
+      <MarketConditions analysis={analysis} {...actions} />
       {analysis && (
         <>
           <AnalysisCharts
-            charts={analysis.charts}
+            charts={analysis.charts.filter((chart) => chart.id !== 'benchmark-comparison')}
             controls={(chart) =>
               chart.id === 'bars-with-fills' && symbols.length > 1 && !actions.readOnly ? (
                 <div className="flex flex-wrap items-end gap-3">

@@ -7,6 +7,25 @@ The preceding calculation foundation and its acceptance remain in
 [TEARSHEET_PLAN.md](TEARSHEET_PLAN.md). This specification refines the P5/P6/P7/P8
 journeys and M2/M3/M4a packages in [DELIVERY_PLAN.md](DELIVERY_PLAN.md).
 
+**12 September saved market conditions:** the worktree now adds an explicit
+**Analyze market conditions** action beside the saved benchmark context. Its
+historical trend/volatility strips and per-strategy cohort table stay in the
+continuous report; the backend supplies an observed research lead or insufficient
+evidence finding. Totals require both dimensions to be known; a known dimension
+is retained when the other is uncertain. Cohort returns are averages of saved net
+trade returns, never labelled filtered portfolio returns. Methodology is collapsed,
+and no live status, extra settings wall or premature trading action is introduced.
+See [the full regime journey](REGIME_RESEARCH_PLAN.md).
+
+**16 September condition testing:** a known cohort now offers **Test condition**
+inside a saved VectorBT report. Small samples remain testable as exploration;
+unknown conditions do not offer a button. The native queued test opens under the
+same experiment. Its report shows the condition, matched original-versus-test
+return/drawdown/trade totals and collapsed admission counts. Exact replay retains
+the gate; actions whose setup contract cannot yet carry it are hidden and also
+rejected by the backend. Archived, pinned and standalone reports do not offer the
+new action. No optimization is started by simply browsing conditions.
+
 ## 1. Outcome and saved decisions
 
 A trader opens a result and can immediately understand growth, losses, consistency
@@ -50,7 +69,7 @@ files; current source is authoritative for the distinctions below.
 | Candidate reports | Winner report retained; other configurations can be replayed on frozen inputs | One visible candidate selection, direct report links and durable evidence links for requested candidate reports |
 | Validation | Frozen reserved-period contract, baseline/search selection-only mode, explicit candidate evaluation and period/candidate identities; legacy both-period reports stay readable | Fair comparison and a visible evidence-use history; saved decisions and complete return navigation |
 | Persistence | Saved experiment/setup/job relationships, account-saved report preferences and separate analysis artifacts | Saved candidates, comparisons, decisions and full navigation restoration |
-| Benchmark | Explicitly unavailable without aligned independent evidence | Native Historify benchmark selection, missing-only acquisition, frozen reporting evidence and actual relative statistics |
+| Benchmark | Explicit Nifty 50 report overlay, native missing-only acquisition, frozen aligned evidence and relative statistics implemented in the worktree; section 21 | Broader benchmark selection, ordinary broker acceptance and benchmark-aware automatic evaluation |
 | Export | Exact evidence and analysis JSON downloads | Reader-friendly report HTML/print output, linked study context and saved comparison export |
 
 Relevant implementation entry points: [results](../../frontend/src/components/research/PortfolioResults.tsx),
@@ -964,6 +983,46 @@ assets, worker heartbeat, ownership/CSRF and existing-account checks passed.
 Configuration, broker/history and local UI customizations retained their hashes.
 This installation smoke check did not submit a user-data calculation or download.
 
+## 21. Explicit benchmark comparison — 12 September 2026
+
+**Implemented in the worktree; not installed or published.** Performance now offers
+one quiet **Add Nifty 50 benchmark** action. It prepares a daily NSE index series
+through native Historify/history and the existing queued analysis lifecycle.
+Viewing a report makes no benchmark download request. A saved comparison remains
+readable after refresh; pinned and archived reports expose their retained evidence
+without preparation controls.
+
+The main comparison shows portfolio return, Nifty 50 return, their percentage-point
+difference, actual dates and matched session count, with a paired cumulative-return
+chart. Beta, annualized alpha, correlation, tracking error and information ratio
+are under **Benchmark details** with their retained basis. The eight comparison
+statistics are distinct from the original full-period report statistics.
+
+Only consecutive shared completed sessions participate, including the preceding
+index close needed for the first return. Missing values are not carried forward.
+Partial coverage declares its dates and omitted sessions; insufficient coverage
+shows a reason instead of invented results. Failed preparation retains the prior
+analysis and offers an exact-request retry. Account, run or period changes ignore
+stale responses. Original exports and pinned analysis remain accessible.
+
+The overlay freezes a separate source receipt and never rewrites original price
+snapshots, summary values, study scores or selection. This first preset is an index
+price comparison; it does not establish a total-return benchmark, a tradable
+replacement portfolio or a newly benchmark-ranked automatic recommendation.
+
+**Verification:** the complete frontend suite passes **1,941 checks in
+114 suites**, including explicit-only requests, retry identity, stale-response and
+read-only guards, partial/unavailable values, saved comparisons and ordinary report
+integration. TypeScript, production build and scoped lint pass. Controlled Chrome
+acceptance opened the native report with no history calls, explicitly prepared
+one NIFTY/NSE_INDEX/D request, displayed 135 matched sessions and all eight
+statistics, then retained the same comparison on refresh without another request.
+The original summary and raw export bytes stayed unchanged. Desktop and 390 px
+light/dark layouts were reviewed, with no browser errors. The isolated native
+queue/Historify/analysis fixture used deterministic history responses; its worker
+and server were stopped and temporary viewport reset afterward. Wider benchmark
+choices and ordinary broker acceptance remain open.
+
 ## References
 
 - [Visual reference](https://github.com/ranaroussi/quantstats/blob/main/docs/report.webp):
@@ -974,6 +1033,9 @@ This installation smoke check did not submit a user-data calculation or download
   discrete-trade outcomes. QS-01 evaluates adoption later.
 - [VectorBT portfolio API](https://vectorbt.dev/api/portfolio/base/): existing
   native portfolio statistics, plots and QuantStats adapter entry points.
+- [VectorBT return accessors](https://vectorbt.dev/api/returns/accessors/):
+  benchmark-return inputs and native relative-return statistics. The installed
+  library version and retained analysis basis determine the actual calculations.
 - [Nautilus reports](https://nautilustrader.io/docs/latest/concepts/reports/):
   native execution/account records; accept APIs against our pinned runtime.
 - [Optuna 5 visualization APIs](https://optuna.readthedocs.io/en/v5.0.0/reference/visualization/index.html)

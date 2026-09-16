@@ -99,6 +99,32 @@ beforeEach(() => vi.stubGlobal('IntersectionObserver', undefined))
 afterEach(() => vi.unstubAllGlobals())
 
 describe('continuous portfolio report', () => {
+  it('keeps market conditions explicit in the real report and preserves existing figures', async () => {
+    const value = fixture()
+    const before = JSON.stringify(value)
+    const onPrepare = vi.fn()
+    mount(value, { onPrepare })
+    expect(onPrepare).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: 'Analyze market conditions' }))
+    expect(onPrepare).toHaveBeenCalledExactlyOnceWith(undefined, undefined, undefined, true)
+    expect(JSON.stringify(value)).toBe(before)
+  })
+
+  it('offers an explicit benchmark in the actual report without changing its statistics', async () => {
+    const value = fixture()
+    const before = JSON.stringify(value)
+    const onPrepare = vi.fn()
+    mount(value, { onPrepare })
+    expect(onPrepare).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: 'Add Nifty 50 benchmark' }))
+    expect(onPrepare).toHaveBeenCalledExactlyOnceWith(undefined, undefined, {
+      symbol: 'NIFTY',
+      exchange: 'NSE_INDEX',
+      interval: 'D',
+      role: 'benchmark',
+    })
+    expect(JSON.stringify(value)).toBe(before)
+  })
   it('customizes headlines and grouped statistics using exact account or provider keys', async () => {
     const value = fixture()
     const before = JSON.stringify(value)

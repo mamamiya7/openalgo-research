@@ -347,15 +347,27 @@ def run_one(store, token, stop_requested=None):
                     "Checkpoint inputs or execution policy changed; start a new experiment"
                 )
             saved = receipt["state"]
-        elif kind == "acquire" and attempt:
+        elif kind in ("acquire", "portfolio_analysis") and attempt:
             with store.sessions() as db:
                 prior = db.get(ResearchExperiment, attempt.previous_job_id)
                 prior_job = db.get(ResearchJob, attempt.previous_job_id)
+            prior_spec = json.loads(prior.specification) if prior else {}
+            same_benchmark = (
+                kind == "portfolio_analysis"
+                and prior is not None
+                and prior.kind == kind
+                and (spec.get("benchmark") is not None or spec.get("market_conditions") is True)
+                and prior_spec.get("benchmark") == spec.get("benchmark")
+                and prior_spec.get("market_conditions") == spec.get("market_conditions")
+                and prior_spec.get("market_context") == spec.get("market_context")
+                and prior_spec.get("parent_result_artifact") == spec["parent_result_artifact"]
+            )
             if (
                 prior
                 and prior.checkpoint
                 and prior_job.source_id == job.source_id
                 and prior_job.owner == job.owner
+                and (kind == "acquire" or same_benchmark)
             ):
                 receipt = read_artifact(store, prior.checkpoint)
                 if receipt["identity"] == prior.identity and receipt["policy_version"] == policy:
@@ -366,7 +378,16 @@ def run_one(store, token, stop_requested=None):
             parent_result_artifact = spec["parent_result_artifact"]
             with network_lease(store, token, job.id, stop_requested) as cancelled:
                 cancelled()
-                result = run_analysis(store, job.owner, job.source_id, spec, progress=progress)
+                result = run_analysis(
+                    store,
+                    job.owner,
+                    job.source_id,
+                    spec,
+                    progress=progress,
+                    saved=saved,
+                    checkpoint=checkpoint,
+                    cancelled=cancelled,
+                )
                 cancelled()
         elif kind in ("portfolio_backtest", "portfolio_optimize"):
             from services.research_activity import initial_activity

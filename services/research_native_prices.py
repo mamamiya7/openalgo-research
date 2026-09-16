@@ -104,6 +104,58 @@ def acquire_native_prices(
     max_seconds=1800,
     clock=time.monotonic,
 ):
+    """Original NSE equity acquisition; its evidence and checkpoint identities are unchanged."""
+    return _acquire_prices(
+        signals,
+        plan,
+        calendar_snapshot,
+        reader=reader,
+        writer=writer,
+        credentials=credentials,
+        archive_dir=archive_dir,
+        prior=prior,
+        checkpoint=checkpoint,
+        progress=progress,
+        activity=activity,
+        cancelled=cancelled,
+        history=history,
+        max_requests=max_requests,
+        max_seconds=max_seconds,
+        clock=clock,
+    )
+
+
+def acquire_market_series_prices(plan, calendar_snapshot, **options):
+    """Auxiliary series use explicit identity without introducing scanner signals."""
+    from research.market_series import plan_series
+
+    descriptor = plan.get("descriptor", {})
+    required = plan.get("required_dates", {}).get(descriptor.get("symbol"))
+    if plan_series(descriptor, required, calendar_snapshot) != plan:
+        raise ValueError("Auxiliary market-series plan changed")
+    return _acquire_prices(None, plan, calendar_snapshot, _series=descriptor, **options)
+
+
+def _acquire_prices(
+    signals,
+    plan,
+    calendar_snapshot,
+    *,
+    reader,
+    writer,
+    credentials,
+    archive_dir,
+    prior=None,
+    checkpoint=None,
+    progress=None,
+    activity=None,
+    cancelled=None,
+    history=None,
+    max_requests=500,
+    max_seconds=1800,
+    clock=time.monotonic,
+    _series=None,
+):
     """Read required native prices, download holes, and publish truthful gaps.
 
     ``reader``/``writer`` are already bound to the selected native D/1m archive.
@@ -119,12 +171,13 @@ def acquire_native_prices(
     interval = plan.get("interval")
     if (
         interval not in {"D", "1m"}
-        or not signals
-        or len(signals) > 25000
+        or (_series is None and (not signals or len(signals) > 25000))
         or not 1 <= max_requests <= 500
         or not 1 <= max_seconds <= 1800
     ):
         raise ValueError("Invalid or unbounded native price request")
+    exchange = _series["exchange"] if _series else "NSE"
+    mode = "historify-market-series-v1" if _series else MODE
     sessions = calendar_snapshot.get("sessions", [])
     if (
         not sessions
@@ -141,7 +194,7 @@ def acquire_native_prices(
     grid = sessions if interval == "D" else plan.get("timeline", [])
     if not grid or len(grid) > MAX_BARS or grid != sorted(set(grid)):
         raise ValueError("Native prices need an ordered bounded calendar grid")
-    symbols = {signal["symbol"] for signal in signals}
+    symbols = {_series["symbol"]} if _series else {signal["symbol"] for signal in signals}
     provided = plan.get(field)
     if not isinstance(provided, dict) or set(provided) - symbols:
         raise ValueError("Native price scope must name only uploaded symbols")
@@ -159,17 +212,19 @@ def acquire_native_prices(
     positions = {slot: index for index, slot in enumerate(grid)}
     identity = hashlib.sha256(
         _encoded(
-            {"signals": signals, "plan": plan, "calendar": calendar_snapshot, "policy": POLICY}
+            {"series": _series, "plan": plan, "calendar": calendar_snapshot, "policy": mode}
+            if _series
+            else {"signals": signals, "plan": plan, "calendar": calendar_snapshot, "policy": POLICY}
         )
     ).hexdigest()
-    if prior and (prior.get("identity") != identity or prior.get("mode") != MODE):
+    if prior and (prior.get("identity") != identity or prior.get("mode") != mode):
         raise ValueError("Native price checkpoint belongs to different immutable inputs")
     state = (
         copy.deepcopy(prior)
         if prior
         else {
             "identity": identity,
-            "mode": MODE,
+            "mode": mode,
             "receipts": [],
             "findings": [],
             "transport_attempts": [],
@@ -441,6 +496,8 @@ def acquire_native_prices(
         for slot, row in rows.items():
             if slot not in state["bars"][symbol]:
                 values = {key: row[key] for key in ("open", "high", "low", "close")}
+                if _series:
+                    values["timestamp"] = row["timestamp"]
                 state["bars"][symbol][slot] = values
                 state["raw_bars"][symbol][slot] = dict(values)
                 covered += 1
@@ -465,7 +522,7 @@ def acquire_native_prices(
             "provider": f"{broker} via OpenAlgo history" if broker else "OpenAlgo Historify",
             "broker": broker,
             "symbol": symbol,
-            "exchange": "NSE",
+            "exchange": exchange,
             "interval": interval,
             "requested_from": first,
             "requested_to": last,
@@ -475,6 +532,8 @@ def acquire_native_prices(
             "rejected_observations": rejected,
             "accepted_slots": sorted(accepted),
         }
+        if _series:
+            item.update(version="openalgo-market-series-receipt-v1", descriptor=_series)
         encoded = _encoded(item)
         digest = hashlib.sha256(encoded).hexdigest()
         if digest not in receipt_sizes:
@@ -550,7 +609,7 @@ def acquire_native_prices(
             try:
                 success, response, status = (history or native_history)(
                     symbol=symbol,
-                    exchange="NSE",
+                    exchange=exchange,
                     interval=interval,
                     start_date=first[:10],
                     end_date=last[:10],
@@ -680,10 +739,10 @@ def acquire_native_prices(
     save()
     provenance = {
         "provider": "OpenAlgo Historify",
-        "exchange": "NSE",
+        "exchange": exchange,
         "interval": interval,
         "native_price_policy": POLICY,
-        "acquisition_mode": MODE,
+        "acquisition_mode": mode,
         "adjustment_basis": "provider-native",
         "calendar_basis": "openalgo-market-calendar-v1",
         "identity_verified": False,
@@ -724,5 +783,10 @@ def acquire_native_prices(
             timeline=list(grid), session_hours=copy.deepcopy(plan.get("session_hours", {}))
         )
         provenance["temporal_version"] = "minute-open-v1"
-    snapshot["coverage"] = validate_snapshot(snapshot, signals)
+    if _series:
+        # These prices are never admitted through the executable NSE-equity
+        # snapshot validator. The market-series contract validates them separately.
+        snapshot["market_series"] = copy.deepcopy(_series)
+    else:
+        snapshot["coverage"] = validate_snapshot(snapshot, signals)
     return snapshot

@@ -17,6 +17,9 @@ import {
 } from '@/components/ui/dialog'
 import { AnalysisFigure } from './AnalysisCharts'
 import { AnalysisMetricTable } from './AnalysisMetricTable'
+import { BenchmarkComparison } from './BenchmarkComparison'
+import { ConditionReplaySummary } from './ConditionReplaySummary'
+import { MarketConditions } from './MarketConditions'
 import {
   type AnalysisActions,
   AnalysisBasis,
@@ -336,6 +339,7 @@ export function PortfolioContinuousReport({
   const target = (section: string) => `${id}-${section.toLowerCase().replaceAll(' ', '-')}`
   return (
     <section className="min-w-0 space-y-6" aria-label="Portfolio report">
+      <ConditionReplaySummary result={result} />
       <div className="flex flex-wrap items-center justify-end gap-2">
         {onSettings && (
           <Button size="sm" variant="ghost" onClick={onSettings}>
@@ -468,6 +472,8 @@ export function PortfolioContinuousReport({
         )}
       </section>
       <AnalysisPreparation {...actions} missing={!analysis} />
+      <BenchmarkComparison analysis={analysis} {...actions} />
+      <MarketConditions analysis={analysis} {...actions} />
       {hasConsistency && (
         <section
           id={target('Consistency')}

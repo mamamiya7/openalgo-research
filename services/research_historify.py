@@ -7,9 +7,16 @@ from pathlib import Path
 IST = timezone(timedelta(hours=5, minutes=30))
 
 
-def native_historify_read(symbol, first, last, expected_path, *, interval="D"):
+def _archive_exchange(exchange, interval):
+    if exchange not in {"NSE", "NSE_INDEX"} or (exchange == "NSE_INDEX" and interval != "D"):
+        raise ValueError("Unsupported native research archive exchange or interval")
+    return exchange
+
+
+def native_historify_read(symbol, first, last, expected_path, *, interval="D", exchange="NSE"):
     from database import historify_db
 
+    exchange = _archive_exchange(exchange, interval)
     target = Path(expected_path).resolve()
     if Path(historify_db.get_db_path()).resolve() != target:
         raise ValueError(
@@ -46,7 +53,7 @@ def native_historify_read(symbol, first, last, expected_path, *, interval="D"):
         records = connection.execute(
             "SELECT timestamp, open, high, low, close, volume, oi FROM market_data "
             "WHERE symbol=? AND exchange=? AND interval=? AND timestamp>=? AND timestamp<? ORDER BY timestamp LIMIT ?",
-            [symbol.upper(), "NSE", interval, lower, upper, limit + 1],
+            [symbol.upper(), exchange, interval, lower, upper, limit + 1],
         ).fetchall()
     if len(records) > limit:
         raise ValueError("Historify rows exceed the bounded archive read")
@@ -64,11 +71,18 @@ class NativeHistorifyArchive:
     Create a fresh scope when an acquisition is resumed in another worker turn.
     """
 
-    __slots__ = ("_expected_path", "_interval", "_initialized", "_initialization_attempted")
+    __slots__ = (
+        "_expected_path",
+        "_interval",
+        "_exchange",
+        "_initialized",
+        "_initialization_attempted",
+    )
 
-    def __init__(self, expected_path, *, interval="D"):
+    def __init__(self, expected_path, *, interval="D", exchange="NSE"):
         if interval not in {"D", "1m"}:
             raise ValueError("Unsupported or oversized research archive write")
+        self._exchange = _archive_exchange(exchange, interval)
         self._expected_path = Path(expected_path).resolve()
         self._interval = interval
         self._initialized = False
@@ -76,7 +90,12 @@ class NativeHistorifyArchive:
 
     def read(self, symbol, first, last):
         return native_historify_read(
-            symbol, first, last, self._expected_path, interval=self._interval
+            symbol,
+            first,
+            last,
+            self._expected_path,
+            interval=self._interval,
+            exchange=self._exchange,
         )
 
     def _check_path(self, historify_db):
@@ -102,16 +121,20 @@ class NativeHistorifyArchive:
             historify_db.init_database()
             self._initialized = True
             self._check_path(historify_db)
-        count = historify_db.upsert_market_data(pd.DataFrame(rows), symbol, "NSE", self._interval)
+        count = historify_db.upsert_market_data(
+            pd.DataFrame(rows), symbol, self._exchange, self._interval
+        )
         if count != len(rows):
             raise ValueError("Historify did not acknowledge all downloaded rows")
         return count
 
 
-def native_historify_write(symbol, rows, expected_path, *, interval="1m"):
+def native_historify_write(symbol, rows, expected_path, *, interval="1m", exchange="NSE"):
     # Legacy standalone callers retain per-call initialization. Acquisition jobs
     # instead reuse NativeHistorifyArchive to avoid repeating schema work.
-    return NativeHistorifyArchive(expected_path, interval=interval).write(symbol, rows)
+    return NativeHistorifyArchive(expected_path, interval=interval, exchange=exchange).write(
+        symbol, rows
+    )
 
 
 def checked_archive_rows(rows, symbol, first, last, reference):

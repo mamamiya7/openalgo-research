@@ -11,6 +11,7 @@ import {
   portfolioResearch,
 } from '@/api/portfolioResearch'
 import { researchStudyActivity } from '@/api/researchStudyActivity'
+import { researchValidation } from '@/api/researchValidation'
 import type { ResearchSource } from '@/api/scannerResearch'
 import PortfolioResearch from '@/pages/PortfolioResearch'
 import { useAuthStore } from '@/stores/authStore'
@@ -38,6 +39,7 @@ vi.mock('@/api/portfolioResearch', () => ({
     pause: vi.fn(),
     resume: vi.fn(),
     rerun: vi.fn(),
+    conditionReplay: vi.fn(),
     analysis: vi.fn().mockResolvedValue({ status: 'missing' }),
     prepareAnalysis: vi.fn(),
     analysisExportUrl: (id: string) => `/scanner-research/api/portfolio/jobs/${id}/analysis/export`,
@@ -1184,6 +1186,158 @@ describe('portfolio engine capabilities', () => {
 })
 
 describe('portfolio result reading', () => {
+  it('starts a condition backtest from the displayed saved analysis and opens its native job', async () => {
+    const saved: PortfolioResult = {
+      ...result,
+      report_context: {
+        version: 'research-report-context-v1',
+        report_id: 'report',
+        job_id: finished.id,
+        result_artifact: 'report-artifact',
+        inputs_artifact: 'inputs',
+        config_id: 'config',
+        period: 'full',
+        period_label: 'Full period',
+        dates: { from: '2026-01-05', to: '2026-01-08' },
+        analysis_version: 'v1',
+        analysis_artifact: 'conditions-artifact',
+      },
+      analysis: {
+        version: 'v1',
+        metrics: {},
+        unavailable: {},
+        catalog: [],
+        charts: [],
+        basis: [],
+        market_conditions: {
+          version: 'research-market-conditions-v1',
+          status: 'available',
+          descriptor: { symbol: 'NIFTY', exchange: 'NSE_INDEX', interval: 'D', role: 'benchmark' },
+          dates: { from: '2026-01-05', to: '2026-01-08' },
+          coverage: {
+            total_sessions: 4,
+            classified_sessions: 4,
+            closed_trades: 20,
+            classified_trades: 20,
+            unclassified_trades: 0,
+          },
+          timeline: [],
+          cohorts: [
+            {
+              strategy_id: strategy.id,
+              strategy_name: strategy.name,
+              dimension: 'trend',
+              regime: 'up',
+              label: 'Rising',
+              closed_trades: 20,
+              entry_sessions: 20,
+              average_net_return_pct: 1,
+              win_rate_pct: 50,
+              net_pnl: 100,
+              evidence: 'descriptive',
+            },
+          ],
+          finding: {
+            status: 'observed',
+            text: 'Historical condition differences.',
+            next_step: 'Test a condition.',
+          },
+          basis: [],
+          recipe: {},
+        },
+      },
+    }
+    const open = vi.fn()
+    vi.mocked(portfolioResearch.conditionReplay).mockResolvedValue({
+      ...running,
+      id: 'condition-job',
+    })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    clients.push(client)
+    const validation = vi
+      .spyOn(researchValidation, 'context')
+      .mockImplementation(() => new Promise(() => {}))
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <PortfolioResults
+            job={finished}
+            result={saved}
+            experimentId="research"
+            onOpenReport={open}
+            onRerun={vi.fn()}
+            rerunning={false}
+            exportUrl="/export"
+          />
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
+    expect(portfolioResearch.conditionReplay).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: 'Test rising condition' }))
+    await waitFor(() => expect(open).toHaveBeenCalledWith('condition-job'))
+    expect(portfolioResearch.conditionReplay).toHaveBeenCalledWith(
+      finished.id,
+      {
+        strategy_id: strategy.id,
+        dimension: 'trend',
+        regime: 'up',
+        analysis_artifact: 'conditions-artifact',
+        period: 'selection',
+        request_id: expect.any(String),
+      },
+      expect.any(AbortSignal)
+    )
+    validation.mockRestore()
+  })
+
+  it('keeps the condition comparison visible without offering workflows that would lose its gate', async () => {
+    const saved: PortfolioResult = {
+      ...result,
+      condition_replay: {
+        version: 'v1',
+        id: 'condition',
+        condition: { strategy_id: strategy.id, dimension: 'trend', regime: 'up', label: 'Rising' },
+        parent_job_id: 'parent',
+        parent_result_artifact: 'result',
+        analysis_artifact: 'analysis',
+        period: 'selection',
+        counts: {
+          allowed: 2,
+          filtered: 1,
+          unknown: 1,
+          original_excluded: 0,
+          pending: 0,
+          unaffected: 0,
+        },
+        baseline: { summary: { net_return_pct: 2, max_drawdown_pct: 1, closed_trades: 4 } },
+        delta: { net_return_pct: -1, max_drawdown_pct: -0.5, closed_trades: -1 },
+        basis: [],
+      },
+    }
+    render(
+      <PortfolioResults
+        job={finished}
+        result={saved}
+        experimentId="research"
+        onOpenReport={vi.fn()}
+        onRerun={vi.fn()}
+        onOptimize={vi.fn()}
+        onAdjust={vi.fn()}
+        onEvaluate={vi.fn()}
+        rerunning={false}
+        exportUrl="/export"
+      />
+    )
+    expect(screen.getByRole('region', { name: 'Condition test' })).toBeVisible()
+    expect(
+      screen.queryByRole('button', {
+        name: /Optimize this|Adjust & test|Save to shortlist|Test later period|Test rising condition/,
+      })
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Export', exact: true })).toBeVisible()
+    expect(portfolioResearch.conditionReplay).not.toHaveBeenCalled()
+  })
+
   it('keeps a frozen comparison member on its primary saved period without latest-analysis or study actions', async () => {
     const frozen = {
       ...result,

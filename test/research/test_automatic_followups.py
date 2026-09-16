@@ -4,7 +4,7 @@
 import time
 
 import pytest
-from test_automatic_workflow import calculate, request_and_prices
+from test_automatic_workflow import AUTOMATIC_WORKFLOW_TIMEOUT, calculate, request_and_prices
 from test_decisions import body
 from test_jobs import app, client
 from test_library import OWNER, create
@@ -16,7 +16,7 @@ from services import research_validation as validation
 from services import scanner_research_service as service
 
 
-@pytest.mark.timeout(180)
+@pytest.mark.timeout(AUTOMATIC_WORKFLOW_TIMEOUT)
 def test_baseline_finding_requires_exact_backtest_then_supports_real_saved_decision(
     app, client, monkeypatch
 ):

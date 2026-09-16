@@ -32,6 +32,7 @@ import { reportMoney, useReportCurrency } from './ReportCurrency'
 import { ResearchResultReview } from './ResearchResultReview'
 import { researchResultPeriod, researchResultRole } from './researchPresentation'
 import { SaveToShortlist } from './SaveToShortlist'
+import { useConditionReplay } from './useConditionReplay'
 import { usePortfolioAnalysis } from './usePortfolioAnalysis'
 import { useReportPreferences } from './useReportPreferences'
 import { readStudyView, studyWorkspaceIdentity, writeStudyView } from './useStudyWorkspaceView'
@@ -254,6 +255,7 @@ function PortfolioReport({
   hideStudyTabs = false,
   experimentId,
   freezeAnalysis = false,
+  onOpenReport,
 }: ResultProps & { laterPeriod?: boolean; hideStudyTabs?: boolean }) {
   const owner = useAuthStore((state) => state.user?.username)
   const preferences = useReportPreferences(owner)
@@ -274,10 +276,27 @@ function PortfolioReport({
     freezeAnalysis
   )
   const result = analysis.result
+  const conditionResult = Boolean(result.condition_replay)
+  const canTestCondition =
+    !readOnly &&
+    !freezeAnalysis &&
+    !conditionResult &&
+    Boolean(experimentId) &&
+    Boolean(onOpenReport) &&
+    Boolean(result.report_context?.analysis_artifact) &&
+    (result.execution?.engine ?? result.portfolio?.engine ?? 'vectorbt') === 'vectorbt'
+  const conditionReplay = useConditionReplay(
+    job.id,
+    result.report_context?.analysis_artifact,
+    laterPeriod ? 'validation' : 'selection',
+    onOpenReport,
+    !canTestCondition || analysis.busy
+  )
   const automatic = Boolean(result.automatic_research || job.result?.automatic_research)
   const currency = useReportCurrency()
   const money = (value: unknown) => reportMoney(value, currency)
   const analysisActions = {
+    conditionReplay: canTestCondition ? conditionReplay : undefined,
     busy: analysis.busy,
     response: analysis.response,
     onPrepare: analysis.prepare,
@@ -358,7 +377,8 @@ function PortfolioReport({
               {rerunning ? 'Starting…' : 'Backtest these settings'}
             </Button>
           )}
-          {!laterPeriod &&
+          {!conditionResult &&
+            !laterPeriod &&
             !automatic &&
             result.report_context?.period !== 'evaluation' &&
             onOptimize &&
@@ -367,7 +387,8 @@ function PortfolioReport({
                 Optimize this
               </Button>
             )}
-          {!laterPeriod &&
+          {!conditionResult &&
+            !laterPeriod &&
             !automatic &&
             result.report_context?.period !== 'evaluation' &&
             onAdjust &&
@@ -381,7 +402,8 @@ function PortfolioReport({
                 Adjust & test
               </Button>
             )}
-          {!automatic &&
+          {!conditionResult &&
+            !automatic &&
             !laterPeriod &&
             result.report_context?.period !== 'evaluation' &&
             experimentId && (
@@ -415,7 +437,11 @@ function PortfolioReport({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem disabled={rerunning} onSelect={() => onRerun()}>
-                  {rerunning ? 'Starting…' : onAdjust ? 'Replay exact' : 'Run again'}
+                  {rerunning
+                    ? 'Starting…'
+                    : onAdjust || conditionResult
+                      ? 'Replay exact'
+                      : 'Run again'}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -430,14 +456,18 @@ function PortfolioReport({
           Open an exact backtest to compare or save this setup.
         </p>
       )}
-      {!automatic && experimentId && result.report_context && !freezeAnalysis && (
-        <ResearchResultReview
-          experimentId={experimentId}
-          job={job}
-          result={result}
-          readOnly={readOnly}
-        />
-      )}
+      {!conditionResult &&
+        !automatic &&
+        experimentId &&
+        result.report_context &&
+        !freezeAnalysis && (
+          <ResearchResultReview
+            experimentId={experimentId}
+            job={job}
+            result={result}
+            readOnly={readOnly}
+          />
+        )}
       <details className="text-xs text-muted-foreground">
         <summary className="cursor-pointer">Report details</summary>
         <dl className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -471,7 +501,7 @@ function PortfolioReport({
           )}
         </dl>
       </details>
-      {!experimentId && result.reserved_evaluation && (
+      {!conditionResult && !experimentId && result.reserved_evaluation && (
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <span className="text-muted-foreground">
             Later period reserved · {result.reserved_evaluation.evaluation.from} –{' '}

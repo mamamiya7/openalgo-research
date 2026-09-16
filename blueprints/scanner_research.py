@@ -782,6 +782,32 @@ def portfolio_rerun(job_id):
     ), 202
 
 
+@scanner_research_bp.post("/portfolio/jobs/<job_id>/condition-replay")
+def portfolio_condition_replay(job_id):
+    from services.research_condition_replay import submit
+
+    data = request.get_json()
+    if not isinstance(data, dict) or set(data) - {
+        "strategy_id",
+        "dimension",
+        "regime",
+        "analysis_artifact",
+        "period",
+        "request_id",
+    }:
+        raise ValueError("Choose a saved strategy and market condition")
+    if request.args:
+        raise ValueError("Invalid condition test query")
+    result = submit(
+        store(),
+        session["user"],
+        job_id,
+        {key: value for key, value in data.items() if key != "request_id"},
+        request_id=data.get("request_id"),
+    )
+    return jsonify(result), 202
+
+
 @scanner_research_bp.route("/portfolio/jobs/<job_id>/analysis", methods=["GET", "POST"])
 def portfolio_analysis(job_id):
     from services import research_analysis
@@ -789,7 +815,13 @@ def portfolio_analysis(job_id):
     if request.method == "GET":
         return jsonify(research_analysis.status(store(), session["user"], job_id))
     data = request.get_json()
-    if not isinstance(data, dict) or set(data) - {"parameters", "symbol", "period"}:
+    if not isinstance(data, dict) or set(data) - {
+        "parameters",
+        "symbol",
+        "period",
+        "benchmark",
+        "market_conditions",
+    }:
         raise ValueError("Supply analysis parameters or an empty object")
     result = research_analysis.submit(
         store(),
@@ -798,6 +830,8 @@ def portfolio_analysis(job_id):
         data.get("parameters"),
         data.get("symbol"),
         data.get("period", "selection"),
+        data.get("benchmark"),
+        data.get("market_conditions"),
     )
     return jsonify(result), 200 if result["status"] == "complete" else 202
 

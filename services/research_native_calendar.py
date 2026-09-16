@@ -15,6 +15,7 @@ from research.engine import TRIGGER_WARMUP_SESSIONS
 IST = timezone(timedelta(hours=5, minutes=30))
 CALENDAR_SOURCE = "database.market_calendar_db.get_effective_session_window"
 MAX_CALENDAR_DAYS = 4200
+MAX_AUXILIARY_WARMUP = 252
 
 
 @contextmanager
@@ -113,6 +114,57 @@ def native_calendar_snapshot(
         from research.requirements import normalize_request
 
         normalize_request(request)
+    first = date.fromisoformat(min(signal["date"] for signal in signals))
+    last = date.fromisoformat(max(signal["date"] for signal in signals))
+    return _record_calendar(
+        first,
+        last,
+        today=today,
+        window_reader=window_reader,
+        warmup_sessions=warmup_sessions,
+        tail_sessions=tail_sessions,
+        completion_check=completion_check,
+    )
+
+
+def native_calendar_window(
+    date_from, date_to, *, warmup_sessions=0, today=None, window_reader=None
+):
+    """Record an explicit auxiliary-data window, without inventing scanner signals.
+
+    Warmup is separate from scored observations. The same admitted NSE sessions
+    serve NSE cash and NSE_INDEX references; instrument exchange remains explicit
+    in the market-series descriptor, never inferred from this calendar.
+    """
+    if type(warmup_sessions) is not int or not 0 <= warmup_sessions <= MAX_AUXILIARY_WARMUP:
+        raise ValueError("Market history needs between 0 and 252 warmup sessions")
+    try:
+        first, last = date.fromisoformat(date_from), date.fromisoformat(date_to)
+        if first.isoformat() != date_from or last.isoformat() != date_to or last < first:
+            raise ValueError
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Choose ordered ISO dates for market history") from exc
+    return _record_calendar(
+        first,
+        last,
+        today=today,
+        window_reader=window_reader,
+        warmup_sessions=warmup_sessions,
+        stop_at_last=True,
+    )
+
+
+def _record_calendar(
+    first,
+    last,
+    *,
+    today,
+    window_reader,
+    warmup_sessions,
+    tail_sessions=None,
+    completion_check=None,
+    stop_at_last=False,
+):
     if today is None:
         as_of = datetime.now(IST)
     elif isinstance(today, datetime):
@@ -123,24 +175,24 @@ def native_calendar_snapshot(
         as_of = datetime.combine(today, time.max, IST)
     else:
         raise ValueError("Native calendar cutoff must be a date or aware datetime")
-    first = date.fromisoformat(min(signal["date"] for signal in signals))
-    last = date.fromisoformat(max(signal["date"] for signal in signals))
     if not 0 <= (as_of.date() - first).days <= MAX_CALENDAR_DAYS - 60:
         raise ValueError("Native calendar requires a bounded historical signal range")
     require_covered_day(first)
     require_covered_day(last)
-    if tail_sessions is None and completion_check is None:
+    if tail_sessions is None and completion_check is None and not stop_at_last:
         require_covered_day(as_of.date())
     context = nullcontext(window_reader) if window_reader is not None else _native_reader()
     with context as reader:
         warmup = []
         cursor = first - timedelta(days=1)
-        for _ in range(60 if warmup_sessions else 0):
+        for _ in range(max(60, warmup_sessions * 3) if warmup_sessions else 0):
             try:
                 require_covered_day(cursor)
             except ValueError as exc:
                 raise ValueError(
                     "These scanner signals need eight earlier verified trading sessions. Use later signal dates."
+                    if not stop_at_last and warmup_sessions == TRIGGER_WARMUP_SESSIONS
+                    else f"This history needs {warmup_sessions} earlier verified trading sessions. Use later dates."
                 ) from exc
             if _session(cursor, reader, as_of):
                 warmup.append(cursor)
@@ -152,7 +204,8 @@ def native_calendar_snapshot(
         sessions, hours = [], {}
         cursor = min(warmup) if warmup else first
         tail_count = 0
-        while cursor <= as_of.date():
+        through = min(last, as_of.date()) if stop_at_last else as_of.date()
+        while cursor <= through:
             require_covered_day(cursor)
             timing = _session(cursor, reader, as_of)
             if timing:
