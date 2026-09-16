@@ -1,4 +1,7 @@
 # Docker Development Setup for OpenAlgo Flask
+
+> **Historical host development example.** For this distribution, use the [current Research Docker instructions](../research/RUNTIME.md#docker-service) and the repository's Dockerfile/Compose configuration. Do not replace them with the illustrative Python 3.11 Dockerfile below. For local installation, use the [guided installer](../research/RUNTIME.md#easy-local-installation-recommended).
+
 This guide focuses on setting up a development environment for OpenAlgo Flask using Docker.
 
 ## Prerequisites

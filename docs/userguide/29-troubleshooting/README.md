@@ -1,5 +1,7 @@
 # 29 - Troubleshooting
 
+**Research setup or launch problem?** Start with [installer troubleshooting](../../research/RUNTIME.md#if-setup-stops) and [updates and recovery](../../research/DISTRIBUTION.md#updates-and-recovery). The guided installer manages its own Python and dependencies; use **Setup.cmd** to retry setup and **Start.cmd** for later launches (Linux: `bash setup-research.sh` / `bash start-research.sh`). Manual environment commands below are host troubleshooting references, not required Research installation steps.
+
 ## Introduction
 
 This guide helps you diagnose and resolve common issues in OpenAlgo. Problems are organized by category with step-by-step solutions.

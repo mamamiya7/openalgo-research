@@ -19,7 +19,7 @@ Each `plugin.json` declares the adapter's supported exchanges, broker type, and 
 
 ## Configure Credentials
 
-The installer normally writes the broker configuration to `.env`. An authenticated administrator can review or update the same values from **Profile > Broker Credentials**:
+The Research installer selects the broker and prepares `.env`; enter broker-issued credentials in **Connect Broker → Add broker credentials** after creating your account. Restart with **Start.cmd** (Linux: `bash start-research.sh`) after saving. An authenticated administrator can review or update the same values from **Profile → Broker Credentials**. See [first-time setup](../05-first-time-setup/README.md).
 
 | Variable | Purpose |
 |---|---|

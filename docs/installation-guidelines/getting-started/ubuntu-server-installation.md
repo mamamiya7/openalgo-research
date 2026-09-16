@@ -1,5 +1,7 @@
 # Ubuntu Server Installation
 
+> **Installing OpenAlgo Research?** Use [managed Linux source installation](../../research/RUNTIME.md#managed-linux-source-installation), which includes the Research dependencies and worker. For a local desktop installation, use the [guided installer](../../research/RUNTIME.md#easy-local-installation-recommended). The upstream OpenAlgo server installation below does not by itself install this Research distribution.
+
 ### Prerequisites
 
 #### System Requirements

@@ -1,5 +1,8 @@
 # Docker Documentation
 
+**OpenAlgo Research:** use the [guided Windows/Linux installation](../research/RUNTIME.md#easy-local-installation-recommended) for local use, or the [Research Docker service instructions](../research/RUNTIME.md#docker-service) for the current Compose setup. Public CI verifies the image build and engine dependencies; full container first-run and recovery remain unverified for this preview. The documents below include upstream and historical development references.
+
+
 Complete Docker deployment and troubleshooting documentation for OpenAlgo.
 
 ---

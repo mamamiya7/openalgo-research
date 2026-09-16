@@ -1,5 +1,11 @@
 # 03 - System Requirements
 
+## OpenAlgo Research
+
+The guided Research installer targets **Windows x64** and **Linux x86_64** and installs its own **Python 3.12** runtime with VectorBT and Optuna. See the [current installation requirements](../../research/RUNTIME.md#easy-local-installation-recommended). Nautilus is an optional separate Linux/WSL runtime; macOS is not a verified Research installation target for this preview.
+
+The hardware tables and operating-system comparisons below describe the base OpenAlgo host, not measured minimums for Research optimization workloads. Research memory, CPU and storage needs depend on the symbol count, candle history and trial budget.
+
 ## Introduction
 
 OpenAlgo is designed to run on modest hardware. This guide helps you understand what you need and choose the right setup for your needs.
@@ -14,7 +20,7 @@ OpenAlgo is designed to run on modest hardware. This guide helps you understand 
 | CPU | 1 vCPU | 2 vCPU |
 | Storage | 1 GB | 5 GB |
 | OS | Windows 10/11, Ubuntu 20.04+, macOS 11+ | Ubuntu 22.04 LTS |
-| Python | 3.11 | 3.12 |
+| Python | 3.12 | 3.12 |
 | Network | Stable internet | Low-latency connection |
 
 ### For Advanced Usage (Python Strategies, Multiple Integrations)

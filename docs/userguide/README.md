@@ -1,6 +1,8 @@
 # OpenAlgo User Guide
 
-Welcome to the official OpenAlgo User Guide - your comprehensive resource for mastering algorithmic trading with OpenAlgo.
+This guide covers the OpenAlgo host and this repository's Research installation.
+
+**Installing OpenAlgo Research?** Start with the [guided installer](../research/RUNTIME.md#easy-local-installation-recommended), then [first-time setup](05-first-time-setup/README.md). For an existing installation, use [updates and recovery](../research/DISTRIBUTION.md#updates-and-recovery). The remaining modules describe OpenAlgo's broader trading features.
 
 ## What You'll Learn
 
@@ -67,7 +69,7 @@ This guide takes you from zero to automated trading, covering everything from ba
 | I want to... | Go to |
 |--------------|-------|
 | Understand what OpenAlgo does | [Module 01](./01-what-is-openalgo/README.md) |
-| Install OpenAlgo | [Module 04](./04-installation/README.md) |
+| Install OpenAlgo Research | [Guided installation](../research/RUNTIME.md#easy-local-installation-recommended) |
 | Connect my broker | [Module 06](./06-broker-connection/README.md) |
 | Place my first order | [Module 10](./10-placing-first-order/README.md) |
 | Test without real money | [Module 15](./15-analyzer-mode/README.md) |

@@ -32,7 +32,8 @@ need → drill into the specific file. Don't load everything at once.
 
 | Topic | Entry point |
 |---|---|
-| Ubuntu server install | [installation-guidelines/getting-started/ubuntu-server-installation.md](installation-guidelines/getting-started/ubuntu-server-installation.md) |
+| OpenAlgo Research: start here | [Guided installation and troubleshooting](research/RUNTIME.md#easy-local-installation-recommended) · [first-time setup](userguide/05-first-time-setup/README.md) |
+| Upstream OpenAlgo Ubuntu server reference | [installation-guidelines/getting-started/ubuntu-server-installation.md](installation-guidelines/getting-started/ubuntu-server-installation.md) |
 | Docker | [docker/README.md](docker/README.md) |
 | OpenAlgo Research distribution: guided setup, launcher, update and compatibility | [research/DISTRIBUTION.md](research/DISTRIBUTION.md) · [research/RUNTIME.md](research/RUNTIME.md) · [offline start guide](../START_HERE.html) |
 | Upgrade / SMTP / TOTP / forgot-password | https://docs.openalgo.in/installation-guidelines/getting-started/ |

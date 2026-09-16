@@ -26,17 +26,11 @@ The dashboard, TradingView webhooks, Analyzer Mode, and Flow builder cover workf
 
 ### What does the current build require?
 
-OpenAlgo requires Python 3.12 or newer. Resource needs depend on market-data subscriptions, strategy count, Historify data volume, and deployment topology. See [System Requirements](../03-system-requirements/README.md) and the platform-specific installation guide.
+The Research guided installer supports Windows x64 and Linux x86_64 and installs private Python 3.12 with the locked calculation dependencies. Windows users do not need separate Python, Git or Node.js installations. Initial setup needs internet access. See [installation requirements and troubleshooting](../../research/RUNTIME.md#easy-local-installation-recommended).
 
 ### How do I update an installed instance?
 
-From the repository root run:
-
-```bash
-bash install/update.sh
-```
-
-The updater backs up its configured data set, synchronizes code and dependencies, runs `upgrade/migrate_all.py`, rebuilds the frontend, and restarts services where applicable. Back up `db/health.db` separately because the current automatic backup list does not include it.
+Follow [Research updates and recovery](../../research/DISTRIBUTION.md#updates-and-recovery). Stop the application and worker, back up configuration and all private data, then apply the tested Research release while preserving those files. Re-run Setup for the guided installation. Do not replace `.env` or regenerate its keys. Upstream-only update instructions do not cover the Research worker, engine locks and saved evidence.
 
 ### Can I run OpenAlgo on a VPS?
 
@@ -68,7 +62,7 @@ Analyzer Mode routes supported order workflows to the sandbox database instead o
 
 ### Does OpenAlgo provide backtesting?
 
-Historify stores historical data and OpenAlgo supports live or walk-forward strategy execution. Use a dedicated backtesting engine or the testing tools in your charting platform for portfolio backtests.
+This distribution adds **Tools → Backtest & Optimize**: dated scanner CSVs use OpenAlgo/Historify price history with VectorBT backtests, Optuna studies and an optional Nautilus runtime. See the [Research scope and included features](../../research/DISTRIBUTION.md#what-is-included). Other modules in this guide also cover the upstream host's live trading features.
 
 ### What happens if OpenAlgo stops while a position is open?
 
