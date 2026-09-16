@@ -1,1 +1,0 @@
-import{a as e,r as t}from"./rolldown-runtime-Cyuzqnbw.js";import{n,t as r}from"./factory-C8xIBHuO.js";import{l as i,n as a,t as o}from"./scatter-Dc3_i3rb.js";var s=e(r(),1),c=e(i(),1),l=e(a(),1),u=e(n(),1),d=e(o(),1);u.register([d.default,c.default,l.default]);var f=u.default,p=t({default:()=>h}),m=s.default,h=(m.default??m)(f);export{p as n,h as t};

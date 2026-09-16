@@ -439,7 +439,7 @@ def setup(
     print("[6/6] Ready. Use Start.cmd (Windows) or bash start-research.sh next time.")
     if fresh:
         print(
-            "Create your OpenAlgo account in the browser. Then open Profile > Broker Credentials, add your broker app keys, save, and restart with Start."
+            "Create your OpenAlgo account in the browser. On Connect Broker, choose Add broker credentials, save your broker app keys, and restart with Start."
         )
     if no_launch:
         return 0

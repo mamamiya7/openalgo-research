@@ -28,6 +28,7 @@ REQUIRED_RESEARCH_FILES = {
     "tools/research_desktop.py",
     "tools/research_desktop_web.py",
     "tools/research_install_smoke.py",
+    "frontend/src/components/auth/BrokerCredentialsSetup.tsx",
     "research/distribution.json",
     "research/connectors/registry.py",
     "research/connectors/vectorbt_adapter.py",

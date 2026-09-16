@@ -357,6 +357,9 @@ def login():
                 ), 200
 
             session["user"] = username  # Set the username in the session
+            # Credentials can be configured before broker OAuth, but only for a
+            # short period after completing the OpenAlgo account login.
+            session["account_authenticated_at"] = datetime.now(UTC).isoformat()
 
             # Try to resume existing broker session (skip OAuth if token still valid)
             resumed = _try_resume_broker_session(username)
@@ -453,6 +456,7 @@ def login_totp():
 
     # Promote the pending login to a real session.
     session["user"] = pending_username
+    session["account_authenticated_at"] = datetime.now(UTC).isoformat()
     session["totp_verified_at"] = _utcnow_iso()
     _clear_pending_totp()
 

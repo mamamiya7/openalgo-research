@@ -26,8 +26,9 @@ workflow. Research starts from a CSV export or saved signals.
 1. Download the ZIP above and **extract all files** into a folder you will keep.
 2. Double-click **`Setup.cmd`**. Choose your broker when asked. Setup installs
    the required Python tools and dependencies, then opens the application.
-3. Create your OpenAlgo account, configure your broker credentials in the app,
-   then open **Tools → Backtest & Optimize**.
+3. Create your OpenAlgo account and sign in. On **Connect Broker**, choose
+   **Add broker credentials**. Save, restart with **Start.cmd**, connect your
+   broker, then open **Tools → Backtest & Optimize**.
 
 After the first setup, double-click **`Start.cmd`**. It starts the app and research
 worker together. Keep the launcher open; press **Ctrl+C** there to stop both.

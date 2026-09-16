@@ -10,6 +10,11 @@ and equivalent Linux x86_64 scripts. Setup installs private Python 3.12 and froz
 dependencies, verifies release files, creates unique configuration only when
 absent, applies native migrations and starts the app and research worker together.
 Users choose their broker and finish account/credential setup in the native UI.
+The Connect Broker screen offers a focused **Add broker credentials** dialog
+before broker OAuth. It accepts a fresh, verified account login (including any
+required TOTP), with a 30-minute setup window. This route-local permission does
+not authenticate trading or unlock network configuration. Connected sessions
+retain their existing validation. Saving keys prompts a launcher restart.
 
 The local launcher waits for both services, refuses duplicate/occupied ports,
 binds locally with debug disabled, rotates logs, checkpoints the worker on stop

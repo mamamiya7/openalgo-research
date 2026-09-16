@@ -41,6 +41,7 @@ jobs:
         run: >-
           uv run --no-sync pytest
           test/test_migrate_agent.py test/test_agent_voice.py
+          test/test_auth_session_hygiene.py
           test/test_graceful_shutdown.py
           test/test_strategy_builder_chart_window.py
           test/test_strategy_builder_chart_reference.py
@@ -118,6 +119,8 @@ jobs:
         working-directory: frontend
         run: >-
           npm run test:run --
+          src/components/auth/BrokerCredentialsSetup.test.tsx
+          src/pages/BrokerSelect.test.tsx
           src/components/research/PortfolioJourney.test.tsx
           src/api/researchTradeChart.test.ts
           src/components/research/SavedTradeJourney.test.tsx

@@ -17,8 +17,11 @@ downloads its private Python 3.12 runtime and locked dependencies, creates uniqu
 local security keys, applies migrations, and starts the application and worker
 together. Internet access is needed for initial setup. No separate Python, Git,
 Node.js or administrator installation is required. Create your account in the
-browser, then enter your broker's app credentials in **Profile → Broker
-Credentials** and connect your broker. Select **Tools → Backtest & Optimize**.
+browser and sign in. On **Connect Broker**, choose **Add broker credentials**,
+enter the app credentials issued by your broker and save. Restart with
+**Start.cmd** (Linux: `bash start-research.sh`) to load them, sign in and connect
+your broker. Select **Tools → Backtest & Optimize**. Later changes are also
+available in **Profile → Broker Credentials**.
 
 For later visits, double-click **Start.cmd**. Keep its window open while using the
 app; press **Ctrl+C** there to stop both services. A duplicate launch or an occupied
