@@ -87,6 +87,42 @@ def test_port_collision_leaves_existing_listener_alone():
             pass
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux TIME_WAIT restart semantics")
+def test_recently_closed_connection_allows_restart_but_active_listener_does_not():
+    import errno
+
+    with socket.socket() as listener:
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        port = listener.getsockname()[1]
+        with socket.create_connection(("127.0.0.1", port), timeout=1) as client:
+            accepted, _ = listener.accept()
+            with accepted:
+                # The server actively closes, putting its local port in
+                # TIME_WAIT after the client's FIN; no arbitrary sleep needed.
+                accepted.shutdown(socket.SHUT_WR)
+                assert client.recv(1) == b""
+                client.shutdown(socket.SHUT_WR)
+                assert accepted.recv(1) == b""
+
+    # Prove this exercises the original failure, rather than an unused port.
+    with socket.socket() as plain:
+        with pytest.raises(OSError) as error:
+            plain.bind(("127.0.0.1", port))
+        assert error.value.errno == errno.EADDRINUSE
+
+    desktop.check_ports([("market-data", port)])
+    with socket.socket() as restarted:
+        restarted.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        restarted.bind(("127.0.0.1", port))
+        restarted.listen()
+        with pytest.raises(desktop.InstanceBusy, match="already in use"):
+            desktop.check_ports([("market-data", port)])
+        with socket.create_connection(("127.0.0.1", port), timeout=1):
+            pass
+
+
 def test_own_env_overrides_another_installation_and_disabled_dotenv(tmp_path):
     path = tmp_path / ".env"
     path.write_text("FLASK_PORT=5327\nDATABASE_URL=sqlite:///db/own.db\nAPP_KEY=own-key\n")

@@ -290,6 +290,13 @@ def check_ports(ports):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
             if os.name == "nt":
                 probe.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            else:
+                # Match the native POSIX servers' restart semantics. A closed
+                # connection in TIME_WAIT has no listening process, and must
+                # not be mistaken for another installation still running.
+                # SO_REUSEADDR still refuses an active listener; SO_REUSEPORT
+                # is deliberately never enabled by this probe.
+                probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
                 probe.bind(("127.0.0.1", port))
             except OSError as error:
