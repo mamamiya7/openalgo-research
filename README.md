@@ -56,6 +56,12 @@ See [current implementation and verification](docs/research/STATUS.md).
 
 ### Start from Chartink
 
+![Chartink scanner page with the green Research in OpenAlgo extension button at the bottom right.](docs/research/screenshots/chartink-extension-button.png)
+
+**Your scanner → your saved research.** The extension adds the button at the bottom
+right. Open the scanner's historical backtest and choose its period before sending
+signals. [Install the extension](extensions/chartink/README.md#install-the-extension).
+
 1. [Download the extension ZIP](https://github.com/mamamiya7/openalgo-research/releases/download/chartink-v0.1.2/openalgo-chartink-0.1.2.zip) and **extract all files** into a folder you will keep.
 2. Open `chrome://extensions` in Chrome. Turn on **Developer mode**, click
    **Load unpacked**, and select the extracted folder containing `manifest.json`.

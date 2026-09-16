@@ -53,6 +53,15 @@ If you choose a new folder instead, remove the old unpacked extension and load t
 
 [Report a problem](https://github.com/mamamiya7/openalgo-research/issues) with your extension/app versions and the visible error. Do not include passwords, broker keys or private scanner exports.
 
+## Where to click on Chartink
+
+![Chartink scanner with Research in OpenAlgo at the bottom right.](https://raw.githubusercontent.com/mamamiya7/openalgo-research/main/docs/research/screenshots/chartink-extension-button.png)
+
+The green **Research in OpenAlgo** button is added by the extension. Open the
+scanner's historical backtest and select its period before clicking it. The
+screenshot shows the button's location; the historical export supplies the
+signals, not the scanner-filter editor shown here.
+
 ## What flows between the apps
 
 ```mermaid
