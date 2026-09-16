@@ -9,8 +9,8 @@ prices, saves runs and presents their results.
 This is a native distribution fork of [OpenAlgo](https://github.com/marketcalls/openalgo),
 with explicit host integration hooks, a front end and a worker.
 The [Research repository](https://github.com/mamamiya7/openalgo-research) and
-[versioned preview release](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.5)
-are the distribution locations. [Release notes](releases/0.1.0-preview.5.md) record
+[versioned preview release](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.6)
+are the distribution locations. [Release notes](releases/0.1.0-preview.6.md) record
 this preview's changes and verification boundaries.
 
 ## What is included
@@ -48,7 +48,7 @@ Execution policies and supported scope are documented in
 
 ## Install and open
 
-Download `openalgo-research-0.1.0-preview.5.zip` from the preview release, compare
+Download `openalgo-research-0.1.0-preview.6.zip` from the preview release, compare
 its SHA-256 with the supplied `SHA256SUMS`, and extract it into its installation
 directory. Use this versioned asset for its prebuilt interface; GitHub's automatic
 source archives are source checkouts.

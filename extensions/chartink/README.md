@@ -6,18 +6,52 @@ Send a scanner's historical signal export into a saved OpenAlgo Research experim
 
 This connector belongs to the same OpenAlgo Research project. Install **OpenAlgo Research preview.5 or newer**, which includes `/scanner-research/api/imports/chartink/capabilities` protocol 1. Earlier preview.4 is incompatible.
 
-## Install and test
+## Install the extension
 
-1. Install [OpenAlgo Research preview.5](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.5) using its **Setup.cmd** (Windows) or `bash setup-research.sh` (Linux). Follow the [installation guide](https://github.com/mamamiya7/openalgo-research/blob/main/docs/research/RUNTIME.md), then sign in with your OpenAlgo account.
-2. In Chrome, open `chrome://extensions`, enable **Developer mode**, select **Load unpacked**, and choose this `extensions/chartink` folder. Alternatively extract the packaged ZIP and choose the folder containing `manifest.json`.
-3. Open the extension from Chrome's toolbar. Enter the OpenAlgo address you use to sign in, such as `http://127.0.0.1:5000`, then choose **Connect** and allow access to that address. Remote installations require HTTPS. No broker key or password is entered into the extension.
-4. Visit a Chartink scanner and open its historical backtest results. Choose the period you want and make sure Chartink's historical **Download → CSV** export is available. Sign in to Chartink if required.
-5. Click **Research in OpenAlgo** on the scanner, or use the extension's toolbar button. OpenAlgo opens a saved experiment named after the scanner, with the signals attached.
-6. Review capital, position size, entry, exits, holding period and costs. Choose **Backtest**. The app uses its existing Historify/broker workflow to prepare the necessary prices and saves the result in the library.
-7. Choose **Optimize** to populate suggested ranges for supported settings. Review the visible ranges, objective and trial budget, then run. Existing custom search ranges and saved trial budgets are retained.
-8. Return to the library and reopen the experiment/result. Capture the same history again to check duplicate reuse; capture changed history to create a related experiment while keeping earlier work intact.
+**Extension 0.1.2 · Chrome 120+ · OpenAlgo Research preview.5+**
 
-The first installation in Chrome requires a manual **Load unpacked** action. Version **0.1.1** adds the original logo, privacy/help links and store-ready ZIP layout. For an existing unpacked installation, choose **Reload** at `chrome://extensions` after updating its files. This package has not been submitted to the Chrome Web Store. The [public release guide](https://github.com/mamamiya7/openalgo-research/blob/main/docs/research/CHROME_EXTENSION_PUBLISHING.md) accompanies this version's source publication; new documentation links become available when that source is pushed.
+[**Download the extension ZIP**](https://github.com/mamamiya7/openalgo-research/releases/download/chartink-v0.1.2/openalgo-chartink-0.1.2.zip) · [Release and checksum](https://github.com/mamamiya7/openalgo-research/releases/tag/chartink-v0.1.2)
+
+This is a free, manual installation. The extension is **not yet published on the Chrome Web Store**. No separate Chrome update is needed if you already use version 120 or newer.
+
+1. **Start OpenAlgo Research.** Install [the app](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.6) with **Setup.cmd** on Windows or `bash setup-research.sh` on Linux, then create your account and sign in. On later visits, use **Start.cmd** or `bash start-research.sh`. Keep the launcher open. [App installation guide](https://github.com/mamamiya7/openalgo-research/blob/main/docs/research/RUNTIME.md).
+2. **Download and extract the extension ZIP.** Keep the extracted folder in a permanent location; Chrome loads the extension from that folder. Use the named `openalgo-chartink-0.1.2.zip` asset, not GitHub's automatic Source code archive.
+3. **Load it in Chrome.** Type `chrome://extensions` in the address bar, enable **Developer mode**, click **Load unpacked**, and select the extracted folder containing `manifest.json`. Do not select the ZIP itself. If working from this repository, select `extensions/chartink`.
+4. **Pin it.** Open the puzzle-piece **Extensions** menu beside Chrome's address bar and pin **OpenAlgo Research — Chartink**.
+5. **Connect it to your app.** Click the pinned icon. Enter the OpenAlgo address you already use to sign in, including its port—for example, `http://127.0.0.1:5000`—then click **Connect** and allow access. Use the same address consistently: `localhost` and `127.0.0.1` are different origins. Remote installations require HTTPS. No broker key or password is entered into the extension.
+
+In Research preview.6, **Import from Chartink** in the Research library also opens an installation guide. Preview.5 supports the same import through the pinned extension even though it does not have that guide.
+
+## Import your scanner and run research
+
+1. Open a **Chartink scanner**, then open its **historical backtest results** and choose the period you want. Confirm that the historical **Download → CSV** export is available. Sign in to Chartink if required. Today's result table alone is not a historical signal export.
+2. Click **Research in OpenAlgo** on the scanner page or in the pinned extension. The connector captures the official CSV for the selected history; you do not need to save and upload that file yourself.
+3. OpenAlgo opens a **saved setup named after the scanner**, with its signals and source attached. Check the imported dates and symbols, then review capital, position size, entry, exits, holding period and costs.
+4. Choose **Backtest**, or **Optimize** to review suggested ranges, objective and trial budget before running. The app reuses available Historify candles and fetches missing required prices through the connected broker. Connect your broker in OpenAlgo before requesting missing prices.
+5. Return to the **Research library** to reopen your setup, results or studies. Importing unchanged history reuses the saved import; changed history creates related research while preserving earlier work.
+
+**Importing saves a draft. It does not automatically download broker prices, run an optimization or place an order.** Chartink supplies signal dates and symbols; OpenAlgo handles the prices and calculations.
+
+Already have a CSV? Open **Tools → Backtest & Optimize**, create a setup and upload it directly. The extension is optional.
+
+## Update an existing extension
+
+Download and extract the new extension ZIP into your existing extension folder, replacing its packaged files. At `chrome://extensions`, find **OpenAlgo Research — Chartink** and click **Reload**. Refresh any already-open Chartink scanner tabs. Confirm version **0.1.2** appears in the extension's **Details**, then reconnect if requested. No OpenAlgo restart is needed for an extension-only update, and saved research remains in the app.
+
+If you choose a new folder instead, remove the old unpacked extension and load the new folder. Removing the extension clears its local connection settings; reconnect to OpenAlgo afterward. Do not keep two copies enabled.
+
+## If something does not open
+
+| What you see | What to do |
+| --- | --- |
+| Chrome cannot load the extension | Extract the ZIP first, then select the folder that directly contains `manifest.json`. |
+| OpenAlgo cannot be reached | Start OpenAlgo, sign in in Chrome, and reconnect to that exact address and port. |
+| Login interrupts an import | Sign in to OpenAlgo, reopen the extension and choose **Continue import**. |
+| No historical export is found | Open the scanner's historical backtest, select an available period and check **Download → CSV**. Sign in to Chartink if required. |
+| The scanner-page button is missing | Refresh the scanner after installation or use the pinned extension. Confirm Chrome allows access to Chartink. |
+| The app is incompatible | Install OpenAlgo Research preview.5 or newer; plain upstream OpenAlgo and Research preview.4 do not include this import protocol. |
+
+[Report a problem](https://github.com/mamamiya7/openalgo-research/issues) with your extension/app versions and the visible error. Do not include passwords, broker keys or private scanner exports.
 
 ## What flows between the apps
 
@@ -52,7 +86,7 @@ Original evidence belongs to the signed-in OpenAlgo account. Archiving hides sav
 
 ## Supported boundary
 
-This first connector supports Chartink screener pages whose historical export includes a date and symbol. It depends on the visible historical export controls remaining available. It does not bypass access requirements or guarantee every Chartink layout. Other scanner websites, adding a capture into an existing multi-strategy experiment, reusable personal presets, rich study plots, candidate shortlists and saved comparisons remain separate journey work.
+This connector supports Chartink screener pages whose historical export includes a date and symbol. It depends on the visible historical export controls remaining available. It does not bypass access requirements or guarantee every Chartink layout. Other scanner websites are not supported. Each capture opens its saved or related experiment; the extension does not append a new strategy to an existing multi-strategy experiment.
 
 The application's current release scope remains long NSE cash equities. Broker compatibility and supported candle history come from OpenAlgo's existing adapters; this implementation does not establish that every broker or instrument has been tested.
 

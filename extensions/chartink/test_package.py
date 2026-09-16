@@ -40,7 +40,7 @@ class PublicPackageTests(unittest.TestCase):
             redirect_stdout(io.StringIO()),
         ):
             PACKAGE.main()
-        return output / "openalgo-chartink-0.1.1.zip"
+        return output / "openalgo-chartink-0.1.2.zip"
 
     def test_store_layout_assets_privacy_license_and_exclusions(self):
         (self.root / ".env").write_text("private=never-ship")
@@ -56,7 +56,7 @@ class PublicPackageTests(unittest.TestCase):
             self.assertFalse(any("node_modules" in name for name in names))
             self.assertIsNone(archive.testzip())
             manifest = json.loads(archive.read("manifest.json"))
-            self.assertEqual(manifest["version"], "0.1.1")
+            self.assertEqual(manifest["version"], "0.1.2")
             for section in (manifest["icons"], manifest["action"]["default_icon"]):
                 for path in section.values():
                     self.assertIn(path, names)
@@ -94,7 +94,7 @@ class PublicPackageTests(unittest.TestCase):
     def test_invalid_and_inconsistent_versions_are_rejected(self):
         path = self.root / "manifest.json"
         manifest = json.loads(path.read_text(encoding="utf-8"))
-        for version in ("../secret", "0.01.1", "0.1.65536", "0.0.0.0", "1.2.3.4.5", "0.1.2"):
+        for version in ("../secret", "0.01.1", "0.1.65536", "0.0.0.0", "1.2.3.4.5", "99.0.0"):
             with self.subTest(version=version):
                 path.write_text(json.dumps({**manifest, "version": version}), encoding="utf-8")
                 with self.assertRaises(ValueError):

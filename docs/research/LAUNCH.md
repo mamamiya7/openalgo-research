@@ -1,6 +1,6 @@
 # OpenAlgo Research release readiness
 
-Updated 16 September 2026 for `0.1.0-preview.5`.
+Updated 17 September 2026 for `0.1.0-preview.6`.
 
 The named release ZIP now includes the current OpenAlgo 2.0.2.5 interface,
 **Setup.cmd** for guided Windows setup, and **Start.cmd** to launch the app and
@@ -22,7 +22,8 @@ official-file-first launch proposal, which did not meet the product requirement.
 
 ## Consumer journey
 
-Open **Tools → Backtest & Optimize**, upload or reuse one to eight signal CSVs,
+Open **Tools → Backtest & Optimize**. Choose **Import from Chartink** for the
+extension setup guide, or create an experiment and upload or reuse one to eight signal CSVs,
 set strategy rules and allocations, choose Backtest or Optimize, then review the
 combined account and strategy contributions. VectorBT and Optuna TPE are the
 defaults. Advanced engines and settings stay in disclosures or drawers.

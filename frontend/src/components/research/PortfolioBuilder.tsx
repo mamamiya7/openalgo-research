@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { researchDefaults } from '@/lib/researchDraft'
+import { ChartinkConnect } from './ChartinkConnect'
 import { ChartinkSource } from './ChartinkSource'
 import { PortfolioCsvHelp } from './PortfolioCsvHelp'
 import { PortfolioSetupReview } from './PortfolioSetupReview'
@@ -373,9 +374,10 @@ export function PortfolioBuilder({
             <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-5 py-12 text-center">
               <FileSpreadsheet className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
               <p className="text-sm text-muted-foreground">
-                Upload a signal CSV or use one you saved.
+                Import Chartink history, upload a CSV or reuse saved signals.
               </p>
               <div className="flex flex-wrap justify-center gap-2">
+                <ChartinkConnect />
                 <Button type="button" onClick={() => input.current?.click()}>
                   <Plus className="h-4 w-4" aria-hidden="true" />
                   {uploading ? 'Adding signals…' : 'Add signal CSV'}

@@ -11,6 +11,7 @@ import {
   researchLibrary,
   type SetupVersionSummary,
 } from '@/api/researchLibrary'
+import { ChartinkConnect } from '@/components/research/ChartinkConnect'
 import { ChartinkImport } from '@/components/research/ChartinkImport'
 import { ChartinkSource } from '@/components/research/ChartinkSource'
 import { addPortfolioSource, freshPortfolioDraft } from '@/components/research/PortfolioBuilder'
@@ -348,17 +349,20 @@ function LibraryIndex({
     <section className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold tracking-tight">Research library</h1>
-        <Button
-          onClick={() => {
-            setCreating(true)
-            setName('')
-            setError(null)
-          }}
-          disabled={busy}
-        >
-          <Plus className="mr-2 size-4" />
-          New experiment
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <ChartinkConnect />
+          <Button
+            onClick={() => {
+              setCreating(true)
+              setName('')
+              setError(null)
+            }}
+            disabled={busy}
+          >
+            <Plus className="mr-2 size-4" />
+            New experiment
+          </Button>
+        </div>
       </header>
       <nav aria-label="Research library" className="flex gap-1 overflow-x-auto border-b pb-2">
         {tabs.map(([id, title]) => (
@@ -453,11 +457,11 @@ function LibraryIndex({
                       ? 'No matching experiments'
                       : tab === 'archived'
                         ? 'No archived experiments'
-                        : 'Start with a research question'}
+                        : 'Start with your signals'}
                   </h2>
                   {!search && tab !== 'archived' && (
                     <p className="mt-2 text-sm text-muted-foreground">
-                      Keep your setups, backtests and studies together.
+                      Import from Chartink, or create an experiment to upload a signal CSV.
                     </p>
                   )}
                 </div>

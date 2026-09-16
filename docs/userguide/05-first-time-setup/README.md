@@ -1,6 +1,6 @@
 # 05 - First-Time Setup
 
-These steps follow the [OpenAlgo Research installer](../../research/RUNTIME.md#easy-local-installation-recommended). Setup starts the app and research worker and opens your browser when both are ready.
+These steps follow the [OpenAlgo Research preview.6 installer](../../research/RUNTIME.md#easy-local-installation-recommended). Setup starts the app and research worker and opens your browser when both are ready.
 
 ## Create your account and connect your broker
 
@@ -8,9 +8,16 @@ These steps follow the [OpenAlgo Research installer](../../research/RUNTIME.md#e
 2. On **Connect Broker**, select **Add broker credentials**. Enter the app credentials issued by your broker and save. Use the field hints and your broker's developer portal for its required callback URL and credential format.
 3. Stop the launcher with **Ctrl+C**, then reopen **Start.cmd** on Windows or run `bash start-research.sh` on Linux. Restarting loads the saved credentials.
 4. Sign in and complete your broker's connection flow.
-5. Open **Tools → Backtest & Optimize** to upload a dated scanner CSV and start research.
+5. Open **Tools → Backtest & Optimize** and choose how to start below.
 
 Later credential changes are available under **Profile → Broker Credentials** and also require a restart. See [Broker Connection](../06-broker-connection/README.md) for adapter-specific details.
+
+## Start your first research setup
+
+- **From Chartink:** Choose **Import from Chartink** for the installation guide, or follow the [Chrome extension instructions](../../../extensions/chartink/README.md#install-the-extension). Pin the extension and connect it to the same OpenAlgo address you use to sign in. On a Chartink scanner, choose the historical backtest period with **Download → CSV** available, then click **Research in OpenAlgo**. Your named setup opens with the signals attached.
+- **From a file:** In **Tools → Backtest & Optimize**, create a setup and upload your dated signal CSV. No extension is needed.
+
+Review the imported dates, capital and trading settings, then choose **Backtest** or **Optimize**. Importing only saves a draft. OpenAlgo reuses Historify prices and downloads missing required candles through your connected broker when you run. Reopen saved work from the Research library.
 
 ## Settings and saved data
 

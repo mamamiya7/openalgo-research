@@ -8,8 +8,8 @@ separate locked Linux environment through the same worker and consumer interface
 
 ## Easy local installation (recommended)
 
-Download the [preview.5 release](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.5)
-and extract **openalgo-research-0.1.0-preview.5.zip** into a permanent folder. This
+Download the [preview.6 release](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.6)
+and extract **openalgo-research-0.1.0-preview.6.zip** into a permanent folder. This
 named asset includes the built interface; GitHub's automatic source archives do not.
 
 On **Windows x64**, double-click **Setup.cmd** and choose your broker. Setup
@@ -45,15 +45,17 @@ Source developers must first build `frontend` with `npm ci` and `npm run build`;
 setup explains this if the built interface is absent.
 
 VectorBT and Optuna are included. The optional Nautilus runtime is a separate
-Linux/WSL install: [NAUTILUS.md](NAUTILUS.md). The Chartink extension is optional;
-ordinary CSV upload works without it. The desktop launcher is for local use;
+Linux/WSL install: [NAUTILUS.md](NAUTILUS.md). To start from Chartink, choose **Import from Chartink** in the Research library
+for extension installation, the exact OpenAlgo address and the capture steps.
+The [extension guide](../../extensions/chartink/README.md) includes its separate
+ZIP download and recovery instructions. CSV upload also works without it. The desktop launcher is for local use;
 managed server and Docker instructions remain below.
 
 ### If setup stops
 
 | Message or symptom | Next step |
 | --- | --- |
-| Built interface missing | Download the named `openalgo-research-0.1.0-preview.5.zip` asset and extract all files; the automatic Source code ZIP requires a developer build. |
+| Built interface missing | Download the named `openalgo-research-0.1.0-preview.6.zip` asset and extract all files; the automatic Source code ZIP requires a developer build. |
 | Installing dependencies | First setup downloads the calculation libraries. Setup prints an elapsed-time update every 20 seconds; details are in `log/research-setup.log`. |
 | Port already in use | Close the existing OpenAlgo launcher before running Setup or Start again. Setup does not stop unrelated applications. |
 | Windows Application Control blocked a file | The computer's security policy rejected the downloaded Python launcher. Setup stops without changing that policy. On a managed device, ask its administrator to review an approved Python environment; do not disable security controls. This restriction was observed on the maintainer's host and is also tracked [upstream](https://github.com/astral-sh/uv/issues/6584). |
@@ -65,7 +67,7 @@ information from log excerpts; never attach `.env`, broker keys or databases.
 
 ## Manual native Windows or Linux core
 
-Download the [versioned preview ZIP](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.5)
+Download the [versioned preview ZIP](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.6)
 and extract it. Use Python 3.12 and `uv` from that installation directory. A release ZIP already
 contains the built interface; Node/npm is needed only when building from a source
 checkout. On a fresh Windows installation, open PowerShell in the extracted

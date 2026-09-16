@@ -1,15 +1,15 @@
 # Publish the free Chartink connector
 
-Prepared 11 September 2026 for extension **0.1.1**. This is a release plan, not a submitted or approved store listing.
+Updated 17 September 2026 for extension **0.1.2**. The [GitHub release](https://github.com/mamamiya7/openalgo-research/releases/tag/chartink-v0.1.2) provides the manual installation package. **Chrome Web Store submission and approval are still pending.**
 
-Publish it as **one community Chrome extension**, with its source in this repository and an install button on the Chrome Web Store. It connects to the user's own compatible OpenAlgo Research app; it is not a hosted backtesting service. No new website, analytics service or payment system is needed for this release.
+Distribute it as **one community Chrome extension**, with its source and versioned installation ZIP in this repository. A Chrome Web Store install button is the next distribution step. It connects to the user's own compatible OpenAlgo Research app; it is not a hosted backtesting service. No new website, analytics service or payment system is needed for this release.
 
 ## What is ready, and what remains
 
 | Item | State |
 | --- | --- |
 | Original green connector logo, toolbar icons and 440 × 280 promotional tile | Prepared in [store artwork](extension-store/README.md) |
-| Version 0.1.1 ZIP with manifest at its root, license and original artwork | Build with `python extensions/chartink/package.py`; the output and checksum are under ignored `.agent-native/chartink-package/` |
+| Version 0.1.2 ZIP with manifest at its root, license and original artwork | [Download ZIP](https://github.com/mamamiya7/openalgo-research/releases/download/chartink-v0.1.2/openalgo-chartink-0.1.2.zip); [release/checksum](https://github.com/mamamiya7/openalgo-research/releases/tag/chartink-v0.1.2). Rebuild with `python extensions/chartink/package.py`. |
 | Public policy, bundled offline policy, support links and store copy | Prepared: [privacy](CHARTINK_PRIVACY.md), [listing and review instructions](CHARTINK_STORE_LISTING.md) |
 | Public app release supporting Chartink connector protocol 1 | Use **`0.1.0-preview.5`** or newer; its app package includes protocol 1. Older preview.4 is incompatible. Store submission and fresh-profile acceptance remain separate. |
 | Real store screenshots and fresh-profile acceptance | **Still needed** against the final compatible release. The logo/promo tile are not screenshots. |
@@ -20,15 +20,15 @@ Publish it as **one community Chrome extension**, with its source in this reposi
 
 1. **Test the new build.** Reload the unpacked extension at `chrome://extensions`; if installing from the ZIP, extract it first and select the folder containing `manifest.json`. The toolbar and popup should show the green connector logo. Follow the acceptance checks below. No OpenAlgo restart is needed just to update the extension.
 
-2. **Release the compatible app and source together.** Package and test the Research application containing connector protocol 1, then publish its versioned release. Tag the exact extension source (suggested tag: `chartink-extension-v0.1.1`), attach the ZIP and `SHA256SUMS`, and add the tested app release/version to the extension README and reviewer instructions. These publishing actions are a subsequent step, not part of this preparation.
+2. **Use the versioned public packages.** The current app is [Research preview.6](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.6); the extension package is [chartink-v0.1.2](https://github.com/mamamiya7/openalgo-research/releases/tag/chartink-v0.1.2). Use the extension release's ZIP and checksum for testing and submission, and record both versions in the acceptance notes. The extension also supports Research preview.5; an extension-only update does not require reinstalling a compatible app. For later releases, tag the exact source, attach the named ZIP and checksum, and update the compatibility instructions together.
 
 3. **Complete the narrow legal/content checks below.** Keep the repository's existing AGPL v3 license and notices. Resolve the specific Chartink export question. Use the original logo and independent-community wording. No separate software license was invented for the extension.
 
 4. **Register your publisher account.** Use a Google account you intend to maintain, protect it with two-step verification, and open the [Chrome Web Store developer dashboard](https://chrome.google.com/webstore/devconsole). Pay the one-time registration fee shown there; the extension can remain free for users. Choose your real publisher name and verify a contact email you monitor. Complete any identity, location or trader-status questions using your actual circumstances; “free” alone is not an answer to all such questions. [Registration guidance](https://developer.chrome.com/docs/webstore/register), [account setup](https://developer.chrome.com/docs/webstore/set-up-account).
 
-5. **Verify the public help and policy links.** The source update includes these documents in the repository. Confirm the links in [store copy](CHARTINK_STORE_LISTING.md) work without signing in before submission. GitHub can host the policy and support instructions. Enable a private security-reporting route in the repository and identify it in support documentation before inviting vulnerability reports.
+5. **Verify the public help and policy links.** These documents are part of the public repository. Recheck the links in [store copy](CHARTINK_STORE_LISTING.md) without signing in before store submission. GitHub can host the policy and support instructions. Enable a private security-reporting route in the repository and identify it in support documentation before inviting vulnerability reports.
 
-6. **Create the store item and upload the ZIP.** Choose **New item** in the developer dashboard and upload `openalgo-chartink-0.1.1.zip` directly. Its `manifest.json` is now at the ZIP root, as Chrome requires. Use the prepared name, summary and description; choose the closest available productivity/research category and accurate supported regions/language. [Package preparation](https://developer.chrome.com/docs/webstore/prepare).
+6. **Create the store item and upload the ZIP.** Choose **New item** in the developer dashboard and upload `openalgo-chartink-0.1.2.zip` directly. Its `manifest.json` is at the ZIP root, as Chrome requires. Use the prepared name, summary and description; choose the closest available productivity/research category and accurate supported regions/language. [Package preparation](https://developer.chrome.com/docs/webstore/prepare).
 
 7. **Add the images.** Upload `icons/icon128.png`, the 440 × 280 promo tile, and at least one real product screenshot at 1280 × 800 or 640 × 400. Three screenshots are useful: connect/import; the saved scanner with dates/symbols; and research setup in OpenAlgo. Clearly label app screenshots as the separate required OpenAlgo Research app. Use a scanner you can publicly show and remove personal tabs, usernames, holdings and notifications. [Image requirements](https://developer.chrome.com/docs/webstore/images).
 

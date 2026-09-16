@@ -11,13 +11,14 @@ the connected engines perform the calculations.
 Inspired by **Chartink scanner signals**: evaluate a scanner's CSV signals as a
 portfolio, with your own stops, targets, trailing rules and holding periods.
 The aim is to connect broker data, backtesting and optimization in one open-source
-workflow. Research starts from a CSV export or saved signals.
+workflow. Start directly from a Chartink scanner with the Chrome extension, upload
+a CSV export, or reuse saved signals.
 
-**Current preview: `0.1.0-preview.5` · OpenAlgo 2.0.2.5 · Windows and Linux**
+**Current preview: `0.1.0-preview.6` · OpenAlgo 2.0.2.5 · Windows and Linux**
 
-[**Download OpenAlgo Research**](https://github.com/mamamiya7/openalgo-research/releases/download/research-v0.1.0-preview.5/openalgo-research-0.1.0-preview.5.zip)
+[**Download OpenAlgo Research**](https://github.com/mamamiya7/openalgo-research/releases/download/research-v0.1.0-preview.6/openalgo-research-0.1.0-preview.6.zip)
 · [Install and start](docs/research/RUNTIME.md)
-· [Release notes](docs/research/releases/0.1.0-preview.5.md)
+· [Release notes](docs/research/releases/0.1.0-preview.6.md)
 · [Architecture](docs/research/SYSTEM_MAP.md)
 · [Latest source](https://github.com/mamamiya7/openalgo-research/tree/main)
 
@@ -45,10 +46,34 @@ progress, reports, and native trade charts with entry/exit markers, visual
 indicators and candle-by-candle replay. The interface is already built.
 See [current implementation and verification](docs/research/STATUS.md).
 
-A [Chartink Chrome connector](extensions/chartink/README.md) is also available in
-`extensions/chartink`: capture the scanner's official historical export and open a
-named, saved Research setup. Its manual unpacked-extension installation is
-optional; uploading a CSV works without it.
+## Choose how to start
+
+| Your starting point | What to do |
+| --- | --- |
+| **A Chartink scanner** | Install the [Chrome extension](https://github.com/mamamiya7/openalgo-research/releases/download/chartink-v0.1.2/openalgo-chartink-0.1.2.zip), choose the scanner's historical period, then click **Research in OpenAlgo**. A named setup opens with its signals already attached. |
+| **A CSV file** | Open **Tools → Backtest & Optimize**, create a setup and upload the file. No extension is needed. |
+| **Saved research** | Reopen a setup in the Research library to change settings, backtest or optimize. |
+
+### Start from Chartink
+
+1. [Download the extension ZIP](https://github.com/mamamiya7/openalgo-research/releases/download/chartink-v0.1.2/openalgo-chartink-0.1.2.zip) and **extract all files** into a folder you will keep.
+2. Open `chrome://extensions` in Chrome. Turn on **Developer mode**, click
+   **Load unpacked**, and select the extracted folder containing `manifest.json`.
+   Open Chrome's **Extensions** puzzle-piece menu and pin **OpenAlgo Research — Chartink**.
+3. Keep OpenAlgo Research running and sign in. Click the pinned extension, enter
+   the same OpenAlgo address you use in Chrome, such as `http://127.0.0.1:5000`,
+   then select **Connect** and allow access.
+4. On a Chartink scanner, open its **historical backtest**, select the period, and
+   check that **Download → CSV** is available. Click **Research in OpenAlgo** on
+   the page or in the pinned extension.
+5. OpenAlgo opens the saved setup. Review the signal dates and trading settings,
+   then choose **Backtest** or **Optimize**. Importing saves a draft; it does not
+   start a run.
+
+**Chartink supplies the signals; OpenAlgo's connected broker supplies any missing
+prices through Historify.** The extension is optional and currently installed
+manually, not through the Chrome Web Store. Requires Chrome 120+ and OpenAlgo
+Research preview.5 or newer. [Full extension guide, updates and troubleshooting](extensions/chartink/README.md).
 
 ## What you can do
 
@@ -119,10 +144,11 @@ to preserve their accounts, broker settings and saved research.
 To develop from a Git checkout instead, first run `npm ci` and `npm run build` in
 `frontend`, then run the setup script from the repository root. GitHub's automatic
 **Source code** archives do not contain the built interface; use the named
-`openalgo-research-0.1.0-preview.5.zip` asset for the easy installation.
+`openalgo-research-0.1.0-preview.6.zip` asset for the easy installation.
 
-In **Tools → Backtest & Optimize**, upload a CSV or reuse saved signals, choose
-settings, and run. Daily and timed CSV examples are available in the screen.
+Use the [Chartink extension](extensions/chartink/README.md), or open **Tools →
+Backtest & Optimize** to upload a CSV or reuse saved signals. Review the settings
+and run. Daily and timed CSV examples are available in the screen.
 
 The application and research worker run together in the same installation.
 Nautilus is optional; VectorBT and Optuna are the default environment.

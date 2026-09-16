@@ -1,6 +1,6 @@
 # Chrome Web Store submission copy
 
-Prepared for 0.1.1. Verify the public URLs and replace the reviewer prerequisites with the actual tested release before submitting. This file is not a published listing.
+Prepared for extension **0.1.2**, compatible with **OpenAlgo Research preview.5 or newer**. The [GitHub installation package](https://github.com/mamamiya7/openalgo-research/releases/tag/chartink-v0.1.2) is separate from Chrome Web Store publication. Verify the public URLs and complete the reviewer prerequisites before submitting. **This file is not a published store listing.**
 
 ## Store listing
 
@@ -19,7 +19,7 @@ In the separate OpenAlgo Research app, review your trading rules, run supported 
 What you need:
 
 - Chrome 120 or later.
-- A compatible OpenAlgo Research installation supporting Chartink connector protocol 1. Plain OpenAlgo or the older Research preview.4 release alone is insufficient. Follow the linked installation instructions for the tested release.
+- OpenAlgo Research preview.5 or newer, running and signed in at the address you connect in the extension. It must support Chartink connector protocol 1. Plain OpenAlgo or the older Research preview.4 release alone is insufficient. Follow the linked installation instructions.
 - A Chartink scanner with an available historical Download → CSV export. Source sign-in and access requirements still apply.
 
 The current research release targets long NSE cash equities. Importing historical signals does not recreate the scanner's formula or make its indicator parameters automatically optimizable.
@@ -34,8 +34,10 @@ Free and open source. Independent community project; not an official or endorsed
 - Support: https://github.com/mamamiya7/openalgo-research/issues
 - Privacy policy: https://github.com/mamamiya7/openalgo-research/blob/main/docs/research/CHARTINK_PRIVACY.md
 - Installation: https://github.com/mamamiya7/openalgo-research/blob/main/extensions/chartink/README.md
+- Extension release: https://github.com/mamamiya7/openalgo-research/releases/tag/chartink-v0.1.2
+- Current app: https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.6
 
-The new policy and instructions must be pushed before these URLs are used in a submission. Set the publisher contact email in Google's dashboard to an address the owner monitors; no email address has been invented here.
+The policy and installation instructions are public; recheck all links without signing in before a store submission. Set the publisher contact email in Google's dashboard to an address the owner monitors; no email address has been invented here.
 
 ## Privacy practices
 
@@ -63,7 +65,7 @@ Confirm Google's data-use certifications only after checking the final submitted
 
 ## Reviewer instructions — complete these prerequisites before submission
 
-Record the **tested public app release/tag and installation URL**, a **specific accessible Chartink scanner URL with historical CSV export**, and any **dedicated test-account instructions**. Do not submit this template with those details missing. No real trading-account credentials should appear here or in public source.
+Use **extension 0.1.2** with [Research preview.6](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.6) and the [app installation guide](RUNTIME.md). Record the actual acceptance test date/source commit, a **specific accessible Chartink scanner URL with historical CSV export**, and any **dedicated test-account instructions**. Do not submit this template with those details missing. No real trading-account credentials should appear here or in public source.
 
 1. Install the linked compatible OpenAlgo Research release. Start it using its documented setup and create/sign in to a test account. A broker connection is not needed to verify this extension's signal import.
 2. Open the extension, enter the test app's address, choose Connect and grant that host access. The app must report Chartink connector protocol 1.

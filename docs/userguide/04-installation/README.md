@@ -4,7 +4,7 @@
 
 Use the [Research installation guide](../../research/RUNTIME.md#easy-local-installation-recommended) for this repository. It is the canonical guide for the tested release, supported platforms and troubleshooting.
 
-1. Download the named **openalgo-research-0.1.0-preview.5.zip** asset from the [release page](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.5) and extract it into a permanent folder. GitHub's automatic **Source code** downloads do not include the built interface.
+1. Download the named **openalgo-research-0.1.0-preview.6.zip** asset from the [release page](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.6) and extract it into a permanent folder. GitHub's automatic **Source code** downloads do not include the built interface.
 2. On Windows x64, double-click **Setup.cmd** and choose your broker. On Linux x86_64, run `bash setup-research.sh`.
 3. Complete [first-time setup](../05-first-time-setup/README.md) in the browser that opens.
 

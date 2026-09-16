@@ -1,8 +1,26 @@
 # OpenAlgo Research status
 
-Updated: 16 September 2026. Release: **`0.1.0-preview.5`**, targeting OpenAlgo 2.0.2.5.
+Updated: 17 September 2026. Release: **`0.1.0-preview.6`**, targeting OpenAlgo 2.0.2.5.
 
-## Guided installation and current public package — 16 September 2026
+## Chartink entry and extension onboarding — 17 September 2026
+
+The Research library and empty setup now offer **Import from Chartink**, with a
+compact guide to install the Chrome connector, copy the current OpenAlgo origin,
+and send a scanner's official historical CSV into a named saved experiment.
+Opening the guide does not create an experiment or start calculations. The existing
+CSV and saved-source workflows remain available. Clipboard denial keeps the address
+selectable; dialog focus returns to its opener.
+
+Extension **0.1.2** has a separate versioned download and clearer popup next steps.
+It supports Research preview.5 and newer; preview.6 includes the in-app guide.
+Chrome Web Store submission remains pending. Installation still uses Developer
+mode and **Load unpacked**. No broker credentials or extension permissions are added.
+
+See [extension installation](../../extensions/chartink/README.md) and
+[preview.6 release notes](releases/0.1.0-preview.6.md). Release compatibility and
+fresh Windows/Linux installation are checked by the distribution workflow.
+
+## Guided installation and preview.5 package — 16 September 2026
 
 The preview.5 package includes the current research application and prebuilt UI,
 including saved-trade charts, plus **Setup.cmd** and **Start.cmd** for Windows x64

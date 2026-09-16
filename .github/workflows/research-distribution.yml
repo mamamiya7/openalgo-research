@@ -162,6 +162,7 @@ jobs:
           src/components/research/ResearchPlot.test.tsx
           src/components/research/usePortfolioAnalysis.test.tsx
           src/components/research/ChartinkImport.test.tsx
+          src/components/research/ChartinkConnect.test.tsx
           src/components/research/ResearchRunProgress.test.tsx
           src/components/research/StudyContinuationDialog.test.tsx
           src/components/research/StudyContinuation.test.tsx

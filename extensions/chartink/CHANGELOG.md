@@ -1,5 +1,14 @@
 # Extension releases
 
+## 0.1.2 — source release; Chrome Web Store submission pending
+
+- Three clear popup steps: connect the running OpenAlgo address, choose Chartink history, then review saved research before running it.
+- Clickable Chartink scanner link when the current page cannot be imported, plus a direct setup guide.
+- Clear connection, reconnect and pending-import actions; capture stays unavailable until the selected address is connected.
+- Popup interaction tests cover pairing, import recovery and actionable guidance.
+
+Capture, permissions, connector protocol 1 and native research calculations are unchanged. Requires OpenAlgo Research **0.1.0-preview.5 or newer**.
+
 ## 0.1.1 — prepared, not yet published
 
 - Original green connector logo in Chrome's toolbar, extension listing and popup.
