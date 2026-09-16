@@ -119,6 +119,11 @@ jobs:
         run: >-
           npm run test:run --
           src/components/research/PortfolioJourney.test.tsx
+          src/api/researchTradeChart.test.ts
+          src/components/research/SavedTradeJourney.test.tsx
+          src/components/research/SavedTradeChart.test.tsx
+          src/components/research/savedTradeChartFeed.test.ts
+          src/components/research/savedTradeIndicators.test.ts
           src/components/research/PortfolioTrials.test.tsx
           src/components/research/studyTrialView.test.ts
           src/components/research/studyPresentation.test.ts

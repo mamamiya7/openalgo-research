@@ -19,12 +19,17 @@ The current development source integrates **OpenAlgo 2.0.2.5**, including
 upstream changes through 16 September 2026 and `openalgo-charts` 2.3.2.
 The downloadable preview above is an older, unchanged release. See the
 [upstream update and reuse plan](docs/research/UPSTREAM_UPDATE_20260916.md)
-for the exact version, migrations and planned use of native charts and indicators.
+for the exact version, migrations and implemented or planned integrations.
+
+**New in the latest source:** open saved trades on native charts with entry/exit
+markers, visual indicators and candle-by-candle replay. This feature is not in
+the older preview ZIP.
 
 [Download the preview](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.4)
 · [Install and start](docs/research/RUNTIME.md)
 · [Release notes](docs/research/releases/0.1.0-preview.4.md)
 · [Architecture](docs/research/SYSTEM_MAP.md)
+· [Latest source](https://github.com/mamamiya7/openalgo-research/tree/main)
 
 The development source also includes a Research library with saved experiment
 drafts and setup versions, plus live CSV, price and Optuna progress and automatic
@@ -49,6 +54,23 @@ manual unpacked-extension installation; it is not included in preview.4.
   later-period check.
 - Review the account curve, each strategy's contribution, trades and trials.
   Reopen saved runs, export results, or replay selected settings exactly.
+- Inspect saved daily or minute trades on native charts, with recorded entry/exit
+  markers, visual indicators and bar replay.
+
+## Inspect a saved trade
+
+**Saved report → Trades → View on chart → Replay**
+
+See the trade's recorded entry and exit prices on the candles used by that run.
+Add native studies such as EMA, RSI, MACD or Bollinger Bands; play, pause, change
+speed, step through bars or rewind. Replay reveals candles and fill markers as
+it reaches them. Closing the chart returns to the same trade table and filters.
+
+Charts read the run's **saved price snapshot**, so opening one needs no new broker
+download and does not change the result. This visual replay is separate from
+**Exact replay**, which reruns saved settings through the backtesting engine.
+Drawings are temporary; long trades load in sections, each with its own replay.
+See [saved trade charts](docs/research/SAVED_TRADE_CHARTS.md) for details.
 
 ## How the tools fit together
 
@@ -82,8 +104,10 @@ trials and saved results.
 
 ## Get started
 
-1. Download the versioned ZIP from the preview release and extract it. The ZIP
-   includes the built interface and locked dependencies.
+1. For the latest features, use the [main source branch](https://github.com/mamamiya7/openalgo-research/tree/main)
+   and follow the [source installation instructions](docs/research/DISTRIBUTION.md#install-and-open),
+   including the frontend build. The versioned preview ZIP is an older release
+   with its interface already built.
 2. Follow the [Windows/Linux setup and startup guide](docs/research/RUNTIME.md).
    Existing users should read the [update instructions](docs/research/DISTRIBUTION.md#updates-and-recovery)
    before replacing an installation.

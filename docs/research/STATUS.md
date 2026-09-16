@@ -21,7 +21,8 @@ artifact hashes. The chart dialog fits desktop and 390 px viewports; broader
 host-page overflow remains. Long section paging has automated coverage.
 Installed in the normal application on 16 September: 57 saved jobs and existing
 account/settings are preserved, with source/assets updated and no dependency or
-schema migration. This increment has not been published. Historify navigation and causal
+schema migration. This increment is included in the current source; the published
+preview.4 ZIP remains unchanged. Historify navigation and causal
 indicator admission to automatic research remain separate planned work.
 
 ## OpenAlgo host update — 16 September 2026
