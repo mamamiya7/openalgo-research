@@ -282,6 +282,32 @@ User indicators live in `strategies/indicators/*.js` (gitignored, mirroring
 - **They are not sandboxed.** An indicator runs on the app origin with the logged-in session and can reach `/api/v1/`. That matches the trust model of the Python strategy host, which already runs arbitrary user code, but it means an indicator from an untrusted source is as dangerous as any script.
 - Use the **`chart-indicator`** skill to write one. It validates against the real library and refuses to install a file that errors.
 
+### Bumping openalgo-charts also updates the chart-indicator skill
+
+The skill documents a specific build. `reference/api.md` carries the full export
+index and `pitfalls.md` carries the built-in ids a custom module can shadow, so
+a version bump that touches neither leaves the skill describing a library that
+is no longer installed. **Upgrading the pin and updating the skill are one
+change, not two.**
+
+```sh
+cd frontend && npm install openalgo-charts@<version> --save-exact
+node .claude/skills/chart-indicator/generate-api-index.mjs   # regenerates the index
+node .claude/skills/chart-indicator/coverage.mjs             # must print COVERAGE COMPLETE
+```
+
+Then read the upstream changelog for the range you skipped and update the prose
+by hand: **Recent changes worth knowing** in `SKILL.md`, the *What arrived
+after* table in `api.md`, and the id-collision list in `pitfalls.md` if the
+registry grew. The generator only owns the export index; nothing generates the
+teaching.
+
+The `chart-indicator-skill` CI job runs both checks, so a stale skill fails the
+build. It exists because both scripts were already in the repo and nothing ran
+them: the index sat on 1.8.1 advertising "337 names" while `/trading` shipped
+2.1.5 with 363, and the eleven studies added in 1.8.3 were absent from the
+reference an indicator author reads.
+
 Two built-in pages exercise the streaming stack end to end: **`/websocket/test`**
 (market data; `/20`, `/30`, `/50` variants request those depth levels) and
 **`/websocket/order`** (account-level order/trade update stream). Use them to
@@ -292,6 +318,38 @@ verify a broker feed rather than writing a throwaway client.
 The reason to still register a route in `blueprints/react_app.py` is that
 unregistered paths hit `Error404Tracker` for *unauthenticated* visitors and
 count toward an IP ban.
+
+### Adding a page: the three registrations
+
+A new page is not done until all three are present. Miss the second and the
+page works until someone opens a bookmark while logged out; miss the third and
+nobody finds it.
+
+1. **The route, in `frontend/src/App.tsx`** — a `lazy()` import plus a `<Route>`
+   inside the right layout wrapper. `Layout` is the standard sidebar shell;
+   `FullWidthLayout` is for canvas-style pages like the Flow editor.
+
+2. **The same path, in `blueprints/react_app.py`** — a view that only calls
+   `serve_react_app()`:
+
+   ```python
+   @react_bp.route("/agent", strict_slashes=False)
+   def react_agent():
+       return serve_react_app()
+   ```
+
+   It serves nothing different. It exists so a direct hit or a refresh on that
+   path is a *known* route rather than a 404 counted against the visitor's IP.
+   Register every path the page owns, including its parameterised children.
+
+3. **The nav entry, in `frontend/src/config/navigation.ts`** — usually
+   `profileMenuItems`. Entries are shown unfiltered; the filtering in
+   `useProfileMenuItems.ts` is for **broker capabilities** (Leverage, Holdings),
+   not for whether a feature has been configured yet. A feature that needs
+   setup shows its own setup screen on the page, as Telegram and WhatsApp do.
+
+Add the nav entry in the same change as the route. A menu item pointing at a
+path that does not resolve is worse than no menu item.
 
 ## Symbol Format
 
@@ -348,6 +406,27 @@ open files". Preventing one at creation is far cheaper than hunting it later:
 After a change touching any of these, run the **`fd-audit`** skill before calling
 it done.
 
+**Every message a user reads is written for a trader, not a developer.** The
+people running this are traders self-hosting a platform. They cannot act on a
+status code, a protocol name or the internals of a request, and showing them one
+is not neutral: it reads as a fault they caused, and sends them looking through
+their own settings for something that was never wrong.
+
+- **Name the cause and the next action.** "Your OpenAI account has no credits
+  left. Add credits under billing." Not "HTTP 500", not "invalid_offer", not
+  "SDP parse failed". If there is no action, say who is fixing it and that
+  waiting is the whole of it.
+- **Never put a status code, an exception class, a protocol term or an endpoint
+  in front of a user.** `logger.exception()` already keeps the technical detail
+  where it belongs, which is `log/errors.jsonl`.
+- **Do not guess the cause in the message.** A confidently wrong message is
+  worse than a vague one: it sends someone to the wrong place with conviction.
+  Where a symptom has more than one cause, lead with the one the operator can
+  check themselves. A provider that answers an exhausted balance with a bare
+  500 taught this the expensive way.
+- **The audience is the same on every surface.** A spoken error is heard by
+  someone who cannot see a log, so it has to be a sentence, not a code.
+
 **Database access** goes through the SQLAlchemy ORM, not raw SQL.
 
 **Schema changes need a migration script, not just a startup hook.** Users
@@ -383,6 +462,75 @@ component files, TanStack Query for server state.
 **No icons or emojis anywhere** — source, comments, log messages, commit
 messages, PR descriptions, changelogs, release notes, or any generated text
 including drafts for Discord or Telegram. Use plain text labels.
+
+### The ChatGPT subscription model list is ours to maintain
+
+The `chatgpt/` provider authenticates with a ChatGPT Plus or Pro plan by OAuth
+device flow instead of an API key, and it reaches **Codex**, not the ChatGPT web
+app. Everything about the agent's provider catalogue is read live from LiteLLM
+precisely so a package bump brings new models with it. This provider is the one
+exception, and it needs a person.
+
+**The symptom, if you do not know this.** LiteLLM's registry carries ten
+`chatgpt/*` entries, newest `gpt-5.4`, while the backend serves more. A model
+absent from that registry has no `mode`, so LiteLLM routes it through the
+chat-completions bridge instead of `/v1/responses`. The request never reaches
+the API: it lands on a Cloudflare interstitial and returns
+`403 Enable JavaScript and cookies to continue`. That reads like a network
+problem, an account problem or a bot block, and is none of them. Registering the
+entry with `mode: responses` is the entire fix.
+
+**The distinction that makes a candidate testable.** The backend refuses a model
+it does not serve in plain words:
+
+```
+{"detail":"The 'gpt-5.6' model is not supported when using Codex with a ChatGPT account."}
+```
+
+So a clean 400 naming the model means **not available**; a 403 HTML page means
+**not registered**, and is your bug, not OpenAI's. Anything else, read it.
+
+**Adding a model.** `services/agent/chatgpt_models.py` holds the supplement,
+registered into LiteLLM by `catalog._build()` and by `builder.build_model()`.
+Both are needed: a run resolving a stored row never touches the catalogue. It is
+deliberately NOT done in `chatgpt_oauth.ensure_ready()`, which runs inside a
+request and must import no LiteLLM and do no network work -- a hook placed there
+was caught by `test_the_gate_does_no_network_work`. To add a name, verify it
+first against a real
+subscription rather than guessing, because the set is not derivable from a
+pattern -- `gpt-5.6` is refused while `gpt-5.6-sol`, `-luna` and `-terra` all
+work:
+
+```python
+litellm.register_model({"chatgpt/<name>": {"litellm_provider": "chatgpt", "mode": "responses"}})
+litellm.responses(model="chatgpt/<name>", input=[{"role": "user", "content": "ok"}], stream=True)
+```
+
+Then add it to `SUPPLEMENTAL` with its context window.
+
+**Three rules for that file.**
+
+- **Never write cost keys.** A plan turn has no per-token price, and
+  `catalog.estimate_cost` returning None is what makes the usage badge report
+  tokens and no cost. Reporting `$0.00` claims the turn was free when it
+  consumed plan quota; falling back to the API price is worse.
+- **Never overwrite a LiteLLM entry, and test the provider, not the name.**
+  Eight of these models share a bare name with an OpenAI API model, so
+  `"gpt-5.6-sol" in litellm.model_cost` is True because of *OpenAI's* entry. A
+  guard written that way skips every model it exists to add. Match on
+  `litellm_provider == "chatgpt"`.
+- **Fail quietly.** The supplement is a convenience; a LiteLLM whose registry
+  has a different shape should cost these models, not a working agent.
+
+**Availability is per plan, not per provider.** These are the models the backend
+serves; which a given account may use is between the operator and OpenAI. The
+catalogue is advisory, and the model test on the config page is what answers for
+one account. That test **streams**, deliberately: LiteLLM's non-streaming reader
+for this provider raises `Unknown items in responses API response: []` on a
+reply that streams back perfectly (upstream #26179, open; its fix #27562 was
+closed unmerged), and the agent only ever runs `stream=True` anyway.
+
+Delete the file when LiteLLM ships these names. Its entries win automatically.
 
 ## Frontend build
 

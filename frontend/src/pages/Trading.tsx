@@ -1,13 +1,32 @@
 import { LayoutGrid, Link2 as LinkIcon } from 'lucide-react'
-import { createLinkGroup, type LinkGroup } from 'openalgo-charts'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { type ChartObjects, createLinkGroup, type LinkGroup } from 'openalgo-charts'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Navbar } from '@/components/layout/Navbar'
+
+// Lazy, because the panel pulls the markdown renderer and the syntax
+// highlighter's grammars and themes behind it. Statically imported, every
+// trader loading a chart paid for a chat they may never open. The heavy
+// visualization packages inside it are already lazy for the same reason.
+const AgentPanel = lazy(() =>
+  import('@/components/trading/AgentPanel').then((m) => ({ default: m.AgentPanel }))
+)
+
 import { ChartPane } from '@/components/trading/ChartPane'
 import { DrawingRail } from '@/components/trading/DrawingRail'
+import { DOCK_ID } from '@/components/trading/dock/DockShell'
+import {
+  type DockTab,
+  escapeTarget,
+  readDockTab,
+  writeDockTab,
+} from '@/components/trading/dock/dockState'
+import { TradingDock } from '@/components/trading/dock/TradingDock'
+import { ObjectsPanel } from '@/components/trading/ObjectsPanel'
 import { OptionChainPanel } from '@/components/trading/OptionChainPanel'
-import { type PanelId, RightRail } from '@/components/trading/RightRail'
+import { isPanelId, type PanelId, RightRail } from '@/components/trading/RightRail'
 import { TickBox } from '@/components/trading/TickBox'
 import { WatchlistPanel } from '@/components/trading/WatchlistPanel'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -15,6 +34,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Switch } from '@/components/ui/switch'
+import type { AgentChartCommand } from '@/lib/agent/stream'
+import { LAYOUTS, LayoutIcon } from '@/lib/chart/layouts'
 import type { DrawStats, SearchRow, TradingTerminal } from '@/lib/trading/terminal'
 import { cn } from '@/lib/utils'
 
@@ -24,79 +46,28 @@ const NO_DRAW: DrawStats = {
   canRedo: false,
   hasSelection: false,
   magnet: false,
+  stay: false,
   tool: null,
   shortcuts: {},
 }
 
-/**
- * Grid layout presets. Each preset is a
- * CSS grid: `areas` names the cells, `cells` maps each pane (in order) to a named
- * area — so a pane can span (e.g. the big left chart in "1 + 2").
- */
-interface LayoutPreset {
-  id: string
-  label: string
-  cols: string
-  rows: string
-  areas: string
-  cells: string[]
-}
-
-const LAYOUTS: LayoutPreset[] = [
-  { id: 'single', label: 'Single', cols: '1fr', rows: '1fr', areas: '"a"', cells: ['a'] },
-  {
-    id: 'cols2',
-    label: '2 columns',
-    cols: '1fr 1fr',
-    rows: '1fr',
-    areas: '"a b"',
-    cells: ['a', 'b'],
-  },
-  {
-    id: 'rows2',
-    label: '2 rows',
-    cols: '1fr',
-    rows: '1fr 1fr',
-    areas: '"a" "b"',
-    cells: ['a', 'b'],
-  },
-  {
-    id: 'oneTwo',
-    label: '1 + 2',
-    cols: '1.4fr 1fr',
-    rows: '1fr 1fr',
-    areas: '"a b" "a c"',
-    cells: ['a', 'b', 'c'],
-  },
-  {
-    id: 'grid4',
-    label: '2 × 2',
-    cols: '1fr 1fr',
-    rows: '1fr 1fr',
-    areas: '"a b" "c d"',
-    cells: ['a', 'b', 'c', 'd'],
-  },
-  {
-    id: 'grid6',
-    label: '3 × 2',
-    cols: '1fr 1fr 1fr',
-    rows: '1fr 1fr',
-    areas: '"a b c" "d e f"',
-    cells: ['a', 'b', 'c', 'd', 'e', 'f'],
-  },
-  {
-    id: 'grid8',
-    label: '4 × 2',
-    cols: '1fr 1fr 1fr 1fr',
-    rows: '1fr 1fr',
-    areas: '"a b c d" "e f g h"',
-    cells: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'],
-  },
-]
-
 const LAYOUT_KEY = 'oa-trading-layout'
 const SYNC_KEY = 'oa-trading-sync'
 const PANEL_KEY = 'oa-trading-panel'
+/**
+ * One-Click, the scalping terminal's convention ('1' / '0'). Off by default
+ * and off whenever the key is unreadable: a chart must never open with its
+ * Buy button live because storage was cleared or blocked.
+ */
+const ARMED_KEY = 'oa-trading-armed'
+
+function readArmed(): boolean {
+  try {
+    return localStorage.getItem(ARMED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 /**
  * What a linked grid agrees on. The engine keeps the three independent, so the
@@ -132,31 +103,18 @@ function readSync(): SyncState {
   }
 }
 
-/** Mini glyph that previews a layout preset (renders the actual grid arrangement). */
-function LayoutIcon({ preset, className }: { preset: LayoutPreset; className?: string }) {
-  return (
-    <span
-      className={cn('grid h-4 w-4 gap-px', className)}
-      style={{
-        gridTemplateColumns: preset.cols,
-        gridTemplateRows: preset.rows,
-        gridTemplateAreas: preset.areas,
-      }}
-      aria-hidden="true"
-    >
-      {preset.cells.map((c) => (
-        <span key={c} style={{ gridArea: c }} className="rounded-[1px] bg-current" />
-      ))}
-    </span>
-  )
-}
-
 export default function Trading() {
   const [layoutId, setLayoutId] = useState(() => {
     const saved = localStorage.getItem(LAYOUT_KEY)
     return LAYOUTS.some((l) => l.id === saved) ? (saved as string) : 'single'
   })
   const [sync, setSync] = useState<SyncState>(readSync)
+  /**
+   * One-Click for the whole workspace. Every pane follows it, like sync: the
+   * on-chart Buy in one pane must not fire while the same button in the next
+   * pane asks first.
+   */
+  const [armed, setArmed] = useState<boolean>(readArmed)
   /**
    * One group for the whole workspace, created once and kept for the life of
    * the page. Panes join it as their charts are built and re-join after every
@@ -173,6 +131,7 @@ export default function Trading() {
   /* ── one drawing rail for every pane ─────────────────────────────────── */
   const [tool, setTool] = useState<string | null>(null)
   const [magnet, setMagnet] = useState(false)
+  const [stay, setStay] = useState(false)
   const [showRail, setShowRail] = useState(true)
   const [stats, setStats] = useState<DrawStats>(NO_DRAW)
   // Undo / delete act on the pane you last drew in; arming a tool hits them all,
@@ -182,8 +141,16 @@ export default function Trading() {
   /* ── side panels ─────────────────────────────────────────────────────── */
   const [panel, setPanel] = useState<PanelId | null>(() => {
     const saved = localStorage.getItem(PANEL_KEY)
-    return saved === 'watchlist' || saved === 'options' ? saved : null
+    // Checked against the rail's own list rather than a second copy of it, so
+    // a panel added or renamed there cannot leave this reading a stale name.
+    return isPanelId(saved) ? saved : null
   })
+  /**
+   * The bottom dock: which book is open under the grid, or null for the
+   * collapsed strip. Page-level like the side panels, and for the same
+   * reason: the books span every symbol, so they belong to no one pane.
+   */
+  const [dock, setDock] = useState<DockTab | null>(readDockTab)
   /**
    * Which pane a panel click loads into, and whose instrument the watchlist
    * highlights. The first pane until the user touches another, so a click in
@@ -191,6 +158,7 @@ export default function Trading() {
    */
   const [focusedPane, setFocusedPane] = useState('p0')
   const [paneSymbols, setPaneSymbols] = useState<Record<string, string | null>>({})
+  const [paneObjects, setPaneObjects] = useState<Record<string, ChartObjects>>({})
   /**
    * Every live pane's terminal, keyed by pane id.
    *
@@ -204,6 +172,19 @@ export default function Trading() {
   const noteTerminal = useCallback((paneId: string, terminal: TradingTerminal | null) => {
     if (terminal) terminalsRef.current[paneId] = terminal
     else delete terminalsRef.current[paneId]
+  }, [])
+
+  const noteObjects = useCallback((paneId: string, objects: ChartObjects | null) => {
+    setPaneObjects((previous) => {
+      if (objects) {
+        if (previous[paneId] === objects) return previous
+        return { ...previous, [paneId]: objects }
+      }
+      if (!(paneId in previous)) return previous
+      const next = { ...previous }
+      delete next[paneId]
+      return next
+    })
   }, [])
 
   /** The pane a panel acts on: the focused one, else any pane that is up. */
@@ -240,21 +221,74 @@ export default function Trading() {
     [panelTarget]
   )
 
+  /**
+   * Whether any pane is replaying, or picking a bar to replay from. The
+   * dock's actions go to the broker at the live price, and the chart already
+   * refuses every order route while a replayed session is on screen; a
+   * Cancel in the dock under that chart has to refuse in the same breath.
+   * Any pane, not just the focused one: the dock is page-level and the
+   * replayed chart is on screen whichever pane it is in.
+   */
+  const tradingLocked = useCallback(
+    () =>
+      Object.values(terminalsRef.current).some(
+        (t) => t !== null && (t.replayActive() || t.replayPickingBar())
+      ),
+    []
+  )
+
   /** Bound to the focused pane so panel search returns broker-supported rows. */
   const searchFromFocusedPane = useCallback(
     (query: string, exchange?: string, limit?: number) =>
       panelTarget()?.search(query, exchange, limit) ?? Promise.resolve([]),
     [panelTarget]
   )
-  const railStats: DrawStats = { ...stats, tool, magnet }
+
   /**
-   * Hand a key event to the focused pane; it reports whether a tool claimed it.
-   * The chord table ships with the lazily loaded draw tier, so the terminal --
-   * not this page and not the rail -- is what can answer.
+   * The agent's two ends, both resolved through `panelTarget` at call time.
+   *
+   * That is what makes the chart context fresh: the pane is looked up when the
+   * message is sent, not when the panel mounted, so loading a symbol and then
+   * asking about it asks about the symbol that is there. It also means the
+   * agent follows the focused pane in a grid layout, the same way the
+   * watchlist and the option chain already do.
    */
-  const armByShortcut = useCallback((e: KeyboardEvent) => {
+  const readChartContext = useCallback(() => panelTarget()?.chartContext() ?? null, [panelTarget])
+
+  const applyChartCommands = useCallback(
+    (commands: AgentChartCommand[]) => {
+      void panelTarget()?.applyChartCommands(commands)
+    },
+    [panelTarget]
+  )
+
+  /**
+   * The focused pane as a PNG, for the agent composer's screenshot item.
+   *
+   * The same capture the camera menu's save and copy use, so what the model is
+   * shown is exactly what saving would have produced: the interaction-only
+   * overlays taken down, the OHLC readout painted in.
+   */
+  const captureChart = useCallback(
+    () => panelTarget()?.snapshotPng() ?? Promise.resolve(null),
+    [panelTarget]
+  )
+  const objectsPaneId = paneObjects[focusedPane]
+    ? focusedPane
+    : (Object.keys(paneObjects)[0] ?? focusedPane)
+  const objectsPaneLabel = `Pane ${Number(objectsPaneId.slice(1)) + 1}${
+    paneSymbols[objectsPaneId] ? ` · ${paneSymbols[objectsPaneId]}` : ''
+  }`
+  const railStats: DrawStats = { ...stats, tool, magnet, stay }
+  /**
+   * Hand a key event to the focused pane; it reports whether the drawing tier
+   * claimed it, as a chord arming a tool or as an edit of the selection
+   * (delete, duplicate, a nudge). Both tables ship with the lazily loaded
+   * tier, so the terminal -- not this page and not the rail -- can answer.
+   */
+  const onDrawKey = useCallback((e: KeyboardEvent) => {
     const t = activeRef.current
-    if (!t || !t.armByShortcut(e)) return false
+    if (!t || !t.handleDrawKey(e)) return false
     setTool(t.drawStats().tool)
     setStats(t.drawStats())
     return true
@@ -276,6 +310,19 @@ export default function Trading() {
     else localStorage.removeItem(PANEL_KEY)
   }, [panel])
 
+  useEffect(() => {
+    writeDockTab(dock)
+  }, [dock])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(ARMED_KEY, armed ? '1' : '0')
+    } catch {
+      // Storage refused (private mode, quota): the switch still works for
+      // this visit, it just does not survive a reload.
+    }
+  }, [armed])
+
   /**
    * Escape closes the open panel, the way it disarms a drawing tool. Without
    * it the only way back to a full-width chart is a 32px target in the corner.
@@ -288,9 +335,13 @@ export default function Trading() {
    *   panel underneath it.
    * - to an armed drawing tool, which DrawingRail disarms on the same key
    *   without stopping propagation. One Escape did both.
+   *
+   * The bottom dock slots in after those two and before the panel, but only
+   * while it is the topmost thing with focus: focus is inside it, or it is
+   * the only thing open. escapeTarget holds that rule.
    */
   useEffect(() => {
-    if (!panel) return
+    if (!panel && !dock) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       if (tool) return
@@ -305,7 +356,8 @@ export default function Trading() {
       if (document.body.hasAttribute('data-scroll-locked')) return
       if (
         document.querySelector(
-          '[data-state="open"][role="dialog"],' +
+          '[data-trading-dialog-open="true"],' +
+            '[data-state="open"][role="dialog"],' +
             '[data-state="open"][data-slot="popover-content"],' +
             '[data-state="open"][role="menu"],' +
             '[data-state="open"][role="listbox"]'
@@ -313,11 +365,21 @@ export default function Trading() {
       ) {
         return
       }
-      setPanel(null)
+      const dockEl = document.getElementById(DOCK_ID)
+      const closes = escapeTarget({
+        dock: dock !== null,
+        panel: panel !== null,
+        focusInDock: !!dockEl && dockEl.contains(document.activeElement),
+      })
+      if (closes === 'dock') setDock(null)
+      else if (closes === 'panel') setPanel(null)
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [panel, tool])
+    // Capture sees an open pane dialog before that dialog's own window-level
+    // Escape listener unmounts it. In bubble order the dialog could disappear
+    // first, making this handler also close the panel underneath it.
+    window.addEventListener('keydown', onKey, { capture: true })
+    return () => window.removeEventListener('keydown', onKey, { capture: true })
+  }, [panel, dock, tool])
 
   useEffect(() => {
     localStorage.setItem(SYNC_KEY, JSON.stringify(sync))
@@ -478,6 +540,27 @@ export default function Trading() {
     </DropdownMenu>
   )
 
+  /**
+   * One-Click, beside the layout and sync pickers because, like them, it is a
+   * property of the workspace and not of one pane. The switch is the control
+   * and the badge is its label, so the badge reads the state in the scalping
+   * terminal's words and clicking either toggles it once. A label, not a
+   * button, for the reason the sync rows give: a button wrapping a switch
+   * fires twice.
+   */
+  const armedControl = (
+    <label className="flex h-8 shrink-0 cursor-pointer items-center gap-1.5 pl-1">
+      <Switch checked={armed} onCheckedChange={setArmed} aria-label="One-Click" />
+      {/* The word goes below lg, as Indicators and Replay drop their labels:
+          with it the single-pane toolbar at 1024px pushed the LED and the
+          camera into hidden horizontal scroll. The switch keeps its name. */}
+      <Badge variant={armed ? 'destructive' : 'secondary'}>
+        <span className="hidden lg:inline">One-Click&nbsp;</span>
+        {armed ? 'ARMED' : 'off'}
+      </Badge>
+    </label>
+  )
+
   return (
     <>
       {/* Full-bleed page: the nav must match the chart width, not
@@ -494,7 +577,8 @@ export default function Trading() {
               onRedo={() => act((t) => t.redoDraw())}
               onRemove={(all) => act((t) => t.removeDrawings(all))}
               onMagnet={(v) => setMagnet(v)}
-              onShortcut={armByShortcut}
+              onStay={(v) => setStay(v)}
+              onShortcut={onDrawKey}
             />
           )}
           <div className="min-h-0 min-w-0 flex-1">
@@ -523,18 +607,22 @@ export default function Trading() {
                     style={{ gridArea: cell }}
                     sharedTool={tool}
                     sharedMagnet={magnet}
+                    sharedStay={stay}
                     onFocusPane={focusPane}
                     onSymbolChange={noteSymbol}
                     onTerminalChange={noteTerminal}
+                    onObjectsChange={noteObjects}
                     onDrawStats={setStats}
                     onToggleRail={() => setShowRail((v) => !v)}
                     railVisible={showRail}
                     linkGroup={linkRef.current}
+                    armed={armed}
                     layoutPicker={
                       i === 0 ? (
                         <>
                           {layoutPicker}
                           {syncPicker}
+                          {armedControl}
                         </>
                       ) : undefined
                     }
@@ -566,9 +654,35 @@ export default function Trading() {
               activeSymbol={paneSymbols[focusedPane] ?? null}
             />
           )}
+          {apiKey && wsUrl && panel === 'agent' && (
+            <Suspense fallback={null}>
+              <AgentPanel
+                getChartContext={readChartContext}
+                onChartCommand={applyChartCommands}
+                onCaptureChart={captureChart}
+              />
+            </Suspense>
+          )}
+          {apiKey && wsUrl && panel === 'objects' && (
+            <ObjectsPanel model={paneObjects[objectsPaneId] ?? null} paneLabel={objectsPaneLabel} />
+          )}
 
           {apiKey && wsUrl && <RightRail active={panel} onSelect={setPanel} />}
         </main>
+
+        {/* The bottom dock: orders, positions and trades across every symbol.
+            Under the rails and the side panel, full width, because the books
+            are the workspace's and not one pane's. */}
+        {apiKey && wsUrl && (
+          <TradingDock
+            tab={dock}
+            onTabChange={setDock}
+            apiKey={apiKey}
+            onPick={sendToFocusedPane}
+            activeSymbol={paneSymbols[focusedPane] ?? null}
+            tradingLocked={tradingLocked}
+          />
+        )}
       </div>
     </>
   )

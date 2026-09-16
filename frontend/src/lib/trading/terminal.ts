@@ -13,15 +13,18 @@
  * cancel, real-time order stream, REST fallback) is unchanged.
  */
 
-import type { LinkGroup } from 'openalgo-charts'
+import type { ChartObjectSnapshot, LinkGroup } from 'openalgo-charts'
 import {
   type Bar,
   BuySellButtons,
   CandleBuilder,
+  ChartObjects,
+  type ChartTheme,
   compactVolume,
   createChart,
+  DataLoadingController,
+  type DataLoadingSnapshot,
   type IPrimitive,
-  LogoWatermark,
   type LtpEvent,
   type MarketDepth,
   OpenAlgoDataFeed,
@@ -30,17 +33,29 @@ import {
   type PriceLine,
   ReplayController,
   ReplayShade,
-  TextWatermark,
   type ReplayState,
   readChartSettings,
   type SeriesApi,
   type SeriesStyle,
   type SeriesType,
+  TextWatermark,
   tryResolveInterval,
   withBarCache,
 } from 'openalgo-charts'
-import type { DrawingController } from 'openalgo-charts/draw'
-import { runTransform } from 'openalgo-charts/transform'
+import type {
+  DrawingController,
+  DrawingPatch,
+  DrawingsDocument,
+  DrawingText,
+  DrawingTool,
+} from 'openalgo-charts/draw'
+import {
+  runTransform,
+  parseExpression,
+  evaluateExpression,
+  type SymbolExpression,
+} from 'openalgo-charts/transform'
+import { ExpressionFeed, isChartExpression, resolveLeg } from './expressionFeed'
 
 // Re-exported so the React layer imports its chart types from this facade
 // rather than reaching into the library directly, as it already does for
@@ -51,15 +66,39 @@ type ChartInstance = ReturnType<typeof createChart>
 type BuySellButtonsInstance = InstanceType<typeof BuySellButtons>
 type TradeFeedInstance = InstanceType<typeof OpenAlgoTradeFeed>
 type DrawingControllerInstance = InstanceType<typeof DrawingController>
-type DrawingJson = ReturnType<DrawingControllerInstance['toJSON']>[number]
+
+/** The document a pane holds when it has nothing drawn. A fresh one each time, never shared. */
+const emptyDrawings = (): DrawingsDocument => ({ version: 2, drawings: [] })
+
+/**
+ * Whether a stored value is already the 2.0 document. A 1.9.x save is a bare
+ * array; anything else is garbage. The entries are not inspected: the tier's
+ * own migration validates every field when it loads them.
+ */
+function isDrawingsDocument(value: unknown): value is DrawingsDocument {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const doc = value as { version?: unknown; drawings?: unknown }
+  return doc.version === 2 && Array.isArray(doc.drawings)
+}
 
 /** What the toolbar needs to enable/disable its drawing buttons. */
 export interface DrawStats {
   count: number
   canUndo: boolean
   canRedo: boolean
+  /**
+   * Whether anything is selected. The tier supports a shift-click multi-
+   * selection; the rail's delete and the style bar act on all of it, while
+   * `DrawSelection` describes the primary (the first id picked).
+   */
   hasSelection: boolean
   magnet: boolean
+  /**
+   * Whether the armed tool survives a placement. Off, the tier disarms after
+   * one drawing and the rail returns to the cursor, which is the tier's
+   * default; on, the tool stays armed until it is turned off.
+   */
+  stay: boolean
   tool: string | null
   /**
    * Tool id -> keyboard chord, from the draw tier. Empty until the tier has
@@ -69,8 +108,18 @@ export interface DrawStats {
   shortcuts: Record<string, string>
 }
 
+import type { AgentChartCommand } from '@/lib/agent/stream'
 import type { AppMode, ThemeMode } from '@/stores/themeStore'
-import { buildChartTheme, isLightTheme, resolveCssColor, volumeColor } from './chartTheme'
+import {
+  applyChartCommands,
+  applyIndicatorCommands,
+  type ChartContext,
+  describeDrawings,
+  isAgentDrawingId,
+} from './chartContract'
+import { DRAW_TOOL_METADATA } from './drawingToolMetadata'
+import { CurrentDrawingSource, profileObjectProvider } from './chartObjectsAdapter'
+import { buildChartTheme, mutedTradeColors, resolveCssColor, volumeColor } from './chartTheme'
 import { CHART_TYPES } from './chartTypes'
 import { fmtPrice, money, priceDp, snapTick, tickSize } from './format'
 import {
@@ -88,6 +137,16 @@ import {
   legendToneStyle,
   lotInfoText,
 } from './legend'
+import { profileIntervalSupported, selectProfileInterval } from './profileIntervals'
+import { ProfileLayer } from './profileLayer'
+import {
+  isProfileKind,
+  type ProfileKind,
+  profileDefaults,
+  profileValues,
+  readProfileSettings,
+} from './profileSettings'
+import { profileSettingsView } from './profileSettingsView'
 
 export type OrderSide = 'BUY' | 'SELL'
 export type OrderType = 'MARKET' | 'LIMIT' | 'SL' | 'SL-M'
@@ -128,6 +187,13 @@ export interface SymbolView {
   tick: number
   freezeQty: number
   quoteOnly: boolean
+  /**
+   * A chart of an expression (`NIFTY/RELIANCE`, `2*CE25000 - CE25200`) rather
+   * than an instrument. There is nothing to place an order in and nothing to
+   * subscribe to, so this is set alongside `quoteOnly`, and the order path
+   * refuses it by name rather than trusting that alias to hold.
+   */
+  synthetic?: boolean
   productOptions: string[]
   product: string
 }
@@ -148,11 +214,54 @@ export interface CtxItem {
   enabled: boolean
 }
 
+/**
+ * An order the terminal has validated but not placed, in the shape the host's
+ * order ticket takes. Produced while One-Click is off: the on-chart buttons and
+ * the context-menu rows start an order but never place one, the way the option
+ * chain's pills do. Quantity is in units (lots already multiplied out), which
+ * is what the ticket and the broker both take.
+ */
+export interface OrderTicketRequest {
+  symbol: string
+  exchange: string
+  action: OrderSide
+  quantity: number
+  lotSize: number
+  tickSize: number
+  product: 'MIS' | 'NRML' | 'CNC'
+  priceType: OrderType
+  /** Limit price, for LIMIT and SL. Absent on a market order. */
+  price?: number
+  /** Trigger, for SL and SL-M. */
+  triggerPrice?: number
+  strategy: string
+}
+
+/**
+ * The order a ticket comes back with, in the placeorder endpoint's field
+ * names: the trader may have changed the side, the quantity, the type or the
+ * product before confirming, so it is taken whole rather than as a patch on
+ * the OrderTicketRequest that opened it.
+ */
+export interface ConfirmedOrder {
+  symbol: string
+  exchange: string
+  action: OrderSide
+  quantity: number
+  pricetype: OrderType
+  product: 'MIS' | 'NRML' | 'CNC'
+  price?: number
+  trigger_price?: number
+}
+
 export interface TerminalCallbacks {
   onReady(info: { intervalGroups: IntervalGroup[]; interval: string; chartType: string }): void
+  onIntervalChange?(interval: string): void
   onToast(msg: string, kind: ToastKind): void
   onWsState(state: string): void
   onSymbolLoaded(view: SymbolView): void
+  /** Linked branding exposed in host chrome for keyboard and assistive technology. */
+  onBrandingChange?(link: BrandingLink | null): void
   onLtp(ltp: number): void
   /** Drawing toolbar state changed (tool armed, shape added/removed, undo...). */
   onDrawChange?(stats: DrawStats): void
@@ -163,6 +272,10 @@ export interface TerminalCallbacks {
    * canvas-only and ships no DOM, so the form is ours to render.
    */
   onIndicatorSettings?(req: IndicatorSettingsRequest): void
+  /** The current chart generation's shared object inventory. */
+  onObjectsChange?(objects: ChartObjects | null): void
+  /** Opens this pane's existing chart settings dialog. */
+  onChartSettings?(req: ChartSettingsRequest): void
   /** A drawing was selected (or deselected), for the style popover. */
   onDrawSelect?(sel: DrawSelection | null): void
   /**
@@ -177,10 +290,57 @@ export interface TerminalCallbacks {
    * but has no DOM to collect it with, so the host prompts.
    */
   onDrawTextEdit?(req: { id: string; tool: string; text: string }): void
+  /**
+   * One-Click is off and an order route was used: the on-chart Buy or Sell,
+   * or a context-menu row. Every guard the armed path applies has already
+   * passed. The engine ships no DOM, so the ticket is the host's to render;
+   * nothing is placed until it confirms.
+   */
+  onOrderTicket?(req: OrderTicketRequest): void
+}
+
+export interface BrandingLink {
+  href: string
+  label: string
 }
 
 /** Tools whose content is typed rather than dragged. */
-const TEXT_TOOLS = new Set(['text', 'callout', 'price-label'])
+const TEXT_TOOLS = new Set(Object.keys(DRAW_TOOL_METADATA).filter((id) => DRAW_TOOL_METADATA[id].text))
+
+/** The colour forms emitted by the chart palette and the host token rasterizer. */
+function drawingRgb(color: string): number[] | null {
+  const value = color.trim()
+  let rgb: number[] | null = null
+  if (/^#[0-9a-f]{3,4}$/i.test(value)) {
+    rgb = [...value.slice(1, 4)].map((channel) => parseInt(channel + channel, 16))
+  } else if (/^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(value)) {
+    rgb = [1, 3, 5].map((offset) => parseInt(value.slice(offset, offset + 2), 16))
+  } else {
+    const match = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*[\d.]+\s*)?\)$/i.exec(value)
+    if (match) rgb = match.slice(1, 4).map(Number)
+  }
+  return rgb
+}
+
+/** Native colour inputs require hex even when the canvas theme uses rgb(). */
+function drawingColorInput(color: string): string {
+  const rgb = drawingRgb(color)
+  return rgb ? `#${rgb.map(channel => Math.max(0, Math.min(255, Math.round(channel))).toString(16).padStart(2, '0')).join('')}` : '#000000'
+}
+
+/** Match the renderer's automatic plate text while preserving an unset override. */
+function drawingTextContrast(background: string): string {
+  const rgb = drawingRgb(background)
+  if (!rgb) return '#10131a'
+  const [r, g, b] = rgb.map((channel) => {
+    const value = channel / 255
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+  })
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.45 ? '#10131a' : '#ffffff'
+}
+
+/** The engine's font size for drawing text that carries none, in media px. */
+const DRAWING_TEXT_PX = 12
 
 /** Everything needed to generate an indicator settings form. */
 export interface IndicatorSettingsRequest {
@@ -231,6 +391,7 @@ export type ChartSettingsField = IndicatorField | ChartSettingsPairField
 export interface ChartSettingsTabView {
   id: string
   label: string
+  description?: string
   inputs: ChartSettingsField[]
 }
 
@@ -281,8 +442,8 @@ export interface DrawSelection {
 
 /**
  * Everything a text-bearing drawing's settings dialog edits. The engine renders
- * all of it already (`TEXT`'s style keys); it ships no DOM, so the form is the
- * host's and needs the current values to open populated rather than blank.
+ * all of it already (a drawing's `text` keys); it ships no DOM, so the form is
+ * the host's and needs the current values to open populated rather than blank.
  */
 export interface DrawTextStyle {
   text: string
@@ -309,7 +470,9 @@ export interface TerminalOptions {
   callbacks: TerminalCallbacks
 }
 
-const DERIVATIVE_EXCHANGES = new Set(['NFO', 'BFO', 'CDS', 'BCD', 'MCX', 'NCO', 'NCDEX'])
+// CRYPTO is the broker-agnostic exchange for crypto derivatives (utils/constants.py); a
+// contract there is NRML or MIS in lots, and CNC does not exist for it.
+const DERIVATIVE_EXCHANGES = new Set(['NFO', 'BFO', 'CDS', 'BCD', 'MCX', 'NCO', 'NCDEX', 'CRYPTO'])
 
 /**
  * Products a segment accepts. Derivative segments are NRML/MIS and cash equity
@@ -368,7 +531,77 @@ export function dedupeIndicators<T extends { indicatorId: string; settings: unkn
     return true
   })
 }
+
+export interface SavedIndicatorRecord {
+  indicatorId: string
+  settings: Record<string, unknown>
+  /** Missing in saves written before visibility persistence. */
+  visible?: boolean
+}
+
+/** Avoid storage and React work for generic object events that changed no indicator. */
+export function sameIndicatorRecords(
+  left: readonly SavedIndicatorRecord[],
+  right: readonly SavedIndicatorRecord[]
+): boolean {
+  return JSON.stringify(left) === JSON.stringify(right)
+}
+
+export function sameIndicatorInstances(
+  left: readonly { id: string; name: string }[],
+  right: readonly { id: string; name: string }[]
+): boolean {
+  return JSON.stringify(left) === JSON.stringify(right)
+}
 const STRATEGY = 'chart-trading'
+/**
+ * Minimum gap between two armed fires, the scalping terminal's figure. A
+ * double-click on the on-chart Buy, or a click that lands as the canvas
+ * repaints under it, must be one order and not two.
+ */
+export const ORDER_COOLDOWN_MS = 120
+
+/**
+ * The quantity an order carries, in units. The toolbar box means lots on a
+ * derivative segment and shares on cash equity; the broker takes units either
+ * way. One function so the armed path and the ticket cannot size differently.
+ */
+export function orderUnits(qty: number, lots: boolean, lotsize: number): number {
+  const n = Math.max(1, Math.floor(qty || 1))
+  return lots ? n * lotsize : n
+}
+
+/**
+ * The ticket for an order the chart would otherwise place at once: the same
+ * price mapping `placeFromMenu` sends the broker. A market order carries no
+ * price; a limit carries the clicked price; a stop carries it as the trigger
+ * and, for SL, as the limit too.
+ */
+export function buildOrderTicket(input: {
+  sym: SymbolView
+  qty: number
+  product: string
+  side: OrderSide
+  type: OrderType
+  /** The tick-snapped price the row was clicked at; ignored for MARKET. */
+  price: number
+}): OrderTicketRequest {
+  const { sym, side, type, price } = input
+  const stop = type === 'SL' || type === 'SL-M'
+  return {
+    symbol: sym.symbol,
+    exchange: sym.exchange,
+    action: side,
+    quantity: orderUnits(input.qty, sym.lots, sym.lotsize),
+    lotSize: sym.lots ? sym.lotsize : 1,
+    tickSize: sym.tick,
+    product: input.product as 'MIS' | 'NRML' | 'CNC',
+    priceType: type,
+    price: type === 'MARKET' || type === 'SL-M' ? undefined : price,
+    triggerPrice: stop ? price : undefined,
+    strategy: STRATEGY,
+  }
+}
 const VISIBLE_BARS = 120
 /** Empty bars kept between the newest candle and the price axis. */
 const RIGHT_PAD_BARS = 4
@@ -424,6 +657,7 @@ export class TradingTerminal {
   private readonly sk: string
 
   private chart: ChartInstance | null = null
+  private offBranding: (() => void) | null = null
   private price: SeriesApi | null = null
   private volume: SeriesApi | null = null
 
@@ -431,17 +665,33 @@ export class TradingTerminal {
      interval / chart-type / theme change, so both round-trip through plain
      data here and are re-applied to the new chart. */
   private draw: DrawingControllerInstance | null = null
-  private drawJson: DrawingJson[] = []
+  private readonly objectDrawings = new CurrentDrawingSource()
+  private objects: ChartObjects | null = null
+  private offProfileObject: (() => void) | null = null
+  private drawJson: DrawingsDocument = emptyDrawings()
+  /**
+   * A 1.9.x save (a bare array) waiting for the draw tier to migrate it. The
+   * migration lives in the tier, which is fetched on first use, so it cannot
+   * run on the boot path without bundling the tier for every pane; the array
+   * waits here and `attachDrawing` lifts it the moment the tier is in hand.
+   * Null once it has, or when the save was already a document.
+   */
+  private drawLegacy: readonly unknown[] | null = null
   private drawTool: string | null = null
   private drawMagnet = false
+  private drawStay = false
   /** True once a drawing control has been touched — gates the lazy tier fetch. */
   private drawEnabled = false
-  private activeIndicators: { indicatorId: string; settings: Record<string, unknown> }[] = []
+  private activeIndicators: SavedIndicatorRecord[] = []
   private indicatorsLoaded = false
   /** Guards syncIndicators while applyIndicators is mid-flight. */
   private applyingIndicators = false
+  /** The generation whose saved instances are still crossing an async tier load. */
+  private restoringIndicatorsOn: ChartInstance | null = null
+  /** Last live instance identities sent to the pane toolbar. */
+  private announcedIndicators: { id: string; name: string }[] = []
   /** History paging: in-flight guard, and whether the broker ran out. */
-  private loadingOlder = false
+  private loadingOlder: { chart: ReturnType<typeof createChart>; ticket: number } | null = null
   private noMoreHistory = false
   private volumeOn = true
   private gridV = true
@@ -456,6 +706,30 @@ export class TradingTerminal {
         shiftKey?: boolean
       }) => string | null)
     | null = null
+  /**
+   * What a key means for the selection or the placement in hand. The tier
+   * installs no listener and answers questions instead, so a host that never
+   * asks has a Delete key that does nothing. Null until the tier loads.
+   */
+  private keyAction:
+    | ((
+        e: {
+          key: string
+          ctrlKey?: boolean
+          metaKey?: boolean
+          shiftKey?: boolean
+          altKey?: boolean
+        },
+        ctx: {
+          hasSelection: boolean
+          hasTarget: boolean
+          editingText: boolean
+          placing?: boolean
+        }
+      ) => { type: string; dx?: number; dy?: number } | null)
+    | null = null
+  /** The tier's tool registry, for a tool's own defaults; null until it loads. */
+  private toolOf: ((id: string) => DrawingTool) | null = null
   private posLine: PriceLine | null = null
   private tradeBtns: BuySellButtonsInstance | null = null
   /** The bar the OHLC readout is currently showing; replayed into the export. */
@@ -473,13 +747,9 @@ export class TradingTerminal {
   private ws: InstanceType<typeof OpenAlgoWsFeed> | null = null
   private rest: InstanceType<typeof OpenAlgoDataFeed> | null = null
   /**
-   * The same feed with warm-load caching in front of it.
-   *
-   * Deliberately a SECOND handle rather than a replacement for `rest`: the
-   * periodic reconcile exists to re-ask the broker about bars it may already
-   * have, so it must keep going to the wire. Everything else -- opening a
-   * symbol, paging in older history -- is immutable closed history and is
-   * exactly what a cache is for.
+   * The REST feed with warm-load caching in front of it. The data controller
+   * asks this wrapper for a closed snapshot, then uses `noCache` for every
+   * authoritative tail repair. `rest` remains available for finer replay bars.
    *
    * The cache never stores a forming bar, so a warm load is short by at most
    * the bar currently building, which the WebSocket supplies within a tick. A
@@ -487,10 +757,30 @@ export class TradingTerminal {
    * must never be confidently wrong about a price.
    */
   private cachedBars: ReturnType<typeof withBarCache> | null = null
+  /** One owner for warm history, authoritative repair, paging and live merges. */
+  private data: DataLoadingController | null = null
+  private offData: (() => void) | null = null
+  /** The request whose symbol/interval metadata the current chart was built for. */
+  private chartDataKey: string | null = null
   private trade: TradeFeedInstance | null = null
   private builder: CandleBuilder | null = null
+  /** The expression on the chart, when the pane shows a combination rather than an instrument. */
+  private expr: SymbolExpression | null = null
+  /** History for plain symbols and combinations alike; the controller talks only to this. */
+  private exprFeed: ExpressionFeed | null = null
+  /** Exchange a bare leg of the current expression resolves to. */
+  private exprLegExchange = 'NSE'
+  /** Latest price per leg, keyed as the expression names them. */
+  private readonly legLtp = new Map<string, number>()
+  /** The LTP subscriptions a combination holds, one per leg. */
+  private legSubs: Array<{ symbol: string; exchange: string }> = []
   private offLtp: (() => void) | null = null
   private offDepth: (() => void) | null = null
+  private offWsState: (() => void) | null = null
+  private offWsControl: (() => void) | null = null
+  private offOrderUpdate: (() => void) | null = null
+  private offLegendActions: (() => void) | null = null
+  private offReplayPointer: (() => void) | null = null
   private depthActive = false
 
   private rawBars: Bar[] = []
@@ -512,6 +802,8 @@ export class TradingTerminal {
    * {@link snapshotChartDefaults}.
    */
   private chartDefaults: Record<string, string | number | boolean> = {}
+  private profileLayer: ProfileLayer | null = null
+  private availableIntervals: string[] = ['1m', '5m', '15m', '1h', 'D']
   /** The workspace link group this pane belongs to, if sync is on. */
   private link: LinkGroup | null = null
   /** Non-null only while the chart is showing a replayed prefix. */
@@ -523,11 +815,11 @@ export class TradingTerminal {
   private replayShades: ReplayShade[] = []
   private replayMark: TextWatermark | null = null
   /** Base-interval bars under the displayed ones, for intra-bar replay. */
-  private replaySub: { interval: string; bars: Bar[] } | null = null
+  private replaySub: { interval: string; symbol: string; exchange: string; bars: Bar[] } | null =
+    null
+  private replayLoadTicket = 0
   /** The price axis's autoscale state before replay forced it on. */
   private replayAutoScale = true
-  /** Held so it can be moved to whichever pane is currently at the bottom. */
-  private watermark: LogoWatermark | null = null
   private shownCount = 0
   private liveBucket: number | null = null
   private lastLtp: number | null = null
@@ -539,11 +831,26 @@ export class TradingTerminal {
   private ctype = 'candlestick'
   private product = 'MIS'
   private qty = 1
+  /**
+   * One-Click. Off, a Buy or a context-menu row opens the host's ticket; on,
+   * it places at once. The page owns the switch and every pane follows it.
+   * Default off: a fresh terminal must never send an order on one click.
+   */
+  private armed = false
+  /** When the last armed order left, for the double-fire cooldown. */
+  private lastFireAt = 0
+  /** The theme the live chart was built with; the trade buttons derive from it. */
+  private chartTheme: ChartTheme | null = null
 
   private bookTimer: ReturnType<typeof setInterval> | null = null
-  private reconcileTimer: ReturnType<typeof setTimeout> | null = null
   private ltpPollTimer: ReturnType<typeof setInterval> | null = null
+  /** Serialises agent chart commands. See {@link applyChartCommands}. */
+  private chartCommandQueue: Promise<void> = Promise.resolve()
   private destroyed = false
+
+  private readonly onVisibilityChange = () => {
+    this.data?.setVisible(document.visibilityState !== 'hidden')
+  }
 
   constructor(opts: TerminalOptions) {
     this.apiKey = opts.apiKey
@@ -646,6 +953,9 @@ export class TradingTerminal {
   }
 
   private setPriceData() {
+    // History can finish during replay. Keep its live snapshot up to date,
+    // but leave both displayed series and their timeline to the playhead.
+    if (this.replay) return
     if (!this.price || !this.volume || !this.rawBars.length) return
     const cfg = CHART_TYPES[this.ctype] || CHART_TYPES.candlestick
     if (cfg.transform) {
@@ -667,6 +977,72 @@ export class TradingTerminal {
       this.shownBars = this.rawBars
     }
     this.shownCount = this.shownBars.length
+    this.profileLayer?.refresh(true)
+  }
+
+  private dataKey(request: { symbol: string; exchange: string; interval: string }): string {
+    return `${request.exchange}:${request.symbol}:${request.interval}`
+  }
+
+  /** Apply a controller snapshot only to the symbol session that requested it. */
+  private applyDataSnapshot(snapshot: DataLoadingSnapshot): void {
+    const request = snapshot.request
+    const sym = this.sym
+    if (
+      this.destroyed ||
+      !request ||
+      !sym ||
+      request.symbol !== sym.symbol ||
+      request.exchange !== sym.exchange ||
+      request.interval !== this.interval
+    )
+      return
+
+    this.noMoreHistory = snapshot.hasMore === false
+    if (snapshot.reason === 'live' || snapshot.reason === 'state') return
+
+    // While replay is paused, snapshots deliberately retain the display bars.
+    // The controller's live store still accepts refreshes, pages and pushBar,
+    // so keep rawBars current for the eventual resume without touching canvas.
+    const owned = snapshot.paused ? this.data?.bars() : snapshot.bars
+    if (!owned?.length) return
+    const next = [...owned]
+    const chart = this.chart
+    const before = snapshot.reason === 'prepend' ? chart?.getVisibleLogicalRange() : null
+    const countBefore = this.shownCount
+
+    // History's view of the bar still forming: the sampled volume (a depth
+    // subscription carries none), the true open when the builder opened the
+    // bucket mid-way, and the union of the extremes. The close stays with the
+    // ticks, which are fresher than any poll. The builder's own copy is
+    // reconciled as well, or its next tick would write the stale values
+    // straight back over the repair.
+    if (snapshot.reason === 'refresh' && this.builder && this.liveBucket != null) {
+      const current = this.builder.current()
+      const index = current ? next.findIndex((bar) => bar.time === current.time) : -1
+      if (current && index >= 0 && current.time === this.liveBucket) {
+        const reconciled = this.builder.reconcile(next[index])
+        if (reconciled) next[index] = reconciled
+      }
+    }
+
+    this.rawBars = next
+    if (snapshot.paused || this.replay) return
+
+    const key = this.dataKey(request)
+    if (!this.chart || !this.price || !this.volume || this.chartDataKey !== key) {
+      this.chartDataKey = key
+      this.buildChart()
+    } else {
+      this.setPriceData()
+    }
+
+    // Prepending shifts logical indexes. Preserve the same candles in view,
+    // including for transformed charts whose output count differs from OHLC.
+    const inserted = this.shownCount - countBefore
+    if (snapshot.reason === 'prepend' && before && inserted > 0 && chart && this.chart === chart) {
+      chart.setVisibleLogicalRange({ from: before.from + inserted, to: before.to + inserted })
+    }
   }
 
   /**
@@ -703,6 +1079,7 @@ export class TradingTerminal {
     // place, so only the count can have moved.
     this.shownBars = this.rawBars
     this.shownCount = this.rawBars.length
+    this.profileLayer?.refresh()
     return true
   }
 
@@ -764,21 +1141,27 @@ export class TradingTerminal {
    * a listener a frame.
    */
   private wireLegendActions(): void {
+    this.offLegendActions?.()
     const act = (e: Event): void => {
-      const el = (e.target as HTMLElement | null)?.closest?.("[data-legend-action]")
+      const el = (e.target as HTMLElement | null)?.closest?.('[data-legend-action]')
       if (!el) return
-      if (el.getAttribute("data-legend-action") !== "volume") return
+      if (el.getAttribute('data-legend-action') !== 'volume') return
       e.preventDefault()
       e.stopPropagation()
       this.setVolumeVisible(!this.volumeOn)
       this.setLegend(this.legendBar)
       this.cb.onVolumeChange?.(this.volumeOn)
     }
-    this.legendEl.addEventListener("click", act)
-    this.legendEl.addEventListener("keydown", (e) => {
+    const keydown = (e: Event): void => {
       const k = (e as KeyboardEvent).key
-      if (k === "Enter" || k === " ") act(e)
-    })
+      if (k === 'Enter' || k === ' ') act(e)
+    }
+    this.legendEl.addEventListener('click', act)
+    this.legendEl.addEventListener('keydown', keydown)
+    this.offLegendActions = () => {
+      this.legendEl.removeEventListener('click', act)
+      this.legendEl.removeEventListener('keydown', keydown)
+    }
   }
 
   /**
@@ -789,7 +1172,7 @@ export class TradingTerminal {
   private legendModel(bar: Bar | null): LegendRun[] {
     const sym = this.sym
     if (!sym) return []
-    return buildChartLegend({
+    const runs = buildChartLegend({
       symbol: sym.symbol,
       interval: this.interval,
       exchange: sym.exchange,
@@ -800,6 +1183,13 @@ export class TradingTerminal {
       fmtVolume: compactVolume,
       volumeHidden: !this.volumeOn,
     })
+    if (isProfileKind(this.ctype)) {
+      runs.splice(2, 0, { text: CHART_TYPES[this.ctype].label, tone: 'meta' })
+      return runs.map((run) =>
+        run.action === 'volume' ? { ...run, action: undefined, dim: false } : run
+      )
+    }
+    return runs
   }
 
   /* ── order lines / position marker ────────────────────────────────────── */
@@ -907,8 +1297,7 @@ export class TradingTerminal {
 
   /* real order quantity (lots × lotsize for derivatives) */
   private orderQty(): number {
-    const n = Math.max(1, Math.floor(this.qty || 1))
-    return this.sym?.lots ? n * this.sym.lotsize : n
+    return orderUnits(this.qty, this.sym?.lots ?? false, this.sym?.lotsize ?? 1)
   }
   /** Quantity chip text for the inline panel (lots for FnO, else qty). */
   private qtyChip(): string {
@@ -931,6 +1320,10 @@ export class TradingTerminal {
       this.toast('search a symbol first')
       return
     }
+    if (this.sym.synthetic) {
+      this.toast(`${this.sym.symbol} is a computed chart, not an instrument — there is nothing to trade`, 'err')
+      return
+    }
     if (this.sym.quoteOnly) {
       this.toast(`${this.sym.exchange} is quote-only — trading is not supported`, 'err')
       return
@@ -949,6 +1342,33 @@ export class TradingTerminal {
       )
       return
     }
+    // Every guard above has passed on both paths. Disarmed, the click opens
+    // the ticket and stops here; armed, it is the order. The guards are not
+    // moved below this fork on purpose: a ticket pre-filled with a stop on the
+    // wrong side of LTP, or a quantity over the freeze limit, would only be
+    // refused later by the broker, in words that do not say why.
+    if (!this.armed) {
+      if (!this.cb.onOrderTicket) {
+        this.toast('One-Click is off', 'err')
+        return
+      }
+      this.cb.onOrderTicket(
+        buildOrderTicket({
+          sym: this.sym,
+          qty: this.qty,
+          product: this.product,
+          side,
+          type,
+          price: px,
+        })
+      )
+      return
+    }
+    // The scalping terminal's double-fire guard: a second click inside the
+    // window is the same click, not a second order.
+    const now = Date.now()
+    if (now - this.lastFireAt < ORDER_COOLDOWN_MS) return
+    this.lastFireAt = now
     const lotTxt = this.sym.lots ? `${qty / this.sym.lotsize}L (${qty})` : qty
     const summary = `${side} ${type} ${lotTxt} ${this.sym.symbol}${type === 'MARKET' ? '' : ` @ ${this.fmt(px)}`} · ${this.product}`
     try {
@@ -967,6 +1387,38 @@ export class TradingTerminal {
       this.pollBook()
     } catch (e) {
       this.toast(this.cleanError(e), 'err')
+    }
+  }
+
+  /**
+   * Place the order a ticket confirmed, through the same feed the armed path
+   * uses. The feed asserts the page's mode against the server before it
+   * posts, so a disarmed click has the same refusal an armed one has when
+   * the badge says live and the server has been switched to analyzer. The
+   * caller is the ticket dialog, which shows the thrown message.
+   */
+  async placeTicket(order: ConfirmedOrder): Promise<{ orderId: string }> {
+    // The ticket was refused before it opened; this covers a replay started
+    // while it stood open. No toast here: the dialog shows the reason.
+    if (this.tradingLocked()) throw new Error('Replay is a simulation. Leave replay to trade.')
+    if (!this.trade) throw new Error('trading is not available')
+    const stop = order.pricetype === 'SL' || order.pricetype === 'SL-M'
+    try {
+      const r = await this.trade.place({
+        symbol: order.symbol,
+        exchange: order.exchange,
+        side: order.action,
+        type: order.pricetype,
+        qty: order.quantity,
+        product: order.product,
+        price: order.pricetype === 'MARKET' ? undefined : order.price,
+        triggerPrice: stop ? order.trigger_price : undefined,
+        mode: this.tradeMode(),
+      })
+      this.pollBook()
+      return { orderId: r.orderId }
+    } catch (e) {
+      throw new Error(this.cleanError(e))
     }
   }
 
@@ -995,17 +1447,132 @@ export class TradingTerminal {
   }
 
   /* ── chart build + interaction wiring ─────────────────────────────────── */
+  private profileBlockMinutes(): number {
+    return readProfileSettings('tpo', this.chartSettingsSaved).blockMinutes
+  }
+
+  private compatibleProfileInterval(kind: ProfileKind): string | null {
+    return selectProfileInterval(
+      kind,
+      this.interval,
+      this.profileBlockMinutes(),
+      this.availableIntervals
+    )
+  }
+
+  private hideProfileSeries(): void {
+    if (!isProfileKind(this.ctype)) return
+    // Retain OHLC data for the timeline, crosshair, replay and visible autoscale.
+    this.price?.applyOptions({
+      visible: true,
+      bodyVisible: false,
+      borderVisible: false,
+      wickVisible: false,
+    })
+    this.volume?.applyOptions({ visible: false })
+  }
+
+  private installProfile(): void {
+    this.offProfileObject?.()
+    this.offProfileObject = null
+    this.profileLayer?.dispose()
+    this.profileLayer = null
+    const chart = this.chart
+    const price = this.price
+    const kind = this.ctype
+    if (!chart || !price || !isProfileKind(kind) || this.destroyed) return
+    const settings = readProfileSettings(kind, this.chartSettingsSaved)
+    const context = {
+      tickSize: this.tick(),
+      exchange: this.sym?.exchange ?? 'NSE',
+      timezone: chart.timezone(),
+      intervalSeconds: intervalSeconds(this.interval) ?? 300,
+      priceScale: () => price.priceScale(),
+    }
+    this.hideProfileSeries()
+    this.profileLayer = new ProfileLayer({
+      host: {
+        addPrimitive: (primitive) => chart.addPrimitive(primitive, 0),
+        removePrimitive: (primitive) => chart.removePrimitive(primitive),
+      },
+      load: async () => {
+        const { createChartProfile } = await import('./chartProfiles')
+        return createChartProfile(kind, settings, context)
+      },
+      // getData includes the current partial replay bar; rawBars includes future bars.
+      readBars: () => price.getData(),
+      onError: (error) =>
+        this.toast(`Profile could not be rendered: ${this.cleanError(error)}`, 'err'),
+      onWarning: (message) => this.toast(message, ''),
+    })
+    this.offProfileObject =
+      this.objects?.register(profileObjectProvider(kind, () => this.requestChartSettings())) ?? null
+  }
+
+  /** Open the pane-owned chart dialog from the canvas or object inventory. */
+  private requestChartSettings(): void {
+    void this.chartSettings().then((request) => {
+      if (request) this.cb.onChartSettings?.(request)
+    })
+  }
+
+  /** Reuse the existing pane editors for every built-in object settings action. */
+  private openObjectSettings(object: ChartObjectSnapshot): void {
+    if (object.kind === 'source') {
+      this.requestChartSettings()
+      return
+    }
+    if (object.kind === 'indicator') {
+      this.openIndicatorSettings(object.sourceId)
+      return
+    }
+    if (object.kind === 'drawing') {
+      this.objects?.select(object.id)
+      if (this.isTextDrawing(object.sourceId)) this.requestDrawTextEdit(object.sourceId)
+    }
+  }
+
+  /** Install one inventory for exactly one chart generation. */
+  private installObjects(): void {
+    const chart = this.chart
+    if (!chart || this.destroyed) return
+    const objects = new ChartObjects(chart, {
+      drawings: this.objectDrawings,
+      onSettings: (object) => this.openObjectSettings(object),
+    })
+    this.objects = objects
+    this.cb.onObjectsChange?.(objects)
+  }
+
+  /** Release inventory observations before any object or chart it reads. */
+  private detachObjects(): void {
+    const objects = this.objects
+    this.objects = null
+    this.cb.onObjectsChange?.(null)
+    this.offProfileObject?.()
+    this.offProfileObject = null
+    objects?.destroy()
+  }
+
   private buildChart() {
+    this.stopReplay()
+    this.detachObjects()
+    this.profileLayer?.dispose()
+    this.profileLayer = null
     // Snapshot drawings before the chart they live on goes away.
     this.detachDrawing()
+    this.offBranding?.()
+    this.offBranding = null
     if (this.chart) this.chart.destroy()
     // The primitives registered here belonged to the chart just destroyed.
     this.screenshotExcluded.length = 0
     this.container.innerHTML = ''
     const { mode, appMode } = this.getTheme()
+    const theme = buildChartTheme(mode, appMode)
+    this.chartTheme = theme
     this.chart = createChart(this.container, {
       priceAxisWidth: 78,
-      theme: buildChartTheme(mode, appMode),
+      theme,
       // Corner clock and bar countdown. Both are off by default in the engine,
       // deliberately: a countdown repaints every second, and on the historical
       // range a chart usually opens on it counts against a bar that closed months
@@ -1018,8 +1585,20 @@ export class TradingTerminal {
       // OHLC readout or its trade panel. Unbind it and claim the same chord for
       // `screenshot()` below, so the keyboard and the toolbar button produce the
       // same image instead of two different ones.
+      // Alt+V and Alt+H were bound twice: the engine toggles a grid, the draw
+      // tier arms the vertical and horizontal line. Both fired, so one press
+      // moved the grid and armed a tool. The drawing tools keep the chords,
+      // being the ones a trader reaches for mid-analysis and the ones the rail
+      // advertises; the grid stays on the toolbar button and the right-click
+      // menu, where it was already reachable.
+      // A double-click used to reset the view, which fits every loaded bar and
+      // so lands on the oldest one -- which is exactly where the history loader
+      // wakes, so the gesture quietly fetched another page. It now maximizes the
+      // pane under the pointer instead, and a second press puts the stack back.
+      // Reset stays on the toolbar button, the right-click menu and Home.
+      doubleClick: 'maximize',
       shortcuts: {
-        disabledCommands: ['screenshot'],
+        disabledCommands: ['screenshot', 'toggleGridVert', 'toggleGridHorz'],
         customShortcuts: [
           {
             command: 'app:screenshot',
@@ -1040,9 +1619,17 @@ export class TradingTerminal {
       // to start under both or they land on top of the buttons.
       legendOffset: { top: 80 },
     })
+    this.chart.setDataContext(
+      this.sym
+        ? { symbol: this.sym.symbol, exchange: this.sym.exchange, interval: this.interval }
+        : { interval: this.interval }
+    )
+    this.offBranding = this.chart.on('branding:changed', () => {
+      this.cb.onBrandingChange?.(this.brandingLink())
+    })
+    this.cb.onBrandingChange?.(this.brandingLink())
     const cfg = CHART_TYPES[this.ctype] || CHART_TYPES.candlestick
     const dp = this.dp()
-    const light = isLightTheme(mode, appMode)
     const style: SeriesStyle = cfg.baseline
       ? { baseValue: this.rawBars.reduce((s, b) => s + b.close, 0) / (this.rawBars.length || 1) }
       : {}
@@ -1071,7 +1658,8 @@ export class TradingTerminal {
     this.volume.priceScale().setOptions({ marginTop: 0.82, marginBottom: 0 })
     // A rebuild makes a fresh series, so the preference has to be re-applied
     // rather than assumed -- switching chart type or theme would show it again.
-    if (!this.volumeOn) this.volume.applyOptions({ visible: false })
+    if (!this.volumeOn || isProfileKind(this.ctype)) this.volume.applyOptions({ visible: false })
+    this.installObjects()
     // Same reasoning for the settings patch: a chart-type or theme switch
     // rebuilds the chart, and without this the user's colours, timezone and
     // scale options would silently revert to the engine defaults.
@@ -1088,6 +1676,7 @@ export class TradingTerminal {
     // of the group it still believes it is in.
     this.joinLink()
     this.setPriceData()
+    this.installProfile()
 
     this.applyDefaultViewport()
 
@@ -1110,31 +1699,6 @@ export class TradingTerminal {
           ? this.rawBars[this.rawBars.length - 1].close
           : null
 
-    // Mini brand mark, bottom-left. On pane 0 now that volume is an overlay
-    // there rather than a pane of its own — pane 1 only exists once an
-    // indicator asks for one, so anchoring to it would have been conditional.
-    const watermark = new LogoWatermark({
-      // The symbol on its own, not the app icon: that asset is a full-bleed
-      // plate with the mark filling under half of it and the wordmark
-      // beneath, so scaling it up scaled the padding too. This one's square
-      // viewBox is tight to the symbol, so height alone gives 32x32, and
-      // 3 of plate padding puts it in a 38x38 square.
-      src: '/images/openalgo-glyph.svg',
-      position: 'bottom-left',
-      height: 32,
-      padding: 3,
-      margin: 10,
-      opacity: 0.85,
-      // Mark alone at rest; the wording unrolls to its right on hover, so it
-      // names itself when looked at without occupying the corner always. The
-      // mark and text share one colour, so this sets both.
-      label: 'OpenAlgo Charts',
-      labelColor: light ? '#3c4354' : '#e4e8f4',
-      href: 'https://openalgo.in',
-    })
-    this.watermark = watermark
-    this.chart.addPrimitive(watermark, 0)
-
     // inline SELL · qty · BUY panel, docked top-left below the OHLC legend.
     if (!this.sym!.quoteOnly) {
       this.tradeBtns = new BuySellButtons({
@@ -1145,6 +1709,7 @@ export class TradingTerminal {
         scale: 0.72,
       })
       if (lp != null) this.tradeBtns.setMark(lp)
+      this.applyTradeColors()
       // Order entry is an affordance, not chart content: it is left out of a
       // saved image (see `screenshotExcluded`).
       this.addExcludedPrimitive(this.tradeBtns, 0)
@@ -1160,18 +1725,25 @@ export class TradingTerminal {
     // to nothing so the bar underneath stays reachable, so there is no primitive
     // to report. A click that ends a pan must not count, so a drag of more than
     // a couple of pixels disarms it.
+    this.offReplayPointer?.()
     let pressAt: { x: number; y: number } | null = null
-    this.container.addEventListener('pointerdown', (ev) => {
+    const pointerdown = (ev: Event) => {
       pressAt = { x: (ev as PointerEvent).clientX, y: (ev as PointerEvent).clientY }
-    })
-    this.container.addEventListener('pointerup', (ev) => {
+    }
+    const pointerup = (ev: Event) => {
       const from = pressAt
       pressAt = null
       if (!this.replayPicking || !from) return
       const e = ev as PointerEvent
       if (Math.abs(e.clientX - from.x) > 3 || Math.abs(e.clientY - from.y) > 3) return
       this.commitReplayPick()
-    })
+    }
+    this.container.addEventListener('pointerdown', pointerdown)
+    this.container.addEventListener('pointerup', pointerup)
+    this.offReplayPointer = () => {
+      this.container.removeEventListener('pointerdown', pointerdown)
+      this.container.removeEventListener('pointerup', pointerup)
+    }
 
     // drag-to-modify with a drag ghost; commit on release (tick-snapped)
     this.chart.subscribeDrag(
@@ -1207,14 +1779,6 @@ export class TradingTerminal {
       }
     )
     this.chart.subscribeClick((id) => {
-      // The canvas cannot hold an anchor, so the mark reports the hit and the
-      // host navigates. noopener/noreferrer: the opened tab must not reach back
-      // into a page holding a broker session.
-      if (id === 'watermark') {
-        const href = watermark.href()
-        if (href) window.open(href, '_blank', 'noopener,noreferrer')
-        return
-      }
       if (id === 'trade:buy') return void this.placeFromMenu('BUY', 'MARKET')
       if (id === 'trade:sell') return void this.placeFromMenu('SELL', 'MARKET')
       if (id === 'position::close') return void this.exitPosition()
@@ -1250,9 +1814,27 @@ export class TradingTerminal {
     // list still held it — so the next rebuild (timeframe, chart type, theme)
     // brought the deleted indicator back.
     this.chart.on('indicatorRemoved', () => this.syncIndicators())
-    this.chart.on('paneRemoved', () => this.placeWatermark())
+    // Visibility changes made from the Objects panel stay with the pane on a
+    // chart rebuild, just like settings and removal from the canvas legend.
+    this.chart.on('objects:change', () => this.syncIndicators())
     // Scrolling back past the loaded range pages in older bars.
     this.chart.setHistoryLoader(() => void this.loadOlderHistory())
+  }
+
+  /** Safe link metadata for the active chart branding, if it supplies a destination. */
+  brandingLink(): BrandingLink | null {
+    const options = (
+      this.chart as unknown as {
+        brandingOptions?(): false | { href?: string; label?: string }
+      } | null
+    )?.brandingOptions?.()
+    if (!options || typeof options.href !== 'string' || !/^https?:\/\//i.test(options.href))
+      return null
+    const label =
+      typeof options.label === 'string' && options.label.trim()
+        ? options.label.trim()
+        : 'Chart branding'
+    return { href: options.href, label }
   }
 
   /**
@@ -1263,8 +1845,20 @@ export class TradingTerminal {
   private restoreChartTools(): void {
     try {
       const raw = this.lsGet('draw')
-      const parsed = raw ? (JSON.parse(raw) as DrawingJson[]) : []
-      if (Array.isArray(parsed) && parsed.length) {
+      const parsed: unknown = raw ? JSON.parse(raw) : null
+      if (Array.isArray(parsed)) {
+        // A 1.9.x save. The migration lives in the draw tier, which is fetched
+        // on first use, so the array cannot be lifted here without bundling the
+        // tier for every pane. It is held apart from `drawJson` so nothing reads
+        // its entries through the version 2 type (their text still sits in the
+        // style bag, where `describeDrawings` would not find it) until
+        // `attachDrawing` migrates it. The migration reads the array as-is, so
+        // wrapping it in a version 2 envelope would gain nothing.
+        if (parsed.length) {
+          this.drawLegacy = parsed
+          this.drawEnabled = true
+        }
+      } else if (isDrawingsDocument(parsed) && parsed.drawings.length) {
         this.drawJson = parsed
         this.drawEnabled = true
       }
@@ -1279,6 +1873,7 @@ export class TradingTerminal {
       /* ignore */
     }
     this.drawMagnet = this.lsGet('magnet') === '1'
+    this.drawStay = this.lsGet('stay') === '1'
     const grid = this.lsGet('grid')
     if (grid && grid.length === 2) {
       this.gridV = grid[0] === '1'
@@ -1305,26 +1900,59 @@ export class TradingTerminal {
    * the rest of the session.
    */
   private async loadOlderHistory(): Promise<void> {
-    if (this.loadingOlder || this.noMoreHistory || !this.rest || !this.sym || !this.chart) {
-      this.chart?.historyLoadComplete()
+    const chart = this.chart
+    const sym = this.sym
+    const interval = this.interval
+    const data = this.data
+    const rest = this.rest
+    const ticket = this.loadTicket
+    if (this.destroyed || !chart || chart.isDestroyed) return
+    if (this.loadingOlder?.chart === chart && this.loadingOlder.ticket === ticket) return
+    if (this.noMoreHistory || (!data && !rest) || !sym) {
+      chart.historyLoadComplete()
       return
     }
     const oldest = this.rawBars[0]?.time
     if (oldest === undefined) {
-      this.chart.historyLoadComplete()
+      chart.historyLoadComplete()
       return
     }
-    this.loadingOlder = true
+    const request = { chart, ticket }
+    this.loadingOlder = request
     try {
+      if (data) {
+        await data.loadMore()
+        if (
+          this.destroyed ||
+          chart.isDestroyed ||
+          chart !== this.chart ||
+          ticket !== this.loadTicket ||
+          sym !== this.sym ||
+          interval !== this.interval ||
+          data !== this.data
+        )
+          return
+        this.applyDataSnapshot(data.getState())
+        return
+      }
       const to = oldest - 1
-      const older = await this.rest.getBars({
-        symbol: this.sym.symbol,
-        exchange: this.sym.exchange,
-        interval: this.interval,
-        from: to - lookbackDays(this.interval) * 86400,
+      const older = await rest!.getBars({
+        symbol: sym.symbol,
+        exchange: sym.exchange,
+        interval,
+        from: to - lookbackDays(interval) * 86400,
         to,
       })
-      if (this.destroyed || !this.chart) return
+      if (
+        this.destroyed ||
+        chart.isDestroyed ||
+        chart !== this.chart ||
+        ticket !== this.loadTicket ||
+        sym !== this.sym ||
+        interval !== this.interval ||
+        rest !== this.rest
+      )
+        return
       // Trust nothing about the window the broker actually returned: keep only
       // what is genuinely older, or a re-sent overlapping page would duplicate
       // bars and grow rawBars without ever moving the left edge.
@@ -1336,7 +1964,7 @@ export class TradingTerminal {
       // Prepending shifts every logical index by the inserted count, so the
       // view has to shift with it or the user is thrown back to the right edge
       // mid-scroll.
-      const before = this.chart.getVisibleLogicalRange()
+      const before = chart.getVisibleLogicalRange()
       const countBefore = this.shownCount
       this.rawBars = [...fresh, ...this.rawBars]
       this.setPriceData()
@@ -1345,7 +1973,7 @@ export class TradingTerminal {
       // number of elements, so the axis grows by its own amount.
       const inserted = this.shownCount - countBefore
       if (before && inserted > 0) {
-        this.chart.setVisibleLogicalRange({
+        chart.setVisibleLogicalRange({
           from: before.from + inserted,
           to: before.to + inserted,
         })
@@ -1354,8 +1982,12 @@ export class TradingTerminal {
       // A failed page must not poison the session; the next scroll retries.
       console.error('[trading] history paging', e)
     } finally {
-      this.loadingOlder = false
-      this.chart?.historyLoadComplete()
+      // An old page can finish after another chart or load started paging.
+      // Release only its own work, never the newer request's loading state.
+      if (this.loadingOlder === request) this.loadingOlder = null
+      if (!this.destroyed && !chart.isDestroyed && this.loadingOlder?.chart !== chart) {
+        chart.historyLoadComplete()
+      }
     }
   }
 
@@ -1368,12 +2000,14 @@ export class TradingTerminal {
    */
   private detachDrawing(): void {
     if (!this.draw) return
+    const draw = this.draw
     try {
-      this.drawJson = this.draw.toJSON()
-      this.draw.destroy()
+      this.drawJson = draw.toJSON()
+      draw.destroy()
     } catch {
       /* chart already gone; keep the last snapshot we have */
     }
+    this.objectDrawings.detach(draw)
     this.draw = null
   }
 
@@ -1383,24 +2017,39 @@ export class TradingTerminal {
    */
   private async attachDrawing(): Promise<void> {
     if (this.draw || !this.chart) return
-    const { DrawingController, drawingShortcuts, matchDrawingShortcut } = await import(
-      'openalgo-charts/draw'
-    )
+    const {
+      DrawingController,
+      drawingShortcuts,
+      getDrawingTool,
+      keyToDrawingAction,
+      matchDrawingShortcut,
+      migrateDrawings,
+    } = await import('openalgo-charts/draw')
     // The await is a real suspension point: the pane can be destroyed, or the
     // chart rebuilt again, while the tier is in flight.
     if (this.destroyed || !this.chart || this.draw) return
     const draw = new DrawingController(this.chart, {
       magnet: this.drawMagnet,
-      stayInDrawingMode: false,
+      stayInDrawingMode: this.drawStay,
     })
     this.draw = draw
+    this.objectDrawings.attach(draw)
     this.drawShortcuts = drawingShortcuts()
     this.matchShortcut = matchDrawingShortcut
-    if (this.drawJson.length) {
+    this.keyAction = keyToDrawingAction
+    this.toolOf = getDrawingTool
+    if (this.drawLegacy) {
+      // The 1.9.x array becomes the document every other reader here expects.
+      // Garbage yields an empty document rather than a throw, so a stale entry
+      // still cannot stop the pane.
+      this.drawJson = migrateDrawings(this.drawLegacy)
+      this.drawLegacy = null
+    }
+    if (this.drawJson.drawings.length) {
       try {
         draw.fromJSON(this.drawJson)
       } catch {
-        this.drawJson = [] // a shape from an older build; better empty than broken
+        this.drawJson = emptyDrawings() // a shape from an older build; better empty than broken
       }
     }
     if (this.drawTool) draw.setTool(this.drawTool)
@@ -1409,9 +2058,11 @@ export class TradingTerminal {
     // A text tool is useless until it has text, so placing one asks straight
     // away rather than leaving an empty box on the chart.
     this.chart.on('draw:add', (p) => {
-      const d = (p as { drawing?: { id: string; tool: string; style?: { text?: string } } }).drawing
-      if (d && TEXT_TOOLS.has(d.tool)) {
-        this.cb.onDrawTextEdit?.({ id: d.id, tool: d.tool, text: d.style?.text ?? '' })
+      const d = (p as { drawing?: { id: string; tool: string; text?: { value?: string } } }).drawing
+      // Agent markup is exempt: it arrives with its caption already written, so
+      // prompting for one would open a dialog nobody asked for, once per shape.
+      if (d && TEXT_TOOLS.has(d.tool) && !isAgentDrawingId(d.id)) {
+        this.cb.onDrawTextEdit?.({ id: d.id, tool: d.tool, text: d.text?.value ?? '' })
       }
     })
     this.chart.on('draw:add', () => this.afterDrawChange())
@@ -1419,10 +2070,13 @@ export class TradingTerminal {
     // Double-click a text drawing to open its settings. The chart's own
     // double-click resets the view, which it must not do when the gesture was
     // aimed at a drawing -- editSelectedText() reports whether it claimed it.
-    this.chart.on('dblclick', () => {
-      this.editSelectedText()
+    // Double-click a text drawing to open its settings. Saying the press was
+    // claimed keeps the chart from also maximizing the pane under it.
+    this.chart.on('dblclick', (p) => {
+      if (this.editSelectedText()) (p as { handled?: boolean }).handled = true
     })
     this.chart.on('draw:update', () => this.afterDrawChange())
+    this.objects?.refresh()
   }
 
   private afterDrawChange(): void {
@@ -1476,7 +2130,7 @@ export class TradingTerminal {
   requestDrawTextEdit(id: string): void {
     const d = this.draw?.get(id)
     if (!d || !TEXT_TOOLS.has(d.tool)) return
-    this.cb.onDrawTextEdit?.({ id: d.id, tool: d.tool, text: d.style.text ?? '' })
+    this.cb.onDrawTextEdit?.({ id: d.id, tool: d.tool, text: d.text?.value ?? '' })
   }
 
   /**
@@ -1484,24 +2138,41 @@ export class TradingTerminal {
    * Background and border default OFF, matching the engine's own defaults —
    * text dropped on a chart should be the words, not a filled plate.
    */
+  /** A tool's default text (placeholder and size), or null when it has none. */
+  private toolDefaultText(tool: string): DrawingText | null {
+    try {
+      return this.toolOf?.(tool).defaultText ?? null
+    } catch {
+      return null // a tool the registry no longer knows; the engine's default applies
+    }
+  }
+
   drawTextStyle(id: string): DrawTextStyle | null {
     const d = this.draw?.get(id)
     if (!d) return null
-    const st = (d.style ?? {}) as Record<string, unknown>
+    const t: Partial<DrawingText> = d.text ?? {}
+    const theme = this.chart?.theme()
+    const lineColor = d.style.color ?? theme?.lineColor ?? '#4f8cff'
+    const plate = d.tool !== 'text' && d.tool !== 'table'
+    const backgroundColor = t.backgroundColor ?? (plate ? lineColor
+      : d.tool === 'table' || t.background === true ? theme?.background ?? '#ffffff' : '#434651')
+    const plateFill = d.tool === 'callout' || d.tool === 'price-label' ? lineColor : backgroundColor
+    const color = t.color ?? (plate ? drawingTextContrast(plateFill) : lineColor)
     return {
-      text: (st.text as string) ?? '',
-      color: (st.color as string) ?? '#e4e8f4',
-      fontSize: (st.fontSize as number) ?? 14,
-      bold: st.fontWeight === 'bold',
-      italic: st.fontStyle === 'italic',
-      background: st.background === true,
-      // Never the chart's own background: a plate in that colour is invisible,
-      // which reads as "Background does nothing". A neutral grey shows on both
-      // the dark and light themes.
-      backgroundColor: (st.backgroundColor as string) ?? '#434651',
-      border: st.border === true,
-      borderColor: (st.borderColor as string) ?? (st.color as string) ?? '#e4e8f4',
-      wrap: st.wrap === true,
+      text: t.value ?? '',
+      color: drawingColorInput(color),
+      // Unset means the tool's own size, which is what the engine paints it at
+      // (a price label is 12px, the text tool 14px). Seeding the dialog with a
+      // host constant instead would enlarge a label whose caption alone was
+      // edited.
+      fontSize: t.fontSize ?? this.toolDefaultText(d.tool)?.fontSize ?? (d.tool === 'price-label' ? 12 : DRAWING_TEXT_PX),
+      bold: t.bold === true,
+      italic: t.italic === true,
+      background: d.tool !== 'text' || t.background === true,
+      backgroundColor: drawingColorInput(backgroundColor),
+      border: d.tool === 'table' ? t.border !== false : t.border === true,
+      borderColor: drawingColorInput(t.borderColor ?? lineColor),
+      wrap: t.wrap === true,
     }
   }
 
@@ -1517,20 +2188,24 @@ export class TradingTerminal {
       this.afterDrawChange()
       return
     }
-    this.draw.update(id, {
-      style: {
-        text: trimmed,
-        color: v.color,
-        fontSize: v.fontSize,
-        fontWeight: v.bold ? 'bold' : 'normal',
-        fontStyle: v.italic ? 'italic' : 'normal',
-        background: v.background,
-        backgroundColor: v.backgroundColor,
-        border: v.border,
-        borderColor: v.borderColor,
-        wrap: v.wrap,
-      },
-    })
+    const initial = this.drawTextStyle(id)
+    if (!initial) return
+    // Preserve absent overrides so content edits retain renderer defaults and
+    // continue following future theme changes. Font colour belongs to text.
+    const text: DrawingText = { value: trimmed }
+    if (v.color !== initial.color) text.color = v.color
+    if (v.fontSize !== initial.fontSize) text.fontSize = v.fontSize
+    if (v.bold !== initial.bold) text.bold = v.bold
+    if (v.italic !== initial.italic) text.italic = v.italic
+    if (v.background !== initial.background) {
+      text.background = v.background
+      if (v.background) text.backgroundColor = v.backgroundColor
+    }
+    if (v.backgroundColor !== initial.backgroundColor) text.backgroundColor = v.backgroundColor
+    if (v.border !== initial.border) text.border = v.border
+    if (v.borderColor !== initial.borderColor) text.borderColor = v.borderColor
+    if (v.wrap !== initial.wrap) text.wrap = v.wrap
+    this.draw.update(id, { text })
     this.afterDrawChange()
   }
 
@@ -1539,22 +2214,30 @@ export class TradingTerminal {
     if (!this.draw) return
     const trimmed = text.trim()
     if (trimmed === '') this.draw.remove(id)
-    else this.draw.update(id, { style: { text: trimmed } })
+    else this.draw.update(id, { text: { value: trimmed } })
     this.afterDrawChange()
   }
 
-  /** Restyle the selected drawing (colour, width, dash, lock). */
+  /**
+   * Restyle every selected drawing (colour, width, dash, lock). The style bar
+   * shows the primary's values, but a shift-click selection is one edit to the
+   * operator, so the patch lands on all of it as one undo entry.
+   */
   styleSelectedDrawing(patch: {
     color?: string
     lineWidth?: number
     lineStyle?: 'solid' | 'dashed' | 'dotted'
     locked?: boolean
   }): void {
-    const id = this.draw?.selected()
-    if (!this.draw || !id) return
+    const ids = this.draw?.selection() ?? []
+    if (!this.draw || ids.length === 0) return
     const { locked, ...style } = patch
-    if (Object.keys(style).length > 0) this.draw.update(id, { style })
-    if (locked !== undefined) this.draw.update(id, { locked })
+    const fields: DrawingPatch = {}
+    if (Object.keys(style).length > 0) fields.style = style
+    if (locked !== undefined) fields.locked = locked
+    if (Object.keys(fields).length > 0) {
+      this.draw.updateMany(ids.map((id) => ({ id, patch: fields })))
+    }
     this.afterDrawChange()
   }
 
@@ -1573,7 +2256,7 @@ export class TradingTerminal {
    * caller can swallow the key. The tier owns the chord table, so this is a
    * no-op until drawing has been attached.
    */
-  armByShortcut(e: {
+  handleDrawKey(e: {
     key: string
     altKey?: boolean
     ctrlKey?: boolean
@@ -1581,19 +2264,62 @@ export class TradingTerminal {
     shiftKey?: boolean
   }): boolean {
     const id = this.matchShortcut?.(e) ?? null
-    if (id === null) return false
-    void this.setDrawTool(id)
+    if (id !== null) {
+      void this.setDrawTool(id)
+      return true
+    }
+    const d = this.draw
+    if (!d || !this.keyAction) return false
+    const action = this.keyAction(e, {
+      hasSelection: d.selected() !== null,
+      // The host tracks no hover target of its own, so a key acts on the
+      // selection alone; a press selects first, which is what makes Delete
+      // reach the drawing the user just clicked.
+      hasTarget: false,
+      editingText: false,
+      placing: d.activeTool() !== null,
+    })
+    if (!action) return false
+    const targets = [...d.selection()]
+    switch (action.type) {
+      case 'delete':
+        if (targets.length === 0) return false
+        d.removeMany(targets)
+        break
+      case 'undo':
+        d.undo()
+        break
+      case 'redo':
+        d.redo()
+        break
+      case 'duplicate':
+        if (targets.length === 0) return false
+        d.duplicate(targets)
+        break
+      case 'nudge':
+        if (targets.length === 0) return false
+        d.nudge(targets, action.dx ?? 0, action.dy ?? 0)
+        break
+      // cancel, finish and popAnchor belong to placement, which the rail's
+      // own Escape already ends; copy, cut and paste are the clipboard's.
+      default:
+        return false
+    }
+    this.afterDrawChange()
     return true
   }
 
   drawStats(): DrawStats {
     const d = this.draw
     return {
-      count: d ? d.drawings().length : this.drawJson.length,
+      // A 1.9.x save counts its raw entries until the tier lifts it: the same
+      // number the rail showed for that save before the upgrade.
+      count: d ? d.drawings().length : (this.drawLegacy?.length ?? this.drawJson.drawings.length),
       canUndo: d ? d.canUndo() : false,
       canRedo: d ? d.canRedo() : false,
       hasSelection: d ? d.selected() !== null : false,
       magnet: this.drawMagnet,
+      stay: this.drawStay,
       tool: this.drawTool,
       shortcuts: this.drawShortcuts,
     }
@@ -1609,13 +2335,13 @@ export class TradingTerminal {
     this.afterDrawChange()
   }
 
-  /** Remove the selected drawing, or every drawing when `all` is set. */
+  /** Remove every selected drawing, or every drawing when `all` is set. */
   removeDrawings(all: boolean): void {
     if (!this.draw) return
     if (all) this.draw.clear()
     else {
-      const id = this.draw.selected()
-      if (id) this.draw.remove(id)
+      const ids = this.draw.selection()
+      if (ids.length) this.draw.removeMany(ids)
     }
     this.afterDrawChange()
   }
@@ -1626,6 +2352,151 @@ export class TradingTerminal {
     this.draw?.setOptions({ magnet: on })
     this.lsSet('magnet', on ? '1' : '0')
     this.cb.onDrawChange?.(this.drawStats())
+  }
+
+  /**
+   * Keep the armed tool after a placement, instead of returning to the cursor.
+   * Drawing three trend lines is three picks otherwise, and the rail resetting
+   * itself reads as the click having failed rather than as the tool having
+   * done its one job.
+   */
+  setDrawStay(on: boolean): void {
+    this.drawStay = on
+    this.draw?.setOptions({ stayInDrawingMode: on })
+    this.lsSet('stay', on ? '1' : '0')
+    this.cb.onDrawChange?.(this.drawStats())
+  }
+
+  /* The agent view of this chart, and the markup it puts on it. */
+
+  /**
+   * What the agent panel reports about this chart, read fresh at send time.
+   *
+   * Never captured and reused: the operator changes the symbol and then asks
+   * about it, so a context snapshotted when the panel mounted would have the
+   * agent analysing the instrument they used to be looking at.
+   *
+   * The shape is the wire's, defined once in `chartContract.ts` against
+   * `services/agent/chart_contract.py`, so what is built here is posted as it
+   * stands.
+   *
+   * @returns The context, or null when no instrument is loaded. Null means the
+   *   panel sends no context at all and every reading tool says so plainly,
+   *   which is better than a context naming an instrument that is not there.
+   */
+  chartContext(): ChartContext | null {
+    const chart = this.chart
+    if (!chart || !this.sym) return null
+
+    // The live controller when the tier is up, its snapshot when it is not: a
+    // pane whose drawings were restored from storage but never touched has
+    // drawings to report and no controller to ask.
+    const drawings = this.draw ? this.draw.toJSON().drawings : this.drawJson.drawings
+    const { drawings: mine, agentGroups } = describeDrawings(drawings)
+
+    // The viewport in seconds rather than in logical indices, because that is
+    // what the bars the backend fetches are keyed by. indexToTimeFloat answers
+    // for a fractional index and for one past the last bar, which is exactly
+    // where a right edge sits.
+    const range = chart.getVisibleLogicalRange()
+    const layer = chart.dataLayer
+    const from = Number(layer.indexToTimeFloat(range.from))
+    const to = Number(layer.indexToTimeFloat(range.to))
+    const last = this.rawBars[this.rawBars.length - 1]
+
+    return {
+      symbol: this.sym.symbol,
+      exchange: this.sym.exchange,
+      interval: this.interval,
+      chart_type: this.ctype,
+      bars_loaded: this.rawBars.length,
+      visible_bars: Math.max(0, Math.round(range.to - range.from)),
+      visible_from: Number.isFinite(from) ? Math.round(from) : null,
+      visible_to: Number.isFinite(to) ? Math.round(to) : null,
+      last_price: this.lastLtp ?? last?.close ?? null,
+      indicators: this.listIndicators(),
+      drawings: mine,
+      agent_groups: agentGroups,
+    }
+  }
+
+  /**
+   * Apply one turn's chart commands.
+   *
+   * Queued rather than run on arrival. Attaching the drawing tier is a dynamic
+   * import, so two frames landing close together would both await it and race
+   * to draw into a controller that did not exist when either of them started;
+   * chaining onto the previous promise makes the second wait for the first and
+   * keeps the ops in the order the model sent them. A failure is swallowed
+   * into the chain rather than rejecting it, so one bad frame cannot wedge
+   * every later turn.
+   *
+   * @param commands - The `commands` list from one chart_command frame.
+   * @returns Resolves once these commands have been applied.
+   */
+  applyChartCommands(commands: AgentChartCommand[]): Promise<void> {
+    this.chartCommandQueue = this.chartCommandQueue
+      .then(() => this.runChartCommands(commands))
+      .catch((e) => {
+        console.error('[trading] chart command', e)
+      })
+    return this.chartCommandQueue
+  }
+
+  private async runChartCommands(commands: AgentChartCommand[]): Promise<void> {
+    if (this.destroyed || commands.length === 0) return
+
+    // The two halves of the vocabulary land on two different surfaces: an
+    // indicator is not a drawing, and a clear must never reach one.
+    const indicators = commands.filter((c) => c.op === 'indicator')
+    const rest = commands.filter((c) => c.op !== 'indicator')
+    if (indicators.length) await this.runIndicatorCommands(indicators)
+    if (this.destroyed || rest.length === 0) return
+
+    // Agent markup is a drawing control being used, so the tier is fetched the
+    // same way arming a tool fetches it.
+    this.drawEnabled = true
+    await this.attachDrawing()
+    if (this.destroyed || !this.draw) return
+    // Every add and remove emits its own event, and afterDrawChange is already
+    // bound to those, so persistence and the rail's counter follow from this
+    // without a second write here.
+    applyChartCommands(this.draw, commands, { anchorTime: this.rawBars.at(-1)?.time })
+  }
+
+  /**
+   * Add or remove the indicators the agent asked for.
+   *
+   * The decision is `chartContract.applyIndicatorCommands`, which is pure and
+   * testable without a chart; this supplies the live tier and persists the
+   * result. `loadIndicators` runs first so the operator's own modules from
+   * `strategies/indicators/` have registered: the id is checked against the
+   * chart's OWN registry, which is what lets a custom indicator be added by a
+   * name no list on the server has ever heard of.
+   */
+  private async runIndicatorCommands(commands: AgentChartCommand[]): Promise<void> {
+    await this.loadIndicators()
+    if (this.destroyed) return
+    const { hasIndicator } = await import('openalgo-charts')
+    // Two awaits above, and the terminal can be torn down inside either, so the
+    // chart is re-checked rather than asserted.
+    if (this.destroyed || !this.chart) return
+    const chart = this.chart
+
+    const changed = applyIndicatorCommands(
+      {
+        indicators: () => chart.indicators(),
+        addIndicator: (id, settings) => chart.addIndicator(id, settings),
+        // The same call `removeIndicatorById` makes for the dialog's Remove,
+        // so the agent's removal and the operator's are one behaviour.
+        removeIndicator: (instanceId) => {
+          chart.removeIndicator(instanceId)
+        },
+        hasIndicator,
+      },
+      commands
+    )
+    if (changed) this.syncIndicators()
   }
 
   /* ── indicators + grid (top-menu extras) ───────────────────────────────── */
@@ -1673,23 +2544,35 @@ export class TradingTerminal {
     // would add this run's indicators to a chart another run has already
     // populated, duplicating every one of them.
     const chart = this.chart
-    await this.loadIndicators()
-    if (this.destroyed || !this.chart || this.chart !== chart) return
-    // Re-adding walks the tracked list, so a sync mid-loop would read a
-    // half-applied chart and truncate it.
-    this.applyingIndicators = true
+    if (!chart) return
+    this.restoringIndicatorsOn = chart
     try {
-      // syncIndicators writes the result back, so a layout that already
-      // carries duplicates heals on the next load.
-      for (const rec of dedupeIndicators(this.activeIndicators)) {
-        try {
-          this.chart.addIndicator(rec.indicatorId, rec.settings)
-        } catch {
-          /* an id that is no longer registered — skip rather than break the chart */
+      await this.loadIndicators()
+      if (this.destroyed || !this.chart || this.chart !== chart) return
+      // Re-adding walks the tracked list, so a sync mid-loop would read a
+      // half-applied chart and truncate it.
+      this.applyingIndicators = true
+      try {
+        // syncIndicators writes the result back, so a layout that already
+        // carries duplicates heals on the next load.
+        for (const rec of dedupeIndicators(this.activeIndicators)) {
+          try {
+            const inst = this.chart.addIndicator(rec.indicatorId, rec.settings)
+            inst.setVisible(rec.visible !== false)
+          } catch {
+            /* an id that is no longer registered — skip rather than break the chart */
+          }
         }
+      } finally {
+        this.applyingIndicators = false
       }
+    } catch (error) {
+      if (!this.destroyed && this.chart === chart) {
+        this.toast(`Indicators could not be restored: ${this.cleanError(error)}`, 'err')
+      }
+      return
     } finally {
-      this.applyingIndicators = false
+      if (this.restoringIndicatorsOn === chart) this.restoringIndicatorsOn = null
     }
     this.syncIndicators()
   }
@@ -1749,9 +2632,11 @@ export class TradingTerminal {
    * zone the chart is already in.
    */
   async chartSettings(): Promise<ChartSettingsRequest | null> {
-    if (!this.chart) return null
+    const chart = this.chart
+    if (!chart) return null
     const { chartSettingsSchema, readChartSettings } = await import('openalgo-charts')
-    const tabs = chartSettingsSchema(this.chart).map((t) => ({
+    if (chart !== this.chart || this.destroyed) return null
+    const tabs = chartSettingsSchema(chart).map((t) => ({
       id: t.id,
       label: t.label,
       inputs: t.inputs.map((i) =>
@@ -1760,11 +2645,15 @@ export class TradingTerminal {
           : toField(i as { key: string; type: string; label?: string; group?: string })
       ),
     }))
-    return {
-      tabs,
-      values: { ...readChartSettings(this.chart) },
-      defaults: { ...this.chartDefaults },
-    }
+    return profileSettingsView(
+      {
+        tabs,
+        values: { ...readChartSettings(chart) },
+        defaults: { ...this.chartDefaults },
+      },
+      this.ctype,
+      this.chartSettingsSaved
+    )
   }
 
   /**
@@ -1809,19 +2698,56 @@ export class TradingTerminal {
    * what "default" has to mean for the reset to be worth having.
    */
   async applyChartSettings(patch: Record<string, string | number | boolean>): Promise<void> {
-    if (!this.chart) return
+    const chart = this.chart
+    if (!chart) return
     const { applyChartSettings } = await import('openalgo-charts')
-    applyChartSettings(this.chart, patch)
+    if (chart !== this.chart || this.destroyed) return
+    const enginePatch = Object.fromEntries(
+      Object.entries(patch).filter(([key]) => !key.startsWith('profiles.'))
+    )
     const merged = { ...this.chartSettingsSaved, ...patch }
+    if (
+      isProfileKind(this.ctype) &&
+      !selectProfileInterval(
+        this.ctype,
+        this.interval,
+        readProfileSettings('tpo', merged).blockMinutes,
+        this.availableIntervals
+      )
+    ) {
+      this.toast('The broker has no interval compatible with this TPO block size', 'err')
+      return
+    }
+    applyChartSettings(chart, enginePatch)
+    const defaults = {
+      ...this.chartDefaults,
+      ...profileDefaults('tpo'),
+      ...profileDefaults('session-volume-profile'),
+    }
+    for (const kind of ['tpo', 'session-volume-profile'] as const) {
+      const normalized = profileValues(kind, merged)
+      for (const key of Object.keys(normalized)) {
+        if (key in merged) merged[key] = normalized[key]
+      }
+    }
     const kept: Record<string, string | number | boolean> = {}
     for (const [k, v] of Object.entries(merged)) {
       // A key absent from the baseline is kept: an unrecognised control is not
       // evidence that its value is the default one.
-      if (!(k in this.chartDefaults) || this.chartDefaults[k] !== v) kept[k] = v
+      if (!(k in defaults) || defaults[k] !== v) kept[k] = v
     }
     this.chartSettingsSaved = kept
     this.lsSet('chartsettings', JSON.stringify(kept))
     this.adoptGridFromPatch(patch)
+    if (isProfileKind(this.ctype)) {
+      const interval = this.compatibleProfileInterval(this.ctype)
+      if (interval && interval !== this.interval) {
+        this.setInterval(interval)
+        this.toast(`Using ${interval} bars for the selected profile block size`, '')
+      } else {
+        this.installProfile()
+      }
+    }
   }
 
   /**
@@ -1854,10 +2780,18 @@ export class TradingTerminal {
    * terminal booting.
    */
   private async restoreChartSettings(): Promise<void> {
-    if (!this.chart || !Object.keys(this.chartSettingsSaved).length) return
+    const chart = this.chart
+    if (!chart || !Object.keys(this.chartSettingsSaved).length) return
     try {
       const { applyChartSettings } = await import('openalgo-charts')
-      applyChartSettings(this.chart, this.chartSettingsSaved)
+      if (chart !== this.chart || this.destroyed) return
+      applyChartSettings(
+        chart,
+        Object.fromEntries(
+          Object.entries(this.chartSettingsSaved).filter(([key]) => !key.startsWith('profiles.'))
+        )
+      )
+      this.installProfile()
     } catch {
       /* ignore */
     }
@@ -1870,33 +2804,22 @@ export class TradingTerminal {
    * two SMAs differ only by instance id, so "remove the one with this
    * indicatorId" would drop an arbitrary one of them.
    */
-  /**
-   * Keep the brand mark in the chart's bottom corner rather than pane 0's.
-   *
-   * A primitive belongs to a pane, and an oscillator that asks for its own
-   * pane pushes a new one underneath. "Bottom of pane 0" is then the middle
-   * of the chart, which is where the mark was ending up. The engine emits no
-   * event when a pane is created (only paneRemoved), so this is driven from
-   * the indicator funnel, which is the only thing that creates one here.
-   */
-  private placeWatermark(): void {
-    const mark = this.watermark
-    if (!this.chart || !mark) return
-    const bottom = this.chart.panes().length - 1
-    if (bottom < 0) return
-    this.chart.removePrimitive(mark)
-    this.chart.addPrimitive(mark, bottom)
-  }
-
   private syncIndicators(): void {
-    if (!this.chart || this.applyingIndicators) return
-    this.placeWatermark()
-    this.activeIndicators = this.chart.indicators().map((i) => ({
+    if (!this.chart || this.applyingIndicators || this.restoringIndicatorsOn === this.chart) return
+    const next = this.chart.indicators().map((i) => ({
       indicatorId: i.indicatorId,
       settings: { ...i.settings() },
+      visible: i.visible(),
     }))
-    this.lsSet('indicators', JSON.stringify(this.activeIndicators))
-    this.cb.onIndicatorsChange?.(this.listIndicators())
+    if (!sameIndicatorRecords(this.activeIndicators, next)) {
+      this.activeIndicators = next
+      this.lsSet('indicators', JSON.stringify(this.activeIndicators))
+    }
+    const announced = this.listIndicators().map(({ id, name }) => ({ id, name }))
+    if (!sameIndicatorInstances(this.announcedIndicators, announced)) {
+      this.announcedIndicators = announced
+      this.cb.onIndicatorsChange?.(announced)
+    }
   }
 
   async addIndicatorById(indicatorId: string): Promise<void> {
@@ -1945,8 +2868,21 @@ export class TradingTerminal {
     this.syncIndicators()
   }
 
-  listIndicators(): { id: string; name: string }[] {
-    return this.chart ? this.chart.indicators().map((i) => ({ id: i.id, name: i.name })) : []
+  /**
+   * The live indicators, carrying both ids because its two callers need
+   * different ones.
+   *
+   * The rail's list removes one overlay of several, so it needs the instance
+   * `id`. The agent names a descriptor it can add and remove, so it needs
+   * `indicatorId`: handed `ema-1` it would ask the chart to remove an
+   * indicator no registry has ever heard of, and the command would be dropped
+   * without a word. One shape carrying both is what keeps that from becoming
+   * two functions that drift.
+   */
+  listIndicators(): { id: string; indicatorId: string; name: string }[] {
+    return this.chart
+      ? this.chart.indicators().map((i) => ({ id: i.id, indicatorId: i.indicatorId, name: i.name }))
+      : []
   }
 
   /**
@@ -2031,7 +2967,7 @@ export class TradingTerminal {
    */
   setVolumeVisible(on: boolean): void {
     this.volumeOn = on
-    this.volume?.applyOptions({ visible: on })
+    this.volume?.applyOptions({ visible: on && !isProfileKind(this.ctype) })
     this.lsSet('vol', on ? '1' : '0')
   }
 
@@ -2048,9 +2984,19 @@ export class TradingTerminal {
    * with no rung below it replays bar by bar, as it always did.
    */
   private static readonly REPLAY_SUB: Record<string, string> = {
-    '3m': '1m', '5m': '1m', '10m': '5m', '15m': '5m', '30m': '15m',
-    '1h': '15m', '60m': '15m', '2h': '30m', '4h': '1h',
-    'D': '1h', '1d': '1h', 'W': 'D', '1w': 'D',
+    '3m': '1m',
+    '5m': '1m',
+    '10m': '5m',
+    '15m': '5m',
+    '30m': '15m',
+    '1h': '15m',
+    '60m': '15m',
+    '2h': '30m',
+    '4h': '1h',
+    D: '1h',
+    '1d': '1h',
+    W: 'D',
+    '1w': 'D',
   }
 
   /* ── market replay ──────────────────────────────────────────────────────
@@ -2192,6 +3138,11 @@ export class TradingTerminal {
    */
   private async beginReplayAt(startIndex: number): Promise<void> {
     if (this.replay || !this.chart || !this.price || this.shownBars.length < 2) return
+    const chart = this.chart
+    const price = this.price
+    const data = this.data
+    const ticket = ++this.replayLoadTicket
+    data?.setPaused(true)
     this.replayPicking = false
     this.setReplayShade(null)
     const driven = this.volume ? [this.price, this.volume] : [this.price]
@@ -2207,13 +3158,27 @@ export class TradingTerminal {
     const from = Math.max(0, Math.min(bars.length - 1, Math.floor(startIndex)))
     const sub = await this.loadReplaySubBars()
     // The await above yields, and the user may have left in the meantime.
-    if (!this.chart || !this.price || this.replay) return
+    if (
+      this.destroyed ||
+      chart !== this.chart ||
+      price !== this.price ||
+      ticket !== this.replayLoadTicket ||
+      this.replay
+    ) {
+      // Do not unpause a newer replay attempt that superseded this await.
+      if (!this.destroyed && data === this.data && ticket === this.replayLoadTicket && !this.replay)
+        data?.setPaused(false)
+      return
+    }
     this.replay = new ReplayController(this.chart, {
       series: driven,
       bars,
       startIndex: from,
       subBars: sub ?? undefined,
-      onFrame: (state) => this.cb.onReplayChange?.(state),
+      onFrame: (state) => {
+        this.profileLayer?.refresh(true)
+        this.cb.onReplayChange?.(state)
+      },
     })
     this.showReplayMark(true)
     this.showTradeButtons(false)
@@ -2249,22 +3214,29 @@ export class TradingTerminal {
    * whole-bar steps, which is what it did before this existed.
    */
   private async loadReplaySubBars(): Promise<Bar[] | null> {
-    const finer = TradingTerminal.REPLAY_SUB[this.interval]
+    const interval = this.interval
+    const finer = TradingTerminal.REPLAY_SUB[interval]
     const sym = this.sym
     const rest = this.rest
     if (!finer || !sym || !rest) return null
-    if (this.replaySub && this.replaySub.interval === this.interval) return this.replaySub.bars
+    if (
+      this.replaySub?.interval === interval &&
+      this.replaySub.symbol === sym.symbol &&
+      this.replaySub.exchange === sym.exchange
+    )
+      return this.replaySub.bars
     try {
       const to = this.gridNow()
       const bars = await rest.getBars({
         symbol: sym.symbol,
         exchange: sym.exchange,
         interval: finer,
-        from: to - lookbackDays(this.interval) * 86400,
+        from: to - lookbackDays(interval) * 86400,
         to,
       })
-      if (!bars.length) return null
-      this.replaySub = { interval: this.interval, bars }
+      if (!bars.length || this.destroyed || this.sym !== sym || this.interval !== interval)
+        return null
+      this.replaySub = { interval, symbol: sym.symbol, exchange: sym.exchange, bars }
       return bars
     } catch {
       return null
@@ -2306,7 +3278,9 @@ export class TradingTerminal {
 
   /** Leave replay and put the live chart back exactly where the user left it. */
   stopReplay(): void {
+    this.replayLoadTicket++
     this.cancelReplayPick()
+    this.data?.setPaused(false)
     if (!this.replay) return
     this.replay.stop()
     this.replay = null
@@ -2348,6 +3322,24 @@ export class TradingTerminal {
     if (this.ltpPollTimer) return
     this.ltpPollTimer = setInterval(async () => {
       if (!this.sym) return
+      if (this.sym.synthetic && this.expr) {
+        // A combination polls each leg and folds, the same as the socket path.
+        try {
+          for (const leg of this.expr.symbols) {
+            const r = resolveLeg(leg, this.exprLegExchange)
+            const j = await this.api<{ data?: { ltp?: number } }>('quotes', {
+              symbol: r.symbol,
+              exchange: r.exchange,
+            })
+            if (typeof j.data?.ltp === 'number' && j.data.ltp > 0) this.legLtp.set(leg, j.data.ltp)
+          }
+          this.onCombinedTick(this.expr, nowSec())
+          this.cb.onWsState('fallback')
+        } catch {
+          /* next cycle */
+        }
+        return
+      }
       try {
         const j = await this.api<{ data?: { ltp?: number; bid?: number; ask?: number } }>(
           'quotes',
@@ -2401,6 +3393,12 @@ export class TradingTerminal {
         const last = this.rawBars[this.rawBars.length - 1]
         if (last && last.time === u.bar.time) this.rawBars[this.rawBars.length - 1] = u.bar
         else this.rawBars.push(u.bar)
+        // History and live bars share one bounded store. The terminal retains
+        // its existing single WS subscription and supplies its built bar here.
+        // A bucket the builder opened mid-way, because history stopped one bar
+        // short or the socket came back, is provisional: history keeps the open.
+        if (u.provisional) this.data?.pushBar(u.bar, { provisional: true })
+        else this.data?.pushBar(u.bar)
         // Replay owns the series while it is running. Writing the live bar into
         // it puts a candle at the current wall-clock bucket, at the current
         // price, hundreds of bars past the playhead: a lone spike far from the
@@ -2427,7 +3425,13 @@ export class TradingTerminal {
   private connectLive() {
     if (!this.ws || !this.sym) return
     const sec = intervalSeconds(this.interval)
-    this.builder = sec ? new CandleBuilder({ intervalSec: sec, volumeMode: 'ltq-sum' }) : null
+    // Broker history is already aligned to the instrument's actual session.
+    // Using one known bar as the congruent anchor preserves openings such as
+    // 09:15 for hourly candles instead of snapping them to the Unix epoch.
+    const sessionAnchorSec = this.rawBars[this.rawBars.length - 1]?.time ?? 0
+    this.builder = sec
+      ? new CandleBuilder({ intervalSec: sec, volumeMode: 'ltq-sum', sessionAnchorSec })
+      : null
     // History normally ends *inside* the bar currently forming. An unseeded
     // builder has no current bar, so its first tick opens a second one for that
     // same bucket -- opening at whatever tick price arrives first instead of the
@@ -2467,7 +3471,10 @@ export class TradingTerminal {
       if (typeof depth.ltp === 'number' && depth.ltp > 0) {
         this.cb.onWsState('live')
         this.stopLtpFallback()
-        this.onTick({ ltp: depth.ltp })
+        // Depth has an exchange timestamp but no classified trade quantity in
+        // the OpenAlgo mode-3 contract. Preserve its time and leave volume for
+        // the authoritative history reconcile.
+        this.onTick({ ltp: depth.ltp, timeSec: depth.timeSec })
       }
     })
     // One subscription per symbol, mode picked by instrument type: indices
@@ -2479,37 +3486,119 @@ export class TradingTerminal {
     }
   }
 
-  /**
-   * Reconcile now rather than on the next cycle.
-   *
-   * The periodic pass is deliberately slow and jittered, which is right for
-   * steady state and wrong for the moment a gap appears. Coming back from a
-   * dropped socket or a hidden tab, the missing buckets are known immediately,
-   * so re-arming the timer with no delay closes the hole at once and keeps a
-   * single code path doing the work.
-   */
-  private reconcileNow(): void {
-    if (this.reconcileTimer) clearTimeout(this.reconcileTimer)
-    this.reconcileTimer = setTimeout(() => this.runReconcile(), 0)
+  /* ── live data for a combination: one LTP stream per leg, folded per tick ── */
+  private connectExpressionLive(expr: SymbolExpression) {
+    if (!this.ws) return
+    const sec = intervalSeconds(this.interval)
+    const sessionAnchorSec = this.rawBars[this.rawBars.length - 1]?.time ?? 0
+    // The builder aggregates the folded value, so the forming bar's open, high
+    // and low belong to the combination rather than to any one leg. Seeded from
+    // the folded history like an instrument's builder: when history stopped one
+    // bucket short, the first tick opens a provisional bar and the repair after
+    // the bar closes brings the open it missed.
+    this.builder = sec
+      ? new CandleBuilder({ intervalSec: sec, volumeMode: 'ltq-sum', sessionAnchorSec })
+      : null
+    if (this.builder && this.rawBars.length) {
+      this.builder.seed(this.rawBars[this.rawBars.length - 1])
+    }
+    // Every leg starts at the close its history ended on, so the first tick of
+    // any one leg already has a price for the others to fold with.
+    this.legLtp.clear()
+    for (const leg of expr.symbols) {
+      const rows = this.exprFeed?.legBars[leg]
+      const last = rows?.[rows.length - 1]
+      if (last) this.legLtp.set(leg, last.close)
+    }
+    this.depthActive = false
+    if (this.offLtp) {
+      this.offLtp()
+      this.offLtp = null
+    }
+    if (this.offDepth) {
+      this.offDepth()
+      this.offDepth = null
+    }
+    this.offLtp = this.ws.onLtp((e: LtpEvent) => {
+      const leg = this.legFor(expr, e.symbol, e.exchange)
+      if (!leg) return
+      this.cb.onWsState('live')
+      this.stopLtpFallback()
+      this.legLtp.set(leg, e.ltp)
+      this.onCombinedTick(expr, e.timeSec)
+    })
+    this.legSubs = expr.symbols.map((leg) => resolveLeg(leg, this.exprLegExchange))
+    for (const leg of this.legSubs) this.ws.subscribe('LTP', leg.symbol, leg.exchange)
   }
 
-  /* periodic history reconcile: snap completed bars to broker OHLC/volume */
-  private scheduleReconcile() {
-    if (this.reconcileTimer) clearTimeout(this.reconcileTimer)
-    this.reconcileTimer = setTimeout(() => this.runReconcile(), 25000 + Math.random() * 10000)
+  /** Which leg of the expression a tick belongs to, or null when it is not ours. */
+  private legFor(expr: SymbolExpression, symbol: string | undefined, exchange: string | undefined) {
+    if (!symbol) return null
+    for (const leg of expr.symbols) {
+      const r = resolveLeg(leg, this.exprLegExchange)
+      if (r.symbol === symbol && (!exchange || r.exchange === exchange)) return leg
+    }
+    return null
+  }
+
+  /** Fold the latest price of every leg into one tick for the combined series. */
+  private onCombinedTick(expr: SymbolExpression, timeSec?: number) {
+    const legs: Record<string, Bar[]> = {}
+    for (const leg of expr.symbols) {
+      const p = this.legLtp.get(leg)
+      if (p === undefined) return // a leg without a price cannot be folded yet
+      legs[leg] = [{ time: 0, open: p, high: p, low: p, close: p }]
+    }
+    const value = evaluateExpression(expr, legs)[0]?.close
+    // A divisor at zero folds to a gap, and a gap is not a price.
+    if (value === undefined || !Number.isFinite(value)) return
+    this.onTick({ ltp: value, timeSec })
+  }
+
+  /** Repair a known stream gap immediately through the shared data owner. */
+  private reconcileNow(): void {
+    void this.runReconcile()
   }
 
   private async runReconcile(): Promise<void> {
+    const ticket = this.loadTicket
+    const sym = this.sym
+    const interval = this.interval
+    const data = this.data
+    const rest = this.rest
+    if (!this.destroyed && sym && data) {
+      await data.refresh()
+      if (
+        this.destroyed ||
+        ticket !== this.loadTicket ||
+        sym !== this.sym ||
+        interval !== this.interval ||
+        data !== this.data
+      )
+        return
+      this.applyDataSnapshot(data.getState())
+      return
+    }
     try {
-      if (this.sym && this.rest) {
+      if (!this.destroyed && sym && rest) {
         const to = nowSec()
-        const fresh = await this.rest.getBars({
-          symbol: this.sym.symbol,
-          exchange: this.sym.exchange,
-          interval: this.interval,
-          from: to - Math.min(3, lookbackDays(this.interval)) * 86400,
+        const fresh = await rest.getBars({
+          symbol: sym.symbol,
+          exchange: sym.exchange,
+          interval,
+          from: to - Math.min(3, lookbackDays(interval)) * 86400,
           to,
         })
+        // A response belongs to the load that requested it, even when a new
+        // load selects the same symbol. It must not mutate the next session.
+        if (
+          this.destroyed ||
+          ticket !== this.loadTicket ||
+          sym !== this.sym ||
+          interval !== this.interval ||
+          rest !== this.rest
+        )
+          return
         const byTime = new Map(fresh.map((b) => [b.time, b]))
         let changed = false
         for (let i = 0; i < this.rawBars.length; i++) {
@@ -2584,15 +3673,102 @@ export class TradingTerminal {
     } catch {
       /* next cycle retries */
     }
-    this.scheduleReconcile()
   }
 
   /** Monotonic id for the most recent loadSymbol; older loads abandon. */
   private loadTicket = 0
 
   /* ── symbol selection ─────────────────────────────────────────────────── */
+  /**
+   * Chart an expression over several instruments: `NIFTY/RELIANCE`,
+   * `2*CE25000 - CE25200`, `(A+B)/2`.
+   *
+   * History goes through the same controller as an instrument, behind a feed
+   * that fetches every leg and folds them, so the warm load, the repair after
+   * each bar closes and the gap repair all apply. Live ticks arrive per leg
+   * and are folded into one series by `connectExpressionLive`. The result is
+   * never allowed to look tradeable.
+   */
+  private async loadExpression(
+    source: string,
+    ticket: number,
+    opts: { silent?: boolean },
+  ): Promise<boolean> {
+    let expr: SymbolExpression
+    try {
+      expr = parseExpression(source)
+    } catch (e) {
+      if (!opts.silent) this.toast(`${this.cleanError(e)}`, 'err')
+      return false
+    }
+
+    // A bare leg inherits the exchange of whatever the pane showed before,
+    // which is what a trader typing `NIFTY/RELIANCE` means. Remembered here so
+    // every later repair resolves the legs the same way the load did.
+    if (!this.sym?.synthetic) this.exprLegExchange = this.sym?.exchange || 'NSE'
+    const to = this.gridNow()
+    const request = {
+      symbol: source,
+      exchange: '',
+      interval: this.interval,
+      from: to - lookbackDays(this.interval) * 86400,
+      to,
+    }
+    const inner = this.cachedBars ?? this.rest
+    if (!inner) return false
+    const feed = this.exprFeed ?? new ExpressionFeed(inner, () => this.exprLegExchange)
+    let bars: readonly Bar[]
+    try {
+      bars = this.data ? await this.data.load(request) : await feed.getBars(request)
+    } catch (e) {
+      if (this.destroyed || ticket !== this.loadTicket) return false
+      this.rawBars = []
+      if (!opts.silent) this.toast(`${source}: ${this.cleanError(e)}`, 'err')
+      return false
+    }
+    if (this.destroyed || ticket !== this.loadTicket) return false
+    if (!bars.length) {
+      // The controller resolves with what it has and reports the failure in
+      // its state: a missing leg is an error, legs that never share a bar are
+      // an empty result.
+      this.rawBars = []
+      const error = this.data?.getState().error
+      if (!opts.silent) {
+        this.toast(
+          `${source}: ${error ? this.cleanError(error) : `the legs share no bars on ${this.interval}`}`,
+          'err'
+        )
+      }
+      return false
+    }
+
+    // `quoteOnly` keeps the product picker and the depth ladder away; `synthetic`
+    // is what the order path refuses by name.
+    this.sym = {
+      symbol: source,
+      exchange: '',
+      name: 'Computed chart',
+      lotsize: 1,
+      lots: false,
+      tick: 0,
+      freezeQty: 1,
+      quoteOnly: true,
+      synthetic: true,
+      productOptions: [],
+      product: '',
+    }
+    this.rawBars = [...bars]
+    this.lastLtp = null
+    this.liveBucket = null
+    this.noMoreHistory = false // the feed pages every leg
+    this.expr = expr
+    this.buildChart()
+    this.connectExpressionLive(expr)
+    return true
+  }
+
   async loadSymbol(pick: SearchRow, opts: { silent?: boolean } = {}): Promise<boolean> {
-    if (!this.rest) return false
+    if (this.destroyed || !this.rest) return false
     /**
      * Claim this load. Two awaits follow -- the symbol lookup and the bars --
      * and a second call arriving inside either of them used to run to
@@ -2615,9 +3791,15 @@ export class TradingTerminal {
       (this.sym.symbol !== pick.symbol || this.sym.exchange !== pick.exchange)
     ) {
       // Mirror connectLive's single-subscription model: the outgoing symbol
-      // holds exactly one mode -- LTP when quote-only, Depth otherwise.
+      // holds exactly one mode -- LTP when quote-only, Depth otherwise. A
+      // combination holds one LTP subscription per leg instead.
       try {
-        if (this.sym.quoteOnly) {
+        if (this.sym.synthetic) {
+          for (const leg of this.legSubs) this.ws.unsubscribe('LTP', leg.symbol, leg.exchange)
+          this.legSubs = []
+          this.legLtp.clear()
+          this.expr = null
+        } else if (this.sym.quoteOnly) {
           this.ws.unsubscribe('LTP', this.sym.symbol, this.sym.exchange)
         } else {
           this.ws.unsubscribe('Depth', this.sym.symbol, this.sym.exchange)
@@ -2625,6 +3807,12 @@ export class TradingTerminal {
       } catch {
         /* not subscribed */
       }
+    }
+    // An expression is not an instrument: there is no master record to look up,
+    // no lot size, no tick and nothing to subscribe to. It takes its own path
+    // and never reaches the order machinery below.
+    if (pick.expression === true || isChartExpression(pick.symbol)) {
+      return await this.loadExpression(pick.symbol, ticket, opts)
     }
     // authoritative metadata (lotsize / tick_size / freeze_qty)
     let info: Record<string, unknown> = { ...pick }
@@ -2638,7 +3826,7 @@ export class TradingTerminal {
       /* search row already carries the essentials */
     }
     // A newer load claimed the pane while this one was waiting.
-    if (ticket !== this.loadTicket) return false
+    if (this.destroyed || ticket !== this.loadTicket) return false
     const exchange = String(info.exchange)
     const lotsize = Number(info.lotsize) || 1
     // The segment decides this, never the lot size. Every MCX, NCO and CDS
@@ -2676,51 +3864,97 @@ export class TradingTerminal {
     this.lastLtp = null
     this.liveBucket = null
     this.noMoreHistory = false
+    let bars: readonly Bar[]
     try {
-      this.rawBars = await (this.cachedBars ?? this.rest).getBars({
+      const request = {
         symbol: this.sym.symbol,
         exchange: this.sym.exchange,
         interval: this.interval,
         from: to - lookbackDays(this.interval) * 86400,
         to,
-      })
+      }
+      bars = this.data
+        ? await this.data.load(request)
+        : await (this.cachedBars ?? this.rest).getBars(request)
     } catch (e) {
+      if (this.destroyed || ticket !== this.loadTicket) return false
       this.rawBars = []
       if (!opts.silent) this.toast(`history error: ${this.cleanError(e)}`, 'err')
       return false // caller may fall back (e.g. to the default symbol)
     }
-    // The bars are in. If a newer load claimed the pane while they were in
-    // flight, stop here rather than building a chart it will build again.
-    if (ticket !== this.loadTicket) return false
+    // Validate before assigning: an older response must neither overwrite the
+    // active session nor recreate a chart after its terminal was destroyed.
+    if (this.destroyed || ticket !== this.loadTicket) return false
+    this.rawBars = [...bars]
     if (!this.rawBars.length) {
-      if (!opts.silent)
-        this.toast(`no history for ${this.sym.symbol} ${this.sym.exchange} ${this.interval}`, 'err')
+      if (!opts.silent) {
+        const error = this.data?.getState().error
+        this.toast(
+          error
+            ? `history error: ${this.cleanError(error)}`
+            : `no history for ${this.sym.symbol} ${this.sym.exchange} ${this.interval}`,
+          'err'
+        )
+      }
       return false
     }
     this.lastLtp = this.rawBars[this.rawBars.length - 1].close
-    this.buildChart()
+    const key = this.dataKey({
+      symbol: this.sym.symbol,
+      exchange: this.sym.exchange,
+      interval: this.interval,
+    })
+    if (!this.chart || !this.price || !this.volume || this.chartDataKey !== key) {
+      this.chartDataKey = key
+      this.buildChart()
+    } else {
+      this.setPriceData()
+    }
     this.cb.onLtp(this.lastLtp)
     this.cb.onSymbolLoaded(this.sym)
 
     // live subscription (swap the previous symbol's stream)
     this.connectLive()
-    this.scheduleReconcile()
     this.pollBook()
     return true
   }
 
   /* ── toolbar setters (called by the React page) ───────────────────────── */
-  setInterval(iv: string) {
+  setInterval(iv: string): string {
+    if (
+      isProfileKind(this.ctype) &&
+      !profileIntervalSupported(this.ctype, iv, this.profileBlockMinutes())
+    ) {
+      this.toast(
+        this.ctype === 'tpo'
+          ? 'Choose an intraday interval that divides the TPO block size'
+          : 'Session Volume Profile requires an intraday interval',
+        'err'
+      )
+      return this.interval
+    }
     this.stopReplay() // same reason as loadSymbol: the bars are about to change
     this.interval = iv
     this.lsSet('interval', iv)
+    this.cb.onIntervalChange?.(iv)
     if (this.sym) this.reloadCurrent()
+    return iv
   }
-  setChartType(v: string) {
-    if (!CHART_TYPES[v]) return
+  setChartType(v: string): string {
+    if (!CHART_TYPES[v]) return this.ctype
+    const interval = isProfileKind(v) ? this.compatibleProfileInterval(v) : this.interval
+    if (!interval) {
+      this.toast('The broker has no intraday interval compatible with this profile', 'err')
+      return this.ctype
+    }
+    this.stopReplay()
     this.ctype = v
     this.lsSet('ctype', v)
-    if (this.rawBars.length) this.buildChart()
+    if (interval !== this.interval) {
+      this.setInterval(interval)
+      this.toast(`Using ${interval} bars for ${CHART_TYPES[v].label}`, '')
+    } else if (this.rawBars.length) this.buildChart()
+    return v
   }
   setProduct(p: string) {
     this.product = p
@@ -2729,6 +3963,35 @@ export class TradingTerminal {
   setQty(n: number) {
     this.qty = Math.max(1, Math.floor(n || 1))
     if (this.tradeBtns) this.tradeBtns.setQty(this.qtyChip())
+  }
+  /**
+   * One-Click on or off. Nothing here gates a risk-reducing action: the
+   * position pill's close, an order line's cancel and drag-to-modify work the
+   * same either way, as they do on the scalping terminal.
+   */
+  setArmed(on: boolean) {
+    if (this.armed === on) return
+    this.armed = on
+    this.applyTradeColors()
+  }
+  oneClickArmed(): boolean {
+    return this.armed
+  }
+  /**
+   * The Buy and Sell panel says which it is. Armed, the theme's own buy and
+   * sell colours: the click is the order. Off, both are pulled towards the
+   * background so they read as a control that opens something rather than one
+   * that fires. A colour swap on the primitive, not a rebuild: the panel keeps
+   * its prices and its place.
+   */
+  private applyTradeColors(): void {
+    if (!this.tradeBtns) return
+    if (this.armed || !this.chartTheme) {
+      this.tradeBtns.setColors(undefined, undefined)
+      return
+    }
+    const muted = mutedTradeColors(this.chartTheme)
+    this.tradeBtns.setColors(muted.buy, muted.sell)
   }
   private reloadCurrent() {
     if (!this.sym) return
@@ -2825,6 +4088,29 @@ export class TradingTerminal {
   }
 
   /**
+   * The chart as a named PNG file, or null when there is nothing to capture.
+   *
+   * A `File` rather than a `Blob` because every caller needs the name as well
+   * as the bytes, and a File is a Blob, so the clipboard takes it unchanged.
+   * The name is the same `SYMBOL-interval-timestamp.png` the saved image uses,
+   * which is what makes an attached screenshot say in the conversation which
+   * chart it was.
+   *
+   * This is the one place a PNG is produced. Copying to the clipboard and
+   * attaching one to an agent turn both come through here, so a change to what
+   * is composited, or to which overlays are taken down first, reaches both.
+   */
+  async snapshotPng(): Promise<File | null> {
+    const chart = this.chart
+    if (!chart || !this.sym) return null
+    const canvas = await this.captureCanvas(chart)
+    if (!canvas) return null
+    const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/png'))
+    if (!blob) return null
+    return new File([blob], this.screenshotName(), { type: 'image/png' })
+  }
+
+  /**
    * Put the chart on the clipboard as an image, ready to paste.
    *
    * The image clipboard is the only form that pastes into a post composer or a
@@ -2834,17 +4120,14 @@ export class TradingTerminal {
    * OpenAlgo qualifies. Anything else is reported rather than failing silently.
    */
   async copyScreenshot(): Promise<void> {
-    const chart = this.chart
-    if (!chart || !this.sym) return
+    if (!this.chart || !this.sym) return
     try {
       if (!navigator.clipboard || typeof ClipboardItem === 'undefined') {
         throw new Error('Copying images needs https or localhost')
       }
-      const canvas = await this.captureCanvas(chart)
-      if (!canvas) return
-      const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/png'))
-      if (!blob) throw new Error('The chart produced no image')
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+      const file = await this.snapshotPng()
+      if (!file) throw new Error('The chart produced no image')
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': file })])
       this.toast('Chart copied, paste it anywhere', 'ok')
     } catch (e) {
       this.toast(this.cleanError(e), 'err')
@@ -2863,9 +4146,11 @@ export class TradingTerminal {
   private async captureCanvas(chart: ChartInstance): Promise<HTMLCanvasElement | null> {
     const hidden = [...this.screenshotExcluded]
     for (const o of hidden) chart.removePrimitive(o.primitive)
-    // Selection handles are grab targets; the drawing itself stays.
-    const selected = this.draw?.selected() ?? null
-    if (selected) this.draw?.select(null)
+    // Selection handles are grab targets; the drawing itself stays. Every
+    // selected id is kept, not only the primary: a shift-click selection would
+    // otherwise come back as its first member.
+    const selected = this.draw?.selection() ?? []
+    if (selected.length) this.draw?.select(null)
     try {
       await nextPaint()
       // A theme toggle or an interval change during that frame rebuilds the
@@ -2877,7 +4162,7 @@ export class TradingTerminal {
     } finally {
       if (!this.destroyed && this.chart === chart) {
         for (const o of hidden) chart.addPrimitive(o.primitive, o.paneIndex)
-        if (selected) this.draw?.select(selected)
+        if (selected.length) this.draw?.select(selected)
       }
     }
   }
@@ -2928,6 +4213,20 @@ export class TradingTerminal {
 
   /* ── right-click order menu ───────────────────────────────────────────── */
   private ctxPrice = 0
+  /** Per-session profile actions are available for quote-only instruments too. */
+  profileContextMenuAt(localX: number, localY: number) {
+    const chart = this.chart
+    if (!chart || !this.profileLayer) return null
+    const maximized = chart.maximizedPane()
+    if (maximized !== null && maximized !== 0) return null
+    // Native primitives receive plot coordinates; a left price axis adds an
+    // origin offset to the container coordinates used by the React menu.
+    const time = chart.dataLayer.indexToTime(0)
+    if (time === undefined) return null
+    const plotLeft = chart.timeToCoordinate(time) - chart.timeScale.indexToX(0)
+    return this.profileLayer.contextMenuAt(localX - plotLeft, localY)
+  }
+
   /** Build the context-menu items for a right-click at container-local y. */
   contextMenuAt(localY: number): { price: number; items: CtxItem[] } | null {
     if (!this.chart || !this.sym || this.sym.quoteOnly) return null
@@ -2969,6 +4268,27 @@ export class TradingTerminal {
   async init() {
     this.rest = new OpenAlgoDataFeed({ baseUrl: '', apiKey: this.apiKey })
     this.cachedBars = withBarCache(this.rest, { ttlMs: 10 * 60_000 })
+    this.exprFeed = new ExpressionFeed(this.cachedBars, () => this.exprLegExchange)
+    // Repair follows the stream: one small refresh a moment after each bar
+    // closes, an immediate one when the stream skips a bucket, and each asks
+    // history for the last few bars only. The 30-second poll stays, now as a
+    // tail request rather than the whole window, because a tradeable's only
+    // subscription is Depth, which carries no traded quantity: history is the
+    // sole source of the forming bar's volume, and a volume pane frozen for a
+    // whole bar reads as a dead feed.
+    this.data = new DataLoadingController(this.exprFeed, {
+      now: nowSec,
+      pollIntervalMs: 30_000,
+      refreshOnBarClose: true,
+      refreshOnGap: true,
+      refreshWindowBars: 5,
+      pageSize: 500,
+      maxEmptyPages: 4,
+      maxBars: 100_000,
+    })
+    this.offData = this.data.subscribe((snapshot) => this.applyDataSnapshot(snapshot))
+    document.addEventListener('visibilitychange', this.onVisibilityChange)
+    this.onVisibilityChange()
     this.trade = new OpenAlgoTradeFeed({ baseUrl: '', apiKey: this.apiKey, strategy: STRATEGY })
 
     // broker-supported intervals → the timeframe dropdown
@@ -2979,23 +4299,38 @@ export class TradingTerminal {
     } catch {
       groups = intervalGroups({ minutes: ['1m', '5m', '15m'], hours: ['1h'], days: ['D'] })
     }
+    // The pane may have closed while intervals loaded. Do not reopen its resources.
+    if (this.destroyed) return
     this.interval = pickInterval(groups, this.lsGet('interval'))
+    this.availableIntervals = groups.flatMap((group) => group.items)
+    if (isProfileKind(this.ctype)) {
+      const interval = this.compatibleProfileInterval(this.ctype)
+      if (interval) this.interval = interval
+      else this.ctype = 'candlestick'
+    }
     this.cb.onReady({ intervalGroups: groups, interval: this.interval, chartType: this.ctype })
 
     // one WebSocket for ticks + the account-level order stream.
     this.ws = new OpenAlgoWsFeed({ url: this.wsUrl, apiKey: this.apiKey })
-    this.ws.onState((s) => {
+    this.offWsState = this.ws.onState((s) => {
+      if (this.destroyed) return
       this.cb.onWsState(s)
       if (s === 'closed' || s === 'error' || s === 'reconnecting') this.startLtpFallback()
       // Back on the wire after a break: whatever closed between the drop and
       // now was never built from ticks, so reconcile at once instead of waiting
-      // out the rest of the 25 to 35 second cycle staring at the hole.
-      if (s === 'open') this.reconcileNow()
+      // for the next poll staring at the hole. The builder is reseeded from its
+      // own bar first, which marks the bucket it opens next as provisional: the
+      // first tick after a gap is not that bucket's open.
+      if (s === 'open') {
+        const current = this.builder?.current()
+        if (current) this.builder?.seed(current)
+        this.reconcileNow()
+      }
     })
-    this.ws.onControl((m) => {
+    this.offWsControl = this.ws.onControl((m) => {
       if (m.type === 'auth' && m.status !== 'success') this.cb.onWsState('auth failed')
     })
-    this.ws.onOrderUpdate((e) => {
+    this.offOrderUpdate = this.ws.onOrderUpdate((e) => {
       if (!this.sym || e.symbol !== this.sym.symbol || !this.chart) return
       const working =
         e.status === 'open' || e.status === 'trigger pending' || e.status === 'pending'
@@ -3061,12 +4396,33 @@ export class TradingTerminal {
 
   destroy() {
     this.destroyed = true
+    this.offBranding?.()
+    this.offBranding = null
+    this.cb.onBrandingChange?.(null)
+    document.removeEventListener('visibilitychange', this.onVisibilityChange)
+    this.offData?.()
+    this.offData = null
+    this.data?.destroy()
+    this.data = null
+    this.detachObjects()
     this.detachDrawing()
     if (this.bookTimer) clearInterval(this.bookTimer)
-    if (this.reconcileTimer) clearTimeout(this.reconcileTimer)
+    this.bookTimer = null
     this.stopLtpFallback()
-    if (this.offLtp) this.offLtp()
-    if (this.offDepth) this.offDepth()
+    this.offLtp?.()
+    this.offLtp = null
+    this.offDepth?.()
+    this.offDepth = null
+    this.offWsState?.()
+    this.offWsState = null
+    this.offWsControl?.()
+    this.offWsControl = null
+    this.offOrderUpdate?.()
+    this.offOrderUpdate = null
+    this.offReplayPointer?.()
+    this.offReplayPointer = null
+    this.offLegendActions?.()
+    this.offLegendActions = null
     try {
       this.ws?.close()
     } catch {
@@ -3077,6 +4433,8 @@ export class TradingTerminal {
     } catch {
       /* nothing to leave */
     }
+    this.profileLayer?.dispose()
+    this.profileLayer = null
     try {
       this.chart?.destroy()
     } catch {

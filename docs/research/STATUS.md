@@ -2,6 +2,38 @@
 
 Updated: 16 September 2026. Published preview: **`0.1.0-preview.4`**, targeting OpenAlgo 2.0.2.2.
 
+## OpenAlgo host update — 16 September 2026
+
+Development source now integrates OpenAlgo **2.0.2.5** through upstream commit
+`d858c2384cbd6a9bdb09d0fb42c1a08b46c48c29`, including the post-release chart
+updates. The Python SDK is 2.0.5 and `openalgo-charts` is 2.3.2. Research engine
+versions and immutable saved-result contracts remain unchanged. The published
+preview ZIP above remains the older release; the current source manifest records
+the new host baseline.
+
+The combined frontend builds and all 2,653 frontend tests pass. Another 485
+targeted upstream checks cover migrations, agent/voice, shutdown, chart data and
+broker corrections. The normal Windows installation now runs this source with
+updated locked Python/frontend dependencies. All 57 saved research jobs and their
+metadata fingerprints are preserved, along with existing account/mode/settings
+and the local market-status guard. The three native agent migrations are
+idempotent against the populated normal database; a rollback backup remains in
+that installation. The app, existing login and research worker are verified
+online. Agent/voice setup remains optional.
+
+The distribution workflow records the full research, Linux/eventlet/Nautilus and
+container acceptance for each published commit. It now also exercises native
+upgrade migrations and shared chart contracts. Local browser acceptance here
+covers the existing login page and rebuilt assets; no real broker trade or
+agent-provider request was made to validate an upgrade.
+
+The [upstream inventory and reuse plan](UPSTREAM_UPDATE_20260916.md) covers all
+157 upstream commits. First feature reuse after compatibility acceptance is the
+shared read-only chart fed by frozen report prices, with trade markers, visual
+indicators and bar replay. Native Historify inspection follows; Python indicator
+admission to automatic research needs its own causal calculation contract.
+
+
 ## Benchmark, market conditions and condition tests — 16 September 2026
 
 The installed update combines the saved Nifty benchmark, historical market-condition

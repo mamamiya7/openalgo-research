@@ -15,6 +15,12 @@ workflow. Research starts from a CSV export or saved signals.
 
 **Current preview: `0.1.0-preview.4` · OpenAlgo 2.0.2.2 · Python 3.12**
 
+The current development source integrates **OpenAlgo 2.0.2.5**, including
+upstream changes through 16 September 2026 and `openalgo-charts` 2.3.2.
+The downloadable preview above is an older, unchanged release. See the
+[upstream update and reuse plan](docs/research/UPSTREAM_UPDATE_20260916.md)
+for the exact version, migrations and planned use of native charts and indicators.
+
 [Download the preview](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.4)
 · [Install and start](docs/research/RUNTIME.md)
 · [Release notes](docs/research/releases/0.1.0-preview.4.md)

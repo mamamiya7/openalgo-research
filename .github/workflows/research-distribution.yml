@@ -37,6 +37,14 @@ jobs:
       - run: uv run --no-sync python tools/research_check.py
       - name: Engine, native data, saved evidence and lifecycle regressions
         run: uv run --no-sync pytest test/research test/test_history_service_source_validation.py -q
+      - name: Host upgrade migrations, shutdown and chart data contracts
+        run: >-
+          uv run --no-sync pytest
+          test/test_migrate_agent.py test/test_agent_voice.py
+          test/test_graceful_shutdown.py
+          test/test_strategy_builder_chart_window.py
+          test/test_strategy_builder_chart_reference.py
+          test/test_upstox_holdings_mapping.py test/test_upstox_tick_size.py -q
       - name: Production eventlet boundary
         if: runner.os == 'Linux'
         run: |
@@ -153,6 +161,11 @@ jobs:
           src/components/layout/ResearchLayout.test.tsx
           src/components/auth/AuthSync.test.tsx
           src/components/strategy-builder/PayoffChart.test.tsx
+          src/components/chart/OpenAlgoChart.test.tsx
+          src/components/strategy-builder/StrategyChartShell.test.tsx
+          src/lib/chart/feeds/historifyFeed.test.ts
+          src/lib/trading/chartProfiles.test.ts
+          src/pages/HistorifyCharts.test.ts
           src/lib/researchDraft.test.ts
           src/hooks/useResearchExperiment.test.tsx
           src/hooks/useResearchNavigation.test.tsx

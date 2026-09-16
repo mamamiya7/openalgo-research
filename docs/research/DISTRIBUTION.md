@@ -145,6 +145,13 @@ Maintainers should:
 
 ## Current verification
 
+Current development source integrates OpenAlgo **2.0.2.5** at upstream
+`d858c2384cbd6a9bdb09d0fb42c1a08b46c48c29`, with Python SDK 2.0.5 and
+`openalgo-charts` 2.3.2. This is separate from the unchanged preview.4 artifact
+described below. See [STATUS.md](STATUS.md) for upgrade acceptance and
+[the upstream inventory](UPSTREAM_UPDATE_20260916.md) for new migrations and
+feature reuse. Research calculation-engine pins are unchanged.
+
 Preview `0.1.0-preview.4` targets OpenAlgo 2.0.2.2, Python 3.12, VectorBT 0.28.5,
 Optuna 5.0.0 and optional NautilusTrader 1.231.0. The final Windows research suite
 passed **774 tests with 42 skips** and one existing Pydantic warning. Native

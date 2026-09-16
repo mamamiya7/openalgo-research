@@ -12,11 +12,26 @@
  * so the guard cannot be reintroduced without failing here.
  */
 
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { CandleBuilder } from 'openalgo-charts'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { priceDp } from './format'
-import { dedupeIndicators, productOptionsFor, resolveTick, usesLots } from './terminal'
+import {
+  buildOrderTicket,
+  dedupeIndicators,
+  ORDER_COOLDOWN_MS,
+  orderUnits,
+  productOptionsFor,
+  resolveTick,
+  sameIndicatorRecords,
+  sameIndicatorInstances,
+  type SymbolView,
+  TradingTerminal,
+  usesLots,
+} from './terminal'
 
 /** Every segment whose contracts carry lotsize 1 in the master. */
 const LOTSIZE_ONE_SEGMENTS = ['MCX', 'NCO', 'CDS', 'BCD', 'NCDEX']
@@ -35,6 +50,11 @@ describe('productOptionsFor', () => {
 
   it.each(CASH_EQUITY)('%s keeps CNC and must never be given NRML', (exchange) => {
     expect(productOptionsFor(exchange)).toEqual(['MIS', 'CNC'])
+  })
+
+  it('CRYPTO is a derivative segment: NRML, never CNC', () => {
+    expect(productOptionsFor('CRYPTO')).toEqual(['MIS', 'NRML'])
+    expect(usesLots('CRYPTO')).toBe(true)
   })
 
   it('defaults an unknown segment to cash equity', () => {
@@ -95,8 +115,9 @@ describe('usesLots', () => {
  * subscribe that would supply ltq is not an option: brokers whose adapters
  * track one mode per symbol froze the chart on it (issue #1664).
  *
- * So the periodic history reconcile supplies that one field. These cases pin
- * why it re-seeds the builder instead of patching `rawBars` alone.
+ * So the history repair supplies that one field, through the builder's own
+ * `reconcile`. These cases pin why the builder's copy must be updated rather
+ * than `rawBars` alone, and what reconcile keeps from each side.
  */
 describe('forming-bar volume', () => {
   const BUCKET = 60
@@ -135,6 +156,20 @@ describe('forming-bar volume', () => {
     expect(u?.isNew).toBe(false)
     // The ticks still own the price. History is a poll and lags them.
     expect(u?.bar.close).toBe(103)
+  })
+
+  it('reconcile takes the sampled volume and a provisional open, and keeps the live close', () => {
+    const b = new CandleBuilder({ intervalSec: BUCKET, volumeMode: 'ltq-sum' })
+    b.seed(bar(0, 5000))
+    // History stopped at the previous bar, so this tick opens the bucket at
+    // whatever price it carries: provisional, and history knows the open.
+    const opened = b.onTick({ time: BUCKET + 10, price: 101 })
+    expect(opened?.provisional).toBe(true)
+    const merged = b.reconcile({ time: BUCKET, open: 100.5, high: 101.5, low: 100.2, close: 100.9, volume: 4200 })
+    expect(merged).toMatchObject({ open: 100.5, high: 101.5, low: 100.2, close: 101, volume: 4200 })
+    const u = b.onTick({ time: BUCKET + 40, price: 103 })
+    expect(u?.bar).toMatchObject({ open: 100.5, close: 103, volume: 4200 })
+    expect(u?.provisional).toBe(false)
   })
 
   it('starts the next bar clean rather than carrying the correction forward', () => {
@@ -213,5 +248,355 @@ describe('dedupeIndicators', () => {
 
   it('leaves an empty list alone', () => {
     expect(dedupeIndicators([])).toEqual([])
+  })
+
+  it('preserves the optional visibility carried by a saved instance', () => {
+    const hidden = { ...ema(20), visible: false }
+    expect(dedupeIndicators([hidden])).toEqual([hidden])
+  })
+})
+
+describe('sameIndicatorRecords', () => {
+  it('ignores object notifications that did not change indicator persistence', () => {
+    const saved = [{ indicatorId: 'ema', settings: { period: 20 }, visible: true }]
+    expect(sameIndicatorRecords(saved, [{ ...saved[0], settings: { period: 20 } }])).toBe(true)
+  })
+
+  it('detects visibility and settings changes', () => {
+    const saved = [{ indicatorId: 'ema', settings: { period: 20 }, visible: true }]
+    expect(sameIndicatorRecords(saved, [{ ...saved[0], visible: false }])).toBe(false)
+    expect(sameIndicatorRecords(saved, [{ ...saved[0], settings: { period: 50 } }])).toBe(false)
+  })
+})
+
+describe('sameIndicatorInstances', () => {
+  it('detects a rebuilt instance even when its descriptor and settings are unchanged', () => {
+    expect(
+      sameIndicatorInstances(
+        [{ id: 'ema-1', name: 'EMA' }],
+        [{ id: 'ema-2', name: 'EMA' }]
+      )
+    ).toBe(false)
+  })
+
+  it('ignores unrelated object notifications for the same live instances', () => {
+    const current = [{ id: 'ema-2', name: 'EMA' }]
+    expect(sameIndicatorInstances(current, current.map((item) => ({ ...item })))).toBe(true)
+  })
+})
+
+describe('chart object lifecycle', () => {
+  const methods = TradingTerminal.prototype as unknown as {
+    applyIndicators(this: unknown): Promise<void>
+    syncIndicators(this: unknown): void
+    destroy(this: unknown): void
+  }
+
+  it('restores saved visibility and treats a legacy record as visible', async () => {
+    const visibilities: boolean[] = []
+    const addIndicator = vi.fn((_id: string, _settings: Record<string, unknown>) => ({
+      setVisible: (visible: boolean) => visibilities.push(visible),
+    }))
+    const syncIndicators = vi.fn()
+    const terminal = Object.assign(Object.create(TradingTerminal.prototype), {
+      chart: { addIndicator },
+      destroyed: false,
+      activeIndicators: [
+        { indicatorId: 'ema', settings: { period: 9 }, visible: false },
+        { indicatorId: 'sma', settings: { period: 20 } },
+      ],
+      restoringIndicatorsOn: null,
+      applyingIndicators: false,
+      loadIndicators: vi.fn().mockResolvedValue(undefined),
+      syncIndicators,
+    })
+
+    await methods.applyIndicators.call(terminal)
+
+    expect(addIndicator.mock.calls.map(([id]) => id)).toEqual(['ema', 'sma'])
+    expect(visibilities).toEqual([false, true])
+    expect(syncIndicators).toHaveBeenCalledOnce()
+    expect(terminal.restoringIndicatorsOn).toBeNull()
+  })
+
+  it('disposes inventory observation before drawing and chart teardown', () => {
+    const order: string[] = []
+    const terminal = Object.assign(Object.create(TradingTerminal.prototype), {
+      destroyed: false,
+      onVisibilityChange: () => {},
+      offData: null,
+      data: null,
+      objects: { destroy: () => order.push('objects') },
+      cb: { onObjectsChange: () => {} },
+      offProfileObject: null,
+      detachDrawing: () => order.push('drawing'),
+      bookTimer: null,
+      stopLtpFallback: () => {},
+      offLtp: null,
+      offDepth: null,
+      offWsState: null,
+      offWsControl: null,
+      offOrderUpdate: null,
+      offReplayPointer: null,
+      offLegendActions: null,
+      ws: null,
+      stopReplay: () => {},
+      profileLayer: null,
+      chart: { destroy: () => order.push('chart') },
+      screenshotExcluded: [],
+    })
+
+    methods.destroy.call(terminal)
+
+    expect(order).toEqual(['objects', 'drawing', 'chart'])
+    expect(terminal.objects).toBeNull()
+    expect(terminal.chart).toBeNull()
+  })
+
+  it('clears a rejected lazy-load guard so a later sync persists live state', async () => {
+    const persisted = vi.fn()
+    const indicator = {
+      id: 'ema-next',
+      indicatorId: 'ema',
+      name: 'EMA',
+      settings: () => ({ period: 9 }),
+      visible: () => false,
+    }
+    const chart = { indicators: () => [indicator] }
+    const terminal = Object.assign(Object.create(TradingTerminal.prototype), {
+      chart,
+      destroyed: false,
+      activeIndicators: [],
+      announcedIndicators: [{ id: indicator.id, name: indicator.name }],
+      restoringIndicatorsOn: null,
+      applyingIndicators: false,
+      loadIndicators: vi.fn().mockRejectedValue(new Error('chunk failed')),
+      cleanError: () => 'chunk failed',
+      toast: vi.fn(),
+      lsSet: persisted,
+    })
+
+    await methods.applyIndicators.call(terminal)
+
+    expect(terminal.restoringIndicatorsOn).toBeNull()
+    expect(terminal.toast).toHaveBeenCalledWith('Indicators could not be restored: chunk failed', 'err')
+
+    methods.syncIndicators.call(terminal)
+
+    expect(persisted).toHaveBeenCalledWith(
+      'indicators',
+      JSON.stringify([{ indicatorId: 'ema', settings: { period: 9 }, visible: false }])
+    )
+    expect(terminal.activeIndicators).toEqual([
+      { indicatorId: 'ema', settings: { period: 9 }, visible: false },
+    ])
+  })
+})
+
+/**
+ * One-Click off: a click opens a ticket instead of placing. The ticket has to
+ * carry exactly what the armed path would have sent, or a trader who reads
+ * the chart, disarms, and confirms is confirming a different order from the
+ * one the chart was about to fire. These pin the two against each other
+ * through the one sizing function and the one price mapping they share.
+ */
+describe('orderUnits', () => {
+  it('multiplies lots out on a derivative segment', () => {
+    expect(orderUnits(2, true, 75)).toBe(150)
+  })
+
+  it('passes shares through on cash equity', () => {
+    expect(orderUnits(7, false, 1)).toBe(7)
+  })
+
+  it('floors to whole lots and never below one', () => {
+    expect(orderUnits(2.9, true, 50)).toBe(100)
+    expect(orderUnits(0, true, 50)).toBe(50)
+    expect(orderUnits(Number.NaN, false, 1)).toBe(1)
+  })
+})
+
+describe('buildOrderTicket', () => {
+  const fno: SymbolView = {
+    symbol: 'NIFTY28MAR2420800CE',
+    exchange: 'NFO',
+    name: 'NIFTY',
+    lots: true,
+    lotsize: 75,
+    tick: 0.05,
+    freezeQty: 1800,
+    quoteOnly: false,
+    productOptions: ['MIS', 'NRML'],
+    product: 'NRML',
+  }
+  const cash: SymbolView = {
+    ...fno,
+    symbol: 'SBIN',
+    exchange: 'NSE',
+    lots: false,
+    lotsize: 1,
+    productOptions: ['MIS', 'CNC'],
+    product: 'CNC',
+  }
+
+  it('sizes the ticket the way the armed path sizes the order', () => {
+    const t = buildOrderTicket({
+      sym: fno,
+      qty: 2,
+      product: 'NRML',
+      side: 'BUY',
+      type: 'MARKET',
+      price: 0,
+    })
+    expect(t.quantity).toBe(orderUnits(2, fno.lots, fno.lotsize))
+    expect(t.quantity).toBe(150)
+    expect(t.lotSize).toBe(75)
+    expect(t.tickSize).toBe(0.05)
+  })
+
+  it('carries the pane product and the terminal strategy tag through', () => {
+    const t = buildOrderTicket({
+      sym: cash,
+      qty: 10,
+      product: 'MIS',
+      side: 'SELL',
+      type: 'MARKET',
+      price: 0,
+    })
+    expect(t).toMatchObject({
+      symbol: 'SBIN',
+      exchange: 'NSE',
+      action: 'SELL',
+      quantity: 10,
+      lotSize: 1,
+      product: 'MIS',
+      strategy: 'chart-trading',
+    })
+  })
+
+  it('sends no price on a market order, the way placeFromMenu does', () => {
+    const t = buildOrderTicket({
+      sym: fno,
+      qty: 1,
+      product: 'MIS',
+      side: 'BUY',
+      type: 'MARKET',
+      price: 123.45,
+    })
+    expect(t.priceType).toBe('MARKET')
+    expect(t.price).toBeUndefined()
+    expect(t.triggerPrice).toBeUndefined()
+  })
+
+  it('puts the clicked price on a limit and nothing on its trigger', () => {
+    const t = buildOrderTicket({
+      sym: fno,
+      qty: 1,
+      product: 'MIS',
+      side: 'BUY',
+      type: 'LIMIT',
+      price: 123.45,
+    })
+    expect(t.priceType).toBe('LIMIT')
+    expect(t.price).toBe(123.45)
+    expect(t.triggerPrice).toBeUndefined()
+  })
+
+  it('puts the clicked price on both fields of a stop, as the armed path does', () => {
+    // placeFromMenu sends price and triggerPrice both equal to the row's price
+    // for SL; the ticket must show the trader the same two numbers.
+    const t = buildOrderTicket({
+      sym: fno,
+      qty: 1,
+      product: 'MIS',
+      side: 'SELL',
+      type: 'SL',
+      price: 120,
+    })
+    expect(t.priceType).toBe('SL')
+    expect(t.price).toBe(120)
+    expect(t.triggerPrice).toBe(120)
+  })
+
+  it('gives a stop-market only its trigger', () => {
+    const t = buildOrderTicket({
+      sym: fno,
+      qty: 1,
+      product: 'MIS',
+      side: 'SELL',
+      type: 'SL-M',
+      price: 120,
+    })
+    expect(t.price).toBeUndefined()
+    expect(t.triggerPrice).toBe(120)
+  })
+})
+
+/**
+ * Where the fork sits. Read from the source, the way replayTradingLock.test.ts
+ * does, because driving a terminal needs a DOM and a broker: every guard the
+ * armed path applies has to run before the ticket opens, and the cooldown has
+ * to sit on the armed placement alone.
+ */
+describe('placeFromMenu forks after its guards', () => {
+  const SRC = readFileSync(join(process.cwd(), 'src/lib/trading/terminal.ts'), 'utf8')
+  const at = SRC.indexOf('private async placeFromMenu(')
+  const body = at === -1 ? '' : SRC.slice(at, SRC.indexOf('async exitPosition()', at))
+  const ticketAt = body.indexOf('onOrderTicket(')
+  const placeAt = body.indexOf('trade.place(')
+
+  it('opens the ticket only after replay, quote-only, freeze and stop-side checks', () => {
+    expect(at).toBeGreaterThan(-1)
+    expect(ticketAt).toBeGreaterThan(-1)
+    for (const guard of ['refuseWhileReplaying()', 'quoteOnly', 'freezeQty', 'stop must be']) {
+      const guardAt = body.indexOf(guard)
+      expect(guardAt, guard).toBeGreaterThan(-1)
+      expect(guardAt, guard).toBeLessThan(ticketAt)
+    }
+  })
+
+  it('never reaches the broker on the disarmed path', () => {
+    expect(placeAt).toBeGreaterThan(ticketAt)
+    expect(body.slice(ticketAt, placeAt)).toContain('return')
+    const forkAt = body.indexOf('this.armed')
+    expect(forkAt).toBeGreaterThan(-1)
+    expect(forkAt).toBeLessThan(ticketAt)
+  })
+
+  it('applies the scalping cooldown to the armed placement', () => {
+    expect(ORDER_COOLDOWN_MS).toBe(120)
+    const coolAt = body.indexOf('ORDER_COOLDOWN_MS')
+    expect(coolAt).toBeGreaterThan(ticketAt)
+    expect(coolAt).toBeLessThan(placeAt)
+  })
+})
+
+/**
+ * The confirmed ticket goes back out through the terminal's feed, which
+ * asserts the page's mode against the server before it posts, exactly as
+ * the armed path does. A ticket that posted straight to the API would be
+ * the one order route on the page deciding on the server's global switch.
+ */
+describe('placeTicket keeps the mode assertion', () => {
+  const SRC = readFileSync(join(process.cwd(), 'src/lib/trading/terminal.ts'), 'utf8')
+  const at = SRC.indexOf('async placeTicket(')
+  const body = at === -1 ? '' : SRC.slice(at, SRC.indexOf('async exitPosition()', at))
+
+  it('places through the trade feed with the page mode', () => {
+    expect(at).toBeGreaterThan(-1)
+    expect(body).toContain('this.trade.place(')
+    expect(body).toContain('mode: this.tradeMode()')
+    expect(body).toContain('this.tradingLocked()')
+  })
+
+  it('is the route the pane hands its ticket', () => {
+    const pane = readFileSync(join(process.cwd(), 'src/components/trading/ChartPane.tsx'), 'utf8')
+    const dialogAt = pane.indexOf('<PlaceOrderDialog')
+    expect(dialogAt).toBeGreaterThan(-1)
+    const dialog = pane.slice(dialogAt, pane.indexOf('/>', dialogAt))
+    expect(dialog).toContain('place={')
+    expect(dialog).toContain('.placeTicket(')
+    expect(dialog).toContain('container={menuHost}')
+    expect(pane).not.toContain('tradingApi.placeOrder')
   })
 })
