@@ -159,6 +159,15 @@ def ensure_env(
         sample, count = re.subn(rf"(?m)^\s*{re.escape(key)}\s*=.*$", f"{key} = '{value}'", sample)
         if not count:
             sample += f"\n{key} = '{value}'\n"
+    # Native first-run validation canonicalizes a valid salt to the line directly
+    # after its pepper. Write that form now so startup need not rewrite .env.
+    # This is fresh configuration only; existing files returned untouched above.
+    sample = re.sub(r"(?m)^[ \t]*FERNET_SALT[ \t]*=.*(?:\n|$)", "", sample)
+    sample = re.sub(
+        r"(?m)^([ \t]*API_KEY_PEPPER[ \t]*=.*)$",
+        lambda match: f"{match[1]}\nFERNET_SALT = '{replacements['FERNET_SALT']}'",
+        sample,
+    )
     try:
         descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except FileExistsError:

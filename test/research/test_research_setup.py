@@ -65,6 +65,30 @@ def test_existing_config_is_preserved_byte_for_byte_without_prompt(install):
     assert (root / ".env").read_bytes() == content
 
 
+def test_fresh_shipped_config_is_unchanged_by_native_salt_initialization(install, monkeypatch):
+    from utils import env_check
+
+    root, _ = install
+    sample = Path(__file__).resolve().parents[2] / ".sample.env"
+    (root / ".sample.env").write_bytes(sample.read_bytes())
+    assert setup.ensure_env(root, "fyers")
+    path = root / ".env"
+    before = path.read_bytes()
+    values = setup.env_values(before.decode())
+    monkeypatch.setenv("API_KEY_PEPPER", values["API_KEY_PEPPER"])
+    monkeypatch.setenv("FERNET_SALT", values["FERNET_SALT"])
+    monkeypatch.setattr(
+        env_check,
+        "_migrate_fernet_db",
+        lambda *_: pytest.fail("fresh valid salt must not migrate data"),
+    )
+    env_check._ensure_fernet_salt(str(path))
+    env_check._ensure_fernet_salt(str(path))
+    assert path.read_bytes() == before
+    after = setup.env_values(path.read_text())
+    assert all(after[key] == values[key] for key in ("APP_KEY", "API_KEY_PEPPER", "FERNET_SALT"))
+
+
 @pytest.mark.parametrize(
     "relative", ["db/openalgo.db", "db/historify.duckdb", "research_data/research.db"]
 )
