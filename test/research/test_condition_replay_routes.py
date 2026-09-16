@@ -47,7 +47,15 @@ def test_route_saves_linked_native_job_and_repeat_is_idempotent(saved):
     store, parent, request = saved
     app, client = browser(store)
     before = count(store)
-    data = {**request, "request_id": "condition-http-first"}
+    copied = library.from_job(
+        store,
+        "owner",
+        {"job_id": parent.id, "mode": "backtest", "request_id": "copied-parent-context"},
+    )
+    # The same immutable baseline can be linked into several saved ideas.
+    ambiguous = client.post(path(parent), json={**request, "request_id": "ambiguous-context"})
+    assert ambiguous.status_code == 400 and count(store) == before
+    data = {**request, "request_id": "condition-http-first", "experiment_id": copied["id"]}
     response = client.post(path(parent), json=data)
     assert response.status_code == 202, response.json
     identifier = response.json["id"]
@@ -59,6 +67,13 @@ def test_route_saves_linked_native_job_and_repeat_is_idempotent(saved):
         parent_link = db.get(ResearchLibraryJob, (links[0].experiment_id, parent.id))
         assert parent_link is not None
         experiment_id = links[0].experiment_id
+        assert experiment_id == copied["id"]
+        other_experiment = db.scalar(
+            select(ResearchLibraryJob.experiment_id).where(
+                ResearchLibraryJob.job_id == parent.id,
+                ResearchLibraryJob.experiment_id != copied["id"],
+            )
+        )
     assert count(store) == before + 1
     experiment = library.get_experiment(store, "owner", experiment_id)
     with pytest.raises(ValueError, match="Exact replay"):
@@ -80,6 +95,11 @@ def test_route_saves_linked_native_job_and_repeat_is_idempotent(saved):
         _evidence(store, report)
     assert client.post(path(parent), json=data).json["id"] == identifier
     assert count(store) == before + 1
+    assert (
+        client.post(path(parent), json={**data, "experiment_id": other_experiment}).status_code
+        == 400
+    )
+    assert count(store) == before + 1
     saved_version = library.get_version(store, "owner", experiment_id, links[0].version_id)
     assert saved_version["parent_job_id"] == parent.id
     assert saved_version["parent_result_artifact"] == parent.result_artifact
@@ -94,6 +114,12 @@ def test_route_authentication_csrf_and_archive_guard_create_no_jobs(saved):
     app, client = browser(store)
     before = count(store)
     data = {**request, "request_id": "condition-http-guard"}
+    foreign = library.create_experiment(store, "other-owner", {"name": "Private context"})
+    denied = client.post(path(parent), json={**data, "experiment_id": foreign["id"]})
+    assert denied.status_code == 404 and count(store) == before
+    unlinked = library.create_experiment(store, "owner", {"name": "Unrelated context"})
+    denied = client.post(path(parent), json={**data, "experiment_id": unlinked["id"]})
+    assert denied.status_code == 400 and count(store) == before
     assert app.test_client().post(path(parent), json=data).status_code == 401
     with client.session_transaction() as session:
         session["user"] = "other-owner"

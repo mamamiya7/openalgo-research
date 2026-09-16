@@ -14,13 +14,14 @@ export const conditionSelectionKey = (condition: ConditionSelection) =>
 
 export function useConditionReplay(
   jobId: string,
+  experimentId: string | undefined,
   analysisArtifact: string | null | undefined,
   period: 'selection' | 'validation',
   onOpenReport: ((id: string) => void) | undefined,
   disabled: boolean
 ): ConditionReplayActions {
   const owner = useAuthStore((state) => state.user?.username ?? 'account')
-  const identity = JSON.stringify([owner, jobId, analysisArtifact, period, disabled])
+  const identity = JSON.stringify([owner, jobId, experimentId, analysisArtifact, period, disabled])
   const currentIdentity = useRef(identity)
   currentIdentity.current = identity
   const request = useRef<AbortController | null>(null)
@@ -46,6 +47,7 @@ export function useConditionReplay(
   async function test(condition: ConditionSelection) {
     if (
       disabled ||
+      !experimentId ||
       !analysisArtifact ||
       !onOpenReport ||
       request.current ||
@@ -64,6 +66,7 @@ export function useConditionReplay(
         jobId,
         {
           ...condition,
+          experiment_id: experimentId,
           analysis_artifact: analysisArtifact,
           period,
           request_id: token,

@@ -179,6 +179,7 @@ export interface ConditionSelection {
   regime: 'up' | 'down' | 'range' | 'normal' | 'high'
 }
 export interface ConditionReplayRequest extends ConditionSelection {
+  experiment_id: string
   analysis_artifact: string
   period: 'selection' | 'validation'
   request_id: string

@@ -287,6 +287,7 @@ function PortfolioReport({
     (result.execution?.engine ?? result.portfolio?.engine ?? 'vectorbt') === 'vectorbt'
   const conditionReplay = useConditionReplay(
     job.id,
+    experimentId,
     result.report_context?.analysis_artifact,
     laterPeriod ? 'validation' : 'selection',
     onOpenReport,

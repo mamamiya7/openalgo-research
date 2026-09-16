@@ -794,6 +794,7 @@ def portfolio_condition_replay(job_id):
         "analysis_artifact",
         "period",
         "request_id",
+        "experiment_id",
     }:
         raise ValueError("Choose a saved strategy and market condition")
     if request.args:

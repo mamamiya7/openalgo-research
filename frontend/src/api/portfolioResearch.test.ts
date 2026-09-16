@@ -7,6 +7,7 @@ beforeEach(() => vi.mocked(webClient.post).mockResolvedValue({ data: { status: '
 describe('portfolio analysis request contract', () => {
   it('submits a condition replay with its exact evidence, idempotency token and abort signal', async () => {
     const request = {
+      experiment_id: 'experiment-a',
       strategy_id: 'a',
       dimension: 'trend',
       regime: 'up',

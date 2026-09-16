@@ -1278,6 +1278,7 @@ describe('portfolio result reading', () => {
     expect(portfolioResearch.conditionReplay).toHaveBeenCalledWith(
       finished.id,
       {
+        experiment_id: 'research',
         strategy_id: strategy.id,
         dimension: 'trend',
         regime: 'up',

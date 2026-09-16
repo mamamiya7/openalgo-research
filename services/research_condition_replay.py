@@ -17,7 +17,8 @@ def submit(store, owner, job_id, request, *, request_id=None):
 
     if (
         not isinstance(request, dict)
-        or set(request) - {"strategy_id", "dimension", "regime", "analysis_artifact", "period"}
+        or set(request)
+        - {"strategy_id", "dimension", "regime", "analysis_artifact", "period", "experiment_id"}
         or not {"strategy_id", "dimension", "regime", "analysis_artifact"} <= set(request)
     ):
         raise ValueError("Choose a saved strategy, market condition and analysis")
@@ -26,6 +27,11 @@ def submit(store, owner, job_id, request, *, request_id=None):
     ):
         raise ValueError("Use a request identity of 1–128 characters")
     artifact, period = request["analysis_artifact"], request.get("period", "selection")
+    experiment_id = request.get("experiment_id")
+    if experiment_id is not None and (
+        not isinstance(experiment_id, str) or not re.fullmatch(r"[a-f0-9]{32}", experiment_id)
+    ):
+        raise ValueError("Choose a saved research experiment")
     if not isinstance(artifact, str) or not re.fullmatch(r"[a-f0-9]{64}", artifact):
         raise ValueError("Choose a saved market-condition analysis")
     if period not in ("selection", "validation"):
@@ -82,7 +88,9 @@ def submit(store, owner, job_id, request, *, request_id=None):
     evidence = {**base, "condition_replay": manifest}
     from services.research_library import enqueue_condition_replay
 
-    return enqueue_condition_replay(store, owner, parent, evidence, request_id)
+    return enqueue_condition_replay(
+        store, owner, parent, evidence, request_id, experiment_id=experiment_id
+    )
 
 
 def verify(store, evidence):

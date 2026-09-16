@@ -894,22 +894,31 @@ def _enqueue(
     return {**response, "reused": bool(prior)} if with_reuse else response
 
 
-def enqueue_condition_replay(store, owner, parent, evidence, request_id):
+def enqueue_condition_replay(store, owner, parent, evidence, request_id, *, experiment_id=None):
     """Atomically retain a condition test in its original saved experiment."""
     manifest = evidence["condition_replay"]
     token, digest = _request(
-        {"request_id": request_id, "parent_job_id": parent.id, "condition_id": manifest["id"]},
+        {
+            "request_id": request_id,
+            "parent_job_id": parent.id,
+            "condition_id": manifest["id"],
+            "experiment_id": experiment_id,
+        },
         "condition_replay",
     )
     with store.sessions() as db:
         current = db.get(ResearchJob, parent.id)
         if current is None or current.owner != owner:
             raise LookupError("Saved result not found")
-        links = db.scalars(
-            select(ResearchLibraryJob).where(ResearchLibraryJob.job_id == parent.id).limit(2)
-        ).all()
+        query = select(ResearchLibraryJob).where(ResearchLibraryJob.job_id == parent.id)
+        if experiment_id is not None:
+            _owned(db, owner, experiment_id)
+            query = query.where(ResearchLibraryJob.experiment_id == experiment_id)
+        links = db.scalars(query.limit(2)).all()
         if len(links) != 1:
-            raise ValueError("Save this result in the research library before testing a condition")
+            raise ValueError(
+                "Open this result in its saved research experiment before testing a condition"
+            )
         link = links[0]
         experiment = _owned(db, owner, link.experiment_id)
         _editable(experiment)
