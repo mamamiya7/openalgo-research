@@ -22,6 +22,32 @@ a CSV export, or reuse saved signals.
 · [Architecture](docs/research/SYSTEM_MAP.md)
 · [Latest source](https://github.com/mamamiya7/openalgo-research/tree/main)
 
+## What do I need to download?
+
+**Download the complete OpenAlgo Research ZIP above, extract it, then run
+`Setup.cmd`. Do not download `Setup.cmd` on its own.** It needs the application
+files beside it. You do not need to clone or install OpenAlgo, VectorBT or Optuna
+from their separate repositories.
+
+| Component | Its job | What you install |
+| --- | --- | --- |
+| **OpenAlgo + Research interface** | Your account, broker connection, historical prices, research screens and saved results | Already included in the app ZIP. |
+| **VectorBT** | The default backtesting engine | Setup downloads and installs the tested version automatically. |
+| **Optuna** | Searches trading settings and scores them through your selected backtester | Setup downloads and installs the tested version automatically. |
+| **NautilusTrader** | An optional alternative backtesting engine | Only if you want it: use the [included Nautilus installer](docs/research/NAUTILUS.md#install-the-tested-runtime) in Linux or WSL. It downloads the pinned dependencies into a separate environment; no separate Nautilus repository or web app is needed. Windows users need Linux/WSL and Linux `uv` for this optional step. |
+| **Chartink Chrome extension** | Sends historical scanner signals into OpenAlgo | Optional [separate extension ZIP](https://github.com/mamamiya7/openalgo-research/releases/download/chartink-v0.1.2/openalgo-chartink-0.1.2.zip), installed in Chrome. CSV upload works without it. |
+
+**Start with the standard setup.** Choose VectorBT for backtests and use Optimize
+when you want Optuna to search settings. After installing the optional Nautilus
+runtime, select it under **More settings → Backtest engine**. Optuna can search
+settings supported by either engine; it is not a separate application you need
+to open. Engine capabilities differ, and the app shows their supported settings.
+
+Everything is operated through **Tools → Backtest & Optimize** in OpenAlgo:
+**signals → OpenAlgo/Historify prices → VectorBT or Nautilus → saved results**.
+For optimization, **Optuna proposes settings → the selected engine tests them →
+OpenAlgo saves the study**. Your broker connection supplies missing price history.
+
 ### Start on Windows
 
 1. Download the ZIP above and **extract all files** into a folder you will keep.
@@ -171,16 +197,30 @@ This preview accepts CSV signal strategies for long NSE cash equities; it does
 not import arbitrary engine programs or deploy live strategies. The
 [connector contract](docs/research/CONNECTORS.md) lists supported execution rules.
 
-## Development and updates
+## When OpenAlgo, VectorBT, Optuna or Nautilus releases an update
+
+**Update OpenAlgo Research as one tested distribution.** An upstream release does
+not automatically update this app. Each Research release specifies the OpenAlgo
+and engine versions it has integrated and checked. Keep using that combination
+until a newer Research release is available.
+
+1. Check the [Research releases](https://github.com/mamamiya7/openalgo-research/releases) and read the new app release's update notes. Extension releases are labeled separately.
+2. Stop the app and worker. Back up `.env`, account databases, Historify prices, strategy files and the complete research data directory.
+3. Download the new **OpenAlgo Research app ZIP** and follow its [update instructions](docs/research/DISTRIBUTION.md#updates-and-recovery), preserving your private configuration and data. Run **Setup.cmd** again (Linux: `bash setup-research.sh`) to install that release's locked dependencies and apply its migrations; use **Start.cmd** for later launches.
+4. If you use Nautilus, re-run its [optional runtime installer](docs/research/NAUTILUS.md#dependency-updates) when the release changes its pinned runtime. Update the Chrome extension separately only when an extension release requires it; its guide lists compatible app versions.
+
+Do not point this installation at upstream OpenAlgo's Git repository or run
+individual `pip install --upgrade` commands for its engines. Those can replace the
+tested combination. Re-running Setup in an old folder does **not** download a new
+Research release: obtain the new app package first. Update notes state which
+migrations and upgrade paths have been verified; keep your backup for recovery.
+
+## Development
 
 [Development](docs/research/DEVELOPMENT.md) ·
 [Distribution and compatibility](docs/research/DISTRIBUTION.md) ·
 [Research MCP tools](docs/research/MCP.md) ·
 [Documentation map](docs/INDEX.md)
-
-Research has its own version and dependency locks. Upstream OpenAlgo and engine
-updates are integrated and checked before a new Research release; independently
-upgrading those libraries is not the supported update path.
 
 ## Upstream OpenAlgo
 

@@ -108,6 +108,15 @@ dependencies. Fresh container setup, full application startup and restore have
 
 ## Updates and recovery
 
+New upstream OpenAlgo, VectorBT, Optuna or Nautilus versions do not automatically
+update an installed Research app. Use a Research release that integrates and checks
+them together. Download its complete app ZIP before re-running Setup; the setup
+script in an older installation only installs that older release's pinned runtime.
+Do not replace the Research source with a checkout from upstream OpenAlgo or upgrade
+its engine libraries individually. The Chrome extension has its own version and
+compatible-app requirements, so an extension update does not always require an app
+update. See the [component and update overview](../../README.md#what-do-i-need-to-download).
+
 Install a tested distribution release rather than upgrading individual engine
 libraries in place. Stop the app and worker, back up source, `.env`, OpenAlgo data,
 Historify, strategy files and the entire research directory, then apply the new
