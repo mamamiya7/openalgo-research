@@ -82,7 +82,9 @@ $('resume').addEventListener('click', async () => {
 });
 $('discard').addEventListener('click', async () => {
   if ($('discard').disabled) return;
+  importing = true; updateActions();
   try { await message({type: 'discard'}); status(''); await refresh(); } catch (error) { status(error.message); }
+  finally { importing = false; updateActions(); }
 });
 chrome.storage.onChanged.addListener((_changes, area) => {
   if (area === 'local' || area === 'session') void refresh().catch(() => {});
