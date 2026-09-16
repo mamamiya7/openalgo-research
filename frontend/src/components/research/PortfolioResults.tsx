@@ -31,6 +31,7 @@ import { PortfolioTrials } from './PortfolioTrials'
 import { reportMoney, useReportCurrency } from './ReportCurrency'
 import { ResearchResultReview } from './ResearchResultReview'
 import { researchResultPeriod, researchResultRole } from './researchPresentation'
+import { SavedTradeChartDialog } from './SavedTradeChartDialog'
 import { SaveToShortlist } from './SaveToShortlist'
 import { useConditionReplay } from './useConditionReplay'
 import { usePortfolioAnalysis } from './usePortfolioAnalysis'
@@ -268,6 +269,12 @@ function PortfolioReport({
   const [exactSymbol, setExactSymbol] = useState<string | null>(null)
   const [tradePage, setTradePage] = useState(0)
   const [trialPage, setTrialPage] = useState(0)
+  const [chartSelection, setChartSelection] = useState<{
+    index: number
+    reportId: string
+    owner: string | undefined
+    opener: HTMLElement
+  } | null>(null)
   const analysis = usePortfolioAnalysis(
     job.id,
     initialResult,
@@ -309,17 +316,26 @@ function PortfolioReport({
   const experiment = result.experiment
   const trades = useMemo(
     () =>
-      result.ledger.filter(
-        (trade) =>
-          (strategyFilter === 'all' || trade.strategy_id === strategyFilter) &&
-          (statusFilter === 'all' || trade.status === statusFilter) &&
-          (exactSymbol
-            ? trade.symbol === exactSymbol
-            : !query || String(trade.symbol).toLowerCase().includes(query.toLowerCase()))
-      ),
+      result.ledger
+        .map((trade, ledgerIndex) => ({ trade, ledgerIndex }))
+        .filter(
+          ({ trade }) =>
+            (strategyFilter === 'all' || trade.strategy_id === strategyFilter) &&
+            (statusFilter === 'all' || trade.status === statusFilter) &&
+            (exactSymbol
+              ? trade.symbol === exactSymbol
+              : !query || String(trade.symbol).toLowerCase().includes(query.toLowerCase()))
+        ),
     [result.ledger, strategyFilter, statusFilter, query, exactSymbol]
   )
   const pending = Number(summary.pending_trades ?? 0) + Number(summary.unfunded_pending ?? 0)
+  const chartContext = result.report_context
+  const selectedTrade =
+    chartSelection &&
+    chartSelection.owner === owner &&
+    chartSelection.reportId === chartContext?.report_id
+      ? result.ledger[chartSelection.index]
+      : undefined
   const otherExclusions = Math.max(
     0,
     Number(summary.excluded_signals ?? 0) - Number(result.source?.excluded_signals ?? 0)
@@ -654,44 +670,83 @@ function PortfolioReport({
                       </th>
                     )
                   )}
+                  {chartContext && (
+                    <th className={th}>
+                      <span className="sr-only">Chart</span>
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {trades.slice(tradePage * 25, (tradePage + 1) * 25).map((trade, index) => (
-                  <tr key={`${trade.strategy_id}-${trade.source_row}-${trade.symbol}-${index}`}>
-                    <td className={td}>
-                      <span className="font-medium">{trade.symbol}</span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">
-                        {trade.strategy_name}
-                      </span>
-                    </td>
-                    <td className={td}>
-                      {stamp(trade.entry_timestamp ?? trade.entry_date)}
-                      <span className="block text-xs text-muted-foreground">
-                        {money(trade.entry_price)}
-                      </span>
-                    </td>
-                    <td className={td}>
-                      {stamp(trade.exit_timestamp ?? trade.exit_date)}
-                      <span className="block text-xs text-muted-foreground">
-                        {money(trade.exit_price)}
-                      </span>
-                    </td>
-                    <td className={td}>{number(trade.quantity)}</td>
-                    <td className={td}>{money(trade.pnl)}</td>
-                    <td className={td}>
-                      <details>
-                        <summary className="cursor-pointer capitalize">{trade.status}</summary>
-                        <p className="mt-2 max-w-60 whitespace-normal text-xs text-muted-foreground">
-                          {String(trade.reason ?? '')}
-                        </p>
-                      </details>
-                    </td>
-                  </tr>
-                ))}
+                {trades
+                  .slice(tradePage * 25, (tradePage + 1) * 25)
+                  .map(({ trade, ledgerIndex }) => (
+                    <tr
+                      key={`${trade.strategy_id}-${trade.source_row}-${trade.symbol}-${ledgerIndex}`}
+                    >
+                      <td className={td}>
+                        <span className="font-medium">{trade.symbol}</span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          {trade.strategy_name}
+                        </span>
+                      </td>
+                      <td className={td}>
+                        {stamp(trade.entry_timestamp ?? trade.entry_date)}
+                        <span className="block text-xs text-muted-foreground">
+                          {money(trade.entry_price)}
+                        </span>
+                      </td>
+                      <td className={td}>
+                        {stamp(trade.exit_timestamp ?? trade.exit_date)}
+                        <span className="block text-xs text-muted-foreground">
+                          {money(trade.exit_price)}
+                        </span>
+                      </td>
+                      <td className={td}>{number(trade.quantity)}</td>
+                      <td className={td}>{money(trade.pnl)}</td>
+                      <td className={td}>
+                        <details>
+                          <summary className="cursor-pointer capitalize">{trade.status}</summary>
+                          <p className="mt-2 max-w-60 whitespace-normal text-xs text-muted-foreground">
+                            {String(trade.reason ?? '')}
+                          </p>
+                        </details>
+                      </td>
+                      {chartContext && (
+                        <td className={td}>
+                          {['closed', 'pending', 'open'].includes(String(trade.status)) &&
+                            typeof trade.entry_price === 'number' &&
+                            Number.isFinite(trade.entry_price) &&
+                            trade.entry_price > 0 &&
+                            typeof trade.quantity === 'number' &&
+                            trade.quantity > 0 && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                aria-label={`View ${trade.symbol} trade on chart`}
+                                onClick={(event) =>
+                                  setChartSelection({
+                                    index: ledgerIndex,
+                                    reportId: chartContext.report_id,
+                                    owner,
+                                    opener: event.currentTarget,
+                                  })
+                                }
+                              >
+                                View on chart
+                              </Button>
+                            )}
+                        </td>
+                      )}
+                    </tr>
+                  ))}
                 {!trades.length && (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-sm text-muted-foreground">
+                    <td
+                      colSpan={chartContext ? 7 : 6}
+                      className="p-8 text-center text-sm text-muted-foreground"
+                    >
                       No trades match these filters.
                     </td>
                   </tr>
@@ -719,6 +774,21 @@ function PortfolioReport({
           </TabsContent>
         )}
       </Tabs>
+      {selectedTrade && chartSelection && chartContext && (
+        <SavedTradeChartDialog
+          key={`${owner}|${chartContext.report_id}|${chartSelection.index}`}
+          request={{
+            jobId: chartContext.job_id,
+            resultArtifact: chartContext.result_artifact,
+            period: chartContext.period,
+            tradeIndex: chartSelection.index,
+          }}
+          symbol={String(selectedTrade.symbol)}
+          strategy={String(selectedTrade.strategy_name ?? '')}
+          opener={chartSelection.opener}
+          onClose={() => setChartSelection(null)}
+        />
+      )}
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
         <DialogContent
           className="max-h-[85dvh] overflow-y-auto sm:max-w-2xl motion-reduce:animate-none"

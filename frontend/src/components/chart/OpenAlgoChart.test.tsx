@@ -139,6 +139,29 @@ beforeEach(() => {
 })
 
 describe('OpenAlgoChart', () => {
+  it('can open a bounded saved window without importing local user scripts', async () => {
+    render(
+      <OpenAlgoChart
+        feed={feed}
+        symbol="RELIANCE"
+        exchange="NSE"
+        interval="1m"
+        customIndicators={false}
+        lookbackBars={4322}
+      />
+    )
+    await waitFor(() => expect(harness.createWidget).toHaveBeenCalled())
+    expect(harness.loadCustomIndicators).not.toHaveBeenCalled()
+    expect(latest().options.lookbackBars).toBe(4322)
+  })
+
+  it('retains local custom indicator loading for existing chart consumers', async () => {
+    render(<OpenAlgoChart feed={feed} symbol="RELIANCE" exchange="NSE" interval="D" />)
+    await waitFor(() => expect(harness.createWidget).toHaveBeenCalled())
+    expect(harness.loadCustomIndicators).toHaveBeenCalledOnce()
+    expect(latest().options.lookbackBars).toBeUndefined()
+  })
+
   it('never hands the engine an order callback', async () => {
     render(<OpenAlgoChart feed={feed} symbol="RELIANCE" exchange="NSE" interval="D" />)
     await waitFor(() => expect(harness.createWidget).toHaveBeenCalled())

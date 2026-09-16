@@ -2,6 +2,28 @@
 
 Updated: 16 September 2026. Published preview: **`0.1.0-preview.4`**, targeting OpenAlgo 2.0.2.2.
 
+## Saved trade charts — development implementation, 16 September 2026
+
+Completed native portfolio reports now offer **Trades → View on chart**, using
+the shared OpenAlgo chart with exact frozen candles and recorded entry/exit
+markers. Visual indicators and bounded bar replay stay within the loaded report
+section; earlier/later periods and original ledger-row identities are preserved.
+No broker/archive read, recalculation or evidence write occurs. Drawings remain
+temporary and are cleared on replay. Long trades expose explicit candle sections.
+
+[The saved chart contract](SAVED_TRADE_CHARTS.md) records daily/minute timestamp
+mapping, missing-data behavior, OHLC execution limits and section warmup limits.
+Forty-one unique backend and 133 unique frontend checks pass, along with
+TypeScript and the production build. Native browser acceptance verifies daily
+and minute markers, EMA/RSI, replay movement and future-information hiding,
+settings and close/focus restoration, with zero console errors and unchanged
+artifact hashes. The chart dialog fits desktop and 390 px viewports; broader
+host-page overflow remains. Long section paging has automated coverage.
+Installed in the normal application on 16 September: 57 saved jobs and existing
+account/settings are preserved, with source/assets updated and no dependency or
+schema migration. This increment has not been published. Historify navigation and causal
+indicator admission to automatic research remain separate planned work.
+
 ## OpenAlgo host update — 16 September 2026
 
 Development source now integrates OpenAlgo **2.0.2.5** through upstream commit
@@ -28,9 +50,10 @@ covers the existing login page and rebuilt assets; no real broker trade or
 agent-provider request was made to validate an upgrade.
 
 The [upstream inventory and reuse plan](UPSTREAM_UPDATE_20260916.md) covers all
-157 upstream commits. First feature reuse after compatibility acceptance is the
-shared read-only chart fed by frozen report prices, with trade markers, visual
-indicators and bar replay. Native Historify inspection follows; Python indicator
+157 upstream commits. First feature reuse is now implemented in development as
+the [saved trade chart](SAVED_TRADE_CHARTS.md), fed by frozen report prices, with
+trade markers, visual indicators and bar replay; native browser acceptance passes.
+Native Historify inspection follows; Python indicator
 admission to automatic research needs its own causal calculation contract.
 
 

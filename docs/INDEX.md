@@ -47,6 +47,7 @@ need → drill into the specific file. Don't load everything at once.
 | Complete trader journeys, study library, navigation and asset-aware design | [research/PRODUCT_JOURNEY_MAP.md](research/PRODUCT_JOURNEY_MAP.md) · [research/ASSET_PROFILES.md](research/ASSET_PROFILES.md) · [visual map](research/trader-journey-map.html) |
 | Integrated Research delivery plan: reconciled whole-product backlog, all 34 journeys, dependencies, assets and release acceptance | [research/DELIVERY_PLAN.md](research/DELIVERY_PLAN.md) |
 | OpenAlgo 2.0.2.5 upgrade, chart/indicator reuse and upstream feature inventory | [research/UPSTREAM_UPDATE_20260916.md](research/UPSTREAM_UPDATE_20260916.md) |
+| Saved trade charts: frozen native candles, entry/exit markers, visual indicators and bounded bar replay | [research/SAVED_TRADE_CHARTS.md](research/SAVED_TRADE_CHARTS.md) |
 | Proposed one-click Optimize: automatic trading-rule/condition research, causal indicators, validation, benchmarks and findings | [research/AUTOMATED_RESEARCH_PLAN.md](research/AUTOMATED_RESEARCH_PLAN.md) |
 | Research download batching, Historify reuse and bounded evidence publication | [research/DOWNLOAD_PERFORMANCE.md](research/DOWNLOAD_PERFORMANCE.md) |
 | Optimization trial metrics, configurable table columns and settings dialogs | [research/TRIAL_RESULTS.md](research/TRIAL_RESULTS.md) |

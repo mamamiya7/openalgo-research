@@ -179,6 +179,10 @@ export interface OpenAlgoChartProps {
   statusline?: boolean
   /** The top bar's Indicators button. */
   indicators?: boolean
+  /** Load local user scripts. Frozen research charts use built-in studies only. */
+  customIndicators?: boolean
+  /** Opening history span in interval units, for bounded saved-data windows. */
+  lookbackBars?: number
   className?: string
   onSymbolChange?: (symbol: string, exchange: string) => void
   onIntervalChange?: (interval: string) => void
@@ -225,6 +229,8 @@ export function OpenAlgoChart({
   rail = true,
   statusline = true,
   indicators = true,
+  customIndicators = true,
+  lookbackBars,
   className,
   onSymbolChange,
   onIntervalChange,
@@ -267,6 +273,7 @@ export function OpenAlgoChart({
     onIntervalRejected,
     onReady,
     loading,
+    lookbackBars,
   })
   latest.current = {
     dataEndsAt,
@@ -283,6 +290,7 @@ export function OpenAlgoChart({
     onIntervalRejected,
     onReady,
     loading,
+    lookbackBars,
   }
 
   useEffect(() => {
@@ -309,10 +317,12 @@ export function OpenAlgoChart({
       // this only has to succeed once per session and the loader de-duplicates
       // concurrent callers. It is documented never to throw; the guard is here
       // so that if it ever does, the page still gets a chart.
-      try {
-        await loadCustomIndicators()
-      } catch {
-        // A user module that will not import must not cost the built-in tier.
+      if (customIndicators) {
+        try {
+          await loadCustomIndicators()
+        } catch {
+          // A user module that will not import must not cost the built-in tier.
+        }
       }
       if (cancelled) return
 
@@ -353,6 +363,7 @@ export function OpenAlgoChart({
         rail,
         statusline,
         indicators,
+        ...(p.lookbackBars ? { lookbackBars: p.lookbackBars } : {}),
         ...(p.intervals ? { intervals: p.intervals } : {}),
         ...(p.symbolSearch ? { symbolSearch: p.symbolSearch } : {}),
         ...(persistKey ? { persist: persistKey } : {}),
@@ -408,7 +419,7 @@ export function OpenAlgoChart({
       widgetRef.current?.destroy()
       widgetRef.current = null
     }
-  }, [feed, persistKey, topbar, rail, statusline, indicators])
+  }, [feed, persistKey, topbar, rail, statusline, indicators, customIndicators])
 
   /**
    * The volume histogram.

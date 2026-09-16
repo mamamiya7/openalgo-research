@@ -150,6 +150,30 @@ def portfolio_candidate_reports(job_id):
     return jsonify(candidates.availability(store(), session["user"], job_id))
 
 
+@scanner_research_bp.get("/portfolio/jobs/<job_id>/trades/<trade_index>/chart")
+def portfolio_trade_chart(job_id, trade_index):
+    from services import research_trade_chart
+
+    if set(request.args) - {"expected_result_artifact", "period", "offset", "limit"} or any(
+        len(request.args.getlist(key)) != 1 for key in request.args
+    ):
+        raise ValueError("Invalid saved trade chart query")
+    response = jsonify(
+        research_trade_chart.read(
+            store(),
+            session["user"],
+            job_id,
+            trade_index,
+            expected_result_artifact=request.args.get("expected_result_artifact"),
+            period=request.args.get("period"),
+            offset=request.args.get("offset"),
+            limit=request.args.get("limit"),
+        )
+    )
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
 @scanner_research_bp.post("/portfolio/jobs/<job_id>/candidates/<config_id>/report")
 def prepare_candidate_report(job_id, config_id):
     if (request.content_length or 0) > 1024:
