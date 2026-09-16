@@ -96,7 +96,8 @@ jobs:
           PY
 
   package:
-    needs: supported-runtime
+    # Build and check the frontend/image while the independent engine matrix runs.
+    # Installation acceptance still requires both jobs, so no check is skipped.
     timeout-minutes: 60
     runs-on: ubuntu-latest
     env:
@@ -216,7 +217,7 @@ jobs:
 
   fresh-install:
     name: Fresh package installation (${{ matrix.os }})
-    needs: package
+    needs: [supported-runtime, package]
     timeout-minutes: 35
     strategy:
       fail-fast: false
