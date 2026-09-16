@@ -6,9 +6,63 @@ preparation and calculations. Use one research worker per research directory.
 VectorBT and Optuna use the core Python environment. Nautilus calculations use a
 separate locked Linux environment through the same worker and consumer interface.
 
-## Native Windows or Linux core
+## Easy local installation (recommended)
 
-Download the [versioned preview ZIP](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.4)
+Download the [preview.5 release](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.5)
+and extract **openalgo-research-0.1.0-preview.5.zip** into a permanent folder. This
+named asset includes the built interface; GitHub's automatic source archives do not.
+
+On **Windows x64**, double-click **Setup.cmd** and choose your broker. Setup
+downloads its private Python 3.12 runtime and locked dependencies, creates unique
+local security keys, applies migrations, and starts the application and worker
+together. Internet access is needed for initial setup. No separate Python, Git,
+Node.js or administrator installation is required. Create your account in the
+browser, then enter your broker's app credentials in **Profile → Broker
+Credentials** and connect your broker. Select **Tools → Backtest & Optimize**.
+
+For later visits, double-click **Start.cmd**. Keep its window open while using the
+app; press **Ctrl+C** there to stop both services. A duplicate launch or an occupied
+port is reported without stopping another application. The launcher binds to
+`127.0.0.1` and opens the browser only after the app and research worker are ready.
+
+On **Linux x86_64**, with `curl`, `tar` and `sha256sum` installed, run:
+
+```sh
+bash setup-research.sh
+# Later launches:
+bash start-research.sh
+```
+
+Setup can be retried after an interrupted download. It preserves an existing
+`.env` byte-for-byte and does not erase accounts, prices or saved research. Stop
+the application and back up its configuration and data before updating its files.
+The private installation cache is `.research-runtime/`; runtime logs are under
+`log/research-desktop-*.log`. Do not share these folders or your `.env` publicly.
+Source developers must first build `frontend` with `npm ci` and `npm run build`;
+setup explains this if the built interface is absent.
+
+VectorBT and Optuna are included. The optional Nautilus runtime is a separate
+Linux/WSL install: [NAUTILUS.md](NAUTILUS.md). The Chartink extension is optional;
+ordinary CSV upload works without it. The desktop launcher is for local use;
+managed server and Docker instructions remain below.
+
+### If setup stops
+
+| Message or symptom | Next step |
+| --- | --- |
+| Built interface missing | Download the named `openalgo-research-0.1.0-preview.5.zip` asset and extract all files; the automatic Source code ZIP requires a developer build. |
+| Installing dependencies | First setup downloads the calculation libraries. Setup prints an elapsed-time update every 20 seconds; details are in `log/research-setup.log`. |
+| Port already in use | Close the existing OpenAlgo launcher before running Setup or Start again. Setup does not stop unrelated applications. |
+| Windows Application Control blocked a file | The computer's security policy rejected the downloaded Python launcher. Setup stops without changing that policy. On a managed device, ask its administrator to review an approved Python environment; do not disable security controls. This restriction was observed on the maintainer's host and is also tracked [upstream](https://github.com/astral-sh/uv/issues/6584). |
+| Setup interrupted or download failed | Check the connection and free disk space, then run Setup again. Existing settings and saved data are preserved. |
+
+If it still fails, [open an installation issue](https://github.com/mamamiya7/openalgo-research/issues/new?template=installation.yml)
+with the release version, operating system and visible error. Remove personal
+information from log excerpts; never attach `.env`, broker keys or databases.
+
+## Manual native Windows or Linux core
+
+Download the [versioned preview ZIP](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.5)
 and extract it. Use Python 3.12 and `uv` from that installation directory. A release ZIP already
 contains the built interface; Node/npm is needed only when building from a source
 checkout. On a fresh Windows installation, open PowerShell in the extracted

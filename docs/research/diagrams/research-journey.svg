@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="480" viewBox="0 0 1280 480" role="img" aria-labelledby="research-journey-title research-journey-desc">
 <title id="research-journey-title">From scanner signals to a tested strategy</title>
-<desc id="research-journey-desc">Import Chartink-inspired CSV signals or reuse saved signals; define stop-loss, target, trailing, holding and allocation rules; prepare required broker prices; run a backtest or optimize; review and save results, export, or replay. Current main source supports a saved experiment library. The latest packaged preview is 0.1.0-preview.4.</desc>
+<desc id="research-journey-desc">Import Chartink-inspired CSV signals or reuse saved signals; define stop-loss, target, trailing, holding and allocation rules; prepare required broker prices; run a backtest or optimize; review and save results, export, or replay. Current source and the packaged preview 0.1.0-preview.5 support a saved experiment library.</desc>
 <defs>
 <marker id="research-journey-arrow" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#5b665e"/></marker>
 <marker id="research-journey-arrow-accent" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#147d5a"/></marker>

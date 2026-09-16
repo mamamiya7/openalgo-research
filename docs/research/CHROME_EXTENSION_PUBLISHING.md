@@ -11,7 +11,7 @@ Publish it as **one community Chrome extension**, with its source in this reposi
 | Original green connector logo, toolbar icons and 440 × 280 promotional tile | Prepared in [store artwork](extension-store/README.md) |
 | Version 0.1.1 ZIP with manifest at its root, license and original artwork | Build with `python extensions/chartink/package.py`; the output and checksum are under ignored `.agent-native/chartink-package/` |
 | Public policy, bundled offline policy, support links and store copy | Prepared: [privacy](CHARTINK_PRIVACY.md), [listing and review instructions](CHARTINK_STORE_LISTING.md) |
-| Public app release supporting Chartink connector protocol 1 | **Required next.** Installed development source supports it; published `0.1.0-preview.4` alone does not. Do not direct new users to an incompatible release. |
+| Public app release supporting Chartink connector protocol 1 | Use **`0.1.0-preview.5`** or newer; its app package includes protocol 1. Older preview.4 is incompatible. Store submission and fresh-profile acceptance remain separate. |
 | Real store screenshots and fresh-profile acceptance | **Still needed** against the final compatible release. The logo/promo tile are not screenshots. |
 | Chartink export/retention terms | **Clarify before broad promotion**, as described below. |
 | Publisher identity, verified contact email and review submission | Owner actions in Google's dashboard; no account registration or submission has been performed. |

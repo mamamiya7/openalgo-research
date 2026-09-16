@@ -9,8 +9,8 @@ prices, saves runs and presents their results.
 This is a native distribution fork of [OpenAlgo](https://github.com/marketcalls/openalgo),
 with explicit host integration hooks, a front end and a worker.
 The [Research repository](https://github.com/mamamiya7/openalgo-research) and
-[versioned preview release](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.4)
-are the distribution locations. [Release notes](releases/0.1.0-preview.4.md) record
+[versioned preview release](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.5)
+are the distribution locations. [Release notes](releases/0.1.0-preview.5.md) record
 this preview's changes and verification boundaries.
 
 ## What is included
@@ -48,24 +48,34 @@ Execution policies and supported scope are documented in
 
 ## Install and open
 
-Download `openalgo-research-0.1.0-preview.4.zip` from the preview release, compare
+Download `openalgo-research-0.1.0-preview.5.zip` from the preview release, compare
 its SHA-256 with the supplied `SHA256SUMS`, and extract it into its installation
 directory. Use this versioned asset for its prebuilt interface; GitHub's automatic
-source archives are source checkouts. For a fresh
-installation, create `.env` from `.sample.env` and complete normal OpenAlgo
-configuration. For an existing installation, preserve its `.env`, account data,
-Historify archive, strategies and saved research evidence.
+source archives are source checkouts.
 
-The native Windows and Linux core uses Python 3.12 with the locked research extra:
+**Windows x64:** double-click **Setup.cmd**, choose your broker, and finish account
+and broker-credential setup in the browser. Setup installs private Python 3.12 and
+the locked dependencies, then starts the web app and research worker. Later,
+double-click **Start.cmd**. Keep the launcher window open; press Ctrl+C to stop.
+
+**Linux x86_64:** run `bash setup-research.sh`; use `bash start-research.sh` for
+later launches. Initial setup needs internet access. The browser opens after
+both services are ready. A packaged installation needs no frontend build.
+
+Setup preserves an existing `.env`, accounts, Historify prices and saved research.
+For an update, stop the old instance and back up those files before applying the
+new source and running setup again. See [RUNTIME.md](RUNTIME.md) and the offline
+`START_HERE.html` included in the ZIP.
+
+For a manual installation, the core uses Python 3.12 with the locked research extra:
 
 ```sh
 uv sync --frozen --extra research
 uv run --no-sync python tools/research_check.py
 ```
 
-Follow [RUNTIME.md](RUNTIME.md) to start the normal application and its research
-worker; it includes the Windows PowerShell setup and two-terminal start/stop
-sequence. Open the installation's usual address, normally `http://localhost:5000`,
+Follow [RUNTIME.md](RUNTIME.md) for the launcher or manual start/stop commands.
+Open the installation's usual address, normally `http://localhost:5000`,
 log in and choose **Tools → Backtest & Optimize**. The route remains
 `/scanner-research`. A release bundle contains its built front end; a source
 checkout needs `npm ci` and `npm run build` in `frontend`.
@@ -145,12 +155,15 @@ Maintainers should:
 
 ## Current verification
 
-Current development source integrates OpenAlgo **2.0.2.5** at upstream
+Preview.5 integrates OpenAlgo **2.0.2.5** at upstream
 `d858c2384cbd6a9bdb09d0fb42c1a08b46c48c29`, with Python SDK 2.0.5 and
-`openalgo-charts` 2.3.2. This is separate from the unchanged preview.4 artifact
-described below. See [STATUS.md](STATUS.md) for upgrade acceptance and
+`openalgo-charts` 2.3.2, including the current research interface, saved-trade
+charts and guided installer. See [STATUS.md](STATUS.md) for current acceptance and
 [the upstream inventory](UPSTREAM_UPDATE_20260916.md) for new migrations and
 feature reuse. Research calculation-engine pins are unchanged.
+
+The following evidence is historical for preview.4; it does not replace the
+preview.5 checks recorded in its release notes.
 
 Preview `0.1.0-preview.4` targets OpenAlgo 2.0.2.2, Python 3.12, VectorBT 0.28.5,
 Optuna 5.0.0 and optional NautilusTrader 1.231.0. The final Windows research suite

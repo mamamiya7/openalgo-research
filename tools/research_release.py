@@ -24,13 +24,16 @@ except ModuleNotFoundError:  # Direct `python tools/research_release.py` invocat
     from research_check import REQUIRED_RESEARCH_FILES, check, distribution
 
 ROOT_FILES = set(
-    """__init__.py .dockerignore .gitignore .sample.env app.py
+    """__init__.py .dockerignore .gitattributes .gitignore .sample.env app.py
 benchmark_api.py Caddyfile CONTRIBUTING.md cors.py csp.py DOCKER_README.md
 docker-build.bat docker-build.sh docker-compose.yaml Dockerfile extensions.py
 INSTALL.md License.md limiter.py pyproject.toml README.md requirements-nginx.txt
 requirements.txt SECURITY.md start.sh utils.py uv.lock CLAUDE.md AGENTS.md""".split()
 )
 ROOT_FILES.add(".github/workflows/research-distribution.yml")
+ROOT_FILES.update(
+    {"Setup.cmd", "Start.cmd", "setup-research.sh", "start-research.sh", "START_HERE.html"}
+)
 SOURCE_DIRS = set(
     """blueprints broker database docs events examples frontend install
 mcp okf portfolio research restx_api sandbox scripts services sip strategies
@@ -66,6 +69,7 @@ BLOCK_PARTS = {
     ".git",
     ".venv",
     ".agent-native",
+    ".research-runtime",
     "research_data",
     "workspace",
     "keys",

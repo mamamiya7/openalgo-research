@@ -1226,8 +1226,10 @@ def load_and_check_env_variables() -> None:
     except Exception:
         pass
 
-    # Validate 5paisa API key format
-    if broker_name == "fivepaisa":
+    # A fresh installation can configure credentials in the authenticated
+    # Broker Credentials screen. Empty keys must not prevent reaching setup;
+    # any supplied key still has to satisfy its broker's format.
+    if broker_api_key and broker_name == "fivepaisa":
         if ":::" not in broker_api_key or broker_api_key.count(":::") != 2:
             print("\nError: Invalid 5paisa API key format detected!")
             print("The BROKER_API_KEY for 5paisa must be in the format:")
@@ -1240,7 +1242,7 @@ def load_and_check_env_variables() -> None:
             sys.exit(1)
 
     # Validate flattrade API key format
-    elif broker_name == "flattrade":
+    elif broker_api_key and broker_name == "flattrade":
         if ":::" not in broker_api_key or broker_api_key.count(":::") != 1:
             print("\nError: Invalid Flattrade API key format detected!")
             print("The BROKER_API_KEY for Flattrade must be in the format:")
@@ -1253,7 +1255,7 @@ def load_and_check_env_variables() -> None:
             sys.exit(1)
 
     # Validate dhan API key format
-    elif broker_name == "dhan":
+    elif broker_api_key and broker_name == "dhan":
         if ":::" not in broker_api_key or broker_api_key.count(":::") != 1:
             print("\nError: Invalid Dhan API key format detected!")
             print("The BROKER_API_KEY for Dhan must be in the format:")

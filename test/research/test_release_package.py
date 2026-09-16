@@ -55,6 +55,7 @@ def source(tmp_path):
         "test/research/token.db",
         "extensions/chartink/signals.csv",
         "extensions/chartink/node_modules/pkg/private.js",
+        ".research-runtime/cache/private.json",
     ]:
         path = tmp_path / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -133,6 +134,8 @@ def test_link_escape_is_rejected(source, tmp_path):
         "frontend/node_modules/pkg/a.js",
         "research/secrets.json",
         "data/raw.csv",
+        ".research-runtime/bin/uv.exe",
+        "tools/.research-runtime/private.json",
     ],
 )
 def test_sensitive_and_escape_names_are_not_sources(name):

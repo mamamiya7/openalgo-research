@@ -1,6 +1,11 @@
 # OpenAlgo Research release readiness
 
-Updated 9 September 2026 for `0.1.0-preview.4`.
+Updated 16 September 2026 for `0.1.0-preview.5`.
+
+The named release ZIP now includes the current OpenAlgo 2.0.2.5 interface,
+**Setup.cmd** for guided Windows setup, and **Start.cmd** to launch the app and
+worker together. Linux equivalents are included. The current acceptance record
+is in [STATUS.md](STATUS.md); [RUNTIME.md](RUNTIME.md) is the user installation guide.
 
 The deliverable is **one installable OpenAlgo Research source distribution**:
 the native Backtest & Optimize screen, research coordination and worker,

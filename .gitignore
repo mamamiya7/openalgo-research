@@ -110,6 +110,7 @@ nul
 # Native research runtime and local agent references
 .agent-native/
 research_data/
+.research-runtime/
 
 # Personal workspace: your own indicators, research, backtests and notes.
 # Only the readme is tracked -- everything else is yours and stays local.

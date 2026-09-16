@@ -76,3 +76,4 @@ frontend/docs/
 !frontend/dist/
 .agent-native/
 research_data/
+.research-runtime/

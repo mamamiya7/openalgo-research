@@ -98,19 +98,24 @@ def network_lease(store, token, job_id, stop_requested=None):
     finished = threading.Event()
     reasons = []
 
-    def check():
+    def check(*, refresh_heartbeat=False):
         if stop_requested and stop_requested():
             raise Interrupted("Worker shutdown requested")
         with store.sessions.begin() as db:
             lease, job = db.get(ResearchWorker, 1), db.get(ResearchJob, job_id)
             if lease.token != token or job.status not in WORKING or job.worker != token:
                 raise Cancelled("Cancellation requested or worker lease lost")
-            lease.heartbeat = job.updated_at = time.time()
+            # Engine callbacks can check cancellation several times per bar.
+            # They must keep reading the live fence, but committing a heartbeat
+            # for every check turns a calculation into thousands of disk flushes
+            # on Windows. The joined monitor owns the periodic heartbeat.
+            if refresh_heartbeat:
+                lease.heartbeat = job.updated_at = time.time()
 
     def monitor():
         while not finished.wait(NETWORK_HEARTBEAT_SECONDS):
             try:
-                check()
+                check(refresh_heartbeat=True)
             except Exception as error:
                 reasons.append(error)
                 return
@@ -743,11 +748,15 @@ def main():
     parser.add_argument(
         "--stop-file", type=Path, help="Exit gracefully when a local supervisor creates this file"
     )
+    parser.add_argument(
+        "--ready-file", type=Path, help="Create a new local supervisor marker after acquiring the worker lease"
+    )
     args = parser.parse_args()
     store = ResearchStore()
     token = uuid.uuid4().hex
     stopping = False
     previous_handlers = {}
+    ready_created = False
 
     def request_stop(_signum, _frame):
         nonlocal stopping
@@ -765,6 +774,12 @@ def main():
         store.initialize()
         acquire(store, token)
         try:
+            if args.ready_file:
+                # The desktop launcher supplies a unique private runtime path.
+                # Refuse to overwrite an existing file supplied by another caller.
+                with args.ready_file.open("x", encoding="utf-8") as marker:
+                    ready_created = True
+                    marker.write("ready\n")
             while not stop_requested():
                 worked = run_one(
                     store,
@@ -776,7 +791,11 @@ def main():
                 if not worked and not stop_requested():
                     time.sleep(1)
         finally:
-            release(store, token)
+            try:
+                if ready_created:
+                    args.ready_file.unlink(missing_ok=True)
+            finally:
+                release(store, token)
     finally:
         try:
             store.close()

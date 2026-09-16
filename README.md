@@ -13,34 +13,41 @@ portfolio, with your own stops, targets, trailing rules and holding periods.
 The aim is to connect broker data, backtesting and optimization in one open-source
 workflow. Research starts from a CSV export or saved signals.
 
-**Current preview: `0.1.0-preview.4` · OpenAlgo 2.0.2.2 · Python 3.12**
+**Current preview: `0.1.0-preview.5` · OpenAlgo 2.0.2.5 · Windows and Linux**
 
-The current development source integrates **OpenAlgo 2.0.2.5**, including
-upstream changes through 16 September 2026 and `openalgo-charts` 2.3.2.
-The downloadable preview above is an older, unchanged release. See the
-[upstream update and reuse plan](docs/research/UPSTREAM_UPDATE_20260916.md)
-for the exact version, migrations and implemented or planned integrations.
-
-**New in the latest source:** open saved trades on native charts with entry/exit
-markers, visual indicators and candle-by-candle replay. This feature is not in
-the older preview ZIP.
-
-[Download the preview](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.4)
+[**Download OpenAlgo Research**](https://github.com/mamamiya7/openalgo-research/releases/download/research-v0.1.0-preview.5/openalgo-research-0.1.0-preview.5.zip)
 · [Install and start](docs/research/RUNTIME.md)
-· [Release notes](docs/research/releases/0.1.0-preview.4.md)
+· [Release notes](docs/research/releases/0.1.0-preview.5.md)
 · [Architecture](docs/research/SYSTEM_MAP.md)
 · [Latest source](https://github.com/mamamiya7/openalgo-research/tree/main)
 
-The development source also includes a Research library with saved experiment
-drafts and setup versions, plus live CSV, price and Optuna progress and automatic
-download-batch continuation. These additions are tested in the native app; the
-packaged preview above remains `0.1.0-preview.4`. See the
-[current implementation and verification](docs/research/EXECUTION_STATUS.md).
+### Start on Windows
+
+1. Download the ZIP above and **extract all files** into a folder you will keep.
+2. Double-click **`Setup.cmd`**. Choose your broker when asked. Setup installs
+   the required Python tools and dependencies, then opens the application.
+3. Create your OpenAlgo account, configure your broker credentials in the app,
+   then open **Tools → Backtest & Optimize**.
+
+After the first setup, double-click **`Start.cmd`**. It starts the app and research
+worker together. Keep the launcher open; press **Ctrl+C** there to stop both.
+No separate Python, Node or Git installation is needed for the packaged Windows
+download. First setup needs internet access and may take several minutes.
+
+On Linux, extract the same ZIP and run `bash setup-research.sh`; next time use
+`bash start-research.sh`. [Setup, troubleshooting and updates](docs/research/RUNTIME.md).
+These launchers are for a local desktop installation. See the runtime guide for
+server deployments and the optional NautilusTrader Linux/WSL environment.
+
+The package includes the current Research library, saved setups, optimization
+progress, reports, and native trade charts with entry/exit markers, visual
+indicators and candle-by-candle replay. The interface is already built.
+See [current implementation and verification](docs/research/STATUS.md).
 
 A [Chartink Chrome connector](extensions/chartink/README.md) is also available in
-development source: capture the scanner's official historical export and open a
-named, saved Research setup. It requires the matching application source and a
-manual unpacked-extension installation; it is not included in preview.4.
+`extensions/chartink`: capture the scanner's official historical export and open a
+named, saved Research setup. Its manual unpacked-extension installation is
+optional; uploading a CSV works without it.
 
 ## What you can do
 
@@ -104,16 +111,17 @@ trials and saved results.
 
 ## Get started
 
-1. For the latest features, use the [main source branch](https://github.com/mamamiya7/openalgo-research/tree/main)
-   and follow the [source installation instructions](docs/research/DISTRIBUTION.md#install-and-open),
-   including the frontend build. The versioned preview ZIP is an older release
-   with its interface already built.
-2. Follow the [Windows/Linux setup and startup guide](docs/research/RUNTIME.md).
-   Existing users should read the [update instructions](docs/research/DISTRIBUTION.md#updates-and-recovery)
-   before replacing an installation.
-3. Open your normal OpenAlgo address, sign in, then choose
-   **Tools → Backtest & Optimize**. Upload a CSV or reuse saved signals, choose
-   settings, and run. Daily and timed CSV examples are available in the screen.
+Use the packaged download and the three steps above. Existing installations
+should follow the [update instructions](docs/research/DISTRIBUTION.md#updates-and-recovery)
+to preserve their accounts, broker settings and saved research.
+
+To develop from a Git checkout instead, first run `npm ci` and `npm run build` in
+`frontend`, then run the setup script from the repository root. GitHub's automatic
+**Source code** archives do not contain the built interface; use the named
+`openalgo-research-0.1.0-preview.5.zip` asset for the easy installation.
+
+In **Tools → Backtest & Optimize**, upload a CSV or reuse saved signals, choose
+settings, and run. Daily and timed CSV examples are available in the screen.
 
 The application and research worker run together in the same installation.
 Nautilus is optional; VectorBT and Optuna are the default environment.

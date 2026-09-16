@@ -1,6 +1,11 @@
 # Native OpenAlgo Research
 
-Current implementation: 9 September 2026, `0.1.0-preview.4`. The native joint
+Current distribution: 16 September 2026, `0.1.0-preview.5`, on OpenAlgo 2.0.2.5.
+It includes the current research UI, native saved-trade charts, guided setup and
+one launcher for the app and worker. See [STATUS.md](STATUS.md) for current
+acceptance. The following baseline verification was recorded on 9 September.
+
+The native joint
 portfolio workflow, full VectorBT/Optuna user-input checks, exact replay and fresh
 Linux installation/reinstall are verified. A fresh Windows directory and locked
 environment also passed the account, VectorBT, Optuna, replay and restart journey.

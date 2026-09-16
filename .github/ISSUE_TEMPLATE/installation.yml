@@ -1,0 +1,46 @@
+name: Installation or startup help
+description: Report trouble with Setup, Start, or your first research run.
+title: "[Install]: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use the named **openalgo-research ZIP** from Releases, extract the whole archive, and run Setup.cmd (Windows) or bash setup-research.sh (Linux).
+        Please never attach your .env, broker keys, account databases, or private CSVs.
+  - type: input
+    id: version
+    attributes:
+      label: Release version
+      placeholder: 0.1.0-preview.5
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Operating system
+      options:
+        - Windows x64
+        - Linux x86_64
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: step
+    attributes:
+      label: Where did it stop?
+      options:
+        - Download or extraction
+        - Setup
+        - Start or browser opening
+        - Account or broker setup
+        - First backtest or optimization
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: What happened?
+      description: Include the visible error and what you expected. Remove personal information from screenshots and log excerpts.
+    validations:
+      required: true

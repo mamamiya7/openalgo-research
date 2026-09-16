@@ -4,11 +4,11 @@
 
 Send a scanner's historical signal export into a saved OpenAlgo Research experiment. Review the trading rules, run a backtest, then optimize supported settings without moving CSV files between apps.
 
-This connector belongs to the same OpenAlgo Research project. It requires the matching application source with `/scanner-research/api/imports/chartink/capabilities` protocol 1; the earlier preview.4 release alone does not contain that endpoint.
+This connector belongs to the same OpenAlgo Research project. Install **OpenAlgo Research preview.5 or newer**, which includes `/scanner-research/api/imports/chartink/capabilities` protocol 1. Earlier preview.4 is incompatible.
 
 ## Install and test
 
-1. Install/run the matching OpenAlgo Research application using the project's [installation guide](https://github.com/mamamiya7/openalgo-research/blob/main/docs/research/RUNTIME.md). The connector endpoint must be present in that source; preview.4 alone is insufficient. Sign in with your normal OpenAlgo account.
+1. Install [OpenAlgo Research preview.5](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.5) using its **Setup.cmd** (Windows) or `bash setup-research.sh` (Linux). Follow the [installation guide](https://github.com/mamamiya7/openalgo-research/blob/main/docs/research/RUNTIME.md), then sign in with your OpenAlgo account.
 2. In Chrome, open `chrome://extensions`, enable **Developer mode**, select **Load unpacked**, and choose this `extensions/chartink` folder. Alternatively extract the packaged ZIP and choose the folder containing `manifest.json`.
 3. Open the extension from Chrome's toolbar. Enter the OpenAlgo address you use to sign in, such as `http://127.0.0.1:5000`, then choose **Connect** and allow access to that address. Remote installations require HTTPS. No broker key or password is entered into the extension.
 4. Visit a Chartink scanner and open its historical backtest results. Choose the period you want and make sure Chartink's historical **Download → CSV** export is available. Sign in to Chartink if required.

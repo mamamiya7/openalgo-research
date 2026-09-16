@@ -210,3 +210,34 @@ jobs:
           assert metadata.version('numpy') == '2.4.4';
           assert metadata.version('pandas') == '2.3.3';
           assert metadata.version('pyarrow') == '25.0.1'"
+
+  fresh-install:
+    name: Fresh package installation (${{ matrix.os }})
+    needs: package
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v6
+        with:
+          name: openalgo-research-preview
+          path: .installer-artifact
+      - name: Install the ZIP, calculate, reinstall and restart
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem -Path .installer-artifact -Recurse -Filter openalgo-research-*.zip | Select-Object -First 1
+          if (-not $archive) { throw 'The installable release ZIP is missing.' }
+          $directory = Join-Path $env:RUNNER_TEMP 'OpenAlgo Research Fresh Install'
+          python tools/research_install_smoke.py --archive $archive.FullName --directory $directory
+      - name: Retain the redacted installation receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: fresh-install-${{ matrix.os }}
+          path: ${{ runner.temp }}/OpenAlgo Research Fresh Install/tmp/install-smoke/receipt.json
+          if-no-files-found: warn
+          retention-days: 14

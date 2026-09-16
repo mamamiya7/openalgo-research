@@ -1,6 +1,42 @@
 # OpenAlgo Research status
 
-Updated: 16 September 2026. Published preview: **`0.1.0-preview.4`**, targeting OpenAlgo 2.0.2.2.
+Updated: 16 September 2026. Release: **`0.1.0-preview.5`**, targeting OpenAlgo 2.0.2.5.
+
+## Guided installation and current public package — 16 September 2026
+
+The preview.5 package includes the current research application and prebuilt UI,
+including saved-trade charts, plus **Setup.cmd** and **Start.cmd** for Windows x64
+and equivalent Linux x86_64 scripts. Setup installs private Python 3.12 and frozen
+dependencies, verifies release files, creates unique configuration only when
+absent, applies native migrations and starts the app and research worker together.
+Users choose their broker and finish account/credential setup in the native UI.
+
+The local launcher waits for both services, refuses duplicate/occupied ports,
+binds locally with debug disabled, rotates logs, checkpoints the worker on stop
+and reaps owned processes. Windows Job Object ownership also covers abrupt
+console closure. Configuration and populated databases remain private.
+
+Optimization cancellation checks retain immediate lease fencing while heartbeat
+writes happen once per monitor interval, eliminating repeated writes on every
+candle. First-run broker validation admits empty keys so the native credentials
+page is reachable; malformed supplied keys are still rejected.
+
+See [release notes](releases/0.1.0-preview.5.md) and [installation](RUNTIME.md).
+Local Windows regression validation passed **1,658 tests with 49 skips**; the
+final targeted installer/launcher/package checks passed **99 with one skip**.
+The compatibility workflow now also installs the exact packaged ZIP on fresh
+Windows and Linux runners and exercises account creation, native archive reuse,
+real VectorBT/Optuna calculations, exact replay, reinstall and restart. Its
+redacted receipts are retained with the workflow artifacts.
+
+A private install on the maintainer's existing Windows host downloaded the
+runtime and dependencies; Windows Application Control rejected uv's generated
+Python launcher. Setup reports this restriction and leaves security policy
+unchanged. The public runner checks cover ordinary clean Windows/Linux
+installation, not every organization's application-control policy.
+
+Historical preview.4 entries below describe the evidence available at those
+milestones; preview.5 supersedes that package.
 
 ## Saved trade charts — development implementation, 16 September 2026
 

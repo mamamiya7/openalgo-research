@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Start with OpenAlgo Research</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#fafaf8;color:#202722;font:18px/1.6 system-ui,sans-serif}main{max-width:860px;margin:64px auto;padding:0 28px}p,li{max-width:720px}h1{font-size:44px;line-height:1.15;letter-spacing:-1px}h2{font-size:24px;margin-top:36px}a{color:#147d5a}code{font:16px ui-monospace,monospace;background:#edf0eb;padding:3px 7px;border-radius:4px}.intro{font-size:22px;color:#526056}.eyebrow{color:#147d5a;letter-spacing:2px;font-size:14px;font-weight:700}li{margin:16px 0}footer{border-top:1px solid #d7dcd6;margin-top:40px;padding-top:16px;font-size:15px;color:#526056}@media(max-width:600px){main{margin:32px auto}h1{font-size:34px}}
+</style>
+</head>
+<body><main>
+<p class="eyebrow">OPENALGO RESEARCH · PREVIEW 5</p>
+<h1>From scanner signals<br>to portfolio research.</h1>
+<p class="intro">The app, VectorBT and Optuna, in one installation.</p>
+<h2>On Windows</h2>
+<ol>
+<li><strong>Extract the whole ZIP.</strong> Keep the extracted folder somewhere permanent. Do not run setup from inside the ZIP viewer.</li>
+<li><strong>Double-click <code>Setup.cmd</code></strong> in that folder. Choose your broker when asked. Setup downloads the required Python tools and dependencies; first setup needs internet and can take several minutes.</li>
+<li><strong>Finish in the browser.</strong> Create your OpenAlgo account, configure your broker credentials in the app, and open <strong>Tools → Backtest &amp; Optimize</strong>.</li>
+</ol>
+<p>Next time, double-click <code>Start.cmd</code>. Keep the launcher open while using the app. Press <strong>Ctrl+C</strong> in the launcher to stop the app and research worker together.</p>
+<h2>On Linux</h2>
+<p>Open a terminal in the extracted folder and run <code>bash setup-research.sh</code>. Next time, use <code>bash start-research.sh</code>.</p>
+<h2>Your first test</h2>
+<p>Upload a scanner CSV, choose your rules and run a backtest. Research reuses OpenAlgo's price archive and obtains missing prices through your connected broker. Start with a small CSV to verify your broker connection.</p>
+<p>The Chartink browser extension and NautilusTrader are optional. VectorBT and Optuna are included in the standard setup. Current portfolio support is long NSE cash-equity signals.</p>
+<p><strong>Updating an existing installation?</strong> Stop it and back up its configuration and data first. Follow the <a href="https://github.com/mamamiya7/openalgo-research/blob/main/docs/research/DISTRIBUTION.md#updates-and-recovery">update guide</a>.</p>
+<footer><a href="https://github.com/mamamiya7/openalgo-research/blob/main/docs/research/RUNTIME.md">Installation help</a> · <a href="https://github.com/mamamiya7/openalgo-research/issues">Report a problem</a><br>Independent community distribution built on OpenAlgo. No account data, broker credentials or market history are bundled.</footer>
+</main></body></html>

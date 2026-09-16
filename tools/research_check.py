@@ -18,6 +18,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_RESEARCH_FILES = {
+    "Setup.cmd",
+    "Start.cmd",
+    "setup-research.sh",
+    "start-research.sh",
+    "START_HERE.html",
+    "tools/research_setup.ps1",
+    "tools/research_setup.py",
+    "tools/research_desktop.py",
+    "tools/research_desktop_web.py",
+    "tools/research_install_smoke.py",
     "research/distribution.json",
     "research/connectors/registry.py",
     "research/connectors/vectorbt_adapter.py",
