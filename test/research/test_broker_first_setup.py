@@ -59,15 +59,19 @@ def test_anonymous_and_pending_totp_cannot_read_settings(app, path):
 
 
 @pytest.mark.parametrize(
-    "marker",
-    [
-        None,
-        "invalid",
-        (datetime.now(UTC) - timedelta(minutes=31)).isoformat(),
-        (datetime.now(UTC) + timedelta(minutes=5)).isoformat(),
-    ],
+    "marker_case",
+    ["missing", "malformed", "expired", "future"],
 )
-def test_partial_login_requires_fresh_account_marker(app, marker):
+def test_partial_login_requires_fresh_account_marker(app, marker_case):
+    # Full-suite calculation tests can take several minutes after collection.
+    # Construct relative dates at execution so a future marker remains future.
+    now = datetime.now(UTC)
+    marker = {
+        "missing": None,
+        "malformed": "invalid",
+        "expired": (now - timedelta(minutes=31)).isoformat(),
+        "future": (now + timedelta(minutes=5)).isoformat(),
+    }[marker_case]
     client = app.test_client()
     account(client, account_authenticated_at=marker)
     assert client.get("/api/broker/credentials").status_code == 401

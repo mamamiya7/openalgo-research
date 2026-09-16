@@ -217,6 +217,9 @@ def test_direct_retry_conflicts_concurrency_archive_and_atomic_failure(app, clie
         decisions.direct_context(store, "foreign-owner", experiment, job)
 
 
+# Native journeys include several real calculations and durable publications.
+# Keep a finite CI integration budget; other tests retain the 60-second default.
+@pytest.mark.timeout(300)
 def test_direct_later_evidence_opening_and_populated_backup_restore(
     app, client, monkeypatch, tmp_path
 ):
@@ -372,6 +375,7 @@ def test_backup_rejects_tampered_direct_selection(app, client, frozen_studies, t
         backup_store(store, tmp_path.with_name(tmp_path.name + "-bad-direct"))
 
 
+@pytest.mark.timeout(300)
 def test_direct_later_target_changed_during_review_does_not_publish(app, client, monkeypatch):
     experiment, _, members, job, _, _ = native_setup(app, client, monkeypatch)
     store = app.extensions["research_store"]
@@ -392,6 +396,7 @@ def test_direct_later_target_changed_during_review_does_not_publish(app, client,
 
 
 @pytest.mark.parametrize("later_target", [False, True])
+@pytest.mark.timeout(300)
 def test_displayed_analysis_is_fenced_and_accepted_retry_survives_upgrade_and_backup(
     app, client, frozen_studies, monkeypatch, tmp_path, later_target
 ):
@@ -485,6 +490,7 @@ def shortlist_artifact_exists(store, artifact):
     return _artifact_present(store, artifact)
 
 
+@pytest.mark.timeout(300)
 def test_later_displayed_analysis_changing_during_save_is_fenced(app, client, monkeypatch):
     from services import research_analysis
 

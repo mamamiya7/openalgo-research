@@ -97,7 +97,7 @@ jobs:
 
   package:
     # Build and check the frontend/image while the independent engine matrix runs.
-    # Installation acceptance still requires both jobs, so no check is skipped.
+    # The overall workflow must pass the engine, package and fresh-install jobs.
     timeout-minutes: 60
     runs-on: ubuntu-latest
     env:
@@ -217,7 +217,9 @@ jobs:
 
   fresh-install:
     name: Fresh package installation (${{ matrix.os }})
-    needs: [supported-runtime, package]
+    # Exercise the exact artifact as soon as it exists; an engine failure still
+    # fails the overall release workflow without hiding installation diagnostics.
+    needs: package
     timeout-minutes: 35
     strategy:
       fail-fast: false

@@ -81,6 +81,9 @@ def test_reserved_baseline_does_not_require_usable_later_prices():
 
 
 @pytest.mark.parametrize("optimize", [False, True])
+# The complete reserved-period journey executes real jobs and persists exact
+# evidence; allow bounded Windows CI I/O time without widening unit timeouts.
+@pytest.mark.timeout(300)
 def test_reserved_baseline_and_candidate_evaluation_survive_reopen_without_downloads(
     app, client, monkeypatch, optimize
 ):

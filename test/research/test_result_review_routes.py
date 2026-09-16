@@ -2,6 +2,7 @@
 
 # ruff: noqa: F811 -- shared isolated native fixtures
 
+import pytest
 from flask import Flask
 from flask_wtf.csrf import CSRFProtect
 from sqlalchemy import func, select
@@ -64,6 +65,9 @@ def counts(store):
         )
 
 
+# Native journeys include several real calculations and durable publications.
+# Keep a finite CI integration budget; other tests retain the 60-second default.
+@pytest.mark.timeout(300)
 def test_exact_report_validation_decision_and_reopening_over_native_routes(
     app, client, monkeypatch
 ):
@@ -121,6 +125,7 @@ def test_exact_report_validation_decision_and_reopening_over_native_routes(
     assert counts(store)[-1] == before[-1] + 1
 
 
+@pytest.mark.timeout(300)
 def test_direct_routes_reject_ambiguous_queries_foreign_account_and_missing_csrf(
     app, client, monkeypatch
 ):

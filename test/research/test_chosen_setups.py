@@ -27,6 +27,11 @@ from services import research_library as library
 from services import scanner_research_service as service
 from services.research_storage import _references, backup_store, restore_store
 
+# Each test prepares real worker jobs and durable evidence before checking the
+# chosen-setup contract. Windows CI disk I/O can exceed the 60-second unit budget;
+# retain a finite full-journey limit without changing assertions or persistence.
+pytestmark = pytest.mark.timeout(300)
+
 
 def ready(app, client, monkeypatch, *, direct=True):
     experiment, comparison, members, job, child, _ = native_setup(app, client, monkeypatch)
