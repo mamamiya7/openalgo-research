@@ -450,7 +450,7 @@ def _acquire_native_source(
     from research.requirements import build_plan
     from services.research_acquisition import _save_receipt, acquisition_receipts
     from services.research_checkpoint import MinuteCheckpointWriter, unpack_checkpoint
-    from services.research_historify import native_historify_read, native_historify_write
+    from services.research_historify import NativeHistorifyArchive
     from services.research_native_calendar import native_calendar_snapshot
     from services.research_native_prices import acquire_native_prices
     from services.scanner_research_service import (
@@ -497,14 +497,14 @@ def _acquire_native_source(
 
     plan = build_plan(evidence["signals"], evidence["data_request"], calendar)
     interval = plan["interval"]
+    archive = NativeHistorifyArchive(target, interval=interval)
     snapshot = acquire_native_prices(
         evidence["signals"],
         plan,
         calendar,
-        reader=lambda symbol, first, last: native_historify_read(
-            symbol, first, last, target, interval=interval
-        ),
-        writer=lambda symbol, rows: native_historify_write(symbol, rows, target, interval=interval),
+        reader=archive.read,
+        reader_many=archive.read_many,
+        writer=archive.write,
         credentials=credentials,
         archive_dir=receipts_dir,
         prior=restored.get("acquisition") if restored else None,

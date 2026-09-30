@@ -403,6 +403,7 @@ def _prepare_prices(
         plan,
         calendar,
         reader=archive.read,
+        reader_many=archive.read_many,
         writer=archive.write,
         credentials=lambda: resolve_broker_session(owner),
         archive_dir=receipts_dir,

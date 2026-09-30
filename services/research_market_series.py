@@ -43,6 +43,7 @@ def acquire_series(
         plan,
         calendar,
         reader=archive.read,
+        reader_many=archive.read_many,
         writer=archive.write,
         credentials=credentials,
         archive_dir=receipts_dir,

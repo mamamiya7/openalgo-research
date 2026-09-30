@@ -2,6 +2,17 @@
 
 Updated: 17 September 2026. Release: **`0.1.0-preview.6`**, targeting OpenAlgo 2.0.2.5.
 
+## Historify cache checks — 30 September 2026 (source update)
+
+Existing OHLC checks now use bounded groups of 16 native windows and one recovery
+save per group. Candle qualification, missing-window broker downloads and frozen
+replay retain their contracts. Read-only database sampling and a large saved-file
+fixture confirm reduced connection and storage-scan overhead; they do not promise
+a complete run time. See [measurements and next delivery order](HISTORIFY_CHECKS.md).
+The preview.6 release ZIP remains unchanged until a new package is qualified.
+Newer condition/recovery work in the local development app is not part of this
+public source increment.
+
 ## Chartink entry and extension onboarding — 17 September 2026
 
 The Research library and empty setup now offer **Import from Chartink**, with a

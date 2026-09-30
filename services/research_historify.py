@@ -5,6 +5,8 @@ from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 
 IST = timezone(timedelta(hours=5, minutes=30))
+ARCHIVE_READ_BATCH_SIZE = 16
+_CANDLE_COLUMNS = ("timestamp", "open", "high", "low", "close", "volume", "oi")
 
 
 def _archive_exchange(exchange, interval):
@@ -13,15 +15,7 @@ def _archive_exchange(exchange, interval):
     return exchange
 
 
-def native_historify_read(symbol, first, last, expected_path, *, interval="D", exchange="NSE"):
-    from database import historify_db
-
-    exchange = _archive_exchange(exchange, interval)
-    target = Path(expected_path).resolve()
-    if Path(historify_db.get_db_path()).resolve() != target:
-        raise ValueError(
-            "Historify was initialized with a different archive; restart with matching configuration"
-        )
+def _read_bounds(first, last, interval):
     if interval == "D":
         start, end = date.fromisoformat(first), date.fromisoformat(last)
         if end < start or (end - start).days > 3700:
@@ -41,6 +35,31 @@ def native_historify_read(symbol, first, last, expected_path, *, interval="D", e
         lower, upper, limit = int(start.timestamp()), int(end.timestamp()) + 1, 10000
     else:
         raise ValueError("Research archive supports daily or one-minute prices")
+    return lower, upper, limit
+
+
+def _read_window(connection, symbol, lower, upper, limit, interval, exchange):
+    records = connection.execute(
+        "SELECT timestamp, open, high, low, close, volume, oi FROM market_data "
+        "WHERE symbol=? AND exchange=? AND interval=? AND timestamp>=? AND timestamp<? "
+        "ORDER BY timestamp LIMIT ?",
+        [symbol.upper(), exchange, interval, lower, upper, limit + 1],
+    ).fetchall()
+    if len(records) > limit:
+        raise ValueError("Historify rows exceed the bounded archive read")
+    return [dict(zip(_CANDLE_COLUMNS, row, strict=True)) for row in records]
+
+
+def native_historify_read(symbol, first, last, expected_path, *, interval="D", exchange="NSE"):
+    from database import historify_db
+
+    exchange = _archive_exchange(exchange, interval)
+    target = Path(expected_path).resolve()
+    if Path(historify_db.get_db_path()).resolve() != target:
+        raise ValueError(
+            "Historify was initialized with a different archive; restart with matching configuration"
+        )
+    lower, upper, limit = _read_bounds(first, last, interval)
     if not target.exists():
         return []
     # Match native connection mode/retries. A short connection avoids keeping a
@@ -50,24 +69,14 @@ def native_historify_read(symbol, first, last, expected_path, *, interval="D", e
             "SELECT 1 FROM information_schema.tables WHERE table_name='market_data'"
         ).fetchone():
             return []
-        records = connection.execute(
-            "SELECT timestamp, open, high, low, close, volume, oi FROM market_data "
-            "WHERE symbol=? AND exchange=? AND interval=? AND timestamp>=? AND timestamp<? ORDER BY timestamp LIMIT ?",
-            [symbol.upper(), exchange, interval, lower, upper, limit + 1],
-        ).fetchall()
-    if len(records) > limit:
-        raise ValueError("Historify rows exceed the bounded archive read")
-    return [
-        dict(zip(("timestamp", "open", "high", "low", "close", "volume", "oi"), row, strict=True))
-        for row in records
-    ]
+        return _read_window(connection, symbol, lower, upper, limit, interval, exchange)
 
 
 class NativeHistorifyArchive:
     """One sequential acquisition's native readers and lazy schema initialization.
 
-    This scope owns no connection or row cache. Native read/write calls open and
-    close their own connections, releasing the archive before broker requests.
+    This scope retains no connection or row cache. Native read/write calls open
+    and close their own connections, releasing the archive before broker requests.
     Create a fresh scope when an acquisition is resumed in another worker turn.
     """
 
@@ -97,6 +106,49 @@ class NativeHistorifyArchive:
             interval=self._interval,
             exchange=self._exchange,
         )
+
+    def read_many(self, requests, *, check=None):
+        """Read at most sixteen exact windows with one short native connection.
+
+        Coverage still comes from OHLC rows, never catalog min/max counts. The
+        caller receives the same ordered, individually bounded rows as ``read``
+        and qualifies them normally. Cancellation/deadline checks run between
+        queries. Nothing is retained on this scope after return or failure.
+        """
+        from database import historify_db
+
+        if not isinstance(requests, (list, tuple)) or len(requests) > ARCHIVE_READ_BATCH_SIZE:
+            raise ValueError("Historify cache batch exceeds its sixteen-window bound")
+        self._check_path(historify_db)
+        windows = []
+        for request in requests:
+            if not isinstance(request, (list, tuple)) or len(request) != 3:
+                raise ValueError("Historify cache batch requires symbol/from/to windows")
+            symbol, first, last = request
+            if not isinstance(symbol, str) or not symbol:
+                raise ValueError("Historify cache batch requires a symbol")
+            windows.append((symbol, *_read_bounds(first, last, self._interval)))
+        if check:
+            check()
+        if not windows or not self._expected_path.exists():
+            return [[] for _ in windows]
+        results = []
+        with historify_db.get_connection() as connection:
+            if not connection.execute(
+                "SELECT 1 FROM information_schema.tables WHERE table_name='market_data'"
+            ).fetchone():
+                return [[] for _ in windows]
+            for symbol, lower, upper, limit in windows:
+                if check:
+                    check()
+                results.append(
+                    _read_window(
+                        connection, symbol, lower, upper, limit, self._interval, self._exchange
+                    )
+                )
+        if check:
+            check()
+        return results
 
     def _check_path(self, historify_db):
         if Path(historify_db.get_db_path()).resolve() != self._expected_path:

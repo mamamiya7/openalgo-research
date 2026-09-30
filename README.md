@@ -22,6 +22,10 @@ a CSV export, or reuse saved signals.
 · [Architecture](docs/research/SYSTEM_MAP.md)
 · [Latest source](https://github.com/mamamiya7/openalgo-research/tree/main)
 
+Latest source includes [faster Historify cache checks](docs/research/HISTORIFY_CHECKS.md).
+The named preview ZIP above remains the packaged release; source changes require
+a later qualified package or the documented developer setup.
+
 ## What do I need to download?
 
 **Download the complete OpenAlgo Research ZIP above, extract it, then run

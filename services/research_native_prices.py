@@ -7,6 +7,7 @@ adapter's candles and freezes exact stored OHLC for the scanner calculation.
 import copy
 import hashlib
 import json
+import logging
 import math
 import time
 from datetime import date, datetime, timedelta
@@ -14,6 +15,7 @@ from pathlib import Path
 
 from research.data import MAX_BARS, validate_snapshot
 from services.research_acquisition import IST, _save_receipt, trading_date
+from services.research_historify import ARCHIVE_READ_BATCH_SIZE
 from services.research_intraday import minute_stamp
 
 POLICY = "openalgo-native-history-v1"
@@ -23,6 +25,7 @@ MAX_JOURNAL = 100000
 MAX_FINDINGS = 1000000
 DAILY_REQUEST_GAP = 20  # One trading month; all request spans still remain below 300 days.
 PRICE_FIELDS = ("open", "high", "low", "close", "volume", "oi")
+logger = logging.getLogger(__name__)
 
 
 class NativePriceNoProgress(ValueError):
@@ -94,6 +97,7 @@ def acquire_native_prices(
     writer,
     credentials,
     archive_dir,
+    reader_many=None,
     prior=None,
     checkpoint=None,
     progress=None,
@@ -113,6 +117,7 @@ def acquire_native_prices(
         writer=writer,
         credentials=credentials,
         archive_dir=archive_dir,
+        reader_many=reader_many,
         prior=prior,
         checkpoint=checkpoint,
         progress=progress,
@@ -145,6 +150,7 @@ def _acquire_prices(
     writer,
     credentials,
     archive_dir,
+    reader_many=None,
     prior=None,
     checkpoint=None,
     progress=None,
@@ -562,26 +568,57 @@ def _acquire_prices(
         report(baseline, "stored_prices")
         emit("planning")
         reads = pending_requests(cache=True)
+        cache_started = time.monotonic()
         cache_end = baseline + (9500 - baseline) // 10
-        for index, (symbol, first, last) in enumerate(reads):
+        # Only local reads share a short connection. The connection has closed
+        # before receipts/checkpoints (and therefore before any broker call).
+        # An interrupted uncommitted group may be reread; stored prices are never
+        # downloaded again for that reason. Broker responses still commit singly.
+        batch_size = ARCHIVE_READ_BATCH_SIZE if reader_many else 1
+        for offset in range(0, len(reads), batch_size):
+            batch = reads[offset : offset + batch_size]
             check()
-            emit("cache", symbol)
+            emit("cache", batch[0][0])
             check()
-            rows = reader(symbol, first, last)
-            accepted, rejected, observations = qualify(symbol, rows, first, last)
-            admit(symbol, accepted, source="cached")
-            if len(state["findings"]) + len(rejected) > MAX_FINDINGS:
-                raise ValueError("Native price findings exceed their bound")
-            state["findings"].extend(rejected)
-            if observations or rejected:
-                receipt(symbol, first, last, observations, rejected, accepted)
-            if len(cache_windows) >= MAX_JOURNAL:
-                raise ValueError("Native cache-check journal exceeds its bound")
-            cache_windows.append([symbol, first, last])
-            refresh_counts(symbol)
-            report(baseline + (cache_end - baseline) * (index + 1) / len(reads), "stored_prices")
-            emit("cache", symbol)
+            row_groups = (
+                reader_many(batch, check=lambda: check(boundary=False))
+                if reader_many
+                else [reader(*batch[0])]
+            )
+            if not isinstance(row_groups, list) or len(row_groups) != len(batch):
+                raise ValueError("Historify batch does not match its requested windows")
+            for local_index, ((symbol, first, last), rows) in enumerate(
+                zip(batch, row_groups, strict=True)
+            ):
+                if reader_many:
+                    check(boundary=False)
+                accepted, rejected, observations = qualify(symbol, rows, first, last)
+                admit(symbol, accepted, source="cached")
+                if len(state["findings"]) + len(rejected) > MAX_FINDINGS:
+                    raise ValueError("Native price findings exceed their bound")
+                state["findings"].extend(rejected)
+                if observations or rejected:
+                    receipt(symbol, first, last, observations, rejected, accepted)
+                if len(cache_windows) >= MAX_JOURNAL:
+                    raise ValueError("Native cache-check journal exceeds its bound")
+                cache_windows.append([symbol, first, last])
+                refresh_counts(symbol)
+                report(
+                    baseline + (cache_end - baseline) * (offset + local_index + 1) / len(reads),
+                    "stored_prices",
+                )
+                emit("cache", symbol)
+                if reader_many:
+                    check()
+            del row_groups, rows
             save()
+        logger.info(
+            "Research Historify check: %d windows, %d symbols, %.3fs, %d cached candles",
+            len(reads),
+            len(required),
+            time.monotonic() - cache_started,
+            sum(counts["cached"] for counts in source_counts.values()),
+        )
         requests = pending_requests()
         state["planned_windows"] = [list(window) for window in requests]
         state["total_windows"] = len(requests) + len(state["completed_windows"])

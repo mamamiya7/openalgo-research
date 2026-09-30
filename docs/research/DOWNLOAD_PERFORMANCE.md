@@ -1,5 +1,8 @@
 # Native research price preparation
 
+The [30 September cache-check increment](HISTORIFY_CHECKS.md) additionally batches
+local archive connections and recovery saves. It preserves the contracts below.
+
 The research coordinator uses OpenAlgo's existing history service and connected
 broker, with native Historify reads, upserts and readback. The improvements below
 are confined to the research layer; broker adapters, Historify schema, engine

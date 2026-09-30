@@ -1,5 +1,10 @@
 # OpenAlgo Research — integrated delivery plan
 
+**30 September sequencing:** [Historify checks and next delivery order](HISTORIFY_CHECKS.md#next-delivery-order)
+prioritizes cache performance, source/package reconciliation, recovery and stability,
+then broader search/report work. Existing package acceptance is not inferred from
+newer local host changes.
+
 **Latest prioritization: 16 September 2026.** The [fresh pro-trader audit](PRO_TRADER_AUDIT.md)
 reviews the current app through 26 controlled screenshots and reconciles all 34
 journeys against current source. **Section 10 owns the next execution order** where
