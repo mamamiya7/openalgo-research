@@ -35,7 +35,7 @@ Free and open source. Independent community project; not an official or endorsed
 - Privacy policy: https://github.com/mamamiya7/openalgo-research/blob/main/docs/research/CHARTINK_PRIVACY.md
 - Installation: https://github.com/mamamiya7/openalgo-research/blob/main/extensions/chartink/README.md
 - Extension release: https://github.com/mamamiya7/openalgo-research/releases/tag/chartink-v0.1.2
-- Current app: https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.6
+- Current app: https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.7
 
 The policy and installation instructions are public; recheck all links without signing in before a store submission. Set the publisher contact email in Google's dashboard to an address the owner monitors; no email address has been invented here.
 
@@ -65,7 +65,7 @@ Confirm Google's data-use certifications only after checking the final submitted
 
 ## Reviewer instructions — complete these prerequisites before submission
 
-Use **extension 0.1.2** with [Research preview.6](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.6) and the [app installation guide](RUNTIME.md). Record the actual acceptance test date/source commit, a **specific accessible Chartink scanner URL with historical CSV export**, and any **dedicated test-account instructions**. Do not submit this template with those details missing. No real trading-account credentials should appear here or in public source.
+Use **extension 0.1.2** with [Research preview.6](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.7) and the [app installation guide](RUNTIME.md). Record the actual acceptance test date/source commit, a **specific accessible Chartink scanner URL with historical CSV export**, and any **dedicated test-account instructions**. Do not submit this template with those details missing. No real trading-account credentials should appear here or in public source.
 
 1. Install the linked compatible OpenAlgo Research release. Start it using its documented setup and create/sign in to a test account. A broker connection is not needed to verify this extension's signal import.
 2. Open the extension, enter the test app's address, choose Connect and grant that host access. The app must report Chartink connector protocol 1.

@@ -1,6 +1,6 @@
 # Publish the free Chartink connector
 
-Updated 17 September 2026 for extension **0.1.2**. The [GitHub release](https://github.com/mamamiya7/openalgo-research/releases/tag/chartink-v0.1.2) provides the manual installation package. **Chrome Web Store submission and approval are still pending.**
+Updated 30 September 2026 for extension **0.1.2**. The [GitHub release](https://github.com/mamamiya7/openalgo-research/releases/tag/chartink-v0.1.2) provides the manual installation package. **Chrome Web Store submission and approval are still pending.**
 
 Distribute it as **one community Chrome extension**, with its source and versioned installation ZIP in this repository. A Chrome Web Store install button is the next distribution step. It connects to the user's own compatible OpenAlgo Research app; it is not a hosted backtesting service. No new website, analytics service or payment system is needed for this release.
 
@@ -20,7 +20,7 @@ Distribute it as **one community Chrome extension**, with its source and version
 
 1. **Test the new build.** Reload the unpacked extension at `chrome://extensions`; if installing from the ZIP, extract it first and select the folder containing `manifest.json`. The toolbar and popup should show the green connector logo. Follow the acceptance checks below. No OpenAlgo restart is needed just to update the extension.
 
-2. **Use the versioned public packages.** The current app is [Research preview.6](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.6); the extension package is [chartink-v0.1.2](https://github.com/mamamiya7/openalgo-research/releases/tag/chartink-v0.1.2). Use the extension release's ZIP and checksum for testing and submission, and record both versions in the acceptance notes. The extension also supports Research preview.5; an extension-only update does not require reinstalling a compatible app. For later releases, tag the exact source, attach the named ZIP and checksum, and update the compatibility instructions together.
+2. **Use the versioned public packages.** The current app is [Research preview.6](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.7); the extension package is [chartink-v0.1.2](https://github.com/mamamiya7/openalgo-research/releases/tag/chartink-v0.1.2). Use the extension release's ZIP and checksum for testing and submission, and record both versions in the acceptance notes. The extension also supports Research preview.5; an extension-only update does not require reinstalling a compatible app. For later releases, tag the exact source, attach the named ZIP and checksum, and update the compatibility instructions together.
 
 3. **Complete the narrow legal/content checks below.** Keep the repository's existing AGPL v3 license and notices. Resolve the specific Chartink export question. Use the original logo and independent-community wording. No separate software license was invented for the extension.
 

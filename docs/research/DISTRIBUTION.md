@@ -9,8 +9,8 @@ prices, saves runs and presents their results.
 This is a native distribution fork of [OpenAlgo](https://github.com/marketcalls/openalgo),
 with explicit host integration hooks, a front end and a worker.
 The [Research repository](https://github.com/mamamiya7/openalgo-research) and
-[versioned preview release](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.6)
-are the distribution locations. [Release notes](releases/0.1.0-preview.6.md) record
+[versioned preview release](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.7)
+are the distribution locations. [Release notes](releases/0.1.0-preview.7.md) record
 this preview's changes and verification boundaries.
 
 ## What is included
@@ -48,7 +48,7 @@ Execution policies and supported scope are documented in
 
 ## Install and open
 
-Download `openalgo-research-0.1.0-preview.6.zip` from the preview release, compare
+Download `openalgo-research-0.1.0-preview.7.zip` from the preview release, compare
 its SHA-256 with the supplied `SHA256SUMS`, and extract it into its installation
 directory. Use this versioned asset for its prebuilt interface; GitHub's automatic
 source archives are source checkouts.
@@ -164,15 +164,18 @@ Maintainers should:
 
 ## Current verification
 
-Preview.5 integrates OpenAlgo **2.0.2.5** at upstream
+Preview.7 retains OpenAlgo **2.0.2.5** at upstream
 `d858c2384cbd6a9bdb09d0fb42c1a08b46c48c29`, with Python SDK 2.0.5 and
 `openalgo-charts` 2.3.2, including the current research interface, saved-trade
 charts and guided installer. See [STATUS.md](STATUS.md) for current acceptance and
 [the upstream inventory](UPSTREAM_UPDATE_20260916.md) for new migrations and
-feature reuse. Research calculation-engine pins are unchanged.
+feature reuse. Research calculation-engine pins are unchanged. Preview.7 adds bounded native
+archive checks and Axios 1.20.0; [its release notes](releases/0.1.0-preview.7.md)
+separate the runtime and exact-package acceptance. The newer local OpenAlgo
+2.0.2.6 condition/recovery development is not bundled in preview.7.
 
 The following evidence is historical for preview.4; it does not replace the
-preview.5 checks recorded in its release notes.
+preview.7 checks recorded in its release notes.
 
 Preview `0.1.0-preview.4` targets OpenAlgo 2.0.2.2, Python 3.12, VectorBT 0.28.5,
 Optuna 5.0.0 and optional NautilusTrader 1.231.0. The final Windows research suite

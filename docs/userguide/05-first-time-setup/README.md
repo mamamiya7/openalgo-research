@@ -1,6 +1,6 @@
 # 05 - First-Time Setup
 
-These steps follow the [OpenAlgo Research preview.6 installer](../../research/RUNTIME.md#easy-local-installation-recommended). Setup starts the app and research worker and opens your browser when both are ready.
+These steps follow the [OpenAlgo Research preview.7 installer](../../research/RUNTIME.md#easy-local-installation-recommended). Setup starts the app and research worker and opens your browser when both are ready.
 
 ## Create your account and connect your broker
 

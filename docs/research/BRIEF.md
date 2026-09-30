@@ -1,8 +1,8 @@
 # Native OpenAlgo Research
 
-Current distribution: 17 September 2026, `0.1.0-preview.6`, on OpenAlgo 2.0.2.5.
-It includes the current research UI, native saved-trade charts, guided setup and
-one launcher for the app and worker. See [STATUS.md](STATUS.md) for current
+Current distribution: 30 September 2026, `0.1.0-preview.7`, on OpenAlgo 2.0.2.5.
+It includes bounded Historify cache checks, patched frontend dependencies, native
+saved-trade charts, guided setup and one launcher for the app and worker. See [STATUS.md](STATUS.md) for current
 acceptance. The following baseline verification was recorded on 9 September.
 
 The native joint

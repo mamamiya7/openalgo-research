@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      validation_scope:
+        description: Full validation, or package-only after separately qualifying unchanged runtime code
+        type: choice
+        options: [full, package]
+        default: full
 
 permissions:
   contents: read
@@ -16,6 +22,9 @@ concurrency:
 
 jobs:
   supported-runtime:
+    # Only an explicit manual package request can omit the engine matrix.
+    # Pushes, pull requests and ordinary manual runs always validate it.
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.validation_scope != 'package' }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -103,6 +112,16 @@ jobs:
     env:
       PYTHON_DOTENV_DISABLED: '1'
     steps:
+      - name: Record validation scope
+        env:
+          VALIDATION_SCOPE: ${{ github.event_name == 'workflow_dispatch' && inputs.validation_scope || 'full' }}
+        run: |
+          if [ "$VALIDATION_SCOPE" = package ]; then
+            echo '## Package-only verification' >> "$GITHUB_STEP_SUMMARY"
+            echo 'The engine matrix is deliberately skipped. This run qualifies packaging, frontend checks, Docker dependency probes and fresh installation of this artifact; it does not establish engine/runtime compatibility. Release notes must cite separate qualification of the unchanged runtime source.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '## Full runtime and package verification' >> "$GITHUB_STEP_SUMMARY"
+          fi
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
         with:

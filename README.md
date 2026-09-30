@@ -14,17 +14,19 @@ The aim is to connect broker data, backtesting and optimization in one open-sour
 workflow. Start directly from a Chartink scanner with the Chrome extension, upload
 a CSV export, or reuse saved signals.
 
-**Current preview: `0.1.0-preview.6` · OpenAlgo 2.0.2.5 · Windows and Linux**
+**Current preview: `0.1.0-preview.7` · OpenAlgo 2.0.2.5 · Windows and Linux**
 
-[**Download OpenAlgo Research**](https://github.com/mamamiya7/openalgo-research/releases/download/research-v0.1.0-preview.6/openalgo-research-0.1.0-preview.6.zip)
+[**Download OpenAlgo Research**](https://github.com/mamamiya7/openalgo-research/releases/download/research-v0.1.0-preview.7/openalgo-research-0.1.0-preview.7.zip)
 · [Install and start](docs/research/RUNTIME.md)
-· [Release notes](docs/research/releases/0.1.0-preview.6.md)
+· [Release notes](docs/research/releases/0.1.0-preview.7.md)
 · [Architecture](docs/research/SYSTEM_MAP.md)
 · [Latest source](https://github.com/mamamiya7/openalgo-research/tree/main)
 
-Latest source includes [faster Historify cache checks](docs/research/HISTORIFY_CHECKS.md).
-The named preview ZIP above remains the packaged release; source changes require
-a later qualified package or the documented developer setup.
+Preview.7 includes [faster Historify cache checks](docs/research/HISTORIFY_CHECKS.md)
+and the patched Axios dependency. Guided setup, Chartink entry and saved reports
+remain available in the same installation. The newer local OpenAlgo 2.0.2.6
+condition-search and unfinished-study features are not included; their
+[reconciliation and package checks](docs/research/PACKAGE_RECONCILIATION.md) are separate.
 
 ## What do I need to download?
 
@@ -180,7 +182,7 @@ to preserve their accounts, broker settings and saved research.
 To develop from a Git checkout instead, first run `npm ci` and `npm run build` in
 `frontend`, then run the setup script from the repository root. GitHub's automatic
 **Source code** archives do not contain the built interface; use the named
-`openalgo-research-0.1.0-preview.6.zip` asset for the easy installation.
+`openalgo-research-0.1.0-preview.7.zip` asset for the easy installation.
 
 Use the [Chartink extension](extensions/chartink/README.md), or open **Tools →
 Backtest & Optimize** to upload a CSV or reuse saved signals. Review the settings

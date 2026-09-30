@@ -1,6 +1,6 @@
 # OpenAlgo Research release readiness
 
-Updated 17 September 2026 for `0.1.0-preview.6`.
+Updated 30 September 2026 for `0.1.0-preview.7`.
 
 The named release ZIP now includes the current OpenAlgo 2.0.2.5 interface,
 **Setup.cmd** for guided Windows setup, and **Start.cmd** to launch the app and
@@ -55,7 +55,7 @@ evidence. Account review remains available without a current broker token.
 | Artifact and privacy | Source inventory excludes credentials, databases, private inputs, local receipts and history files; locks and hashes identify the candidate. | Review the exact final archive and public instructions. Retain upstream licence and attribution files. Distribute example signals, not an owner's price database or account configuration. |
 | User acceptance | Desktop/mobile, keyboard, saved-source, examples, settings and report journeys have scoped checks. | Have intended OpenAlgo users complete upload → run → inspect → reopen without coaching; resolve blocked tasks or misunderstood outcomes. |
 | Capacity and recovery | Bounded worker, admission, storage, resumable acquisition, checkpointing and exact saved evidence are implemented and tested. | Measure realistic CSV/search workloads on advertised hardware. Validate the documented backup/restore procedure against the final release. |
-| Docker and support | Docker configuration and a locked optional engine runtime are included. Install/update/compatibility instructions and a [public issue route](https://github.com/mamamiya7/openalgo-research/issues) are provided. | Execute Docker build/start; it was unavailable locally. |
+| Docker and support | Docker configuration and a locked optional engine runtime are included. Install/update/compatibility instructions and a [public issue route](https://github.com/mamamiya7/openalgo-research/issues) are provided. | Image builds and both environment probes passed in CI. Full container startup, account, restart and restore journeys remain separate. |
 
 Detailed results, non-additive test checkpoints and evidence limits are in
 [VERIFICATION.md](VERIFICATION.md). These checks do not require a profitable

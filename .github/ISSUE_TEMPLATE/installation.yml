@@ -12,7 +12,7 @@ body:
     id: version
     attributes:
       label: Release version
-      placeholder: 0.1.0-preview.5
+      placeholder: 0.1.0-preview.7
     validations:
       required: true
   - type: dropdown

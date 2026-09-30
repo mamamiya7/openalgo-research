@@ -1,6 +1,23 @@
 # OpenAlgo Research status
 
-Updated: 30 September 2026. Release: **`0.1.0-preview.6`**, targeting OpenAlgo 2.0.2.5.
+Updated: 30 September 2026. Release candidate: **`0.1.0-preview.7`**, targeting OpenAlgo 2.0.2.5.
+
+## Preview.7 package — 30 September 2026
+
+This candidate packages the committed Historify cache improvement and Axios
+1.20.0 fix on the existing OpenAlgo 2.0.2.5 baseline. It retains Setup/Start,
+broker-credential onboarding, Chartink import and saved-report compatibility.
+Python locks, engine versions, schemas and installers are unchanged. The newer
+local OpenAlgo 2.0.2.6 condition/recovery work is separate unpublished development.
+See [release notes](releases/0.1.0-preview.7.md) for qualification and limits, and
+[the reconciliation plan](PACKAGE_RECONCILIATION.md) for that next package.
+
+An explicitly selected package-only workflow verifies the final ZIP, frontend,
+Docker image and fresh Windows/Linux installation; it does not claim a new engine
+matrix run. Runtime qualification is attributed to the prior unchanged-code
+[compatibility run](https://github.com/mamamiya7/openalgo-research/actions/runs/36746646691).
+Pushes and pull requests retain the full runtime matrix. Earlier preview assets
+remain unchanged; release checksums identify the new versioned package.
 
 ## Frontend dependency update — 30 September 2026 (source update)
 
@@ -10,8 +27,8 @@ locks Axios 1.20.0, the patched version documented in the
 audit reports zero vulnerabilities, the production build passes and 477 focused
 API/research frontend tests pass. Result-review regressions wait for completed
 navigation; the newer local test was adjusted to retain that same guarantee.
-Remote package/runtime acceptance is tracked separately; the downloadable
-preview.6 ZIP has not been replaced.
+Runtime acceptance is tracked separately from the new preview.7 package; the
+older preview.6 ZIP has not been replaced.
 
 ## Historify cache checks — 30 September 2026 (source update)
 
@@ -20,7 +37,7 @@ save per group. Candle qualification, missing-window broker downloads and frozen
 replay retain their contracts. Read-only database sampling and a large saved-file
 fixture confirm reduced connection and storage-scan overhead; they do not promise
 a complete run time. See [measurements and next delivery order](HISTORIFY_CHECKS.md).
-The preview.6 release ZIP remains unchanged until a new package is qualified.
+The older preview.6 release ZIP remains unchanged; preview.7 packages this fix.
 Newer condition/recovery work in the local development app is not part of this
 public source increment.
 
