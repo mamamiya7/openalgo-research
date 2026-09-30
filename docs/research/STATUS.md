@@ -1,6 +1,17 @@
 # OpenAlgo Research status
 
-Updated: 17 September 2026. Release: **`0.1.0-preview.6`**, targeting OpenAlgo 2.0.2.5.
+Updated: 30 September 2026. Release: **`0.1.0-preview.6`**, targeting OpenAlgo 2.0.2.5.
+
+## Frontend dependency update — 30 September 2026 (source update)
+
+The package CI advisory check identified the older Axios dependency. Source now
+locks Axios 1.20.0, the patched version documented in the
+[Axios advisory](https://github.com/advisories/GHSA-vh66-26gq-q6x8). The dependency
+audit reports zero vulnerabilities, the production build passes and 477 focused
+API/research frontend tests pass. A result-review test now waits for completed
+navigation, rather than treating the API call as proof that the screen changed.
+Remote package/runtime acceptance is tracked separately; the downloadable
+preview.6 ZIP has not been replaced.
 
 ## Historify cache checks — 30 September 2026 (source update)
 

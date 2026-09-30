@@ -175,6 +175,11 @@ describe('connected result validation', () => {
     )
     // The request can be observed before its response has committed navigation.
     await waitFor(() => expect(screen.getByLabelText('Location')).toHaveTextContent('job=later-job'))
+    await waitFor(() =>
+      expect(new URLSearchParams(screen.getByLabelText('Location').textContent!).get('job')).toBe(
+        'later-job'
+      )
+    )
     const params = new URLSearchParams(screen.getByLabelText('Location').textContent!)
     expect(params.get('job')).toBe('later-job')
     expect(new URLSearchParams(params.get('return_research')!).get('return_research')).toBeNull()
