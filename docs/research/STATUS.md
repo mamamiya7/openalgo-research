@@ -8,8 +8,8 @@ The package CI advisory check identified the older Axios dependency. Source now
 locks Axios 1.20.0, the patched version documented in the
 [Axios advisory](https://github.com/advisories/GHSA-vh66-26gq-q6x8). The dependency
 audit reports zero vulnerabilities, the production build passes and 477 focused
-API/research frontend tests pass. A result-review test now waits for completed
-navigation, rather than treating the API call as proof that the screen changed.
+API/research frontend tests pass. Result-review regressions wait for completed
+navigation; the newer local test was adjusted to retain that same guarantee.
 Remote package/runtime acceptance is tracked separately; the downloadable
 preview.6 ZIP has not been replaced.
 
