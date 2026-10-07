@@ -3,8 +3,8 @@
 ## October7 development reconciliation
 
 The current reviewed host is `ee26e4e24caeeb68a27a5417bf3744bc0c5e1964`,
-declaring OpenAlgo2.0.2.6, native charts2.6.0 and OpenScript0.8.1. Development
-metadata targets Researchpreview.8; public preview.7 remains the published
+declaring OpenAlgo 2.0.2.6, native charts 2.6.0 and OpenScript 0.8.1. Development
+metadata targets Research preview.8; public preview.7 remains the published
 baseline. The public Setup/Start launchers, desktop supervisor, fresh-install
 helper and broker-first configuration journey are restored into the development
 source. The newer host's locked atomic configuration writer is retained.

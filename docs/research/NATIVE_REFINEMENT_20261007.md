@@ -82,18 +82,18 @@ broker or predict real strategy performance.
 ## Local installation acceptance — October7
 
 The normal application is activated from committed source `43e9f365b135` with
-the existing account, configuration and all58 saved-run identities preserved.
-The installed source/dependency compatibility check passed160 checks. No runtime
+the existing account, configuration and all 58 saved-run identities preserved.
+The installed source/dependency compatibility check passed 160 checks. No runtime
 database or broker credential was copied into the development source or package.
 
 The exact preview.8 candidate ZIP, built from that committed source, passed a
-fresh Windows installation using its own downloaded Python3.12 runtime, new
+fresh Windows installation using its own downloaded Python 3.12 runtime, new
 account and controlled Historify candles. Acceptance includes broker profile
 access before OAuth, daily archive reuse, real VectorBT calculation, three native
 Optuna trials, exact selected replay, reinstall/restart with identical saved
 exports, and release of owned ports and the instance lock. The ZIP SHA256 is
 `b9f4f51067ebea1bedfda83dd666d587d17eedaace42c2bccffb9168c0963b33`.
-The package's source compatibility check passed156 checks. Its manifest records
+The package's source compatibility check passed 156 checks. Its manifest records
 five unchanged extension icons/test assets restored from the published `cf5f32d`
 source alongside the committed calculation/UI source; they are now committed in
 the reconciled development branch too. Omitted changes are generated host assets.
@@ -101,6 +101,17 @@ the reconciled development branch too. Omitted changes are generated host assets
 This is local Windows acceptance, not a replacement for the public full runtime
 matrix or a fresh Linux acceptance of preview.8. Public preview.7 remains the
 published release. Live broker certification stays limited to its recorded cases.
+
+The final clean-source candidate is built at `96eebaa61407`, SHA256
+`877125b0a927db77dc6c482069574e5ca7a91254ace98952c7c269e359a852a7`.
+It retains 2,795 byte-identical native runtime files from the fresh-tested ZIP.
+Its 353 compiled frontend assets are reused only after all 1,005 frontend source
+inputs match. The manifest records verified reuse rather than claiming another
+compiler run. Later changes are extension 0.1.2, release tooling/tests and
+documentation; the extension passes 39 JavaScript and 6 packaging checks, and
+release reuse passes 72 checks. This distinguishes the fresh native-runtime test
+from the later source/package reconciliation; the final ZIP was not separately
+installed into another fresh environment.
 
 The next implementation order remains shared whole-period account curves and
 saved inspection, retained candidate return series/comparison, then wider
