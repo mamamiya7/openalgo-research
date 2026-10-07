@@ -93,8 +93,10 @@ access before OAuth, daily archive reuse, real VectorBT calculation, three nativ
 Optuna trials, exact selected replay, reinstall/restart with identical saved
 exports, and release of owned ports and the instance lock. The ZIP SHA256 is
 `b9f4f51067ebea1bedfda83dd666d587d17eedaace42c2bccffb9168c0963b33`.
-The package's source compatibility check passed156 checks. Its manifest contains
-no uncommitted included source changes; omitted changes are generated host assets.
+The package's source compatibility check passed156 checks. Its manifest records
+five unchanged extension icons/test assets restored from the published `cf5f32d`
+source alongside the committed calculation/UI source; they are now committed in
+the reconciled development branch too. Omitted changes are generated host assets.
 
 This is local Windows acceptance, not a replacement for the public full runtime
 matrix or a fresh Linux acceptance of preview.8. Public preview.7 remains the
