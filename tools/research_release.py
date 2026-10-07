@@ -18,12 +18,16 @@ import time
 import uuid
 import zipfile
 from contextlib import contextmanager
+from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
+from urllib.parse import unquote, urlsplit
 
 try:
     from tools.research_check import REQUIRED_RESEARCH_FILES, check, distribution
+    from tools.research_install_smoke import validate_archive
 except ModuleNotFoundError:  # Direct `python tools/research_release.py` invocation.
     from research_check import REQUIRED_RESEARCH_FILES, check, distribution
+    from research_install_smoke import validate_archive
 
 ROOT_FILES = set(
     """__init__.py .dockerignore .gitattributes .gitignore .sample.env app.py
@@ -103,6 +107,149 @@ BLOCK_SUFFIXES = {
     ".gz",
     ".tsbuildinfo",
 }
+FRONTEND_COMMANDS = ["npm ci --no-audit --no-fund", "npm run build"]
+MAX_REUSE_ARCHIVE_BYTES = 2 * 1024**3
+MAX_FRONTEND_ASSETS = 10000
+MAX_FRONTEND_ASSET_BYTES = 64 * 1024**2
+MAX_FRONTEND_TOTAL_BYTES = 512 * 1024**2
+
+
+def frontend_inputs(files):
+    """Include the entire staged frontend, not a guessed list of source extensions."""
+    return {
+        name: receipt
+        for name, receipt in files.items()
+        if name.startswith("frontend/") and not name.startswith("frontend/dist/")
+    }
+
+
+def validate_frontend_entrypoints(bundle, assets):
+    """An internally consistent manifest must still contain its browser entrypoints."""
+
+    class Entrypoints(HTMLParser):
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            if tag == "script":
+                reference = attrs.get("src")
+            elif tag == "link" and attrs.get("rel") in ("stylesheet", "modulepreload"):
+                reference = attrs.get("href")
+            else:
+                return
+            if not reference:
+                return
+            parsed = urlsplit(reference)
+            if parsed.scheme or parsed.netloc:
+                return  # Existing external references are not local dist files.
+            path = unquote(parsed.path).lstrip("/")
+            if ".." in PurePosixPath(path).parts or "frontend/dist/" + path not in assets:
+                raise ValueError("Frontend reuse browser entrypoint is missing")
+
+    # index.html is tiny in this application; avoid decoding a large opaque asset.
+    if bundle.getinfo("frontend/dist/index.html").file_size > 1024**2:
+        raise ValueError("Frontend reuse index exceeds limits")
+    parser = Entrypoints(convert_charrefs=True)
+    parser.feed(bundle.read("frontend/dist/index.html").decode("utf-8"))
+    parser.close()
+
+
+def reuse_frontend(stage, source_hashes, archive):
+    """Validate an immutable local release before copying only its bounded dist files."""
+    archive = Path(archive).absolute()
+    for ancestor in (archive, *archive.parents):
+        if ancestor.is_symlink() or (hasattr(ancestor, "is_junction") and ancestor.is_junction()):
+            raise ValueError("Frontend reuse archive must not contain links or junctions")
+    if not archive.is_file() or archive.stat().st_size > MAX_REUSE_ARCHIVE_BYTES:
+        raise ValueError("Frontend reuse requires a bounded regular release archive")
+    with archive.open("rb") as raw:
+        archive_hash = hashlib.file_digest(raw, "sha256").hexdigest()
+        raw.seek(0)
+        with zipfile.ZipFile(raw) as bundle:
+            manifest = validate_archive(bundle)
+            files = manifest["files"]
+            assets = sorted(name for name in files if name.startswith("frontend/dist/"))
+            for name in files:
+                # Never extract source, credentials or arbitrary prior build output.
+                check_name = (
+                    "frontend/" + name.removeprefix("frontend/dist/")
+                    if name.startswith("frontend/dist/")
+                    else name
+                )
+                if not permitted(check_name):
+                    raise ValueError(f"Unsafe source or asset in frontend reuse archive: {name}")
+            previous_inputs = {
+                name: value["sha256"] for name, value in frontend_inputs(files).items()
+            }
+            current_inputs = frontend_inputs(source_hashes)
+            if not current_inputs or previous_inputs != current_inputs:
+                raise ValueError("Frontend reuse inputs differ; rebuild the frontend")
+            if not manifest.get("compatibility_check", {}).get("ok"):
+                raise ValueError("Frontend reuse requires a qualified source build")
+            prior = manifest.get("frontend_build", {})
+            if not isinstance(prior, dict):
+                raise ValueError("Frontend reuse build provenance is incomplete")
+            if prior.get("mode") == "verified-reuse":
+                original = prior.get("original_build", {})
+            else:
+                original = {
+                    "commands": manifest.get("build"),
+                    "toolchain": manifest.get("toolchain"),
+                    "dependency_locks": manifest.get("dependency_locks"),
+                    "base_commit": manifest.get("base_commit"),
+                    "archive_sha256": archive_hash,
+                }
+            if not isinstance(original, dict):
+                raise ValueError("Frontend reuse build provenance is incomplete")
+            toolchain = original.get("toolchain")
+            locks = original.get("dependency_locks")
+            if (
+                original.get("commands") != FRONTEND_COMMANDS
+                or not isinstance(toolchain, dict)
+                or any(
+                    not isinstance(toolchain.get(name), str) or not toolchain[name]
+                    for name in ("node", "npm")
+                )
+                or not isinstance(locks, dict)
+                or locks.get("frontend/package-lock.json")
+                != current_inputs.get("frontend/package-lock.json")
+            ):
+                raise ValueError("Frontend reuse build provenance is incomplete")
+            if (
+                not assets
+                or len(assets) > MAX_FRONTEND_ASSETS
+                or any(files[name]["bytes"] > MAX_FRONTEND_ASSET_BYTES for name in assets)
+                or sum(files[name]["bytes"] for name in assets) > MAX_FRONTEND_TOTAL_BYTES
+                or not any(name.endswith(".js") for name in assets)
+            ):
+                raise ValueError("Frontend reuse assets are incomplete or exceed limits")
+            validate_frontend_entrypoints(bundle, set(assets))
+            # All path, source, provenance, byte and hash validation precedes writes.
+            for name in assets:
+                target = stage / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                received, checksum = 0, hashlib.sha256()
+                with bundle.open(name) as source, target.open("xb") as destination:
+                    while chunk := source.read(1024 * 1024):
+                        received += len(chunk)
+                        if received > files[name]["bytes"]:
+                            raise ValueError("Frontend reuse asset grew during copying")
+                        checksum.update(chunk)
+                        destination.write(chunk)
+                if (
+                    received != files[name]["bytes"]
+                    or checksum.hexdigest() != files[name]["sha256"]
+                ):
+                    raise ValueError("Frontend reuse asset changed during copying")
+        raw.seek(0)
+        if hashlib.file_digest(raw, "sha256").hexdigest() != archive_hash:
+            raise ValueError("Frontend reuse archive changed during validation")
+    return {
+        "mode": "verified-reuse",
+        "source_archive_sha256": archive_hash,
+        "source_release_version": manifest["release_version"],
+        "source_base_commit": manifest.get("base_commit"),
+        "input_hashes": current_inputs,
+        "original_build": original,
+    }
 
 
 def run(command, cwd, log, timeout=1200):
@@ -294,7 +441,7 @@ def staging_directory(output):
         cleanup_staging(stage, output, cleanup=temporary.cleanup)
 
 
-def package(root, output, builder=build_frontend):
+def package(root, output, builder=build_frontend, *, reuse_frontend_from=None):
     root, output = Path(root).resolve(), Path(output).absolute()
     if output.exists():
         raise FileExistsError("Release output already exists; choose a fresh directory")
@@ -330,7 +477,14 @@ def package(root, output, builder=build_frontend):
             failed = [item["name"] for item in compatibility["checks"] if not item["ok"]]
             raise ValueError(f"Distribution compatibility checks failed: {', '.join(failed)}")
         release = distribution(stage)
-        toolchain = builder(stage, output)
+        if reuse_frontend_from is None:
+            toolchain = builder(stage, output)
+            build_commands = FRONTEND_COMMANDS
+            frontend_build = {"mode": "fresh", "input_hashes": frontend_inputs(source_hashes)}
+        else:
+            frontend_build = reuse_frontend(stage, source_hashes, reuse_frontend_from)
+            toolchain = frontend_build["original_build"]["toolchain"]
+            build_commands = []
         dist = stage / "frontend" / "dist"
         if not (dist / "index.html").is_file():
             raise ValueError("Frontend build did not produce index.html")
@@ -353,7 +507,8 @@ def package(root, output, builder=build_frontend):
             "dirty": bool(changed or new),
             "included_changes": sorted((changed | new) & set(source_names)),
             "omitted_change_count": len((changed | new) - set(source_names)),
-            "build": ["npm ci --no-audit --no-fund", "npm run build"],
+            "build": build_commands,
+            "frontend_build": frontend_build,
             "toolchain": toolchain,
             "reproducibility": "Sorted archive paths, fixed timestamps and modes; frontend bytes depend on the recorded source and toolchain.",
             "dependency_locks": {
@@ -387,9 +542,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--reuse-frontend-from",
+        type=Path,
+        help="Reuse validated assets only when every staged frontend input matches this prior release ZIP",
+    )
     args = parser.parse_args()
     output = args.output or args.root / ".agent-native" / "release" / uuid.uuid4().hex
-    print(package(args.root, output))
+    print(package(args.root, output, reuse_frontend_from=args.reuse_frontend_from))
 
 
 if __name__ == "__main__":
