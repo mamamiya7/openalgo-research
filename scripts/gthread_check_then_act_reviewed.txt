@@ -25,6 +25,11 @@ utils/real_threading.py::_wake_hub::_hub_wake_failed_logged  # benign: log-once 
 utils/stream_registry.py::thread_budget::_headroom_warned  # benign: warn-once flag
 
 # --- Objects local to one call --------------------------------------------
+services/research_comparisons.py::update_comparison::row.revision  # benign: scanner_research_service.write_guard takes SQLite's writer lock before reading the revision in the same context-managed transaction
+services/research_decisions.py::_append_decision::head.revision  # benign: every caller acquires write_guard before reading/appending the head; revision and append-only event commit in that transaction
+services/scanner_research_service.py::_ArtifactPublication.publish::self.used  # benign: context-owned synchronous publisher verifies owning thread; SQL write_guard serializes disk quota reservations across publishers
+services/scanner_research_service.py::_ArtifactPublication.publish::self.entries  # benign: context-owned synchronous publisher verifies owning thread; same writer transaction fences the bounded entry reservation
+services/scanner_research_service.py::pause::job.status  # benign: write_guard acquires the writer lock before job admission; state update commits before another request can read for mutation
 broker/groww/api/data.py::BrokerData.fix_timestamps::df.index  # benign: a DataFrame built inside this call, never shared
 broker/groww/api/data.py::BrokerData.get_history::df.index  # benign: a DataFrame built inside this call, never shared
 broker/kotak/api/data.py::BrokerData.__init__::self.base_url  # benign: set once while the object is being constructed

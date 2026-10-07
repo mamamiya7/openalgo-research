@@ -1,0 +1,11 @@
+:root { color-scheme: light dark; font: 16px/1.7 system-ui, sans-serif; }
+body { margin: 0; background: #f8fbf9; color: #183a2d; }
+main { max-width: 740px; margin: 48px auto; padding: 0 24px 48px; }
+h1 { font-size: 28px; line-height: 1.25; }
+h2 { margin-top: 36px; font-size: 20px; }
+li { margin: 12px 0; }
+a { color: #146444; text-underline-offset: 3px; }
+a:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
+code { font-size: 0.9em; }
+@media (max-width: 600px) { main { margin-top: 24px; } }
+@media (prefers-color-scheme: dark) { body { background: #12201b; color: #edf8f1; } a { color: #a5f5c8; } }

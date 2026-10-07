@@ -66,6 +66,8 @@ const SCOPE_FILTERS = [
   { value: 'read:market', label: 'read:market' },
   { value: 'read:account', label: 'read:account' },
   { value: 'write:orders', label: 'write:orders' },
+  { value: 'read:research', label: 'Read research' },
+  { value: 'write:research', label: 'Run research' },
 ]
 
 const OUTCOME_FILTERS = [

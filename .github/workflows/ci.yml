@@ -1,10 +1,11 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  # Retain the upstream matrix for manual compatibility reviews. The research
+  # distribution has its own locked, automatic checks in research-distribution.yml.
+  # Upstream image publishing and auto-commit jobs require push events and remain
+  # inactive in this distribution.
+  workflow_dispatch:
 
 permissions:
   contents: read

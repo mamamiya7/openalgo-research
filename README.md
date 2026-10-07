@@ -1,477 +1,249 @@
-# OpenAlgo - Open Source Algorithmic Trading Platform
+# OpenAlgo Research
 
-<div align="center">
+**Backtest and optimize CSV signal strategies inside OpenAlgo.** One install,
+one account, one broker connection, and the same Historify price archive.
 
-[![PyPI Downloads](https://static.pepy.tech/badge/openalgo)](https://pepy.tech/projects/openalgo)
-[![PyPI Downloads](https://static.pepy.tech/badge/openalgo/month)](https://pepy.tech/projects/openalgo)
-[![X (formerly Twitter) Follow](https://img.shields.io/twitter/follow/openalgoHQ)](https://twitter.com/openalgoHQ)
-[![YouTube: Subscribe](https://img.shields.io/badge/YouTube-Subscribe-FF0000)](https://www.youtube.com/@openalgo)
-[![Discord](https://img.shields.io/discord/1219847221055455263)](https://discord.com/invite/UPh7QPsNhP)
+This is a native distribution fork of [OpenAlgo](https://github.com/marketcalls/openalgo),
+with a React interface and connectors to VectorBT, Optuna, and optional
+NautilusTrader. Research manages the inputs, data preparation and results;
+the connected engines perform the calculations.
 
-</div>
+Inspired by **Chartink scanner signals**: evaluate a scanner's CSV signals as a
+portfolio, with your own stops, targets, trailing rules and holding periods.
+The aim is to connect broker data, backtesting and optimization in one open-source
+workflow. Start directly from a Chartink scanner with the Chrome extension, upload
+a CSV export, or reuse saved signals.
 
-## What is OpenAlgo?
+**Current preview: `0.1.0-preview.7` · OpenAlgo 2.0.2.5 · Windows and Linux**
 
-OpenAlgo is a free, open source, self-hosted **trading platform**, not just a broker bridge. Built on Python Flask + React 19, it gives traders a full-stack environment to **design, host, and execute strategies** through **36 broker plugins**: 35 securities integrations and Delta Exchange for crypto derivatives. Whether you write Python, prefer drag-and-drop, or trade options, OpenAlgo provides a common interface without tying strategy code to one adapter.
+[**Download OpenAlgo Research**](https://github.com/mamamiya7/openalgo-research/releases/download/research-v0.1.0-preview.7/openalgo-research-0.1.0-preview.7.zip)
+· [Install and start](docs/research/RUNTIME.md)
+· [Release notes](docs/research/releases/0.1.0-preview.7.md)
+· [Architecture](docs/research/SYSTEM_MAP.md)
+· [Latest source](https://github.com/mamamiya7/openalgo-research/tree/main)
 
-OpenAlgo is no longer just "an API layer in front of your broker." Today it combines four trading surfaces in one self-hosted instance, sharing the active broker session, market-data infrastructure, and six operational data stores across the journey from idea to testing and live execution.
+Preview.7 includes [faster Historify cache checks](docs/research/HISTORIFY_CHECKS.md)
+and the patched Axios dependency. Guided setup, Chartink entry and saved reports
+remain available in the same installation. The newer local OpenAlgo 2.0.2.6
+condition-search and unfinished-study features are not included; their
+[reconciliation and package checks](docs/research/PACKAGE_RECONCILIATION.md) are separate.
 
-## Five Ways to Trade with OpenAlgo
+## Current development
 
-| Surface | Route | Who it's for |
+The reviewed development source now integrates OpenAlgo main `ee26e4e24cae`,
+including native charts 2.6.0 and OpenScript 0.8.1. The public download above
+remains preview.7. New native chart Values and bounded stock-and-market research
+are being qualified for the next package; they are not included in that ZIP.
+See the [native refinement plan](docs/research/DELIVERY_PLAN.md) and
+[upstream update](docs/research/UPSTREAM_UPDATE_20261007.md).
+
+## What do I need to download?
+
+**Download the complete OpenAlgo Research ZIP above, extract it, then run
+`Setup.cmd`. Do not download `Setup.cmd` on its own.** It needs the application
+files beside it. You do not need to clone or install OpenAlgo, VectorBT or Optuna
+from their separate repositories.
+
+| Component | Its job | What you install |
 | --- | --- | --- |
-| **Unified Broker API** | `/api/v1/` | External platforms: TradingView, Amibroker, ChartInk, Excel, Google Sheets, Python, Java, Go, .NET, Node.js, MetaTrader, GoCharting, N8N. One contract across 36 plugins, with optional operations varying by adapter. |
-| **Python Strategy Host** | `/python` | Traders who code: paste any Python script into the in-browser CodeMirror editor, schedule it on IST start/stop times, run multiple strategies in parallel with process isolation, watch real-time logs. No external server, no Docker, no cron. |
-| **Flow: No-Code Strategy Builder** | `/flow` | Traders who don't code: drag-and-drop nodes for market data, indicators, conditions, order execution, and notifications. Webhook triggers for TradingView and external signals built in. JSON import/export for sharing strategies. |
-| **AI Agent** | `/agent` | Traders who would rather ask: a chat that reads your own market data through OpenAlgo's services, draws charts and payoff diagrams, computes indicators, marks up the `/trading` chart from a right-side panel, and can place orders only with your explicit approval on every single one. Bring your own model from any LiteLLM provider, or a ChatGPT Plus or Pro subscription, or run it locally against Ollama. |
-| **Options Trading Suite** | `/tools` | Options traders: twelve built-in analytical tools (Strategy Builder with payoff diagrams & live Greeks, Option Chain, IV Smile, Max Pain, Vol Surface, GEX dashboard, OI Tracker, OI Profile, Straddle Chart, Straddle PnL simulator, Option Greeks history). Each one streams from your connected broker. |
-
-Order workflows from the REST API, hosted strategies, and Flow can use Analyzer Mode before live execution. Analytics pages, dashboards, PnL tracking, latency monitoring, notifications, and MCP reuse the same application services where their specific capabilities apply.
-
-## Video Tutorial
-
-[![What is OpenAlgo](https://img.youtube.com/vi/S5myMo9WUdQ/0.jpg)](https://www.youtube.com/watch?v=S5myMo9WUdQ)
-
-## Quick Links
-
-- **Documentation**: [docs.openalgo.in](https://docs.openalgo.in)
-- **Installation Guide**: [Getting Started](https://docs.openalgo.in/installation-guidelines/getting-started)
-- **Upgrade Guide**: [Upgrade Instructions](https://docs.openalgo.in/installation-guidelines/getting-started/upgrade)
-- **Why OpenAlgo**: [Why Build with OpenAlgo](https://docs.openalgo.in/why-to-build-with-openalgo)
-
-
-## Python Compatibility
-
-**Requires Python 3.12 or newer.**
-
-## Supported Brokers (36 plugins)
-
-<details>
-<summary>View All Supported Brokers</summary>
-
-- 5paisa (Standard + XTS)
-- AliceBlue
-- AngelOne
-- Arrow
-- Compositedge
-- Definedge
-- Delta Exchange
-- Dhan (Live + Sandbox)
-- Firstock
-- Flattrade
-- Fyers
-- Groww
-- HDFC Securities
-- HDFC Sky
-- IBulls
-- IIFL
-- Iiflcapital
-- Indmoney
-- JainamXTS
-- Kotak Neo
-- Motilal Oswal
-- Mstock
-- Nubra
-- Paytm Money
-- Pocketful
-- RMoney
-- Samco
-- Shoonya (Finvasia)
-- Tradejini
-- TradeSmart
-- Upstox
-- Wisdom Capital
-- Zebu
-- Zerodha
-
-</details>
-
-Plugins share OpenAlgo's normalized API shapes. Exchange coverage, authentication, market-data entitlement, GTT support, and other optional capabilities still vary by adapter and broker account.
-
-## Core Features
-
-### Unified REST API Layer (`/api/v1/`)
-A maintained contract with 57 REST method/path pairs under `/api/v1`:
-- **Order Management**: Place, modify, cancel orders, basket orders, smart orders with position sizing
-- **Portfolio**: Get positions, holdings, order book, trade book, funds
-- **Market Data**: Real-time quotes, historical data, market depth (Level 5), symbol search
-- **Advanced**: Option Greeks calculator, margin calculator, synthetic futures, auto-split orders
-
-### Real-Time WebSocket Streaming
-- Unified WebSocket proxy server (port 8765 by default)
-- Common WebSocket implementation using ZMQ for normalized data across brokers
-- Subscribe to LTP, Quote, or Market Depth for any symbol
-- ZeroMQ-based message bus for high-performance data distribution
-- Automatic reconnection and failover handling
-
-### Flow Visual Strategy Builder (`/flow`)
-Build trading strategies visually without writing code:
-- **Node-based editor** powered by xyflow/React Flow
-- **Pre-built nodes**: Market data, indicators, conditions, order execution, notifications
-- **Real-time execution** with live market data
-- **Webhook triggers** for TradingView and external signals
-- **Condition nodes** with `true/false` and `yes/no` edge handles, `{{var}}` interpolation with list indexing
-- **JSON import/export** for sharing strategies between traders
-- **Visual debugging** with execution flow highlighting
-
-### Options & Strategy Analytics Tools (`/tools`)
-A suite of twelve built-in analytical tools for options trading and market analysis. The pages use the active broker connection; broker market-data entitlements and exchange coverage still apply. Accessible from the **Tools** page in the sidebar:
-
-| Tool | Route | What it does |
-|------|-------|--------------|
-| **Strategy Builder** | `/strategybuilder` | Build multi-leg option strategies with live Greeks, payoff diagrams, what-if simulators, Strategy Chart, Multi Strike OI tabs, and basket order execution |
-| **Strategy Portfolio** | `/strategybuilder/portfolio` | Saved strategies across MyTrades and Simulation watchlists |
-| **Option Chain** | `/optionchain` | Real-time option chain with live Greeks, OI data, and quick order placement |
-| **Option Greeks** | `/ivchart` | Historical IV, Delta, Theta, Vega, and Gamma charts for ATM options |
-| **OI Tracker** | `/oitracker` | Open Interest analysis with CE/PE OI bars, PCR overlay, and ATM strike marker |
-| **Max Pain** | `/maxpain` | Max Pain strike calculation with visual pain distribution across strikes |
-| **Straddle Chart** | `/straddle` | Dynamic ATM Straddle chart with rolling strike, Spot, and Synthetic Futures overlay |
-| **Straddle PnL** | `/straddlepnl` | Simulated intraday ATM straddle P&L with automated N-point adjustments and trade log |
-| **Vol Surface** | `/volsurface` | 3D Implied Volatility surface across strikes and expiries using live option chain data |
-| **GEX Dashboard** | `/gex` | Gamma Exposure analysis with OI Walls, Net GEX per strike, and top gamma strikes |
-| **IV Smile** | `/ivsmile` | Implied Volatility smile with Call/Put IV curves, ATM IV, and skew analysis |
-| **OI Profile** | `/oiprofile` | Futures candlestick with OI butterfly and daily OI change across strikes |
-
-Tools use the active broker's REST and WebSocket capabilities. Data availability and supported exchanges vary by plugin and account entitlement.
-
-### API Analyzer Mode
-Complete testing environment with ₹1 Crore sandbox capital:
-- Test strategies with real market data without risking money
-- Pre-deployment testing for strategy validation
-- Supports the core MARKET, LIMIT, SL, and SL-M price types
-- Realistic margin system with leverage
-- Configurable sandbox square-off schedules
-- Separate database for complete isolation
-
-[API Analyzer Documentation](https://docs.openalgo.in/new-features/api-analyzer)
-
-### Action Center
-Order approval workflow for manual control:
-- **Auto Mode**: Immediate order execution (for personal trading)
-- **Semi-Auto Mode**: Manual approval required before broker execution
-- Complete audit trail with IST timestamps
-- Approve individual orders or bulk approve all
-
-[Action Center Documentation](https://docs.openalgo.in/new-features/action-center)
-
-### Python Strategy Host (`/python`)
-Host and run your Python strategies directly inside OpenAlgo, with no separate VM, no cron, no Docker:
-- Built-in code editor powered by **CodeMirror** with Python syntax highlighting and themes
-- Run multiple strategies in parallel with **full process isolation**
-- Automated **IST-based scheduling** with start/stop times and per-day-of-week control
-- Secure environment variable management with Fernet encryption
-- Real-time logs streamed to the browser; state persists across restarts
-- Built-in `Python Strategy Guide` page walks first-time users from an empty editor to a scheduled, running strategy
-
-### ChartInk Integration
-Direct webhook integration for scanner alerts:
-- Supports BUY, SELL, SHORT, COVER actions
-- Intraday with auto square-off and positional strategies
-- Bulk symbol configuration via CSV
-- Real-time strategy monitoring
-
-### AI Agent (`/agent`)
-A built-in LLM agent, on the full page and as a right-side panel on the `/trading` chart:
-- Reads quotes, depth, history, option chains and Greeks through OpenAlgo's own services, never a third-party data feed
-- Draws candles with the charting library, option analytics with Plotly, and marks levels, trendlines and zones onto your chart
-- Computes 127 indicators with the Rust-backed `openalgo.ta`, and generates Python strategies using the OpenAlgo SDK
-- **Every order pauses for your approval**, showing the exact arguments before anything is sent, with the risk limits applied after you approve
-- Any provider LiteLLM supports, a ChatGPT Plus or Pro subscription over OAuth, or a local model through Ollama
-- Keys are encrypted in your own database and never written to a configuration file
-
-### AI-Powered Trading (MCP Server)
-Connect AI assistants for natural language trading:
-- Compatible with Claude Desktop, Cursor, Windsurf, ChatGPT
-- Execute trades using natural language commands
-- Full trading capabilities: orders, positions, market data
-- Local and secure integration with your OpenAlgo instance
-
-### Telegram Bot Integration
-Real-time notifications and command execution:
-- Automatic order and trade alerts delivered to Telegram
-- Get orderbook, positions, holdings, funds on demand
-- Generate intraday and daily charts
-- Interactive button-based menu
-- Receive strategy alerts directly to Telegram
-- Secure API key encryption
-
-### Advanced Monitoring Tools
-**Latency Monitor**: Track order execution performance and round-trip times across brokers
-
-**Traffic Monitor**: API usage analytics, error tracking, and endpoint statistics
-
-**PnL Tracker**: Real-time profit/loss with interactive charts powered by TradingView Lightweight Charts
-
-[PnL Tracker Documentation](https://docs.openalgo.in/new-features/pnl-tracker)
-
-[Traffic & Latency Monitor Documentation](https://docs.openalgo.in/new-features/traffic-latency-monitor)
-
-### Enterprise-Grade Security
-**Password Security**: Argon2 hashing (Password Hashing Competition winner)
-
-**Token Encryption**: Fernet symmetric encryption with PBKDF2 key derivation
-
-**Two-Factor Authentication**: TOTP support with authenticator apps
-
-**Rate Limiting**: Configurable limits for login, API, orders, webhooks
-
-**Manual IP Ban System**: Monitor and ban suspicious IPs via `/security` dashboard
-
-**Browser Protection**: CSP headers, CORS rules, CSRF protection, secure headers, secure sessions
-
-**SQL Injection Prevention**: SQLAlchemy ORM with parameterized queries
-
-**Privacy First**: Zero data collection policy - your data stays on your server
-
-### Modern React Frontend
-- **React 19** with TypeScript for type-safe, maintainable code
-- **shadcn/ui** components with Tailwind CSS 4.0 for beautiful, accessible UI
-- **TanStack Query** for efficient server state management and caching
-- **Zustand** for lightweight client state management
-- **Real-time updates** via Socket.IO (orders, trades, positions, logs)
-- **CodeMirror** for Python and JSON editing with syntax highlighting and themes
-- **xyflow/React Flow** for visual Flow strategy builder
-- **TradingView Lightweight Charts** for P&L and market data visualization
-- Light and Dark themes with 8 accent colors
-- Mobile-friendly responsive design
-
-## Supported Platforms
-
-Connect your algo strategies and run from any platform:
-
-- **Amibroker** - Direct integration with AFL scripts
-- **TradingView** - Webhook alerts for Pine Script strategies
-- **GoCharting** - Webhook integration
-- **N8N** - Workflow automation
-- **Python** - Official SDK with 100+ technical indicators
-- **GO** - REST API integration
-- **Node.js** - JavaScript/TypeScript library
-- **ChartInk** - Scanner webhook integration
-- **MetaTrader** - Compatible with MT4/MT5
-- **Excel** - REST API + upcoming Add-in
-- **Google Sheets** - REST API integration
-
-Receive your strategy alerts directly to **Telegram** for all platforms.
-
-## Technology Stack
-
-### Backend
-- **Flask 3.0** - Python web framework
-- **SQLAlchemy 2.0** - Database ORM
-- **Flask-SocketIO** - Real-time WebSocket communication
-- **ZeroMQ** - High-performance message bus
-- **Argon2-CFFI** - Password hashing
-- **Cryptography** - Fernet encryption for tokens
-- **Agno** - Agentic framework for the `/agent` reasoning loop and tool calling
-- **LiteLLM** - LLM-agnostic provider layer the agent calls every model through
-
-### Frontend
-- **React 19** - UI library
-- **TypeScript** - Type-safe JavaScript
-- **Vite 8** - Fast build tool powered by Rolldown
-- **Tailwind CSS 4** - Utility-first CSS framework
-- **shadcn/ui** - Component library built on Radix UI
-- **TanStack Query** - Server state management
-- **Zustand** - Client state management
-
-### Data Visualization & Editors
-- **TradingView Lightweight Charts** - Financial charts
-- **CodeMirror** - Code editor for strategies
-- **xyflow/React Flow** - Visual Flow builder
-- **Lucide React** - Icon library
-
-### Testing & Quality
-- **Vitest** - Unit testing
-- **Playwright** - E2E testing
-- **Biome** - Linting and formatting
-- **axe-core** - Accessibility testing
-
-### Databases
-- **SQLite** - 5 databases (main, logs, latency, health, sandbox)
-- **DuckDB** - 1 historical market-data store (Historify)
-
-## Official SDKs
-
-OpenAlgo provides officially supported client libraries for application development and system-level integrations:
-
-| Language / Platform | Repository |
-|---------------------|------------|
-| Python | [openalgo-python-library](https://github.com/marketcalls/openalgo-python-library) |
-| Node.js | [openalgo-node](https://github.com/marketcalls/openalgo-node) |
-| Java | [openalgo-java](https://github.com/marketcalls/openalgo-java) |
-| Rust | [openalgo-rust](https://github.com/marketcalls/openalgo-rust) |
-| .NET / C# | [openalgo.NET](https://github.com/marketcalls/openalgo.NET) |
-| Go | [openalgo-go](https://github.com/marketcalls/openalgo-go) |
-
-## OpenAlgo FOSS Ecosystem
-
-OpenAlgo is part of a larger open-source trading ecosystem:
-
-- **OpenAlgo Core**: This repository (Python Flask + React)
-- **Historify**: Stock market data management platform
-- **Official SDKs**: Python, Node.js, Java, Rust, .NET, Go (see above)
-- **Excel Add-in**: Direct Excel integration
-- **MCP Server**: AI agents integration
-- **Chrome Plugin**: Browser-based tools
-- **Fast Scalper**: High-performance trading (Rust + Tauri)
-- **Web Portal**: Modern UI (NextJS + ShadcnUI)
-- **Documentation**: Comprehensive guides on [Gitbook](https://docs.openalgo.in/mini-foss-universe)
-
-## Installation
-
-### Minimum Requirements
-- **RAM**: 2GB (or 0.5GB + 2GB swap)
-- **Disk**: 1GB
-- **CPU**: 1 vCPU
-- **Python**: 3.12 or newer
-- **Node.js**: 20.20+, 22.22+, or 24.13+ (for frontend development)
-
-### Quick Start with UV
-
-OpenAlgo uses the modern `uv` package manager for faster, more reliable installations:
-
-```bash
-# Clone the repository
-git clone --filter=blob:none https://github.com/marketcalls/openalgo.git
-cd openalgo
-
-# Install UV package manager
-pip install uv
-
-# Configure environment
-cp .sample.env .env
-# Edit .env with your broker API credentials as per documentation
-
-# Run the application using UV
-uv run app.py
-```
-
-The application will be available at `http://127.0.0.1:5000`
-
-For detailed installation instructions, deployment options (Docker, AWS, etc.), and configuration guides, visit [docs.openalgo.in/installation-guidelines/getting-started](https://docs.openalgo.in/installation-guidelines/getting-started)
-
-## API Documentation
-
-Complete API reference and examples:
-- **API Documentation**: [docs.openalgo.in/api-documentation/v1](https://docs.openalgo.in/api-documentation/v1)
-- **Symbol Format**: [docs.openalgo.in/symbol-format](https://docs.openalgo.in/symbol-format)
-
-## Key Benefits
-
-- **Guided Installation**: UV and production install scripts with explicit broker configuration
-- **Single API, Multiple Brokers**: Switch brokers without code changes
-- **No Data Collection**: Complete privacy - your data stays on your server
-- **Visual Strategy Builder**: Create strategies with drag-and-drop Flow editor
-- **Host Python Strategies**: Run strategies directly without external servers
-- **Smart Order Execution**: Intelligent routing for complex strategies
-- **Order Splitting**: Automatically split large orders into smaller chunks
-- **Real-Time Analytics**: PnL tracking, latency monitoring, traffic analysis
-- **Strategy Templates**: Rapid prototyping with pre-built templates
-- **Plugin Architecture**: Extensible design for custom integrations
-- **Active Community**: Discord support, virtual meetups, open roadmap
-
-## Documentation
-
-Comprehensive documentation is available at [docs.openalgo.in](https://docs.openalgo.in):
-- API Reference with examples
-- Broker-specific guides
-- Security best practices
-- Deployment tutorials
-- Strategy development guides
-- Troubleshooting and FAQs
-
-## Contributing
-
-We welcome contributions! To contribute:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes using [Conventional Commits](CONTRIBUTING.md#commit-messages), for example:
-   ```bash
-   git commit -m "feat: add amazing feature"
-   ```
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## Community & Support
-
-- **Discord**: [Join our community](https://www.openalgo.in/discord)
-- **Twitter/X**: [@openalgoHQ](https://twitter.com/openalgoHQ)
-- **YouTube**: [@openalgo](https://www.youtube.com/@openalgo)
-- **GitHub Issues**: [Report bugs or request features](https://github.com/marketcalls/openalgo/issues)
-
-## License
-
-OpenAlgo is released under the **AGPL V3.0 License**. See [License.md](License.md) for details.
-
-## Credits & Acknowledgments
-
-OpenAlgo is built upon the shoulders of giants. We extend our gratitude to all the open-source projects that make this platform possible.
-
-### Core Framework
-- **[Flask](https://flask.palletsprojects.com)** - BSD License - Python web microframework
-- **[React](https://react.dev)** - MIT License - UI library for building user interfaces
-- **[SQLAlchemy](https://www.sqlalchemy.org)** - MIT License - Python SQL toolkit and ORM
-
-### AI & Agent Frameworks
-The AI Agent at `/agent` is deliberately LLM-agnostic. The agent loop and the provider layer are separate pieces, so moving between model vendors, or to a local model, is a configuration change rather than a code change. Both of these projects are what make that possible.
-
-- **[Agno](https://github.com/agno-agi/agno)** - Apache 2.0 - Agentic framework behind the `/agent` reasoning loop, tool calling, session persistence and image attachments
-- **[LiteLLM](https://litellm.ai)** - MIT License - Unified model layer giving one interface across every supported provider, plus the model catalogue and per-model metadata the agent's provider picker is built from
-
-### UI Components & Styling
-- **[shadcn/ui](https://ui.shadcn.com)** - MIT License - Beautifully designed components built with Radix UI and Tailwind CSS
-- **[Radix UI](https://www.radix-ui.com)** - MIT License - Unstyled, accessible UI components
-- **[Tailwind CSS](https://tailwindcss.com)** - MIT License - Utility-first CSS framework
-- **[Lucide](https://lucide.dev)** - ISC License - Beautiful & consistent icon library
-
-### Data Visualization
-- **[TradingView Lightweight Charts](https://github.com/tradingview/lightweight-charts)** - Apache 2.0 - Financial charting library for market data and P&L visualization
-- **[Plotly](https://plotly.com/javascript/)** - MIT License - Interactive charting library for options analytics and visualization
-- **[xyflow/React Flow](https://reactflow.dev)** - MIT License - Highly customizable library for building node-based visual strategy editors
-
-### Code Editors
-- **[CodeMirror](https://codemirror.net)** - MIT License - Versatile code editor for Python and JSON with syntax highlighting
-- **[@uiw/react-codemirror](https://uiwjs.github.io/react-codemirror)** - MIT License - CodeMirror React wrapper with themes
-
-### State Management & Data Fetching
-- **[TanStack Query](https://tanstack.com/query)** - MIT License - Powerful asynchronous state management
-- **[Zustand](https://zustand-demo.pmnd.rs)** - MIT License - Lightweight state management
-- **[Axios](https://axios-http.com)** - MIT License - Promise-based HTTP client
-
-### Real-Time Communication
-- **[Socket.IO](https://socket.io)** - MIT License - Real-time bidirectional event-based communication
-- **[ZeroMQ](https://zeromq.org)** - LGPL License - High-performance asynchronous messaging
-
-### Security
-- **[Argon2-CFFI](https://argon2-cffi.readthedocs.io)** - MIT License - Argon2 password hashing (PHC winner)
-- **[Cryptography](https://cryptography.io)** - BSD/Apache License - Cryptographic recipes and primitives
-
-### Build & Development Tools
-- **[Vite](https://vitejs.dev)** - MIT License - Fast frontend build tool
-- **[TypeScript](https://www.typescriptlang.org)** - Apache 2.0 - JavaScript with syntax for types
-- **[Biome](https://biomejs.dev)** - MIT License - Fast formatter and linter
-- **[Vitest](https://vitest.dev)** - MIT License - Blazing fast unit testing
-- **[Playwright](https://playwright.dev)** - Apache 2.0 - End-to-end testing framework
-
-### Additional Libraries
-- **[React Router](https://reactrouter.com)** - MIT License - Declarative routing for React
-- **[Sonner](https://sonner.emilkowal.ski)** - MIT License - Toast notifications
-- **[cmdk](https://cmdk.paco.me)** - MIT License - Command palette component
-- **[next-themes](https://github.com/pacocoursey/next-themes)** - MIT License - Theme switching
-- **[react-resizable-panels](https://github.com/bvaughn/react-resizable-panels)** - MIT License - Resizable panel layouts
-- **[html2canvas-pro](https://html2canvas.hertzen.com)** - MIT License - Screenshot generation
-
-## Repo Activity
-
-![Alt](https://repobeats.axiom.co/api/embed/0b6b18194a3089cb47ab8ae588caabb14aa9972b.svg "Repobeats analytics image")
-
-## Disclaimer
-
-**This software is for educational purposes only. Do not risk money which you are afraid to lose. USE THE SOFTWARE AT YOUR OWN RISK. THE AUTHORS AND ALL AFFILIATES ASSUME NO RESPONSIBILITY FOR YOUR TRADING RESULTS.**
-
-Always test your strategies in Analyzer Mode before deploying with real money. Past performance does not guarantee future results. Trading involves substantial risk of loss.
-
----
-
-Built with by traders, for traders. Making algorithmic trading accessible to everyone.
+| **OpenAlgo + Research interface** | Your account, broker connection, historical prices, research screens and saved results | Already included in the app ZIP. |
+| **VectorBT** | The default backtesting engine | Setup downloads and installs the tested version automatically. |
+| **Optuna** | Searches trading settings and scores them through your selected backtester | Setup downloads and installs the tested version automatically. |
+| **NautilusTrader** | An optional alternative backtesting engine | Only if you want it: use the [included Nautilus installer](docs/research/NAUTILUS.md#install-the-tested-runtime) in Linux or WSL. It downloads the pinned dependencies into a separate environment; no separate Nautilus repository or web app is needed. Windows users need Linux/WSL and Linux `uv` for this optional step. |
+| **Chartink Chrome extension** | Sends historical scanner signals into OpenAlgo | Optional [separate extension ZIP](https://github.com/mamamiya7/openalgo-research/releases/download/chartink-v0.1.2/openalgo-chartink-0.1.2.zip), installed in Chrome. CSV upload works without it. |
+
+**Start with the standard setup.** Choose VectorBT for backtests and use Optimize
+when you want Optuna to search settings. After installing the optional Nautilus
+runtime, select it under **More settings → Backtest engine**. Optuna can search
+settings supported by either engine; it is not a separate application you need
+to open. Engine capabilities differ, and the app shows their supported settings.
+
+Everything is operated through **Tools → Backtest & Optimize** in OpenAlgo:
+**signals → OpenAlgo/Historify prices → VectorBT or Nautilus → saved results**.
+For optimization, **Optuna proposes settings → the selected engine tests them →
+OpenAlgo saves the study**. Your broker connection supplies missing price history.
+
+### Start on Windows
+
+1. Download the ZIP above and **extract all files** into a folder you will keep.
+2. Double-click **`Setup.cmd`**. Choose your broker when asked. Setup installs
+   the required Python tools and dependencies, then opens the application.
+3. Create your OpenAlgo account and sign in. On **Connect Broker**, choose
+   **Add broker credentials**. Save, restart with **Start.cmd**, connect your
+   broker, then open **Tools → Backtest & Optimize**.
+
+After the first setup, double-click **`Start.cmd`**. It starts the app and research
+worker together. Keep the launcher open; press **Ctrl+C** there to stop both.
+No separate Python, Node or Git installation is needed for the packaged Windows
+download. First setup needs internet access and may take several minutes.
+
+On Linux, extract the same ZIP and run `bash setup-research.sh`; next time use
+`bash start-research.sh`. [Setup, troubleshooting and updates](docs/research/RUNTIME.md).
+These launchers are for a local desktop installation. See the runtime guide for
+server deployments and the optional NautilusTrader Linux/WSL environment.
+
+The package includes the current Research library, saved setups, optimization
+progress, reports, and native trade charts with entry/exit markers, visual
+indicators and candle-by-candle replay. The interface is already built.
+See [current implementation and verification](docs/research/STATUS.md).
+
+## Choose how to start
+
+| Your starting point | What to do |
+| --- | --- |
+| **A Chartink scanner** | Install the [Chrome extension](https://github.com/mamamiya7/openalgo-research/releases/download/chartink-v0.1.2/openalgo-chartink-0.1.2.zip), choose the scanner's historical period, then click **Research in OpenAlgo**. A named setup opens with its signals already attached. |
+| **A CSV file** | Open **Tools → Backtest & Optimize**, create a setup and upload the file. No extension is needed. |
+| **Saved research** | Reopen a setup in the Research library to change settings, backtest or optimize. |
+
+### Start from Chartink
+
+![Chartink scanner page with the green Research in OpenAlgo extension button at the bottom right.](docs/research/screenshots/chartink-extension-button.png)
+
+**Your scanner → your saved research.** The extension adds the button at the bottom
+right. Open the scanner's historical backtest and choose its period before sending
+signals. [Install the extension](extensions/chartink/README.md#install-the-extension).
+
+1. [Download the extension ZIP](https://github.com/mamamiya7/openalgo-research/releases/download/chartink-v0.1.2/openalgo-chartink-0.1.2.zip) and **extract all files** into a folder you will keep.
+2. Open `chrome://extensions` in Chrome. Turn on **Developer mode**, click
+   **Load unpacked**, and select the extracted folder containing `manifest.json`.
+   Open Chrome's **Extensions** puzzle-piece menu and pin **OpenAlgo Research — Chartink**.
+3. Keep OpenAlgo Research running and sign in. Click the pinned extension, enter
+   the same OpenAlgo address you use in Chrome, such as `http://127.0.0.1:5000`,
+   then select **Connect** and allow access.
+4. On a Chartink scanner, open its **historical backtest**, select the period, and
+   check that **Download → CSV** is available. Click **Research in OpenAlgo** on
+   the page or in the pinned extension.
+5. OpenAlgo opens the saved setup. Review the signal dates and trading settings,
+   then choose **Backtest** or **Optimize**. Importing saves a draft; it does not
+   start a run.
+
+**Chartink supplies the signals; OpenAlgo's connected broker supplies any missing
+prices through Historify.** The extension is optional and currently installed
+manually, not through the Chrome Web Store. Requires Chrome 120+ and OpenAlgo
+Research preview.5 or newer. [Full extension guide, updates and troubleshooting](extensions/chartink/README.md).
+
+## What you can do
+
+![Trading journey: import CSV or saved signals, set trading rules and allocations, prepare required broker prices, backtest or optimize, then review, save, export or replay.](docs/research/diagrams/research-journey.svg)
+
+- Combine up to eight long NSE cash-equity signal strategies in one shared-capital
+  backtest, with separate settings and allocation caps.
+- Run daily, intraday or multiday tests using VectorBT, or select the optional
+  NautilusTrader Linux/WSL runtime.
+- Use Optuna to search strategy settings and allocations, with an optional
+  later-period check.
+- Review the account curve, each strategy's contribution, trades and trials.
+  Reopen saved runs, export results, or replay selected settings exactly.
+- Inspect saved daily or minute trades on native charts, with recorded entry/exit
+  markers, visual indicators and bar replay.
+
+## Inspect a saved trade
+
+**Saved report → Trades → View on chart → Replay**
+
+See the trade's recorded entry and exit prices on the candles used by that run.
+Add native studies such as EMA, RSI, MACD or Bollinger Bands; play, pause, change
+speed, step through bars or rewind. Replay reveals candles and fill markers as
+it reaches them. Closing the chart returns to the same trade table and filters.
+
+Charts read the run's **saved price snapshot**, so opening one needs no new broker
+download and does not change the result. This visual replay is separate from
+**Exact replay**, which reruns saved settings through the backtesting engine.
+Drawings are temporary; long trades load in sections, each with its own replay.
+See [saved trade charts](docs/research/SAVED_TRADE_CHARTS.md) for details.
+
+## How the tools fit together
+
+![Architecture: OpenAlgo supplies accounts, broker history and Historify. Our Research layer adds native screens, data planning, engine connectors, background jobs and saved results. VectorBT runs portfolio backtests, Optuna searches settings, and optional NautilusTrader runs event-driven backtests.](docs/research/diagrams/research-architecture.svg)
+
+**VectorBT is the default backtester; Optuna is the optimizer.** NautilusTrader
+is an optional Linux/WSL backtester with its own supported rules. It currently
+excludes trailing stops and nonzero configured slippage. See the
+[engine capabilities](docs/research/CONNECTORS.md).
+
+## Where the prices come from
+
+![Data flow: signals, execution rules and the full optimizer range determine daily or one-minute requirements. Reuse Historify candles; fetch missing windows through OpenAlgo's connected broker and save them in the same archive. Freeze prepared inputs once for all trials and exact replay.](docs/research/diagrams/research-data.svg)
+
+Research automatically chooses daily or one-minute candles from the uploaded
+signals, execution rules and full optimizer range. It reads matching prices from
+**OpenAlgo's Historify database**, downloads missing required coverage through
+**OpenAlgo's connected-broker history service**, and saves it into **that same
+database**. Every trial uses the prepared snapshot. There is no separate research
+broker connection or public-file price fallback.
+
+## What happens during optimization
+
+![Optimization loop: choose ranges, objective and trial budget; Optuna proposes settings; the selected engine backtests frozen prices and signals; Research records the trial and returns its score to Optuna. Review the saved study or replay selected settings when finished.](docs/research/diagrams/research-optimization.svg)
+
+Select the settings to vary and the goal to score. Optuna searches those choices
+through the selected backtester, using the same prepared data across trials.
+An optional later-period check selects settings on earlier signals and evaluates
+them separately on later signals. The native Research interface shows progress,
+trials and saved results.
+
+## Get started
+
+Use the packaged download and the three steps above. Existing installations
+should follow the [update instructions](docs/research/DISTRIBUTION.md#updates-and-recovery)
+to preserve their accounts, broker settings and saved research.
+
+To develop from a Git checkout instead, first run `npm ci` and `npm run build` in
+`frontend`, then run the setup script from the repository root. GitHub's automatic
+**Source code** archives do not contain the built interface; use the named
+`openalgo-research-0.1.0-preview.7.zip` asset for the easy installation.
+
+Use the [Chartink extension](extensions/chartink/README.md), or open **Tools →
+Backtest & Optimize** to upload a CSV or reuse saved signals. Review the settings
+and run. Daily and timed CSV examples are available in the screen.
+
+The application and research worker run together in the same installation.
+Nautilus is optional; VectorBT and Optuna are the default environment.
+
+## Preview scope
+
+Windows and Linux core workflows, exact replay and controlled fresh-install
+journeys have been checked. Real broker evidence covers Fyers daily and minute
+data. Other brokers use the same native integration path, but have not all been
+verified against live accounts. Docker first-run/recovery and broad cross-version upgrade
+coverage remain open. See the [current verification and limits](docs/research/STATUS.md).
+
+This preview accepts CSV signal strategies for long NSE cash equities; it does
+not import arbitrary engine programs or deploy live strategies. The
+[connector contract](docs/research/CONNECTORS.md) lists supported execution rules.
+
+## When OpenAlgo, VectorBT, Optuna or Nautilus releases an update
+
+**Update OpenAlgo Research as one tested distribution.** An upstream release does
+not automatically update this app. Each Research release specifies the OpenAlgo
+and engine versions it has integrated and checked. Keep using that combination
+until a newer Research release is available.
+
+1. Check the [Research releases](https://github.com/mamamiya7/openalgo-research/releases) and read the new app release's update notes. Extension releases are labeled separately.
+2. Stop the app and worker. Back up `.env`, account databases, Historify prices, strategy files and the complete research data directory.
+3. Download the new **OpenAlgo Research app ZIP** and follow its [update instructions](docs/research/DISTRIBUTION.md#updates-and-recovery), preserving your private configuration and data. Run **Setup.cmd** again (Linux: `bash setup-research.sh`) to install that release's locked dependencies and apply its migrations; use **Start.cmd** for later launches.
+4. If you use Nautilus, re-run its [optional runtime installer](docs/research/NAUTILUS.md#dependency-updates) when the release changes its pinned runtime. Update the Chrome extension separately only when an extension release requires it; its guide lists compatible app versions.
+
+Do not point this installation at upstream OpenAlgo's Git repository or run
+individual `pip install --upgrade` commands for its engines. Those can replace the
+tested combination. Re-running Setup in an old folder does **not** download a new
+Research release: obtain the new app package first. Update notes state which
+migrations and upgrade paths have been verified; keep your backup for recovery.
+
+## Development
+
+[Development](docs/research/DEVELOPMENT.md) ·
+[Distribution and compatibility](docs/research/DISTRIBUTION.md) ·
+[Research MCP tools](docs/research/MCP.md) ·
+[Documentation map](docs/INDEX.md)
+
+## Upstream OpenAlgo
+
+OpenAlgo provides the host application, accounts, broker integrations, Historify
+and trading tools. This repository preserves its source history and
+[license](License.md). Research integration is maintained by
+[@mamamiya7](https://github.com/mamamiya7).
+
+[OpenAlgo source](https://github.com/marketcalls/openalgo) ·
+[OpenAlgo contributors](https://github.com/marketcalls/openalgo/graphs/contributors) ·
+[OpenAlgo documentation](https://docs.openalgo.in)

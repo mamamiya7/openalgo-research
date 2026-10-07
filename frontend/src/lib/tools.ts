@@ -15,6 +15,12 @@ export interface Tool {
 
 export const tools: Tool[] = [
   {
+    title: 'Backtest & Optimize',
+    description: 'Backtest signals and optimize your portfolio',
+    href: '/scanner-research',
+    color: 'bg-teal-600',
+  },
+  {
     title: 'Strategy Builder',
     description:
       'Build multi-leg option strategies with live Greeks, payoff diagram and what-if simulators',

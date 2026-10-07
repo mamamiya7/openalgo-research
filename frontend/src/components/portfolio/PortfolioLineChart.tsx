@@ -7,8 +7,9 @@
  * zoom and pan for free, and it is the same renderer the trading terminal uses,
  * so the two look and behave alike.
  */
-import { useEffect, useRef, useState } from 'react'
+
 import { createChart } from 'openalgo-charts'
+import { useEffect, useRef, useState } from 'react'
 import { buildChartTheme } from '@/lib/trading/chartTheme'
 import { useThemeStore } from '@/stores/themeStore'
 
@@ -25,12 +26,15 @@ interface Props {
   height?: number
   /** Formats the crosshair readout; defaults to a plain number. */
   format?: (v: number) => string
+  /** Initial view only; the full series stays available for zooming and panning. */
+  initialRange?: { from: number; to: number }
 }
 
 /** ISO date -> epoch seconds, which is what the chart indexes on. */
-const toEpoch = (iso: string) => Math.floor(new Date(`${iso}T00:00:00Z`).getTime() / 1000)
+const toEpoch = (iso: string) =>
+  Math.floor(new Date(iso.includes('T') ? iso : `${iso}T00:00:00Z`).getTime() / 1000)
 
-export function PortfolioLineChart({ series, height = 320, format }: Props) {
+export function PortfolioLineChart({ series, height = 320, format, initialRange }: Props) {
   const holder = useRef<HTMLDivElement>(null)
   const [readout, setReadout] = useState<{ label: string; values: string[] } | null>(null)
   const { mode, appMode } = useThemeStore()
@@ -47,7 +51,12 @@ export function PortfolioLineChart({ series, height = 320, format }: Props) {
 
     const handles = series.map((s) =>
       chart.addSeries(s.area ? 'area' : 'line', {
-        style: { color: s.color, lineWidth: 2, topColor: `${s.color}33`, bottomColor: `${s.color}00` },
+        style: {
+          color: s.color,
+          lineWidth: 2,
+          topColor: `${s.color}33`,
+          bottomColor: `${s.color}00`,
+        },
       })
     )
 
@@ -59,6 +68,7 @@ export function PortfolioLineChart({ series, height = 320, format }: Props) {
 
     const longest = series.reduce((a, b) => (a.data.length >= b.data.length ? a : b))
     chart.timeScale.fitContent(longest.data.length)
+    if (initialRange) chart.timeScale.setVisibleLogicalRange(initialRange)
 
     // Crosshair readout. The chart is canvas-only and ships no DOM, so the
     // label is ours to render — which also keeps it styled like the rest of
@@ -70,7 +80,7 @@ export function PortfolioLineChart({ series, height = 320, format }: Props) {
         return
       }
       setReadout({
-        label: longest.data[i]?.date ?? '',
+        label: (longest.data[i]?.date ?? '').replace('T', ' ').replace('+05:30', ' IST'),
         values: series.map((s) => {
           const v = s.data[i]?.value
           return v === undefined ? '-' : format ? format(v) : v.toFixed(2)
@@ -81,24 +91,19 @@ export function PortfolioLineChart({ series, height = 320, format }: Props) {
     // The engine tracks its own container size, so there is no resize call to
     // make here; destroying it on unmount is the whole cleanup.
     return () => chart.destroy()
-  }, [series, format, mode, appMode])
+  }, [series, format, mode, appMode, initialRange])
 
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-4 text-xs">
         {series.map((s, i) => (
           <span key={s.name} className="flex items-center gap-1.5">
-            <span
-              className="inline-block h-2 w-2 rounded-sm"
-              style={{ background: s.color }}
-            />
+            <span className="inline-block h-2 w-2 rounded-sm" style={{ background: s.color }} />
             <span className="text-muted-foreground">{s.name}</span>
             <span className="tabular-nums">{readout?.values[i] ?? ''}</span>
           </span>
         ))}
-        {readout && (
-          <span className="ml-auto text-muted-foreground">{readout.label}</span>
-        )}
+        {readout && <span className="ml-auto text-muted-foreground">{readout.label}</span>}
       </div>
       <div ref={holder} style={{ height }} />
     </div>

@@ -31,7 +31,7 @@ from pathlib import Path
 
 import pytest
 from dotenv import dotenv_values
-from flask import Flask
+from flask import Flask, session
 
 import utils.env_check as env_check
 from blueprints import broker_credentials
@@ -50,6 +50,7 @@ ENV_TEXT = (
 
 _update_credentials = inspect.unwrap(broker_credentials.update_credentials)
 _app = Flask(__name__)
+_app.secret_key = "isolated-profile-writer-test"
 
 
 @pytest.fixture
@@ -63,6 +64,8 @@ def env_file(tmp_path, monkeypatch):
 
 def _post(payload: dict):
     with _app.test_request_context("/api/broker/credentials", method="POST", json=payload):
+        # This suite exercises the connected Profile writer, not first setup.
+        session.update(user="fixture-profile", logged_in=True)
         result = _update_credentials()
     response, status = result if isinstance(result, tuple) else (result, 200)
     return status, response.get_json()
@@ -188,7 +191,7 @@ def test_crlf_line_endings_are_kept(env_file):
 def test_a_line_break_in_a_value_is_refused_and_nothing_is_written(env_file):
     status, body = _post({"broker_api_key": "abc\nAPP_KEY = 'forged'"})
     assert status == 400
-    assert "line break" in body["message"]
+    assert "single line" in body["message"]
     assert env_file.read_bytes() == ENV_TEXT.encode("utf-8")
 
 
@@ -250,7 +253,7 @@ def test_under_eventlet_two_greenlet_saves_keep_both_values(tmp_path):
         dotenv.main.load_dotenv = dotenv.load_dotenv
 
         import inspect, time
-        from flask import Flask
+        from flask import Flask, session
         import utils.env_check as env_check
         from blueprints import broker_credentials
 
@@ -263,8 +266,10 @@ def test_under_eventlet_two_greenlet_saves_keep_both_values(tmp_path):
 
         view = inspect.unwrap(broker_credentials.update_credentials)
         app = Flask(__name__)
+        app.secret_key = "isolated-profile-writer-test"
         def post(payload):
             with app.test_request_context("/api/broker/credentials", method="POST", json=payload):
+                session.update(user="fixture-profile", logged_in=True)
                 result = view()
             return result[1] if isinstance(result, tuple) else 200
 

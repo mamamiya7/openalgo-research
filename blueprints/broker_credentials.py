@@ -6,8 +6,10 @@ Handles reading and updating broker credentials in the .env file.
 
 import os
 import re
+from datetime import UTC, datetime
+from functools import wraps
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, session
 
 from utils.env_check import update_env_values
 from utils.logging import get_logger
@@ -16,6 +18,40 @@ from utils.session import check_session_validity
 logger = get_logger(__name__)
 
 broker_credentials_bp = Blueprint("broker_credentials_bp", __name__, url_prefix="/api/broker")
+ACCOUNT_SETUP_SECONDS = 30 * 60
+SETUP_FIELDS = {
+    "broker_api_key",
+    "broker_api_secret",
+    "broker_api_key_market",
+    "broker_api_secret_market",
+    "redirect_url",
+}
+
+
+def broker_configuration_session(view):
+    """Permit fresh verified account setup without granting broker/trading access."""
+    connected_view = check_session_validity(view)
+
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("user") or session.get("pending_totp_user"):
+            return jsonify(status="error", message="Complete your OpenAlgo login first."), 401
+        if session.get("logged_in"):
+            return connected_view(*args, **kwargs)
+        try:
+            authenticated = datetime.fromisoformat(session.get("account_authenticated_at", ""))
+            age = (datetime.now(UTC) - authenticated).total_seconds()
+            valid = 0 <= age <= ACCOUNT_SETUP_SECONDS
+        except (TypeError, ValueError):
+            valid = False
+        if not valid:
+            # Avoid an expired account-only login bouncing back to /broker.
+            session.pop("user", None)
+            session.pop("account_authenticated_at", None)
+            return jsonify(status="error", message="Sign in again to configure your broker."), 401
+        return view(*args, **kwargs)
+
+    return wrapped
 
 
 def get_env_path():
@@ -68,7 +104,7 @@ def get_broker_from_redirect_url(redirect_url: str) -> str:
 
 
 @broker_credentials_bp.route("/credentials", methods=["GET"])
-@check_session_validity
+@broker_configuration_session
 def get_credentials():
     """Get current broker credentials (masked)."""
     try:
@@ -130,10 +166,24 @@ def get_credentials():
 
 
 @broker_credentials_bp.route("/credentials", methods=["POST"])
-@check_session_validity
+@broker_configuration_session
 def update_credentials():
     """Update broker credentials in .env file."""
     try:
+        payload = request.get_json(silent=True) if request.is_json else request.form
+        if request.is_json and not isinstance(payload, dict):
+            return jsonify(status="error", message="Supply broker credential fields."), 400
+        payload = payload or {}
+        if not session.get("logged_in") and set(payload) - SETUP_FIELDS:
+            return jsonify(
+                status="error", message="Only broker credentials can be changed during setup."
+            ), 403
+        for key in SETUP_FIELDS:
+            value = payload.get(key, "")
+            if not isinstance(value, str) or any(char in value for char in "\r\n\0"):
+                return jsonify(
+                    status="error", message="Enter each credential as a single line."
+                ), 400
         # Support both JSON and form data
         if request.is_json:
             data = request.get_json() or {}
@@ -310,14 +360,12 @@ def update_credentials():
 
 
 @broker_credentials_bp.route("/capabilities", methods=["GET"])
-@check_session_validity
+@broker_configuration_session
 def get_capabilities():
     """Return broker capabilities (supported exchanges, type, features) from cached plugin.json."""
-    from flask import session
-
     from utils.plugin_loader import get_broker_capabilities
 
-    broker = session.get("broker")
+    broker = session.get("broker") or get_broker_from_redirect_url(get_env_value("REDIRECT_URL"))
     if not broker:
         return jsonify({"status": "error", "message": "No broker in session"}), 400
 

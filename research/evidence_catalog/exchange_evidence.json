@@ -1,0 +1,69 @@
+{
+  "documents": {
+    "SURV70074.pdf": {
+      "source_url": "https://nsearchives.nseindia.com/content/circulars/SURV70074.pdf",
+      "sha256": "3ba26eabb8138eede6278a537280db1eaf5566b6900f33064847d1da5781da10",
+      "bytes": 202348
+    },
+    "SURV72214.zip": {
+      "source_url": "https://nsearchives.nseindia.com/content/circulars/SURV72214.zip",
+      "sha256": "08156b923723e4e4c35932604f77263511829e40029c5d24589ade8b4eef14b7",
+      "bytes": 273665
+    },
+    "SURV72551.zip": {
+      "source_url": "https://nsearchives.nseindia.com/content/circulars/SURV72551.zip",
+      "sha256": "9e731a00b6500de407a6c946f10544748e69c09fb14221b4bbe213f1f01be71f",
+      "bytes": 102375
+    },
+    "SURV73062.zip": {
+      "source_url": "https://nsearchives.nseindia.com/content/circulars/SURV73062.zip",
+      "sha256": "35f228cb4f914711b3eeb3d5048aca98dc7495f4cb0db3594be9395f0be3e375",
+      "bytes": 102043
+    },
+    "SURV74608.zip": {
+      "source_url": "https://nsearchives.nseindia.com/content/circulars/SURV74608.zip",
+      "sha256": "0ece7db126e13fa50a923448202b5ee145c2405861d3c46c8f0db9bcf18fcc00",
+      "bytes": 135794
+    },
+    "SURV75520.zip": {
+      "source_url": "https://nsearchives.nseindia.com/content/circulars/SURV75520.zip",
+      "sha256": "b6ec10f9ef3f67a66d369db0f0dbbb2855f58f2b65e3a61bcbc1c938a1a353c8",
+      "bytes": 138742
+    },
+    "SURV75990.pdf": {
+      "source_url": "https://nsearchives.nseindia.com/content/circulars/SURV75990.pdf",
+      "sha256": "9ae80a2b5007f22b3abc1c56cd996c252f6e1b2a985b0b16bc8a5c6320978936",
+      "bytes": 151652
+    },
+    "NSE_trading_approval.pdf": {
+      "source_url": "https://www.clcindia.com/assets/uploads/investors/NSE_trading_approval.pdf",
+      "sha256": "0a2145c3b616b3114e53043e7d20559c9a902ea464799166948e3a8137b21603",
+      "bytes": 211532
+    },
+    "CML73909.pdf": {
+      "source_url": "https://nsearchives.nseindia.com/content/circulars/CML73909.pdf",
+      "sha256": "237ef2ba0c6545fce6f56b2605df85ae4b7d76b2f8db976e0ec2bff0120e096d",
+      "bytes": 163268
+    },
+    "CMPT72565.pdf": {
+      "source_url": "https://nsearchives.nseindia.com/content/circulars/CMPT72565.pdf",
+      "sha256": "bb41ba39cf0730ebce2072b8afc5d2ee929bcc49842a5dcf0bbba8e963ba8fc9",
+      "bytes": 210323
+    },
+    "CMPT73946.pdf": {
+      "source_url": "https://nsearchives.nseindia.com/content/circulars/CMPT73946.pdf",
+      "sha256": "4dd3999f2aa7ccbcff7bd8a636abcdb26ea1fa3fcc7c26162ae719c9e8aada7a",
+      "bytes": 246860
+    },
+    "MAHAPEXLTD_11032026174420_OutcomeBoard11032026.pdf": {
+      "source_url": "https://nsearchives.nseindia.com/corporate/MAHAPEXLTD_11032026174420_OutcomeBoard11032026.pdf",
+      "sha256": "69fdd2c244886b4446e1e8ea20446897785aae3adff91d577f7a618635d1dd6a",
+      "bytes": 344520
+    },
+    "MAHAPEXLTD_30032026124412_Letter_of_offer_Disclosure-SD.pdf": {
+      "source_url": "https://nsearchives.nseindia.com/corporate/MAHAPEXLTD_30032026124412_Letter_of_offer_Disclosure-SD.pdf",
+      "sha256": "554511e4ca74756446c69ee36c34d1288df01363615009d6487dcec716507ea8",
+      "bytes": 1555012
+    }
+  }
+}

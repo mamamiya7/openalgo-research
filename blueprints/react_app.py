@@ -297,6 +297,11 @@ def react_pnltracker():
 
 
 # Tools overview (Option Chain, IV Chart, etc.)
+@react_bp.route("/scanner-research", strict_slashes=False)
+def react_scanner_research():
+    return serve_react_app()
+
+
 @react_bp.route("/tools")
 def react_tools():
     return serve_react_app()

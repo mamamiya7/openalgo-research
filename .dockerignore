@@ -17,6 +17,7 @@ __pycache__/
 env/
 venv/
 .venv/
+**/.venv/
 .Python
 
 # Environment and secrets
@@ -54,6 +55,7 @@ docker-compose.yml
 
 # Frontend development files (dist is INCLUDED - pre-built for community)
 frontend/node_modules/
+extensions/*/node_modules/
 frontend/.vite/
 frontend/coverage/
 frontend/test-results/
@@ -72,3 +74,5 @@ frontend/docs/
 # Project docs (EXPLICITLY INCLUDED)
 !docs/
 !frontend/dist/
+.agent-native/
+research_data/

@@ -1,4 +1,6 @@
 version: 2
+# Release dependencies are upgraded together with their connector compatibility
+# checks. Retain the upstream grouping, but do not open unattended version bumps.
 updates:
   # Python dependencies
   - package-ecosystem: "pip"
@@ -9,7 +11,7 @@ updates:
     groups:
       python-minor:
         update-types: ["minor", "patch"]
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     commit-message:
       prefix: "deps(py):"
 
@@ -22,7 +24,7 @@ updates:
     groups:
       npm-root:
         update-types: ["minor", "patch"]
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 0
     commit-message:
       prefix: "deps(css):"
 
@@ -35,13 +37,14 @@ updates:
     groups:
       frontend-deps:
         update-types: ["minor", "patch"]
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     commit-message:
       prefix: "deps(frontend):"
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
+    open-pull-requests-limit: 0
     schedule:
       interval: "weekly"
     commit-message:

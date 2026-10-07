@@ -55,7 +55,8 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from flask import Blueprint, Response, jsonify, request, stream_with_context
+from cachetools import TTLCache
+from flask import Blueprint, Response, current_app, g, jsonify, request, stream_with_context
 
 from limiter import limiter
 from utils import runtime, stream_registry
@@ -66,6 +67,7 @@ logger = get_logger(__name__)
 
 
 mcp_http_bp = Blueprint("mcp_http_bp", __name__, url_prefix="/mcp")
+research_mcp_api_bp = Blueprint("research_mcp_api", __name__, url_prefix="/api/v1/research")
 
 
 @mcp_http_bp.after_request
@@ -154,7 +156,7 @@ def _parse_rate_spec(spec: str) -> tuple[int, int]:
     """
     parts = (spec or "").lower().replace("per ", "per_").split()
     try:
-        count = int(parts[0])
+        count = max(1, min(1000, int(parts[0])))
     except (ValueError, IndexError):
         return (60, 60)
     unit = parts[-1] if len(parts) > 1 else "per_minute"
@@ -174,9 +176,10 @@ def _parse_rate_spec(spec: str) -> tuple[int, int]:
 #
 # Access tokens live fifteen minutes, so a new jti arrives all day in a worker
 # that never restarts. Every _QUOTA_SWEEP_SECONDS the whole dict is swept for
-# buckets whose newest hit is older than the longest window, which bounds it
-# by the tokens active in that window.
-_scope_quota: dict[str, collections.deque] = {}
+# buckets whose newest hit is older than the longest window. Preserve the
+# native integration's hard ceiling as well: at most 4096 live token/scope
+# buckets, each with a bounded sliding window.
+_scope_quota = TTLCache(maxsize=4096, ttl=3600)
 _scope_quota_lock = threading.Lock()
 _QUOTA_SWEEP_SECONDS = 300.0
 _last_quota_sweep = 0.0
@@ -712,6 +715,7 @@ def mcp_dispatch():
     jti = claims.get("jti")
 
     # ---- JSON-RPC envelope parse ----
+    request.max_content_length = 8 * 1024 * 1024 + 65536
     body = request.get_json(silent=True)
     if not isinstance(body, dict):
         return _jsonrpc_error(None, -32700, "Parse error: body must be a JSON object.")
@@ -752,6 +756,7 @@ def mcp_dispatch():
             granted_scopes=granted_scopes,
             client_id=client_id,
             jti=jti,
+            verified_claims=claims,
         )
 
     return _jsonrpc_error(rpc_id, -32601, f"Method not found: {method}")
@@ -843,6 +848,7 @@ def _dispatch_tool_call(
     granted_scopes: list[str],
     client_id: str,
     jti: str | None,
+    verified_claims: dict | None = None,
 ):
     """Handle a tools/call request. Validates scope, runs the tool,
     captures the result, audits, returns JSON-RPC."""
@@ -908,6 +914,7 @@ def _dispatch_tool_call(
             needed=needed,
             client_id=client_id,
             jti=jti,
+            verified_claims=verified_claims,
         )
     finally:
         _release_tool_call()
@@ -922,6 +929,7 @@ def _run_tool_call(
     needed: str,
     client_id: str,
     jti: str | None,
+    verified_claims: dict | None = None,
 ):
     """Check the quota, run one tool and audit it. Holds a tool-call slot."""
     from utils.mcp_tool_registry import SCOPE_WRITE_ORDERS
@@ -939,7 +947,7 @@ def _run_tool_call(
             "rate_limited",
             data={
                 "scope": needed,
-                "limit": _RATE_LIMIT_WRITE if needed == SCOPE_WRITE_ORDERS else _RATE_LIMIT_READ,
+                "limit": _RATE_LIMIT_WRITE if needed.startswith("write:") else _RATE_LIMIT_READ,
             },
         )
 
@@ -956,6 +964,10 @@ def _run_tool_call(
     started = time.perf_counter()
     outcome = "success"
     try:
+        if tool_name.startswith("research_"):
+            from services.research_mcp import owner_from_claims
+
+            g._research_mcp_owner = owner_from_claims(verified_claims)
         result_text = fn(**arguments)  # tools accept kwargs only
     except TypeError:
         outcome = "bad_arguments"
@@ -965,6 +977,8 @@ def _run_tool_call(
         outcome = "error"
         logger.exception(f"[MCP tool] {tool_name} raised: {e}")
         result_text = None
+    finally:
+        g.pop("_research_mcp_owner", None)
     duration_ms = int((time.perf_counter() - started) * 1000)
 
     _audit_log(
@@ -999,6 +1013,78 @@ def _run_tool_call(
         rpc_id,
         {"content": [{"type": "text", "text": result_text}], "isError": False},
     )
+
+
+@research_mcp_api_bp.post("/tool")
+@limiter.limit("30 per minute")
+def research_api_tool():
+    """Native API-key bridge for stdio MCP; accepts research actions only."""
+    from services.research_mcp import (
+        MAX_CSV_BYTES,
+        TOOLS,
+        WRITE_TOOLS,
+        dispatch,
+        owner_from_api_key,
+    )
+
+    request.max_content_length = MAX_CSV_BYTES + 65536
+    if request.content_length and request.content_length > request.max_content_length:
+        return jsonify(message="Research request exceeds 8 MiB"), 413
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or set(data) - {"apikey", "name", "arguments"}:
+        return jsonify(message="Supply a research action and arguments"), 400
+    try:
+        owner = owner_from_api_key(data.get("apikey"))
+    except PermissionError:
+        return jsonify(message="Invalid OpenAlgo API key"), 401
+    name, arguments = data.get("name"), data.get("arguments", {})
+    if not isinstance(name, str) or name not in TOOLS:
+        return jsonify(message="Unknown research action"), 400
+    toolsets = {
+        value.strip().lower()
+        for value in os.getenv("OPENALGO_MCP_TOOLSETS", "").split(",")
+        if value.strip()
+    }
+    if toolsets and "research" not in toolsets:
+        return jsonify(message="Research tools are disabled"), 403
+    if name in WRITE_TOOLS and os.getenv("OPENALGO_MCP_READ_ONLY", "0").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return jsonify(message="Research writes are disabled"), 403
+    store = current_app.extensions.get("research_store")
+    if store is None:
+        return jsonify(message="Research is unavailable"), 503
+    started, outcome = time.perf_counter(), "success"
+    try:
+        return jsonify(dispatch(store, owner, name, arguments))
+    except (ValueError, TypeError) as exc:
+        outcome = "bad_arguments"
+        return jsonify(
+            message=str(exc) if isinstance(exc, ValueError) else "Invalid research arguments"
+        ), 400
+    except LookupError:
+        outcome = "not_found"
+        return jsonify(message="Research record not found"), 404
+    except Exception:
+        outcome = "error"
+        logger.exception("Research API action failed")
+        return jsonify(message="Research action failed; open the saved run for details"), 500
+    finally:
+        _audit_log(
+            {
+                "ts": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+                "client_id": "native-api",
+                "tool": name,
+                "scope": "write:research" if name in WRITE_TOOLS else "read:research",
+                "params_hash": _params_hash(arguments),
+                "duration_ms": int((time.perf_counter() - started) * 1000),
+                "outcome": outcome,
+                "request_ip": request.remote_addr,
+            }
+        )
 
 
 # --------------------------------------------------------------------

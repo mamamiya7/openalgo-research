@@ -12,16 +12,9 @@
  * as wide as it ever was.
  */
 import type { Chart } from 'openalgo-charts'
-import {
-  applyTokens,
-  type DataWindowHandle,
-  injectWidgetStyles,
-  mountDataWindow,
-  WIDGET_COMPONENT_CSS,
-  type WidgetContext,
-  widgetTokens,
-} from 'openalgo-charts/widget'
+import { applyTokens, widgetTokens } from 'openalgo-charts/widget'
 import { useEffect, useRef } from 'react'
+import { mountChartDataWindow } from '@/components/chart/mountChartDataWindow'
 import { buildChartTheme, isLightTheme } from '@/lib/trading/chartTheme'
 import { useThemeStore } from '@/stores/themeStore'
 import { PANEL_HEADER, PanelShell } from './panelShell'
@@ -36,12 +29,7 @@ interface Props {
  * Mount the readings into `host` for `chart`. The data window reads the
  * chart, the document and the locale from its context and nothing else.
  */
-export function mountChartDataWindow(chart: Chart, host: HTMLElement): DataWindowHandle {
-  const doc = host.ownerDocument
-  injectWidgetStyles(doc, WIDGET_COMPONENT_CSS)
-  const context = { chart, document: doc, locale: 'en-IN' } as unknown as WidgetContext
-  return mountDataWindow(context, host)
-}
+export { mountChartDataWindow } from '@/components/chart/mountChartDataWindow'
 
 export function DataWindowPanel({ chart, paneLabel }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)

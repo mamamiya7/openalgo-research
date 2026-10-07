@@ -3,6 +3,33 @@ import pytest
 from services import history_service
 
 
+@pytest.mark.parametrize(
+    "message,code",
+    [
+        (
+            "Symbol 'NIFTY' not found for exchange 'NSE_INDEX'. Please verify the symbol name.",
+            "symbol_unavailable",
+        ),
+        ("Invalid exchange", "invalid_request"),
+    ],
+)
+def test_history_validation_classifies_only_missing_master_symbol(monkeypatch, message, code):
+    monkeypatch.setattr(history_service, "validate_symbol_exchange", lambda *_: (False, message))
+    success, response, status = history_service.get_history_with_auth(
+        "test-token",
+        "test-feed-token",
+        "test-broker",
+        "NIFTY",
+        "NSE_INDEX",
+        "1m",
+        "2026-08-01",
+        "2026-08-22",
+    )
+    assert not success and status == 400
+    assert response["error_code"] == code
+    assert response["message"] == message
+
+
 def _history_request() -> dict:
     return {
         "symbol": "NIFTY",

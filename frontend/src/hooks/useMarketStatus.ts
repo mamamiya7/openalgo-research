@@ -52,8 +52,11 @@ const CRYPTO_EXCHANGES = new Set(['CRYPTO'])
  * therefore fell back to the REST snapshot and sat there looking stale while
  * the stock beside it updated live.
  */
-function calendarExchange(exchange: string): string {
-  return exchange.endsWith('_INDEX') ? exchange.slice(0, -'_INDEX'.length) : exchange
+function calendarExchange(exchange: unknown): string {
+  const normalizedExchange = typeof exchange === 'string' ? exchange : String(exchange ?? '')
+  return normalizedExchange.endsWith('_INDEX')
+    ? normalizedExchange.slice(0, -'_INDEX'.length)
+    : normalizedExchange
 }
 
 export function useMarketStatus() {

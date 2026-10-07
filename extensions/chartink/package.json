@@ -1,0 +1,13 @@
+{
+  "name": "openalgo-chartink-extension",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "package": "python package.py"
+  },
+  "devDependencies": {
+    "jsdom": "26.1.0"
+  }
+}

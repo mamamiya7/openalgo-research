@@ -24,17 +24,19 @@ need → drill into the specific file. Don't load everything at once.
 | Technical indicators (`ta` library) | [<prompt/indicators/openalgo indicators - introduction.md>](<prompt/indicators/openalgo indicators - introduction.md>) |
 | The charting terminal at `/trading`, its order dock and its shortcuts | [userguide/32-charting-terminal](userguide/32-charting-terminal/README.md) |
 | Writing your own chart indicators for `/trading` | [custom-indicators.md](custom-indicators.md) |
-| Writing studies in OpenScript for `/trading` | [openscript.md](openscript.md) |
 | Step-by-step user guide (setup → first order → integrations) | [userguide/README.md](userguide/README.md) |
 | MCP tool reference (Claude Desktop / Cursor / Windsurf) | [mcp-tool-reference.md](mcp-tool-reference.md) |
+| Native Research roadmap: sharper journeys, automatic optimization and upstream compatibility | [research/DELIVERY_PLAN.md](research/DELIVERY_PLAN.md#native-product-refinement-plan--7-october-2026) |
+| Scanner Research: dated CSV, historical execution, search, later tests and retained evidence | [research/STATUS.md](research/STATUS.md) · [research/DEVELOPMENT.md](research/DEVELOPMENT.md) |
 
 ## Install, deploy & operate
 
 | Topic | Entry point |
 |---|---|
-| Ubuntu server install | [installation-guidelines/getting-started/ubuntu-server-installation.md](installation-guidelines/getting-started/ubuntu-server-installation.md) |
+| OpenAlgo Research: start here | [Guided installation and troubleshooting](research/RUNTIME.md#easy-local-installation-recommended) · [first-time setup](userguide/05-first-time-setup/README.md) |
+| Upstream OpenAlgo Ubuntu server reference | [installation-guidelines/getting-started/ubuntu-server-installation.md](installation-guidelines/getting-started/ubuntu-server-installation.md) |
 | Docker | [docker/README.md](docker/README.md) |
-| Optional gthread web server: fresh installs, switching on Ubuntu and Docker, verification and rollback | [gthread/README.md](gthread/README.md) |
+| OpenAlgo Research distribution: guided setup, launcher, update and compatibility | [research/DISTRIBUTION.md](research/DISTRIBUTION.md) · [research/RUNTIME.md](research/RUNTIME.md) · [offline start guide](../START_HERE.html) |
 | Upgrade / SMTP / TOTP / forgot-password | https://docs.openalgo.in/installation-guidelines/getting-started/ |
 | Broker integration (36 plugins) | [broker-integration-guide.md](broker-integration-guide.md) |
 | Release notes & changelog | [releases/](releases/) · [CHANGELOG.md](CHANGELOG.md) |
@@ -43,6 +45,17 @@ need → drill into the specific file. Don't load everything at once.
 
 | Feature | Entry point |
 |---|---|
+| Native Scanner Research development | [research/BRIEF.md](research/BRIEF.md) · [research/STATUS.md](research/STATUS.md) · [research/SYSTEM_MAP.md](research/SYSTEM_MAP.md) · [research/CONNECTORS.md](research/CONNECTORS.md) · [research/JOURNEYS.md](research/JOURNEYS.md) · [research/EXECUTION_STATUS.md](research/EXECUTION_STATUS.md) |
+| Complete trader journeys, study library, navigation and asset-aware design | [research/PRODUCT_JOURNEY_MAP.md](research/PRODUCT_JOURNEY_MAP.md) · [research/ASSET_PROFILES.md](research/ASSET_PROFILES.md) · [visual map](research/trader-journey-map.html) |
+| Integrated Research delivery plan: reconciled whole-product backlog, all 34 journeys, dependencies, assets and release acceptance | [research/DELIVERY_PLAN.md](research/DELIVERY_PLAN.md) |
+| OpenAlgo 2.0.2.5 upgrade, chart/indicator reuse and upstream feature inventory | [research/UPSTREAM_UPDATE_20260916.md](research/UPSTREAM_UPDATE_20260916.md) |
+| Saved trade charts: frozen native candles, entry/exit markers, visual indicators and bounded bar replay | [research/SAVED_TRADE_CHARTS.md](research/SAVED_TRADE_CHARTS.md) |
+| Proposed one-click Optimize: automatic trading-rule/condition research, causal indicators, validation, benchmarks and findings | [research/AUTOMATED_RESEARCH_PLAN.md](research/AUTOMATED_RESEARCH_PLAN.md) |
+| Research download batching, Historify reuse and bounded evidence publication | [research/DOWNLOAD_PERFORMANCE.md](research/DOWNLOAD_PERFORMANCE.md) |
+| Optimization trial metrics, configurable table columns and settings dialogs | [research/TRIAL_RESULTS.md](research/TRIAL_RESULTS.md) |
+| Continuous report, saved preferences, month/drawdown investigation and evaluation-basis receipts; Optuna study, candidate and comparison/validation plan | [research/REPORT_EXPERIENCE_PLAN.md](research/REPORT_EXPERIENCE_PLAN.md) |
+| Chartink extension to saved research: full journey, names, automatic fields, required choices, engines and results | [research/CHARTINK_JOURNEY.md](research/CHARTINK_JOURNEY.md) |
+| Chrome extension logo, public release steps, store copy and privacy | [research/CHROME_EXTENSION_PUBLISHING.md](research/CHROME_EXTENSION_PUBLISHING.md) · [research/CHARTINK_STORE_LISTING.md](research/CHARTINK_STORE_LISTING.md) · [research/CHARTINK_PRIVACY.md](research/CHARTINK_PRIVACY.md) |
 | Agent (`/agent`) | [design/55-agent/README.md](design/55-agent/README.md) |
 | Scalping Terminal (`/scalping`) | [scalping/PRD.md](scalping/PRD.md) |
 | Scanner architecture | [scanner-architecture.md](scanner-architecture.md) |
@@ -73,3 +86,5 @@ need → drill into the specific file. Don't load everything at once.
 
 - User responsibilities & risk ownership: https://docs.openalgo.in/responsibilities
 - Repository: https://github.com/marketcalls/openalgo · Docs: https://docs.openalgo.in
+
+- [Native research refinement implementation](research/NATIVE_REFINEMENT_20261007.md): current chart and joint-search contracts and remaining delivery gates.

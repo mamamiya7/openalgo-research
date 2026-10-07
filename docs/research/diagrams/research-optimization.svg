@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="648" viewBox="0 0 1280 648" role="img" aria-labelledby="research-optimization-title research-optimization-desc">
+<title id="research-optimization-title">Optuna searches. A backtesting engine evaluates.</title>
+<desc id="research-optimization-desc">The user selects settings, ranges, objective and trial budget. Optuna proposes a parameter combination through TPE or grid search. VectorBT or optional NautilusTrader backtests it using the frozen input data. Research records the result and returns the objective score to Optuna for subsequent trials. The finished study retains settings and results for review and exact replay. An optional later-period check chooses settings on earlier signals and evaluates them on a separate later period.</desc>
+<defs>
+<marker id="research-optimization-arrow" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#5b665e"/></marker>
+<marker id="research-optimization-arrow-accent" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#147d5a"/></marker>
+<marker id="research-optimization-arrow-link" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#365e88"/></marker>
+</defs>
+<rect width="1280" height="648" fill="#fafaf8"/>
+<text x="48" y="40" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="600" fill="#147d5a" text-anchor="start" letter-spacing="2">OPENALGO RESEARCH / 04 / HOW OPTIMIZATION WORKS</text>
+<text x="48" y="92" font-family="Georgia, serif" font-size="40" font-weight="400" fill="#202722" text-anchor="start">Optuna searches. A backtesting engine evaluates.</text>
+<text x="48" y="128" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">One prepared dataset, many parameter trials, a study you can revisit.</text>
+<path data-connector="true" d="M 344 232 H 464" fill="none" stroke="#5b665e" stroke-width="1.6" marker-end="url(#research-optimization-arrow)"/>
+<path data-connector="true" d="M 800 232 H 936" fill="none" stroke="#147d5a" stroke-width="1.6" marker-end="url(#research-optimization-arrow-accent)"/>
+<path data-connector="true" d="M 1088 296 V 352 Q 1088 360 1080 360 H 728 Q 720 360 720 368 V 432" fill="none" stroke="#5b665e" stroke-width="1.6" marker-end="url(#research-optimization-arrow)"/>
+<path data-connector="true" d="M 560 432 V 296" fill="none" stroke="#147d5a" stroke-width="1.6" marker-end="url(#research-optimization-arrow-accent)" stroke-dasharray="4 4"/>
+<path data-connector="true" d="M 1176 432 V 296" fill="none" stroke="#5b665e" stroke-width="1.6" marker-end="url(#research-optimization-arrow)"/>
+<path data-connector="true" d="M 464 484 H 344" fill="none" stroke="#5b665e" stroke-width="1.6" marker-end="url(#research-optimization-arrow)"/>
+<g data-label="true"><rect x="376" y="352" width="172" height="24" fill="#fafaf8"/>
+<text x="462.0" y="368" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600" fill="#5b665e" text-anchor="middle">Score → next trial</text>
+</g>
+<g data-label="true"><rect x="912" y="324" width="112" height="24" fill="#fafaf8"/>
+<text x="968.0" y="340" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600" fill="#5b665e" text-anchor="middle">Result</text>
+</g>
+<g data-label="true"><rect x="352" y="448" width="104" height="24" fill="#fafaf8"/>
+<text x="404.0" y="464" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600" fill="#5b665e" text-anchor="middle">Finish</text>
+</g>
+<g data-node="search" data-x="48" data-y="168" data-w="296" data-h="128">
+<rect x="48" y="168" width="296" height="128" rx="8" fill="white" stroke="#a9b4aa" stroke-width="1.2"/>
+<text x="64" y="204" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#202722" text-anchor="start">You define the search</text>
+<text x="64" y="236" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Settings + allowed ranges</text>
+<text x="64" y="264" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Objective + trial budget</text>
+</g>
+<g data-node="optuna" data-x="464" data-y="168" data-w="336" data-h="128">
+<rect x="464" y="168" width="336" height="128" rx="8" fill="#edf6ef" stroke="#147d5a" stroke-width="1.2"/>
+<text x="480" y="204" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#147d5a" text-anchor="start">Optuna proposes settings</text>
+<text x="480" y="236" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">TPE or grid search</text>
+<text x="480" y="264" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">One combination per trial</text>
+</g>
+<g data-node="engine" data-x="936" data-y="168" data-w="296" data-h="128">
+<rect x="936" y="168" width="296" height="128" rx="8" fill="white" stroke="#a9b4aa" stroke-width="1.2"/>
+<text x="952" y="204" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#202722" text-anchor="start">Selected backtester</text>
+<text x="952" y="236" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">VectorBT by default</text>
+<text x="952" y="264" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">or optional NautilusTrader</text>
+</g>
+<g data-node="saved" data-x="48" data-y="432" data-w="296" data-h="112">
+<rect x="48" y="432" width="296" height="112" rx="8" fill="white" stroke="#a9b4aa" stroke-width="1.2"/>
+<text x="64" y="468" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="600" fill="#202722" text-anchor="start">Saved study</text>
+<text x="64" y="500" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Review trials and trades</text>
+<text x="64" y="528" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Replay selected settings</text>
+</g>
+<g data-node="score" data-x="464" data-y="432" data-w="336" data-h="112">
+<rect x="464" y="432" width="336" height="112" rx="8" fill="white" stroke="#a9b4aa" stroke-width="1.2"/>
+<text x="480" y="468" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#202722" text-anchor="start">Research records the result</text>
+<text x="480" y="500" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Trial progress + settings</text>
+<text x="480" y="528" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Objective score to Optuna</text>
+</g>
+<g data-node="prices" data-x="936" data-y="432" data-w="296" data-h="112">
+<rect x="936" y="432" width="296" height="112" rx="8" fill="white" stroke="#a9b4aa" stroke-width="1.2"/>
+<text x="952" y="468" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#202722" text-anchor="start">Frozen prices + signals</text>
+<text x="952" y="500" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Same prepared inputs</text>
+<text x="952" y="528" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">for every trial</text>
+</g>
+<path d="M 48 584 H 1232" stroke="#d7dcd6" fill="none"/>
+<text x="48" y="620" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#5b665e" text-anchor="start">Optional later-period check: choose settings on earlier signals, then evaluate them separately on later signals.</text>
+</svg>

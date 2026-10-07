@@ -1,7 +1,8 @@
 import { BookOpen, ExternalLink, Info, Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { BrokerAuthSignOut } from '@/components/auth/BrokerAuthSignOut'
+import { BrokerCredentialsSetup } from '@/components/auth/BrokerCredentialsSetup'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -85,6 +86,8 @@ export default function BrokerSelect() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [brokerConfig, setBrokerConfig] = useState<BrokerConfig | null>(null)
+  const [credentialsOpen, setCredentialsOpen] = useState(false)
+  const [restartRequired, setRestartRequired] = useState(false)
 
   useEffect(() => {
     // Fetch broker configuration
@@ -122,6 +125,15 @@ export default function BrokerSelect() {
 
     if (!brokerConfig) {
       setError('Broker configuration not loaded')
+      return
+    }
+
+    if (!brokerConfig.broker_api_key || restartRequired) {
+      setError(
+        restartRequired
+          ? 'Restart OpenAlgo to use your saved credentials.'
+          : 'Add your broker credentials before connecting.'
+      )
       return
     }
 
@@ -263,6 +275,13 @@ export default function BrokerSelect() {
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
+              {restartRequired && (
+                <Alert className="mb-4">
+                  <AlertDescription>
+                    Credentials saved. Restart OpenAlgo, then connect your broker.
+                  </AlertDescription>
+                </Alert>
+              )}
 
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-2">
@@ -300,7 +319,16 @@ export default function BrokerSelect() {
                   </Alert>
                 )}
 
-                <Button type="submit" className="w-full" disabled={!selectedBroker || isSubmitting}>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={
+                    !selectedBroker ||
+                    isSubmitting ||
+                    !brokerConfig?.broker_api_key ||
+                    restartRequired
+                  }
+                >
                   {isSubmitting ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -314,6 +342,21 @@ export default function BrokerSelect() {
                   )}
                 </Button>
               </form>
+              <Button
+                type="button"
+                variant={brokerConfig?.broker_api_key ? 'ghost' : 'default'}
+                className="mt-3 w-full"
+                onClick={() => setCredentialsOpen(true)}
+              >
+                {brokerConfig?.broker_api_key
+                  ? 'Edit broker credentials'
+                  : 'Add broker credentials'}
+              </Button>
+              <BrokerCredentialsSetup
+                open={credentialsOpen}
+                onOpenChange={setCredentialsOpen}
+                onSaved={() => setRestartRequired(true)}
+              />
 
               <div className="mt-6 text-center text-sm">
                 <BrokerAuthSignOut />

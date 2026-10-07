@@ -36,6 +36,9 @@ tmp/
 *.duckdb
 *.duckdb.wal
 *.sqlite
+*.sqlite3
+*.parquet
+*.feather
 *.log
 *.jsonl
 *.tmp
@@ -103,6 +106,10 @@ yarn-error.log*
 
 # Windows NUL file
 nul
+
+# Native research runtime and local agent references
+.agent-native/
+research_data/
 
 # Personal workspace: your own indicators, research, backtests and notes.
 # Only the readme is tracked -- everything else is yours and stays local.

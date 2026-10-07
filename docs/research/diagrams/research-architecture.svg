@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="672" viewBox="0 0 1280 672" role="img" aria-labelledby="research-architecture-title research-architecture-desc">
+<title id="research-architecture-title">One OpenAlgo experience, established research engines</title>
+<desc id="research-architecture-desc">OpenAlgo provides the account, broker history service and Historify archive. Our native Research screens, services and background worker manage CSV inputs, trading rules, data planning, jobs and saved results. VectorBT simulates portfolios, Optuna searches settings using the selected simulation engine, and optional NautilusTrader runs event-driven simulations in Linux or WSL. The diagram shows responsibilities; the optimization loop is detailed separately.</desc>
+<defs>
+<marker id="research-architecture-arrow" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#5b665e"/></marker>
+<marker id="research-architecture-arrow-accent" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#147d5a"/></marker>
+<marker id="research-architecture-arrow-link" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#365e88"/></marker>
+</defs>
+<rect width="1280" height="672" fill="#fafaf8"/>
+<text x="48" y="40" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="600" fill="#147d5a" text-anchor="start" letter-spacing="2">OPENALGO RESEARCH / 02 / WHO DOES WHAT</text>
+<text x="48" y="92" font-family="Georgia, serif" font-size="40" font-weight="400" fill="#202722" text-anchor="start">One OpenAlgo experience, established research engines</text>
+<text x="48" y="128" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Our contribution is the native workflow and the connectors that coordinate it.</text>
+<path data-connector="true" d="M 640 256 V 304" fill="none" stroke="#5b665e" stroke-width="1.6" marker-end="url(#research-architecture-arrow)"/>
+<path data-connector="true" d="M 248 416 V 472" fill="none" stroke="#5b665e" stroke-width="1.6" marker-end="url(#research-architecture-arrow)"/>
+<path data-connector="true" d="M 640 416 V 472" fill="none" stroke="#5b665e" stroke-width="1.6" marker-end="url(#research-architecture-arrow)"/>
+<path data-connector="true" d="M 1048 416 V 472" fill="none" stroke="#5b665e" stroke-width="1.6" marker-end="url(#research-architecture-arrow)" stroke-dasharray="4 4"/>
+<g data-node="openalgo" data-x="48" data-y="160" data-w="1184" data-h="96">
+<rect x="48" y="160" width="1184" height="96" rx="8" fill="white" stroke="#a9b4aa" stroke-width="1.2"/>
+<text x="64" y="196" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="600" fill="#202722" text-anchor="start">OpenAlgo foundation</text>
+<text x="64" y="228" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Your account · broker connections and history service · Historify price archive</text>
+</g>
+<g data-node="research" data-x="48" data-y="304" data-w="1184" data-h="112">
+<rect x="48" y="304" width="1184" height="112" rx="8" fill="#edf6ef" stroke="#147d5a" stroke-width="1.2"/>
+<text x="64" y="340" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="600" fill="#147d5a" text-anchor="start">Research — the layer we build</text>
+<text x="64" y="372" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Native screens · CSV inputs and rules · data planning · engine connectors</text>
+<text x="64" y="400" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Background jobs and progress · saved experiments · results and exact replay</text>
+</g>
+<g data-node="vectorbt" data-x="48" data-y="472" data-w="400" data-h="112">
+<rect x="48" y="472" width="400" height="112" rx="8" fill="white" stroke="#a9b4aa" stroke-width="1.2"/>
+<text x="64" y="508" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="600" fill="#202722" text-anchor="start">VectorBT</text>
+<text x="64" y="540" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Portfolio backtesting</text>
+<text x="64" y="568" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Fills · shared cash · fees · P&amp;L</text>
+</g>
+<g data-node="optuna" data-x="488" data-y="472" data-w="304" data-h="112">
+<rect x="488" y="472" width="304" height="112" rx="8" fill="white" stroke="#a9b4aa" stroke-width="1.2"/>
+<text x="504" y="508" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="600" fill="#202722" text-anchor="start">Optuna</text>
+<text x="504" y="540" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Parameter search</text>
+<text x="504" y="568" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Evaluates via the engine</text>
+</g>
+<g data-node="nautilus" data-x="832" data-y="472" data-w="400" data-h="112">
+<rect x="832" y="472" width="400" height="112" rx="8" fill="#f2f3f0" stroke="#a9b4aa" stroke-width="1.2" stroke-dasharray="4 4"/>
+<text x="848" y="508" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="600" fill="#202722" text-anchor="start">NautilusTrader</text>
+<text x="848" y="540" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Event-driven backtesting</text>
+<text x="848" y="568" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Optional Linux / WSL runtime</text>
+</g>
+<path d="M 48 608 H 1232" stroke="#d7dcd6" fill="none"/>
+<text x="48" y="644" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#5b665e" text-anchor="start">Green: our integration layer. Dashed: optional runtime. VectorBT is the default backtester; Optuna is the optimizer.</text>
+</svg>

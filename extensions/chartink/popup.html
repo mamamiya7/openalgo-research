@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OpenAlgo Research</title><link rel="stylesheet" href="popup.css"></head>
+<body><main>
+<header><div class="brand"><img src="icons/icon48.png" width="40" height="40" alt=""><span class="eyebrow">CHARTINK → OPENALGO</span></div><h1>Research this scanner</h1><p>Bring its historical signals into your saved research.</p></header>
+<form id="connect-form"><label for="address">Your OpenAlgo address</label><div class="connection"><input id="address" type="url" placeholder="http://127.0.0.1:5000" required spellcheck="false" autocomplete="url"><button type="submit" id="connect">Connect</button></div></form>
+<p id="connection-status" class="muted"></p>
+<section id="pending" hidden><p id="pending-title"></p><button id="resume" class="primary">Continue import</button><button id="discard" class="quiet">Discard pending import</button></section>
+<section id="new-import"><button id="capture" class="primary">Research in OpenAlgo</button></section>
+<p id="status" role="status" hidden></p><a id="last-result" hidden>Open last experiment</a>
+<footer><a href="privacy.html" target="_blank" rel="noopener">Privacy</a><a href="https://github.com/mamamiya7/openalgo-research/issues" target="_blank" rel="noopener noreferrer">Help</a></footer>
+</main><script type="module" src="popup.js"></script></body></html>

@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="648" viewBox="0 0 1280 648" role="img" aria-labelledby="research-data-title research-data-desc">
+<title id="research-data-title">The same broker connection. The same price archive.</title>
+<desc id="research-data-desc">CSV signals, execution rules and the full optimizer range determine daily or one-minute requirements. Read matching prices from OpenAlgo Historify. Request missing windows through OpenAlgo history and the connected broker, then save and read back those candles in the same Historify database. Freeze prepared inputs once and reuse them across trials. Exact replay uses the saved inputs. Date-only signals with daily execution stay daily; timed or intraday rules require one-minute data; mixed strategies use the finest needed interval.</desc>
+<defs>
+<marker id="research-data-arrow" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#5b665e"/></marker>
+<marker id="research-data-arrow-accent" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#147d5a"/></marker>
+<marker id="research-data-arrow-link" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#365e88"/></marker>
+</defs>
+<rect width="1280" height="648" fill="#fafaf8"/>
+<text x="48" y="40" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="600" fill="#147d5a" text-anchor="start" letter-spacing="2">OPENALGO RESEARCH / 03 / WHERE PRICES COME FROM</text>
+<text x="48" y="92" font-family="Georgia, serif" font-size="40" font-weight="400" fill="#202722" text-anchor="start">The same broker connection. The same price archive.</text>
+<text x="48" y="128" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Research plans the data it needs, reuses available candles and fills missing coverage.</text>
+<path data-connector="true" d="M 368 244 H 480" fill="none" stroke="#5b665e" stroke-width="1.6" marker-end="url(#research-data-arrow)"/>
+<path data-connector="true" d="M 800 244 H 912" fill="none" stroke="#147d5a" stroke-width="1.6" marker-end="url(#research-data-arrow-accent)"/>
+<path data-connector="true" d="M 568 308 V 440" fill="none" stroke="#365e88" stroke-width="1.6" marker-end="url(#research-data-arrow-link)"/>
+<path data-connector="true" d="M 712 440 V 308" fill="none" stroke="#365e88" stroke-width="1.6" marker-end="url(#research-data-arrow-link)"/>
+<g data-label="true"><rect x="804" y="204" width="104" height="24" fill="#fafaf8"/>
+<text x="856.0" y="220" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600" fill="#5b665e" text-anchor="middle">Ready</text>
+</g>
+<g data-label="true"><rect x="424" y="360" width="132" height="24" fill="#fafaf8"/>
+<text x="490.0" y="376" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600" fill="#5b665e" text-anchor="middle">Missing windows</text>
+</g>
+<g data-label="true"><rect x="724" y="360" width="176" height="24" fill="#fafaf8"/>
+<text x="812.0" y="376" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600" fill="#5b665e" text-anchor="middle">Save + read back</text>
+</g>
+<g data-node="requirements" data-x="48" data-y="168" data-w="320" data-h="140">
+<rect x="48" y="168" width="320" height="140" rx="8" fill="white" stroke="#a9b4aa" stroke-width="1.2"/>
+<text x="64" y="204" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="600" fill="#202722" text-anchor="start">Plan requirements</text>
+<text x="64" y="236" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Signals + execution rules</text>
+<text x="64" y="264" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Full optimizer window</text>
+<text x="64" y="292" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Daily or 1-minute candles</text>
+</g>
+<g data-node="historify" data-x="480" data-y="168" data-w="320" data-h="140">
+<rect x="480" y="168" width="320" height="140" rx="8" fill="#edf6ef" stroke="#147d5a" stroke-width="1.2"/>
+<text x="496" y="204" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="600" fill="#147d5a" text-anchor="start">OpenAlgo Historify</text>
+<text x="496" y="236" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">The native price database</text>
+<text x="496" y="264" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Reuse matching candles</text>
+<text x="496" y="292" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Check required coverage</text>
+</g>
+<g data-node="snapshot" data-x="912" data-y="168" data-w="320" data-h="140">
+<rect x="912" y="168" width="320" height="140" rx="8" fill="white" stroke="#a9b4aa" stroke-width="1.2"/>
+<text x="928" y="204" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="600" fill="#202722" text-anchor="start">Freeze run inputs</text>
+<text x="928" y="236" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">One prepared price set</text>
+<text x="928" y="264" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Reused across trials</text>
+<text x="928" y="292" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Retained for exact replay</text>
+</g>
+<g data-node="broker" data-x="480" data-y="440" data-w="320" data-h="112">
+<rect x="480" y="440" width="320" height="112" rx="8" fill="white" stroke="#a9b4aa" stroke-width="1.2"/>
+<text x="496" y="476" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#202722" text-anchor="start">OpenAlgo history service</text>
+<text x="496" y="508" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Your connected broker</text>
+<text x="496" y="536" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Only missing windows</text>
+</g>
+<text x="48" y="380" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600" fill="#202722" text-anchor="start">Daily rules → daily bars</text>
+<text x="48" y="412" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">Timed rules → 1-minute bars</text>
+<text x="48" y="452" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">A mixed portfolio uses the</text>
+<text x="48" y="480" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">finest interval it requires.</text>
+<text x="912" y="440" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="600" fill="#202722" text-anchor="start">Prepare once.</text>
+<text x="912" y="476" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="600" fill="#202722" text-anchor="start">Run many trials.</text>
+<text x="912" y="512" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="400" fill="#5b665e" text-anchor="start">No download per trial.</text>
+<path d="M 48 584 H 1232" stroke="#d7dcd6" fill="none"/>
+<text x="48" y="620" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#5b665e" text-anchor="start">Stops, targets and trailing alone do not force minute data. Broker history availability still determines usable coverage.</text>
+</svg>

@@ -1,0 +1,269 @@
+name: Research distribution compatibility
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      validation_scope:
+        description: Full validation, or package-only after separately qualifying unchanged runtime code
+        type: choice
+        options: [full, package]
+        default: full
+
+permissions:
+  contents: read
+
+concurrency:
+  # A delayed push event must not cancel an explicit release validation run.
+  group: research-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  supported-runtime:
+    # Only an explicit manual package request can omit the engine matrix.
+    # Pushes, pull requests and ordinary manual runs always validate it.
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.validation_scope != 'package' }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      PYTHON_DOTENV_DISABLED: '1'
+      PYTHONUTF8: '1'
+      OPENBLAS_NUM_THREADS: '2'
+      NUMBA_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+          enable-cache: true
+      - run: uv sync --frozen --extra research
+      - run: uv run --no-sync python tools/research_check.py
+      - name: Engine, native data, saved evidence and lifecycle regressions
+        run: uv run --no-sync pytest test/research test/test_history_service_source_validation.py -q
+      - name: Host upgrade migrations, shutdown and chart data contracts
+        run: >-
+          uv run --no-sync pytest
+          test/test_migrate_agent.py test/test_agent_voice.py
+          test/test_auth_session_hygiene.py
+          test/test_graceful_shutdown.py
+          test/test_strategy_builder_chart_window.py
+          test/test_strategy_builder_chart_reference.py
+          test/test_upstox_holdings_mapping.py test/test_upstox_tick_size.py -q
+      - name: Production eventlet boundary
+        if: runner.os == 'Linux'
+        run: |
+          uv pip install "gunicorn==25.3.0" "eventlet==0.41.2"
+          uv run --no-sync pytest test/test_sqlite_lock_cooperative.py test/test_eventlet_cross_thread_locks.py -q
+      - name: Install and probe the locked Nautilus side runtime
+        if: runner.os == 'Linux'
+        run: uv run --no-project python tools/research_install_nautilus.py
+      - name: Add locked side-runtime test dependencies
+        if: runner.os == 'Linux'
+        run: uv sync --project research/runtimes/nautilus --python 3.12 --frozen --no-dev --group test
+      - name: Real native fills and owned Linux process cleanup
+        if: runner.os == 'Linux'
+        run: |
+          PYTHONPATH=. research/runtimes/nautilus/.venv/bin/python -m pytest \
+            --confcutdir=test/research test/research/test_nautilus_portfolio.py \
+            test/research/test_nautilus_runtime.py test/research/test_analytics.py -q
+      - name: Core environment to real Nautilus side-runtime calculation
+        if: runner.os == 'Linux'
+        run: |
+          uv run --no-sync python - <<'PY'
+          import json
+          import sys
+          from importlib import metadata
+          from pathlib import Path
+
+          sys.path.insert(0, str(Path('test/research').resolve()))
+          from test_nautilus_portfolio import assert_reconciles, snapshot
+          from test_vectorbt_portfolio import DAYS, candle, strategy
+          from research.connectors.nautilus_runtime import evaluate
+
+          assert metadata.version('pyarrow') == '23.0.1'
+          prices = snapshot()
+          prices['bars']['AAA'][DAYS[1]] = candle(100, 112, 99, 108)
+          prices['bars']['AAA'][DAYS[2]] = candle(108, 109, 104, 105)
+          strategies = [strategy('a', target_pct=10), strategy('b', target_pct=30)]
+          for _ in range(2):
+              result = evaluate(strategies, prices, 1000)
+              assert_reconciles(result)
+              assert result['execution']['engine'] == 'nautilus'
+              assert result['execution']['engine_version'] == '1.231.0'
+              assert result['execution']['shared_cash'] is True
+              assert result['summary']['final_equity'] == 1075
+              assert result['summary']['closed_trades'] == 2
+          assert not list(Path('.agent-native/runtime-jobs').iterdir())
+          assert metadata.version('pyarrow') == '23.0.1'
+          print(json.dumps({'bridge': 'passed', 'summary': result['summary']}))
+          PY
+
+  package:
+    # Build and check the frontend/image while the independent engine matrix runs.
+    # The overall workflow must pass the engine, package and fresh-install jobs.
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    env:
+      PYTHON_DOTENV_DISABLED: '1'
+    steps:
+      - name: Record validation scope
+        env:
+          VALIDATION_SCOPE: ${{ github.event_name == 'workflow_dispatch' && inputs.validation_scope || 'full' }}
+        run: |
+          if [ "$VALIDATION_SCOPE" = package ]; then
+            echo '## Package-only verification' >> "$GITHUB_STEP_SUMMARY"
+            echo 'The engine matrix is deliberately skipped. This run qualifies packaging, frontend checks, Docker dependency probes and fresh installation of this artifact; it does not establish engine/runtime compatibility. Release notes must cite separate qualification of the unchanged runtime source.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '## Full runtime and package verification' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - run: uv sync --frozen --extra research
+      - working-directory: frontend
+        run: npm ci
+      - name: Check frontend dependency advisories
+        working-directory: frontend
+        run: npm audit --audit-level=high
+      - name: Portfolio and preserved scanner consumer workflows
+        working-directory: frontend
+        run: >-
+          npm run test:run --
+          src/components/auth/BrokerCredentialsSetup.test.tsx
+          src/pages/BrokerSelect.test.tsx
+          src/components/research/PortfolioJourney.test.tsx
+          src/api/researchTradeChart.test.ts
+          src/components/research/SavedTradeJourney.test.tsx
+          src/components/research/SavedTradeChart.test.tsx
+          src/components/research/savedTradeChartFeed.test.ts
+          src/components/research/savedTradeIndicators.test.ts
+          src/components/research/PortfolioTrials.test.tsx
+          src/components/research/studyTrialView.test.ts
+          src/components/research/studyPresentation.test.ts
+          src/components/research/useStudyWorkspaceView.test.tsx
+          src/components/research/PortfolioStudyWorkspace.test.tsx
+          src/components/research/AutomaticResearchFindings.test.tsx
+          src/components/research/StudyActivity.test.tsx
+          src/api/researchStudyActivity.test.ts
+          src/api/researchShortlist.test.ts
+          src/components/research/ResearchShortlist.test.tsx
+          src/components/research/SaveToShortlist.test.tsx
+          src/api/researchComparisons.test.ts
+          src/api/researchDecisions.test.ts
+          src/components/research/ResearchDecisions.test.tsx
+          src/components/research/ResearchComparisons.test.tsx
+          src/components/research/ShortlistCompare.test.tsx
+          src/components/research/MatchedBaseline.test.tsx
+          src/components/research/ResearchResultReview.test.tsx
+          src/components/research/ResearchChosenSetup.test.tsx
+          src/components/research/PortfolioSetupReview.test.tsx
+          src/components/research/portfolioTrialMetrics.test.ts
+          src/components/research/researchPresentation.test.ts
+          src/components/research/PortfolioAnalysis.test.tsx
+          src/components/research/BenchmarkComparison.test.tsx
+          src/components/research/MarketConditions.test.tsx
+          src/components/research/useConditionReplay.test.tsx
+          src/components/research/ConditionReplaySummary.test.tsx
+          src/api/portfolioResearch.test.ts
+          src/components/research/PortfolioContinuousReport.test.tsx
+          src/components/research/ReportInvestigation.test.tsx
+          src/components/research/useReportPreferences.test.tsx
+          src/components/research/ResearchPlot.test.tsx
+          src/components/research/usePortfolioAnalysis.test.tsx
+          src/components/research/ChartinkImport.test.tsx
+          src/components/research/ChartinkConnect.test.tsx
+          src/components/research/ResearchRunProgress.test.tsx
+          src/components/research/StudyContinuationDialog.test.tsx
+          src/components/research/StudyContinuation.test.tsx
+          src/components/research/ConnectorSettings.test.tsx
+          src/components/research/PreflightReview.test.tsx
+          src/components/layout/ResearchLayout.test.tsx
+          src/components/auth/AuthSync.test.tsx
+          src/components/strategy-builder/PayoffChart.test.tsx
+          src/components/chart/OpenAlgoChart.test.tsx
+          src/components/strategy-builder/StrategyChartShell.test.tsx
+          src/lib/chart/feeds/historifyFeed.test.ts
+          src/lib/trading/chartProfiles.test.ts
+          src/pages/HistorifyCharts.test.ts
+          src/lib/researchDraft.test.ts
+          src/hooks/useResearchExperiment.test.tsx
+          src/hooks/useResearchNavigation.test.tsx
+          src/pages/ResearchLibrary.test.tsx
+          src/pages/ScannerResearch.test.tsx
+      - run: uv run --no-sync python tools/research_release.py --output .agent-native/release/ci
+      - name: Check and package the Chartink browser connector
+        working-directory: extensions/chartink
+        run: |
+          npm ci
+          npm test
+          python -m unittest discover -s . -p test_package.py
+          python package.py
+      - name: Retain the installable source distribution and checksums
+        uses: actions/upload-artifact@v6
+        with:
+          name: openalgo-research-preview
+          path: |
+            .agent-native/release/ci/*.zip
+            .agent-native/release/ci/manifest.json
+            .agent-native/release/ci/SHA256SUMS
+            .agent-native/chartink-package/*.zip
+            .agent-native/chartink-package/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
+      - name: Build the actual distribution image
+        run: docker build --tag openalgo-research:ci .
+      - name: Verify installed image core dependencies without starting the app
+        run: docker run --rm --entrypoint python openalgo-research:ci tools/research_check.py
+      - name: Probe the image's separate native Nautilus runtime
+        run: >-
+          docker run --rm
+          --entrypoint /app/research/runtimes/nautilus/.venv/bin/python
+          openalgo-research:ci -I -c
+          "from importlib import metadata; from nautilus_trader.backtest.engine import BacktestEngine;
+          assert metadata.version('nautilus-trader') == '1.231.0';
+          assert metadata.version('numpy') == '2.4.4';
+          assert metadata.version('pandas') == '2.3.3';
+          assert metadata.version('pyarrow') == '25.0.1'"
+
+  fresh-install:
+    name: Fresh package installation (${{ matrix.os }})
+    # Exercise the exact artifact as soon as it exists; an engine failure still
+    # fails the overall release workflow without hiding installation diagnostics.
+    needs: package
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v6
+        with:
+          name: openalgo-research-preview
+          path: .installer-artifact
+      - name: Install the ZIP, calculate, reinstall and restart
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem -Path .installer-artifact -Recurse -Filter openalgo-research-*.zip | Select-Object -First 1
+          if (-not $archive) { throw 'The installable release ZIP is missing.' }
+          $directory = Join-Path $env:RUNNER_TEMP 'OpenAlgo Research Fresh Install'
+          python tools/research_install_smoke.py --archive $archive.FullName --directory $directory
+      - name: Retain the redacted installation receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: fresh-install-${{ matrix.os }}
+          path: ${{ runner.temp }}/OpenAlgo Research Fresh Install/tmp/install-smoke/receipt.json
+          if-no-files-found: warn
+          retention-days: 14
