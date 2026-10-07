@@ -78,3 +78,29 @@ replay and Data window behavior. TypeScript, scoped lint and production build
 pass. Browser inspection confirms EMA persists into replay and its reading changes
 on backwards stepping. This is controlled test data; it does not certify every
 broker or predict real strategy performance.
+
+## Local installation acceptance — October7
+
+The normal application is activated from committed source `43e9f365b135` with
+the existing account, configuration and all58 saved-run identities preserved.
+The installed source/dependency compatibility check passed160 checks. No runtime
+database or broker credential was copied into the development source or package.
+
+The exact preview.8 candidate ZIP, built from that committed source, passed a
+fresh Windows installation using its own downloaded Python3.12 runtime, new
+account and controlled Historify candles. Acceptance includes broker profile
+access before OAuth, daily archive reuse, real VectorBT calculation, three native
+Optuna trials, exact selected replay, reinstall/restart with identical saved
+exports, and release of owned ports and the instance lock. The ZIP SHA256 is
+`b9f4f51067ebea1bedfda83dd666d587d17eedaace42c2bccffb9168c0963b33`.
+The package's source compatibility check passed156 checks. Its manifest contains
+no uncommitted included source changes; omitted changes are generated host assets.
+
+This is local Windows acceptance, not a replacement for the public full runtime
+matrix or a fresh Linux acceptance of preview.8. Public preview.7 remains the
+published release. Live broker certification stays limited to its recorded cases.
+
+The next implementation order remains shared whole-period account curves and
+saved inspection, retained candidate return series/comparison, then wider
+diagnostics and a qualified read-only OpenScript bridge. Additional exit branches,
+engines and asset classes require their own numerical and recovery acceptance.

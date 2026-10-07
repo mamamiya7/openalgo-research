@@ -2,6 +2,8 @@
 
 **7 October implementation:** native Values with causal indicator-preserving replay, new bounded stock-and-market research, and source/package reconciliation. See [implementation contract](NATIVE_REFINEMENT_20261007.md). Public download remains preview.7; the new development version is preview.8.
 
+**Local activation and package acceptance:** the normal app preserves its account, configuration and58 saved runs;160 installed compatibility checks pass. The exact preview.8 ZIP also passes fresh Windows setup, native calculations, exact replay and reinstall/restart with identical saved exports. The full public runtime matrix and fresh preview.8 Linux acceptance remain separate gates. Qualified source is recorded on the local `codex/native-research-refinement` branch; original worktree changes are preserved.
+
 ## Planning checkpoint — 7 October 2026
 
 The [native product refinement plan](DELIVERY_PLAN.md#native-product-refinement-plan--7-october-2026) owns the development order. The implementation contract above records the completed increment; remaining phases retain their own acceptance gates. Neither a local implementation nor an installation receipt constitutes a public release. Older dated sections below remain historical evidence.
