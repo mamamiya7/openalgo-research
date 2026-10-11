@@ -14,8 +14,64 @@ from research import portfolio as contract
 from services import scanner_research_service as service
 
 
+def _same_wire_value(actual, expected):
+    """JSON has one number type; Python evidence keeps its canonical representation."""
+    from math import isfinite
+
+    if type(actual) in (int, float) and type(expected) in (int, float):
+        return actual == expected and isfinite(actual) and isfinite(expected)
+    if type(actual) is not type(expected):
+        return False
+    if isinstance(expected, dict):
+        return actual.keys() == expected.keys() and all(
+            _same_wire_value(actual[key], value) for key, value in expected.items()
+        )
+    if isinstance(expected, list):
+        return len(actual) == len(expected) and all(
+            _same_wire_value(a, b) for a, b in zip(actual, expected, strict=True)
+        )
+    return actual == expected
+
+
+def _canonical_condition_request(request):
+    """Admit an exact registered rule after a browser's numeric JSON round trip.
+
+    Restoring 60 to the registered 60.0 is a transport conversion, not a different
+    hypothesis. Global fingerprint and saved-recipe validation remain strict.
+    Unknown rules, booleans, extra fields and changed values are never repaired.
+    """
+    if not isinstance(request, dict):
+        return request
+    condition = request.get("entry_conditions")
+    from research.entry_conditions import STOCK_VERSIONS, stock_module
+
+    if (
+        not isinstance(condition, dict)
+        or set(condition) != {"version", "hypothesis"}
+        or condition.get("version") not in STOCK_VERSIONS
+    ):
+        return request
+    for expected in stock_module(condition["version"]).catalog():
+        if _same_wire_value(condition["hypothesis"], expected):
+            canonical = dict(request)
+            canonical["entry_conditions"] = {**condition, "hypothesis": expected}
+            rows = request.get("strategies")
+            if isinstance(rows, list):
+                canonical["strategies"] = []
+                for row in rows:
+                    if isinstance(row, dict) and "entry_condition" in row:
+                        if not _same_wire_value(
+                            row["entry_condition"], canonical["entry_conditions"]
+                        ):
+                            raise ValueError("The saved strategy entry condition changed")
+                        row = {**row, "entry_condition": deepcopy(canonical["entry_conditions"])}
+                    canonical["strategies"].append(row)
+            return canonical
+    return request
+
+
 def resolve_inputs(store, owner, request):
-    portfolio = contract.normalize(request)
+    portfolio = contract.normalize(_canonical_condition_request(request))
     versions = contract.execution_versions(portfolio)
     strategies, signals, input_rows = [], [], 0
     first, last = portfolio.get("date_from", ""), portfolio.get("date_to", "9999-12-31")

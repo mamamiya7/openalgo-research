@@ -235,7 +235,12 @@ def normalize_draft(store, owner, raw):
     if portfolio.get("entry_conditions") is not None:
         from research.entry_conditions import markers
         from research.entry_conditions import normalize as normalize_conditions
+        from services.research_portfolio import _canonical_condition_request
 
+        canonical = _canonical_condition_request(portfolio)
+        portfolio["entry_conditions"] = canonical["entry_conditions"]
+        if canonical is not portfolio:
+            portfolio["strategies"] = rows = canonical["strategies"]
         portfolio["entry_conditions"] = normalize_conditions(
             portfolio["entry_conditions"], rows, portfolio["engine"]
         )
