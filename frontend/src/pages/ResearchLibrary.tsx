@@ -14,6 +14,7 @@ import {
 import { ChartinkConnect } from '@/components/research/ChartinkConnect'
 import { ChartinkImport } from '@/components/research/ChartinkImport'
 import { ChartinkSource } from '@/components/research/ChartinkSource'
+import { ChosenEntryConditions } from '@/components/research/ChosenEntryConditions'
 import { addPortfolioSource, freshPortfolioDraft } from '@/components/research/PortfolioBuilder'
 import { ResearchChosenSetup } from '@/components/research/ResearchChosenSetup'
 import { ResearchComparisons } from '@/components/research/ResearchComparisons'
@@ -1449,6 +1450,12 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
                         </li>
                       ))}
                     </ul>
+                    <div className="mt-2">
+                      <ChosenEntryConditions
+                        conditions={version.draft.portfolio.entry_conditions}
+                        strategies={version.draft.portfolio.strategies}
+                      />
+                    </div>
                   </details>
                 </div>
                 <Button
