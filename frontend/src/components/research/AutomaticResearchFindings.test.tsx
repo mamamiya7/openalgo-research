@@ -53,9 +53,10 @@ describe('automatic research findings', () => {
     const data = findings()
     data.version = version
     render(<AutomaticResearchFindings findings={data} />)
-    expect(screen.getByText(label)).not.toBeVisible()
+    const details = screen.getByText('Research details').closest('details') as HTMLElement
+    expect(within(details).getByText(label)).not.toBeVisible()
     await userEvent.click(screen.getByText('Research details'))
-    expect(screen.getByText(label)).toBeVisible()
+    expect(within(details).getByText(label)).toBeVisible()
   })
 
   it('labels a sampled stability challenge without claiming all nearby settings were tested', async () => {
