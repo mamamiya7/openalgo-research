@@ -225,7 +225,7 @@ def build_study_analysis(experiment, *, parameters=None, progress=None):
         lambda: visual.plot_timeline(study),
         None
         if timed
-        else "This older study did not record trial start and finish times. New studies include them.",
+        else "This recorded study does not include original trial start and finish times.",
     )
     add(
         "intermediate",
