@@ -2,13 +2,23 @@
 
 ## Current default and decision flow — 11 October 2026
 
-A new, unconfigured setup selects `automatic-hypotheses-v6` on VectorBT when the user chooses Optimize. The user confirms original financial and execution assumptions, then clicks **Optimize automatically**. The app plans candle interval, missing native history windows, supported stock/market hypotheses, bounded exit ranges, trailing on/off states, search budget and chronological checks. Older recipes are available under Advanced research options; explicit saved scopes, custom ranges and chosen rules are never silently upgraded. Nautilus uses the existing stability-checked exit recipe; it does not gain unsupported stock conditions or trailing stops.
+A new, unconfigured setup selects `automatic-hypotheses-v7` on VectorBT when the user chooses Optimize. The user confirms original financial and execution assumptions, then clicks **Optimize automatically**. The app plans candle interval, missing native history windows, supported stock/market hypotheses, bounded exit ranges, trailing on/off states, admitted clock choices, search budget and chronological checks. Older recipes are available under Advanced research options; explicit saved scopes, custom ranges and chosen rules are never silently upgraded. Nautilus uses the existing stability-checked exit recipe; it does not gain unsupported stock conditions or trailing stops.
 
-The current v6 catalog contains 92 stock/market choices across 32 families, 128 proposals and at most 320 native calculations. Each family tests trailing off and positive enabled distances before refinement. A preflight decision receipt separates app-selected work, retained assumptions, unsearched branches and pending admission. It is a plan, not evidence that every market filter passed or that a global optimum exists. Missing benchmark observations remain unknown; infeasible later tests remain exploratory. Valid conclusions include keeping the original setup or insufficient evidence.
+V7 retains 92 stock/market choices across 32 families, 128 proposals and at most 320 native calculations, including bounded timing probes and refinement. Family screens test trailing off and positive enabled distances. A preflight decision receipt separates app-selected work, retained assumptions, unsearched branches and pending admission. It is a plan, not evidence that every market filter passed or that a global optimum exists. Missing benchmark observations remain unknown; infeasible later tests remain exploratory. Valid conclusions include keeping the original setup or insufficient evidence.
 
 The current intake contract is long NSE cash-equity signals. Optional explicit Exchange/TradingExchange and AssetClass/AssetType/InstrumentType columns are checked before registration. Unsupported declarations are rejected with the row and scope. Plain Chartink Date/Symbol CSVs keep the NSE convention. Timestamps determine required candle resolution, not desired intraday versus multiday trading intent; original clocks and horizon remain user assumptions.
 
-[Automatic trailing selection](AUTOMATIC_TRAILING_20261011.md) is now a separate versioned capability with conditional domains, identical cash/cost assumptions and frozen-evidence replay. Alternative entry/exit clocks, volume filters, account-risk optimisation and wider assets still require qualified admission. The new flow does not reinterpret saved results. Next admission: asset/timing capabilities with native data and numerical acceptance before another search recipe.
+[Automatic trailing selection](AUTOMATIC_TRAILING_20261011.md) and
+[automatic timing](AUTOMATIC_TIMING_20261011.md) are versioned capabilities with
+conditional domains, identical cash/cost assumptions and frozen-evidence replay.
+Actual minute-indicator discovery, volume filters, account-risk optimisation and
+wider assets still require qualified admission. The next
+[feature development sequence](DELIVERY_PLAN.md#feature-development-order-after-the-human-audit)
+starts with research mandate and complete development evidence, then rolling
+validation, qualified method expansion, portfolio intelligence and robust findings.
+The [mandate and development-evidence foundation](DEVELOPMENT_EVIDENCE_20261011.md)
+is implemented in development source. The later additions remain planned; they do
+not reinterpret saved results or silently increase current v7 limits.
 
 The dated sections below describe earlier milestones and defaults.
 

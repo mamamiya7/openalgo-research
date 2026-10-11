@@ -49,11 +49,15 @@ activation preserves all 60 runs and configuration and passes
 the reconciled development branch. Public preview.7 remains unchanged until the
 separate preview.8 publication step is performed.
 
-This plan closes the fourteen workflow steps inspected in the current desktop
-audit. The main journey is usable but requires users to learn research terminology,
-interpret technical failures and assemble the result-to-reuse path themselves.
-Refine the existing native application rather than add another research interface.
-This sequence precedes broader asset and authoring expansion in DELIVERY_PLAN.
+The original fourteen-step audit found a usable journey that required users to
+learn research terminology, interpret technical failures and assemble reuse
+themselves. This increment addressed those original issues within the qualified
+scope above. A fresh normal-app follow-up still found legacy result/setup guidance,
+generic names, ineligible-action and stopped-progress presentation friction.
+The [updated feature order](DELIVERY_PLAN.md#feature-development-order-after-the-human-audit)
+now prioritises substantive research foundations and method expansion before the
+final UX consolidation. Continue the existing native interface and preserve old
+evidence; the original audit paragraph is not a claim that all friction is resolved.
 
 ## Intended trader journey
 

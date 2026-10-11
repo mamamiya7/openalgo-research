@@ -366,6 +366,7 @@ export interface PortfolioProposal {
   datetime_complete?: string
 }
 export interface PortfolioResult {
+  development_evidence?: DevelopmentEvidenceMetadata
   entry_conditions?: EntryConditions
   automatic_stock_condition?: {
     hypothesis: StockEntryConditions['hypothesis'] | JointEntryConditions['hypothesis']
@@ -457,6 +458,14 @@ export interface PortfolioResult {
     study_analysis?: StudyAnalysis
     search_space?: { axes: Record<string, PortfolioRange>; proposal_budget?: number }
   }
+}
+export interface DevelopmentEvidenceMetadata {
+  version: string
+  status: 'collecting' | 'complete' | 'partial' | 'unavailable'
+  entries: Record<string, { status: 'retained' | 'unavailable' }>
+  reserved_final_excluded: boolean
+  marks: number
+  bytes: number
 }
 export interface AutomaticResearchFindings {
   comparison?: {

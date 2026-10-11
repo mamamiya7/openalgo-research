@@ -1,5 +1,6 @@
 import { Check, ChevronDown, FlaskConical } from 'lucide-react'
 import type {
+  DevelopmentEvidenceMetadata,
   AutomaticResearchFindings as Findings,
   PortfolioSettings,
 } from '@/api/portfolioResearch'
@@ -21,12 +22,32 @@ const periods = [
 export function AutomaticResearchFindings({
   findings,
   selectedSettings,
+  developmentEvidence,
 }: {
   findings: Findings
   selectedSettings?: PortfolioSettings[]
+  developmentEvidence?: DevelopmentEvidenceMetadata
 }) {
   const final = findings.final
   const selected = findings.checks.find((check) => check.config_id === findings.selected_config_id)
+  const retainedHistories = developmentEvidence
+    ? Object.values(developmentEvidence.entries).filter((entry) => entry.status === 'retained')
+        .length
+    : 0
+  const incompleteHistories =
+    developmentEvidence?.status === 'partial' ||
+    Object.values(developmentEvidence?.entries ?? {}).some(
+      (entry) => entry.status === 'unavailable'
+    )
+  const historySummary = !developmentEvidence
+    ? undefined
+    : developmentEvidence.status === 'unavailable'
+      ? 'Development account histories unavailable'
+      : retainedHistories > 0
+        ? `${retainedHistories.toLocaleString('en-IN')} development account ${retainedHistories === 1 ? 'history' : 'histories'} saved${developmentEvidence.status === 'collecting' ? ' · collection in progress' : incompleteHistories ? ' · some histories unavailable' : ''}`
+        : developmentEvidence.status === 'collecting'
+          ? 'Development account histories are being saved'
+          : 'Development account histories unavailable'
   const comparisons: Array<[string, Record<string, number | string | null>]> = final
     ? [
         ['Original settings', final.baseline_summary],
@@ -132,6 +153,12 @@ export function AutomaticResearchFindings({
         <div className="mt-4 space-y-4">
           <p className="font-medium">{researchRecipeLabel(findings.version)}</p>
           <p className="text-muted-foreground">{findings.selection_basis}</p>
+          {historySummary && (
+            <p className="text-muted-foreground">
+              {historySummary}
+              {developmentEvidence?.reserved_final_excluded ? ' · final check kept separate' : ''}
+            </p>
+          )}
           {findings.comparison?.status === 'available' && findings.comparison.chart && (
             <section aria-label="Matching final-period curves" className="space-y-2">
               <AnalysisFigure chart={findings.comparison.chart} deferred height={280} />

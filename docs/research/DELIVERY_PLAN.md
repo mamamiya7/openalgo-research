@@ -1,14 +1,239 @@
 # OpenAlgo Research — integrated delivery plan
 
-**Workflow priority — 11 October:** the current fourteen-step desktop audit leads
-to the [comprehensive workflow refinement plan](WORKFLOW_REFINEMENT_20261011.md).
-Recovery, verified selected reports, independent diagnostics, CSV-first entry,
-save/reuse and aligned comparison curves are implemented and under focused
-qualification. The refinement contract records their actual scope and remaining
-acceptance gates. Next: finish measured cached-context preparation improvements,
-qualify the complete journey and install the matching build, then reconcile the
-public package and complete its supported-platform matrix. This precedes broader
-asset and authoring expansion without changing the v7 search or old saved evidence.
+## Feature development order after the human audit
+
+**Updated 11 October 2026. Status: executing.** The first
+[mandate/evidence foundation](DEVELOPMENT_EVIDENCE_20261011.md) is implemented in
+development source; rolling validation and the later packages remain planned.
+This section owns the next
+implementation order. Build the substantive research features below before the
+final workflow polish. Existing contracts and dated acceptance receipts remain
+valid for their recorded versions; a planned capability is not installed or
+published merely because it appears here.
+
+The product should answer: **Which settings are strongest for these signals,
+within my trading assumptions, and what evidence supports using them?** It should
+also explain the conditions where they struggle and when the evidence is too weak
+to prefer anything. A user imports history, confirms essential intent and clicks
+Optimize; the application selects the applicable research programme.
+
+### What optimal means
+
+Define the objective, permitted settings, risk limits, economic assumptions and
+evaluation periods before searching. A fully enumerated finite domain can have a
+verified historical maximum for that objective. A sampled search reports its best
+tested feasible candidate and search coverage. Neither establishes a universal
+optimum across every method, unseen prices or future markets. More indicators and
+more trials can increase selection bias as well as computation.
+
+Use **strongest supported settings** as the main product promise. Preserve an
+unchanged reference and allow no supported improvement, insufficient evidence,
+infeasible risk constraints and unsupported inputs as useful outcomes. Do not
+label the least bad losing trial a trading recommendation.
+
+### Existing foundations to retain
+
+The installed development app is OpenAlgo 2.0.2.7. New unconfigured VectorBT
+optimisations select v7, with 92 registered stock/market choices across 32 families,
+conditional exits/trailing and admitted clock alternatives. Current bounds remain
+128 proposals and 320 native calculations. Older scopes retain their identities.
+
+Historify reuse and missing-only acquisition, causal feature availability,
+role-specific warmup, shared timing unions, purged chronological periods,
+account-wide evidence-use reservations, duplicate evaluation reuse, two development
+checks for up to three finalists, increased-cost and neighbour checks, exact
+reports, native charts, save/reuse and independent diagnostics already exist.
+Extend these seams rather than replace them or build another backtesting engine.
+The installed performance changes and composed Windows/Linux qualification are
+complete for their recorded scope. Public preview.7 remains the distributed ZIP;
+preview.8 publication is separate.
+
+The fresh human audit confirmed the normal account/library, setup, saved custom
+study, trial dialog, report, chart/replay and save dialog. Controlled data additionally
+covered CSV preview, automatic findings, chosen-setup reuse and insufficient-history
+admission. It did not complete a new real-broker optimisation or resume the stopped
+normal run. The wider product is still unfinished.
+
+### Substantive implementation packages
+
+| Order | Feature and new work | Reuse and dependency | Acceptance before moving on |
+|---|---|---|---|
+| 1 | Research mandate and complete development evidence. Freeze objective, user risk envelope, method admission, search/validation budget and comparison identity. Store bounded immutable account marks/returns for each actually evaluated development candidate, fold and cost scenario. Extend existing period-use records with fit/selection/validation/exposed roles. | Extend the pure preflight compiler, recipe registry, evaluation basis, checkpoints and existing account-wide reservations. Full selected-report curves alone are not a complete search matrix. | Identical inputs produce the same plan; every evaluated shard has candidate/fold/settings/cohort/currency/cash/missingness identity. Pause/retry/replay preserve hashes. Renaming/reimporting cannot reset exposed periods. Storage, memory and recovery are bounded. Old saved reports remain unchanged. |
+| 2 | Rolling research and fair validation. Add a versioned rolling/expanding chronological protocol; evaluate an admitted comparable candidate cohort across development folds. Fit transforms, thresholds and any learned model only on each training prefix. Define account reset/carry and fold aggregation. Reserve a final confirmation period. | Retain the existing fixed split as a compatible option. Extend full-horizon purging and shared-cash execution from package 1. A strategy with many trades on a few dates does not supply many independent observations. | Future prices or final-period outcomes cannot change earlier gates, fits or selection. Sparse dates and long holds have explicit admission outcomes. Carry policies, fold costs and baselines reproduce against fixed fixtures. Final confirmation cannot rerank candidates. |
+| 3 | Method admission and broader signal research. Generalise registered families into typed method specifications, then admit the method waves below. Search useful parameter domains and low-complexity combinations instead of an unrestricted Cartesian product. | Extend existing stock/market features and conditional Optuna search, using the evidence and validation from packages 1–2. New methods need new recipe/catalog identities. | Each advertised method has formula, causal availability, requirements, ranges, supported engine/profile and tests. Every registered method receives applicable, redundant, insufficient-data, unsupported or budget-deferred status. Missing inputs never become passing conditions. No trial performs its own acquisition. |
+| 4 | Portfolio and execution intelligence. Add constrained allocation, per-trade sizing, exposure/concentration limits, overlapping-signal priority and turnover/capacity assessment. Keep a fixed-risk comparison beside any changed-risk candidate. | Requires packages 1–3 and qualified volume/execution data for capacity claims. Extend existing portfolio accounting; do not optimise capital, fees or missing-price conventions to manufacture improvement. | All candidate accounts obey user limits and the declared fill policy. Cash competition, rounding, overlapping trades and costs reconcile. Improved P&L from greater exposure is identified separately from improved signal quality. Unsupported sizing/fill semantics stop admission. |
+| 5 | Robust recommendation and uncertainty. Select feasible settings from development results using stable performance, neighbour behaviour, support, simplicity and cost sensitivity. Present a small set of return/risk/activity trade-offs. Add statistical diagnostics only when their inputs and assumptions qualify. | Uses packages 1–4; builds on existing finalist checks and findings. Optuna remains the search tool; Research owns the frozen selection policy and explanation. | Deterministic development-only selection, declared tie-breaks and baseline fallback. No-edge, correlated-symbol, sparse-history and shifting-market suites measure false discoveries and selection stability across seeds. Statistical labels have definitions and qualified inputs, not confidence inferred from trial/trade count. |
+| 6 | Regime suitability and adaptive research. Report where chosen rules worked or failed under separate trend, volatility and liquidity dimensions. First validate simple causal conditions; admit learned regimes only if they add development evidence. Test a frozen conditional strategy policy against a fixed strategy. | Extend existing regime attribution and complete account replay after packages 2–5. A conditional policy must be simulated with shared cash and costs, not assembled from the best completed trades in each regime. | Labels available before entry; thresholds fit inside training folds; sample support and change costs retained. Untouched later evidence assesses the frozen policy. Absent historical VIX, credit/rates or options streams are unavailable, not inferred from stock candles. |
+| 7 | Native rule sources, engine breadth and new asset profiles. Add selected-condition OpenScript preview/parity; later admit a complete rule source with a historical universe and non-trigger opportunities. Qualify one additional asset/venue/engine combination at a time. | Reuse exact chosen settings and data contracts from packages 1–6. Keep Nautilus optional and independently qualified. The [asset profiles](ASSET_PROFILES.md) govern historical metadata/accounting needs. | Python/OpenScript numerical and availability parity; exported studies clearly distinguish original scanner logic from added filters. Shorts/derivatives require historical lifecycle, borrow/margin/expiry/roll evidence and accounting. A library's capability is not automatically an adapter capability. |
+| 8 | Complete the simple consumer journey. Apply the audit fixes below across the now-stable feature contracts, followed by native desktop, keyboard, narrow-layout and accessibility checks. | Each earlier package includes the minimal native UI needed to use it. This final pass consolidates navigation and presentation; it does not postpone actionable admission or truthful findings. | A fresh user completes import → automatic run → understood conclusion → inspected report → named save → reuse without understanding engine names or technical diagnostic messages. Returning users retain context and recover without duplicate work. |
+
+**Execution sequence:** 1 → 2 → 3 → 4 → 5 → 6 → admitted slices of 7 → 8.
+Implement a complete usable slice at each step. Basic selection safeguards from
+package 2 apply before expanded searches in package 3; package 5 adds the richer
+recommendation and uncertainty controller. Small dependencies such as volume
+validity may run alongside evidence work, but wider method search does not ship
+ahead of its validation foundation.
+
+### Method waves inside package 3
+
+| Wave | Features to admit | Essential data and qualification |
+|---|---|---|
+| Existing price families expanded | Wider qualified EMA/trend, momentum, RSI, Bollinger, ATR and benchmark-relative-strength domains; restrained combinations; time stops and ATR-scaled protective exits | Retain original formulas, availability and versioned domains. Learn any distribution-based bounds using development training data only. Dynamic exits need native engine callbacks and same-bar policy tests. |
+| Volume and liquidity | Relative volume, turnover/participation and volume-confirmed conditions; price/volume divergence only with a defined formula | Validate volume units, zeros, gaps and availability. Volume indicates participation assumptions; OHLCV alone cannot prove executable spread, market depth or impact. Corporate-action basis must be compatible. |
+| Intraday and multiple timeframes | Causal minute indicators, session/opening-range conditions, confirmed higher-timeframe context, applicable entry/exit alternatives | Minute execution using prior daily features already exists. Actual minute indicator discovery is new. Freeze the union once; a higher-timeframe bar is unavailable until closed. Date-only CSVs do not automatically force minute downloads. |
+| Controlled statistical families | Return persistence/efficiency and mean-reversion features, limited cross-symbol/benchmark relationships and simple fit-in-training models | Specify estimator, sample requirement and missingness. Hurst, correlations or stationarity diagnostics are admitted on demonstrated fit, not because a metric name appears in a catalogue. Complete universe/pair opportunities are required for claims beyond captured signals. |
+| Later expansion after package 6 | Regime-conditioned rules and parameter policies, then narrowly justified learned models | This wave does not block the initial package 3. It depends on package 6 and training-only fitting. Compare against simpler fixed rules. A learned classifier or model adds another selection attempt and budget obligation. |
+
+The method registry is extensible, not a promise to run every known quant method
+on every CSV. Every *registered relevant* method is considered automatically.
+One representative of a redundant family may be tested before refinement. The
+receipt records considered, simulated, excluded and deferred families separately;
+the interface summarises this and allows details on demand.
+
+### New contracts and implementation seams
+
+Extend the existing compiler into a versioned research mandate containing the
+source fingerprint, economic assumptions, objective/constraints, data requirements,
+admission decisions, fold roles, proposed work and stopping rules. Starting capital,
+cost basis and fill conventions stay fixed by default. User intent such as closing
+within the day is not inferred merely from a timestamp. A sensible visible default
+can be used, but cannot be silently reinterpreted during optimisation.
+
+Ask only for economic intent that data cannot settle: starting cash, allowed
+holding horizon and optional risk limits. Offer an explicit balanced default
+objective; the app chooses the applicable methods, parameters, interval, data
+windows, benchmark and validation protocol. A historical drawdown acceptance
+threshold is not a promise to cap future drawdown or an activated live stop.
+
+Introduce a durable development-evidence store referenced from the existing job
+checkpoint. Each shard retains actual timestamped account marks/returns, observation
+masks, candidate and input identity, fold role, cost scenario and cash/exposure basis.
+Do not embed unbounded curves in trial JSON or substitute plot samples for statistical
+inputs. Storage bounds are compiled before starting; if complete evidence will not
+fit, admit a smaller programme or mark the diagnostic unavailable. A partial or
+winner-only matrix cannot claim complete search evidence. Preserve actual closed
+market gaps; never fill absent observations to make matrix shapes match.
+
+Use `services/research_automatic_catalog.py`, `research/automatic_protocol.py`,
+`research/automatic_hypotheses.py`, `research/stock_features.py`,
+`services/research_stock_market_context.py` and
+`services/research_automatic_periods.py` as the main extension seams. Share identities
+through `research/evaluation_basis.py` and `research/report_contract.py`; extend the
+existing worker/API/report components rather than add a second server or website.
+Names above identify extension points, not a demand to implement every new feature
+inside one large module. Introduce focused pure modules behind those boundaries.
+
+OpenAlgo continues to own account/broker access, History/Historify, calendar and
+native charts. VectorBT owns its supported simulations; Nautilus owns its separately
+qualified event simulations; Optuna owns proposals and study analysis. Reuse suitable
+qualified library implementations through adapters. The intelligence layer owns
+admission, chronology, evidence, constrained selection and explanation. Optional
+language-generated explanations may describe receipts, but cannot invent methods,
+fills, probabilities or recommendations.
+
+### Search policy and what the user receives
+
+Keep the current v7 limits unchanged. Compile new versions with explicit total
+limits for acquisition, feature memory, proposals, native calculations, validation,
+statistical analysis, storage and wall time. Reserve final verification capacity
+before exploring. More families must share a measured budget; expansion cannot
+silently consume all validation calls. Reject impossible domains before simulation,
+reuse duplicate identities and stop at the actual bound. Early elimination uses
+development evidence only and must demonstrate that its approximations do not
+discard known winners unfairly. Search more deeply only through an explicit new
+run/continuation that preserves exposed-period history.
+
+Use few competing objectives. User risk limits are constraints; return, drawdown,
+turnover and robustness are recorded dimensions. An optional small Pareto set shows
+alternatives where improving one dimension sacrifices another, with a predeclared
+default selection. Optuna provides constrained and multi-objective search, but the
+application must enforce hard feasibility and test the chosen policy against the
+pinned version. [Optuna multi-objective documentation](https://optuna.readthedocs.io/en/stable/tutorial/20_recipes/002_multi_objective.html)
+
+Findings must contain the unchanged comparison, strongest feasible tested settings,
+development and later evidence, important trade-offs, conditions of strength/weakness,
+cost sensitivity, coverage and search scope. Explain what changed with paired
+ablations where admitted; parameter importance is not proof of causation. The main
+screen gives one conclusion and next action; full trials, statistics and assumptions
+stay available to a professional trader without becoming the default reading task.
+
+Positive-only Chartink CSVs supply observed triggers, not all non-trigger dates,
+historical universe membership or the scanner's full formula. Optimisation can
+improve management and add conditions to these captured opportunities. Discovering
+or reproducing the original scanner requires package 7's complete source contract.
+Repainting or revised historical captures retain that limitation in their evidence.
+
+### Statistical diagnostics and their prerequisites
+
+Add paired block resampling of comparable development returns, sensitivity to dates
+and symbols, and execution/cost perturbations first. Blocks preserve declared temporal
+and cross-symbol dependence; independently shuffling closed trades does not reproduce
+a shared-cash account. Resampled curves are diagnostic estimates, not new executable
+trade histories. Re-run actual simulation when the perturbation changes execution.
+
+Probabilistic/deflated Sharpe, minimum track-record assessments and probability of
+backtest overfitting are later admitted diagnostics. They require adequate observations,
+search-history assumptions and compatible candidate evidence. A complete matrix is
+necessary for some analyses, but not sufficient to validate adaptive selection or
+independent-trial estimates. Diagnostic-specific cohorts/protocols and calibrated
+fixtures are required. Never apply a paper's formula to a winners-only matrix or
+display an unsupported certainty percentage. These methods address selection bias;
+they do not prove optimal future performance.
+[Deflated Sharpe paper](https://www.davidhbailey.com/dhbpapers/deflated-sharpe.pdf),
+[Probability of backtest overfitting paper](https://www.davidhbailey.com/dhbpapers/backtest-prob.pdf).
+
+### Audit priorities after the feature foundations
+
+1. Connect readiness to the primary action. An ineligible run has one nearby reason
+   and useful remedy; clicking must not repeat an already-known alert. If broker or
+   data readiness changes, recheck without inventing a successful plan.
+2. Lead every result with its recorded outcome and validation scope. Older custom
+   studies can explain ranking, losses and absence of later evidence without claiming
+   retroactive validation. Label manual Keep/Reject/Revisit as a personal decision.
+3. Infer useful setup names from scanner and selected rules; make them editable.
+   When only historical versions exist, explain how to save a chosen tested setup.
+   Keep exact evidence and version history accessible without presenting it first.
+4. Show stopped/paused progress as stopped/paused, with recovery visible. Remove
+   daily-chart coordinate times from the primary session-date reading. Make report
+   actions hierarchical: inspect, save, reuse; put secondary operations in context.
+5. Complete fresh and returning journeys, keyboard and focus, narrow/native navigation,
+   actual zoom/reduced-motion and contrast checks. Include invalid CSV, unavailable
+   broker history, interrupted work, no-edge findings and legacy records. Animation
+   reflects actual work and never claims a fabricated percentage or running state.
+
+### First coding increment and release gates
+
+Start package 1 with a schema and pure contract for development evidence, then
+connect one unchanged-reference and one candidate evaluation to durable shards.
+Exercise interruption, replay, budget exhaustion and hash preservation. Extend to
+every evaluated development window before admitting package 2's rolling protocol.
+This is the next coding increment; adding another large indicator menu is not.
+
+Each subsequent feature slice needs numerical reference cases, causal prefix tests,
+known no-edge/known-edge fixtures, relevant resource audits, measured runtime and a
+complete native journey. Compatibility receipts identify exact host, adapter,
+library, recipe and schema versions. The official VectorBT account/returns APIs and
+Nautilus backtest contracts inform adapters; differences in engine fill policy must
+be explained rather than choosing whichever engine reports the best P&L.
+[VectorBT portfolio API](https://vectorbt.dev/api/portfolio/base/),
+[Nautilus backtesting](https://nautilustrader.io/docs/latest/concepts/backtesting/).
+
+Maintain install/update documentation and affected checks throughout. Public releases
+can ship complete qualified slices; they need not wait for every future method or
+asset. Package 8 consolidates the first completed feature loop and selected package
+7 slices; it does not wait for an unbounded catalogue or all asset classes.
+Installation/runtime/schema changes require the corresponding Windows/Linux,
+populated-update, recovery and rollback checks. Documentation-only edits do not
+trigger a full installer rerun. Source, installed build, packaged archive and public
+release remain separate states in STATUS. Chrome Web Store publication follows its
+existing privacy/publisher plan. Later shadow monitoring is a separately admitted
+feature; live resizing and kill-switch trading are not activated by research saving.
+
+## Recorded implementation checkpoints
+
+The dated material below explains prior implementation and retained acceptance.
+The feature order above supersedes older descriptions of what to build next;
+[STATUS.md](STATUS.md) owns actual completion and publication state.
 
 **11 October checkpoint:** the native host is reconciled to OpenAlgo 2.0.2.7 (`12e111465`), with unchanged charts 2.6.0/OpenScript 0.8.1 and numerical engine pins. New optimisation entry chooses the broad recipe automatically, keeping older scope selection advanced. V6 now adds [versioned trailing activation](AUTOMATIC_TRAILING_20261011.md) without increasing the128-proposal/320-calculation bound or changing v5 replay. Preflight records automatic/fixed/unsupported/pending decisions, and explicit unsupported CSV exchanges/assets are rejected before acquisition. Remaining research order: qualified asset/timing admission, comparison curves and native authoring parity. Historical October7 tables below remain dated evidence; [STATUS.md](STATUS.md) owns current activation/publication status.
 
@@ -25,7 +250,7 @@ and compatible aligned candidate comparison curves are implemented in the curren
 workflow increment. Native authoring parity remains a later dependency.
 
 
-**Observed report-preparation bottleneck — 11 October:** a real broad browser study completed all153 native calls and128 proposals, then high-cardinality Optuna fANOVA blocked optional plot preparation. The immediate fix admits fANOVA only through the categorical bound and exposes a separate chart-preparation stage. Next performance work should publish immutable financial findings before optional diagnostics, then give diagnostics their own bounded status, retry and cancellation, preserving frozen source and method provenance. This is planned work, not current background execution.
+**Observed report-preparation bottleneck — 11 October:** a real broad browser study completed all153 native calls and128 proposals, then high-cardinality Optuna fANOVA blocked optional plot preparation. The implemented workflow increment publishes immutable financial findings before optional bounded diagnostics, which now have independent status, retry and cancellation. Qualification and remaining broader scope are recorded in STATUS; optional plots do not establish research reliability.
 
 **Minute-workload follow-up:** profile native VectorBT callbacks and worker
 cancellation/fence reads. Current callbacks retain live lease checks; any future
@@ -37,9 +262,10 @@ semantics, using identical frozen evidence and measured native runs.
 
 ## Native product refinement plan — 7 October 2026
 
-**Status: executing.** This section owns the next integrated development order,
-refining the older dated sequences below without discarding their M/R contracts
-or acceptance receipts. It is a plan, not a claim that the work has shipped.
+**Historical refinement sequence.** The feature order at the top now owns the
+next development packages. This section retains the October7 design and its
+M/R contracts and acceptance references; dated unresolved items are not a current
+backlog unless corroborated by STATUS and the new feature sequence.
 The separate-installation idea remains parked: deliver one native OpenAlgo
 Research distribution with the ordinary account, broker, Historify and interface.
 

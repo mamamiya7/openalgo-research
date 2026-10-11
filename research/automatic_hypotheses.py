@@ -265,6 +265,7 @@ def run(
     boundary=None,
     admit_final=None,
     defer_study_analysis=False,
+    retain_evaluation=None,
 ):
     """Search jointly, freeze a selection, then assess it without reranking."""
     import optuna
@@ -506,6 +507,23 @@ def run(
             }
         )
 
+    def retain_development(report, settings, hypothesis, period, stress=False):
+        if retain_evaluation is None or period == "final":
+            return None
+        snapshot = window(period)["snapshot"]
+        return retain_evaluation(
+            report,
+            evaluation_id=key_for(settings, hypothesis, period, stress),
+            search_identity=binding,
+            settings=_settings(report["strategies"]),
+            hypothesis=hypothesis,
+            period=period,
+            stress=stress,
+            expected_timeline=snapshot[
+                "timeline" if snapshot["provenance"]["interval"] == "1m" else "sessions"
+            ],
+        )
+
     def measured(settings, hypothesis, period, stress=False, *, report_slot=None):
         key = key_for(settings, hypothesis, period, stress)
         if key not in state["evaluations"]:
@@ -517,10 +535,20 @@ def run(
                 "automatic_stock_condition": deepcopy(report["automatic_stock_condition"]),
                 "evaluation_basis": deepcopy(report["evaluation_basis"]),
             }
+            if retain_evaluation is not None and period != "final":
+                state["evaluations"][key]["development_evidence"] = retain_development(
+                    report, settings, hypothesis, period, stress
+                )
             if report_slot:
                 state[report_slot] = report
             persist()
-        return state["evaluations"][key]
+        # Persistence metadata is separate from the numerical candidate/check
+        # contract, including the exact selected report and historical rows.
+        return {
+            name: value
+            for name, value in state["evaluations"][key].items()
+            if name != "development_evidence"
+        }
 
     baseline_search = measured(baseline, none, "search")
     study = optuna.create_study(
@@ -819,6 +847,9 @@ def run(
     selected = state["selection"]
     if state["selected_report"] is None:
         report = simulate(selected["strategies"], selected["hypothesis"], "search")
+        # The selected report is replayed for its full ledger. Its history must
+        # match the already-recorded evaluation; it is not a new search trial.
+        retain_development(report, selected["strategies"], selected["hypothesis"], "search")
         if report["summary"] != selected["summary"]:
             raise ValueError(
                 "The selected stock and exit settings did not reproduce their search result"

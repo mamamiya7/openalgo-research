@@ -286,7 +286,8 @@ def _save_artifact(store, value):
     return _write_artifact_bytes(store, digest, manifest)
 
 
-def _artifact_content(store, digest):
+def _artifact_content(store, digest, *, max_bytes=None):
+    limit = MAX_ARTIFACT_BYTES if max_bytes is None else max_bytes
     if not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest):
         raise ValueError("Invalid evidence identity")
     path = store.root / "artifacts" / f"{digest}.json"
@@ -297,7 +298,45 @@ def _artifact_content(store, digest):
     try:
         opener = gzip.open if path.suffix == ".gz" else open
         with opener(path, "rb") as stream:
-            raw = stream.read(MAX_ARTIFACT_BYTES + 1)
+            if max_bytes is None:
+                raw = stream.read(MAX_ARTIFACT_BYTES + 1)
+            else:
+                # Our chunk writer puts the three scalar envelope fields before
+                # the tree. Inspect only this bounded preamble before allocating
+                # a manifest, whose wrappers can exceed its logical JSON size.
+                overhead = 256 + 96 * min(MAX_ARTIFACT_NODES, limit)
+                prefix_size = min(2048, limit + overhead + 1)
+                prefix = stream.read(prefix_size)
+                header = prefix.partition(b'"tree"')[0]
+                declared = re.search(rb'"decoded_bytes"\s*:\s*([0-9]+)\s*[,}]', header)
+                manifest_header = (
+                    header.lstrip().startswith(b"{")
+                    and re.search(rb'"format"\s*:\s*"research-chunks-v1"', header)
+                    and re.search(rb'"logical_sha256"\s*:\s*"' + digest.encode() + rb'"', header)
+                    and declared is not None
+                )
+                if manifest_header:
+                    if not 1 <= int(declared[1]) <= limit:
+                        raise ValueError("Research chunks exceed the decoded size limit")
+                    physical_limit = min(MAX_ARTIFACT_BYTES, limit + overhead)
+                else:
+                    physical_limit = limit
+                if len(prefix) > physical_limit:
+                    raise ValueError("Research chunks exceed the decoded size limit")
+                # Regular local/gzip reads return short only at EOF. Avoid a
+                # limit-sized allocation for already complete small evidence.
+                if len(prefix) < prefix_size:
+                    raw = prefix
+                else:
+                    buffered = bytearray(prefix)
+                    while len(buffered) <= physical_limit:
+                        part = stream.read(min(64 * 1024, physical_limit + 1 - len(buffered)))
+                        if not part:
+                            break
+                        buffered.extend(part)
+                    raw = bytes(buffered)
+                if len(raw) > physical_limit:
+                    raise ValueError("Research chunks exceed the decoded size limit")
     except (OSError, EOFError) as exc:
         raise ValueError("Saved evidence is missing or damaged") from exc
     if len(raw) > MAX_ARTIFACT_BYTES:
@@ -307,6 +346,8 @@ def _artifact_content(store, digest):
     except (ValueError, UnicodeError) as exc:
         raise ValueError("Saved evidence integrity check failed") from exc
     if hashlib.sha256(raw).hexdigest() == digest:
+        if len(raw) > limit:
+            raise ValueError("Research chunks exceed the decoded size limit")
         return value, None, len(raw)
     if (
         not isinstance(value, dict)
@@ -314,7 +355,7 @@ def _artifact_content(store, digest):
         or value["format"] != CHUNK_FORMAT
         or value["logical_sha256"] != digest
         or type(value["decoded_bytes"]) is not int
-        or not 1 <= value["decoded_bytes"] <= MAX_ARTIFACT_BYTES
+        or not 1 <= value["decoded_bytes"] <= limit
     ):
         raise ValueError("Saved evidence integrity check failed")
     return None, value, len(raw)
@@ -345,8 +386,20 @@ def artifact_dependencies(store, digest):
     return found
 
 
-def read_artifact(store, digest):
-    remaining = MAX_ARTIFACT_BYTES + 4 * MAX_ARTIFACT_NODES
+def read_artifact(store, digest, *, max_bytes=None):
+    """Read exact evidence, optionally admitting a smaller logical JSON payload.
+
+    A caller limit also bounds decompression and cumulative chunk expansion.
+    Bounded mode admits native manifest metadata within a 2 KiB preamble; the
+    default continues accepting the historical reader's full manifest layout.
+    """
+    if max_bytes is not None and (
+        type(max_bytes) is not int or not 1 <= max_bytes <= MAX_ARTIFACT_BYTES
+    ):
+        raise ValueError("Artifact byte limit must be a positive integer within the research limit")
+    limit = MAX_ARTIFACT_BYTES if max_bytes is None else max_bytes
+    node_allowance = MAX_ARTIFACT_NODES if max_bytes is None else min(MAX_ARTIFACT_NODES, limit)
+    remaining = limit + 4 * node_allowance
     nodes = 0
     active = set()
 
@@ -358,14 +411,18 @@ def read_artifact(store, digest):
             raise ValueError("Cyclic or overly nested research chunks")
         active.add(identifier)
         try:
-            value, manifest, size = _artifact_content(store, identifier)
+            if max_bytes is not None and remaining <= 0:
+                raise ValueError("Research chunks exceed the decoded size limit")
+            value, manifest, size = _artifact_content(
+                store, identifier, max_bytes=None if max_bytes is None else min(limit, remaining)
+            )
             if manifest is None:
                 remaining -= size
                 if remaining < 0:
                     raise ValueError("Research chunks exceed the decoded size limit")
                 return value
             if depth == 0:
-                remaining = min(remaining, manifest["decoded_bytes"] + 4 * MAX_ARTIFACT_NODES)
+                remaining = min(remaining, manifest["decoded_bytes"] + 4 * node_allowance)
 
             def expand(item, level):
                 nonlocal nodes, remaining
@@ -409,7 +466,8 @@ def read_artifact(store, digest):
             value = expand(manifest["tree"], depth + 1)
             raw = encoded(value)
             if (
-                len(raw) != manifest["decoded_bytes"]
+                len(raw) > limit
+                or len(raw) != manifest["decoded_bytes"]
                 or hashlib.sha256(raw).hexdigest() != identifier
             ):
                 raise ValueError("Saved evidence integrity check failed")

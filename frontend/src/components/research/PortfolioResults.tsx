@@ -515,6 +515,7 @@ function PortfolioReport({
         <AutomaticResearchFindings
           findings={result.automatic_research}
           selectedSettings={result.experiment?.selected_strategies}
+          developmentEvidence={result.development_evidence}
         />
       )}
       {!conditionRestricted &&

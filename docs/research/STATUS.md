@@ -1,5 +1,34 @@
 # OpenAlgo Research status
 
+## Research evidence foundation — 11 October 2026 development source
+
+The first [feature foundation](DEVELOPMENT_EVIDENCE_20261011.md) is implemented:
+new VectorBT automatic hypothesis runs freeze their mandate before scoring and
+retain bounded immutable full development account histories. Resume verifies their
+source, settings, costs, scored evaluation and causal condition; backup/pruning
+preserve the references. Existing Research details adds a compact saved-history
+count and honest partial/unavailable states. Legacy results and checkpoints retain
+their original numerical contract. This source increment is not installed in the
+normal app or published; the active v7 numerical recipe is unchanged.
+
+## Remaining research features after the human audit
+
+The [updated feature implementation order](DELIVERY_PLAN.md#feature-development-order-after-the-human-audit)
+starts with the implemented frozen mandate and bounded development evidence,
+then planned rolling validation, qualified method expansion, constrained portfolio research,
+robust selection and regime suitability. Native rule-source and wider asset admission
+follow; the audit's workflow refinements are the final consolidation pass. Existing
+causal preparation, period-use reservations, v7 timing and engine adapters are reused.
+The remaining packages are planned additions, not a new installed recipe or public release.
+
+The fresh normal-app audit inspected the library, setup, saved custom study and
+report, trials/settings, trade chart/replay and save dialog. Controlled evidence
+covered CSV preview, automatic findings, chosen-setup reuse and a rejected short
+history. Observed remaining friction includes an enabled ineligible run action,
+legacy result/setup guidance, generic saved names and stopped-progress styling.
+No new normal broker acquisition, completed optimisation, resume or saved decision
+was performed in that audit. The qualification below retains its recorded scope.
+
 ## Workflow refinement — 11 October 2026
 
 The current increment implements the [comprehensive workflow plan](WORKFLOW_REFINEMENT_20261011.md):

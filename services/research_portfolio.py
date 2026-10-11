@@ -364,7 +364,10 @@ def replay_inputs(store, owner, job_id, *, trial_id=None, period="selection"):
                 {
                     "study_job_id": job.id,
                     "trial_number": selected_row["trial_number"],
-                    "is_objective_winner": study.get("objective_winner_id", study.get("recommendation_id")) == config_id,
+                    "is_objective_winner": study.get(
+                        "objective_winner_id", study.get("recommendation_id")
+                    )
+                    == config_id,
                 }
                 if selected_row is not None
                 else {
@@ -817,6 +820,11 @@ def run(
                 "phase": "calculation",
                 "inputs_artifact": inputs_id,
                 "calculation": (saved or {}).get("calculation"),
+                **{
+                    key: saved[key]
+                    for key in ("development_evidence", "research_mandate")
+                    if saved and key in saved
+                },
             },
             {"completed": 60, "total": 100, "stage": "optimization"},
         )
@@ -847,6 +855,11 @@ def run(
                 "phase": "calculation",
                 "inputs_artifact": inputs_id,
                 "calculation": (saved or {}).get("calculation"),
+                **{
+                    key: saved[key]
+                    for key in ("development_evidence", "research_mandate")
+                    if saved and key in saved
+                },
             },
             {"completed": 60, "total": 100, "stage": "backtest"},
         )
@@ -871,12 +884,56 @@ def run(
         from research.connectors.vectorbt_portfolio import evaluate
 
     if portfolio.get("automatic_research"):
+        development_writer = None
+        research_mandate = None
         if portfolio["automatic_research"]["version"] in HYPOTHESIS_VERSIONS:
-            from research.automatic_hypotheses import run as automatic_run
+            from research.automatic_hypotheses import (
+                JOINT_VERSION,
+                TIMING_VERSION,
+                TRAILING_VERSION,
+                policy_for_version,
+            )
+            from research.automatic_hypotheses import (
+                run as automatic_run,
+            )
+            from research.report_contract import fingerprint
+            from research.research_mandate import build as build_mandate
+            from research.research_mandate import verify as verify_mandate
             from services.research_automatic_periods import claim
+            from services.research_development_evidence import DevelopmentEvidenceWriter
 
             if not job_id:
                 raise ValueError("Smart research needs its durable job identity")
+            # Legacy checkpoints did not retain every candidate's history.
+            # Do not rerun those candidates or retroactively call them complete.
+            saved_calculation = (saved or {}).get("calculation")
+            saved_development = (saved or {}).get("development_evidence")
+            if not saved_calculation or saved_development is not None:
+                research_mandate = (saved or {}).get("research_mandate")
+                if saved_calculation:
+                    verify_mandate(research_mandate, evidence=evidence, inputs_artifact=inputs_id)
+                else:
+                    research_mandate = build_mandate(evidence, inputs_artifact=inputs_id)
+                version = evidence["automatic_recipe"]["version"]
+                stock = evidence.get(
+                    "automatic_stock_market_context"
+                    if version in (JOINT_VERSION, TRAILING_VERSION, TIMING_VERSION)
+                    else "automatic_stock_features"
+                )
+                development_writer = DevelopmentEvidenceWriter(
+                    store,
+                    evidence,
+                    binding={
+                        "inputs_artifact": inputs_id,
+                        "search_identity": fingerprint(
+                            {"recipe": evidence["automatic_recipe"], "stock": stock}
+                        ),
+                    },
+                    max_evaluations=policy_for_version(version)["max_simulations"],
+                    saved=saved_development,
+                )
+                if saved_calculation:
+                    development_writer.reconcile(saved_calculation["evaluations"])
             if evidence["automatic_recipe"]["validation_mode"] != "exploratory_only":
                 claim(store, owner, inputs_id, evidence, job_id)
         elif portfolio["automatic_research"]["version"] == CONDITION_VERSION:
@@ -897,8 +954,18 @@ def run(
                 claim(store, owner, inputs_id, evidence, job_id)
 
         def persist_automatic(state, counts):
+            retained = {}
+            if development_writer is not None:
+                development_writer.reconcile(state["evaluations"])
+                retained["development_evidence"] = development_writer.snapshot()
+                retained["research_mandate"] = research_mandate
             checkpoint(
-                {"phase": "calculation", "inputs_artifact": inputs_id, "calculation": state},
+                {
+                    "phase": "calculation",
+                    "inputs_artifact": inputs_id,
+                    "calculation": state,
+                    **retained,
+                },
                 {
                     **counts,
                     "completed": 60 + 40 * counts["completed"] / max(1, counts["total"]),
@@ -918,7 +985,15 @@ def run(
             observe=observe,
             boundary=boundary,
             defer_study_analysis=defer_study_analysis,
+            **(
+                {"retain_evaluation": development_writer.retain}
+                if development_writer is not None
+                else {}
+            ),
         )
+        if development_writer is not None:
+            result["development_evidence"] = development_writer.snapshot(complete=True)
+            result["research_mandate"] = research_mandate
         return result, evidence
 
     calculation_evidence = evidence

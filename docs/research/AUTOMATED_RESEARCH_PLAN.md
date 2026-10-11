@@ -1,6 +1,23 @@
 # One-click strategy research
 
-## Benchmark-aware relative strength — 1 October 2026
+## Current implementation and next feature order
+
+The installed October11 development increment uses v7 for new unconfigured
+VectorBT optimisations: joint stock/market conditions, exits, conditional trailing
+and admitted timing choices. Native data preparation, causal features, chronological
+checks, evidence-use reservations, exact reports and save/reuse are implemented.
+Actual installation/publication scope is recorded in [STATUS.md](STATUS.md).
+
+The [updated implementation plan](DELIVERY_PLAN.md#feature-development-order-after-the-human-audit)
+prioritises complete candidate development evidence and stronger validation before
+expanding methods, portfolio risk and regime intelligence. The initial
+[mandate/evidence foundation](DEVELOPMENT_EVIDENCE_20261011.md) is now implemented
+in development source. It defines the useful
+answer as strongest supported settings under recorded assumptions, rather than
+every method or a universal future optimum. Below are dated milestones and proposed
+contracts; their old defaults and pending statements do not override current STATUS.
+
+## Historical benchmark-aware relative strength milestone on 1 October 2026
 
 Smart research now defaults to `automatic-hypotheses-v4`:23 registered stock
 conditions across eight families. It adds stock-versus-Nifty relative price-return

@@ -2,7 +2,10 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { axe } from 'jest-axe'
 import { describe, expect, it } from 'vitest'
-import type { AutomaticResearchFindings as Findings } from '@/api/portfolioResearch'
+import type {
+  DevelopmentEvidenceMetadata,
+  AutomaticResearchFindings as Findings,
+} from '@/api/portfolioResearch'
 import { researchDefaults } from '@/lib/researchDraft'
 import { AutomaticResearchFindings } from './AutomaticResearchFindings'
 
@@ -45,6 +48,101 @@ function findings(): Findings {
 }
 
 describe('automatic research findings', () => {
+  it('leaves legacy findings unchanged when account histories were not recorded', async () => {
+    render(<AutomaticResearchFindings findings={findings()} />)
+    await userEvent.click(screen.getByText('Research details'))
+    expect(screen.queryByText(/development account histor/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/final check kept separate/i)).not.toBeInTheDocument()
+  })
+
+  it('keeps retained history information collapsed and distinguishes the untouched final check', async () => {
+    const evidence: DevelopmentEvidenceMetadata = {
+      version: 'research-development-evidence-v1',
+      status: 'complete',
+      entries: Object.fromEntries(
+        Array.from({ length: 82 }, (_, index) => [
+          `history-${index}`,
+          { status: 'retained' as const },
+        ])
+      ),
+      reserved_final_excluded: true,
+      marks: 24000,
+      bytes: 5000000,
+    }
+    render(<AutomaticResearchFindings findings={findings()} developmentEvidence={evidence} />)
+    const summary = screen.getByText(
+      '82 development account histories saved · final check kept separate'
+    )
+    expect(summary).not.toBeVisible()
+    await userEvent.click(screen.getByText('Research details'))
+    expect(summary).toBeVisible()
+    expect(screen.queryByText(/24,000|5,000,000|statistical confidence/i)).not.toBeInTheDocument()
+  })
+
+  it('counts only retained histories and makes a partial collection explicit', async () => {
+    render(
+      <AutomaticResearchFindings
+        findings={findings()}
+        developmentEvidence={{
+          version: 'research-development-evidence-v1',
+          status: 'partial',
+          entries: { kept: { status: 'retained' }, absent: { status: 'unavailable' } },
+          reserved_final_excluded: true,
+          marks: 24,
+          bytes: 1000,
+        }}
+      />
+    )
+    await userEvent.click(screen.getByText('Research details'))
+    expect(
+      screen.getByText(
+        '1 development account history saved · some histories unavailable · final check kept separate'
+      )
+    ).toBeVisible()
+    expect(screen.queryByText(/complete history|statistical confidence/i)).not.toBeInTheDocument()
+  })
+
+  it('reports unavailable histories without claiming completion or final-period separation', async () => {
+    render(
+      <AutomaticResearchFindings
+        findings={findings()}
+        developmentEvidence={{
+          version: 'research-development-evidence-v1',
+          status: 'unavailable',
+          entries: {},
+          reserved_final_excluded: false,
+          marks: 0,
+          bytes: 0,
+        }}
+      />
+    )
+    await userEvent.click(screen.getByText('Research details'))
+    expect(screen.getByText('Development account histories unavailable')).toBeVisible()
+    expect(
+      screen.queryByText(/account histories saved|final check kept separate/i)
+    ).not.toBeInTheDocument()
+  })
+
+  it('labels an in-progress collection without calling it complete', async () => {
+    render(
+      <AutomaticResearchFindings
+        findings={findings()}
+        developmentEvidence={{
+          version: 'research-development-evidence-v1',
+          status: 'collecting',
+          entries: { kept: { status: 'retained' } },
+          reserved_final_excluded: false,
+          marks: 24,
+          bytes: 1000,
+        }}
+      />
+    )
+    await userEvent.click(screen.getByText('Research details'))
+    expect(
+      screen.getByText('1 development account history saved · collection in progress')
+    ).toBeVisible()
+  })
+
   it('shows selected timing beside the saved exits without another disclosure', () => {
     const data = findings()
     data.version = 'automatic-hypotheses-v7'

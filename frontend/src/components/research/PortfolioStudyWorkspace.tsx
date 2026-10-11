@@ -337,6 +337,7 @@ function StudyWorkspace({
         <AutomaticResearchFindings
           findings={result.automatic_research}
           selectedSettings={result.experiment?.selected_strategies}
+          developmentEvidence={result.development_evidence}
         />
       )}
       <details className="border-y py-3 text-xs text-muted-foreground">

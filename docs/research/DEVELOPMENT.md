@@ -4,6 +4,11 @@ Scanner Research is a native OpenAlgo tool at `/scanner-research`, linked from
 Tools. Account authentication and CSRF protect research APIs. Saved evidence
 remains available without a current broker token; trading guards are unchanged.
 
+The [development evidence increment](DEVELOPMENT_EVIDENCE_20261011.md) freezes
+automatic-research mandates and bounded full candidate account histories. Its
+source status, limits, recovery contract and next validation dependency are
+recorded there; it is not yet a new installed or public recipe.
+
 ## Calculation runtime
 
 The `research` dependency extra installs tested VectorBT 0.28.5 and Optuna 5.0.0
