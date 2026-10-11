@@ -1,6 +1,19 @@
 # Reconcile newer local development into a public package
 
-## October7 development reconciliation
+## October11 development publication
+
+The current development source targets OpenAlgo **2.0.2.7** at reviewed upstream
+`12e1114657981a3e50dde8c8ce04eb778ae1cf2f`, with Research preview.8 and qualified
+v6 automatic trailing selection. Public preview.7 remains the released download.
+The combined native frontend is committed with its matching entrypoints. Private
+`.research-runtime/` installer caches remain excluded from Git and Docker context.
+
+The development branch incorporates public installation, onboarding, extension
+and release-support files through the reviewed tree reconciliation. Its ancestry
+differs from public main; a source-branch push is separate from merging main or
+publishing a qualified installation ZIP.
+
+## Historical October7 development reconciliation
 
 The current reviewed host is `ee26e4e24caeeb68a27a5417bf3744bc0c5e1964`,
 declaring OpenAlgo 2.0.2.6, native charts 2.6.0 and OpenScript 0.8.1. Development
