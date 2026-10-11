@@ -1,5 +1,5 @@
 import { MoreHorizontal } from 'lucide-react'
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   type PortfolioJob,
   type PortfolioResult,
@@ -7,13 +7,6 @@ import {
   portfolioResearch,
 } from '@/api/portfolioResearch'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,10 +22,12 @@ import { PortfolioStudyAnalysis } from './PortfolioAnalysis'
 import { PortfolioContinuousReport } from './PortfolioContinuousReport'
 import { BackToStudy, PortfolioStudyWorkspace } from './PortfolioStudyWorkspace'
 import { PortfolioTrials } from './PortfolioTrials'
+import { PrepareTestedReport } from './PrepareTestedReport'
 import { reportMoney, useReportCurrency } from './ReportCurrency'
 import { ResearchResultReview } from './ResearchResultReview'
 import { researchResultPeriod, researchResultRole } from './researchPresentation'
 import { SavedTradeChartDialog } from './SavedTradeChartDialog'
+import { SaveTestedSetup } from './SaveTestedSetup'
 import { SaveToShortlist } from './SaveToShortlist'
 import { useConditionReplay } from './useConditionReplay'
 import { usePortfolioAnalysis } from './usePortfolioAnalysis'
@@ -272,8 +267,6 @@ function PortfolioReport({
 }: ResultProps & { laterPeriod?: boolean; hideStudyTabs?: boolean }) {
   const owner = useAuthStore((state) => state.user?.username)
   const preferences = useReportPreferences(owner)
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const settingsOpener = useRef<HTMLElement | null>(null)
   const [tab, setTab] = useState('report')
   const [strategyFilter, setStrategyFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -321,6 +314,7 @@ function PortfolioReport({
     busy: analysis.busy,
     response: analysis.response,
     onPrepare: analysis.prepare,
+    onCancel: analysis.cancel,
     readOnly,
     freezeAnalysis,
     exportUrl: portfolioResearch.analysisExportUrl(job.id),
@@ -402,7 +396,44 @@ function PortfolioReport({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {automatic && !laterPeriod && !readOnly && (
+          {!conditionRestricted &&
+            !laterPeriod &&
+            !automatic &&
+            !freezeAnalysis &&
+            experimentId &&
+            result.report_context && (
+              <SaveTestedSetup
+                key={JSON.stringify([
+                  job.id,
+                  result.report_context.config_id,
+                  result.report_context.analysis_artifact,
+                ])}
+                experimentId={experimentId}
+                name={
+                  result.report_context.candidate?.trial_number != null
+                    ? `Trial ${result.report_context.candidate.trial_number + 1}`
+                    : (result.portfolio?.name ?? 'Tested setup')
+                }
+                target={{
+                  job_id: job.id,
+                  config_id: result.report_context.config_id ?? undefined,
+                  expected_report: {
+                    result_artifact: result.report_context.result_artifact,
+                    analysis_artifact: result.report_context.analysis_artifact,
+                  },
+                }}
+                readOnly={readOnly}
+              />
+            )}
+          {automatic && !laterPeriod && experiment && onOpenReport && (
+            <PrepareTestedReport
+              jobId={job.id}
+              configId={experiment.recommendation_id}
+              readOnly={readOnly}
+              onOpen={onOpenReport}
+            />
+          )}
+          {automatic && !laterPeriod && !readOnly && (!experiment || !onOpenReport) && (
             <Button disabled={rerunning} onClick={() => onRerun()}>
               {rerunning ? 'Starting…' : 'Backtest these settings'}
             </Button>
@@ -413,7 +444,7 @@ function PortfolioReport({
             result.report_context?.period !== 'evaluation' &&
             onOptimize &&
             !readOnly && (
-              <Button type="button" disabled={rerunning} onClick={onOptimize}>
+              <Button type="button" variant="outline" disabled={rerunning} onClick={onOptimize}>
                 Optimize this
               </Button>
             )}
@@ -446,7 +477,9 @@ function PortfolioReport({
                     : undefined
                 }
                 proposalNumber={
-                  result.experiment ? result.report_context?.candidate?.trial_number : undefined
+                  result.experiment
+                    ? (result.report_context?.candidate?.trial_number ?? undefined)
+                    : undefined
                 }
                 readOnly={readOnly}
               />
@@ -484,11 +517,6 @@ function PortfolioReport({
           selectedSettings={result.experiment?.selected_strategies}
         />
       )}
-      {automatic && !laterPeriod && !readOnly && (
-        <p className="text-xs text-muted-foreground">
-          Open an exact backtest to compare or save this setup.
-        </p>
-      )}
       {!conditionRestricted &&
         !automatic &&
         experimentId &&
@@ -499,8 +527,26 @@ function PortfolioReport({
             job={job}
             result={result}
             readOnly={readOnly}
+            showSave={false}
           />
         )}
+      {(pending > 0 || Number(summary.skipped_trades) > 0 || otherExclusions > 0) && (
+        <Button
+          type="button"
+          variant="link"
+          className="h-auto px-0 pt-4 text-muted-foreground"
+          onClick={() => setTab('trades')}
+        >
+          {[
+            pending > 0 ? `${pending} pending` : '',
+            Number(summary.skipped_trades) > 0 ? `${summary.skipped_trades} skipped` : '',
+            otherExclusions > 0 ? `${otherExclusions} excluded` : '',
+          ]
+            .filter(Boolean)
+            .join(' · ')}{' '}
+          — view trades
+        </Button>
+      )}
       <details className="text-xs text-muted-foreground">
         <summary className="cursor-pointer">Report details</summary>
         <dl className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -521,7 +567,9 @@ function PortfolioReport({
             <div>
               <dt>Study candidate</dt>
               <dd>
-                Trial {result.report_context.candidate.trial_number + 1}
+                {result.report_context.candidate.trial_number == null
+                  ? 'Selected original settings'
+                  : `Trial ${result.report_context.candidate.trial_number + 1}`}
                 {result.report_context.candidate.is_objective_winner ? ' · Best by objective' : ''}
               </dd>
             </div>
@@ -593,11 +641,6 @@ function PortfolioReport({
             result={result}
             preferences={preferences}
             {...analysisActions}
-            onSettings={() => {
-              settingsOpener.current =
-                document.activeElement instanceof HTMLElement ? document.activeElement : null
-              setSettingsOpen(true)
-            }}
             onTrades={(strategyId, symbol) => {
               setStrategyFilter(strategyId ?? 'all')
               setStatusFilter('all')
@@ -607,23 +650,6 @@ function PortfolioReport({
               setTab('trades')
             }}
           />
-          {(pending > 0 || Number(summary.skipped_trades) > 0 || otherExclusions > 0) && (
-            <Button
-              type="button"
-              variant="link"
-              className="h-auto px-0 pt-4 text-muted-foreground"
-              onClick={() => setTab('trades')}
-            >
-              {[
-                pending > 0 ? `${pending} pending` : '',
-                Number(summary.skipped_trades) > 0 ? `${summary.skipped_trades} skipped` : '',
-                otherExclusions > 0 ? `${otherExclusions} excluded` : '',
-              ]
-                .filter(Boolean)
-                .join(' · ')}{' '}
-              — view trades
-            </Button>
-          )}
         </TabsContent>
         {experiment && (
           <TabsContent value="study" className="pt-5">
@@ -805,23 +831,6 @@ function PortfolioReport({
           onClose={() => setChartSelection(null)}
         />
       )}
-      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent
-          className="max-h-[85dvh] overflow-y-auto sm:max-w-2xl motion-reduce:animate-none"
-          onCloseAutoFocus={(event) => {
-            if (settingsOpener.current?.isConnected) {
-              event.preventDefault()
-              settingsOpener.current.focus()
-            }
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>Report settings</DialogTitle>
-            <DialogDescription>The exact settings used for this result.</DialogDescription>
-          </DialogHeader>
-          {settingsContent}
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

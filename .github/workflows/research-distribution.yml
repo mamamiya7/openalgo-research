@@ -165,6 +165,11 @@ jobs:
           src/components/research/ShortlistCompare.test.tsx
           src/components/research/MatchedBaseline.test.tsx
           src/components/research/ResearchResultReview.test.tsx
+          src/components/research/PrepareTestedReport.test.tsx
+          src/components/research/PrepareTestedReport.lifetime.test.tsx
+          src/components/research/SaveTestedSetup.test.tsx
+          src/components/research/SaveTestedSetup.lifetime.test.tsx
+          src/components/research/PortfolioRecovery.test.tsx
           src/components/research/ResearchChosenSetup.test.tsx
           src/components/research/PortfolioSetupReview.test.tsx
           src/components/research/portfolioTrialMetrics.test.ts

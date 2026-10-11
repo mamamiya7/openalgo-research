@@ -288,6 +288,7 @@ export function PortfolioBuilder({
   onUseSaved,
   onRun,
   busy,
+  submitting = busy,
   uploading,
   uploadActivity,
   capabilities,
@@ -298,6 +299,7 @@ export function PortfolioBuilder({
   onUseSaved: (opener: HTMLButtonElement) => void
   onRun: () => void
   busy: boolean
+  submitting?: boolean
   uploading: boolean
   uploadActivity?: ResearchUploadActivity
   capabilities?: PortfolioCapabilities
@@ -998,7 +1000,7 @@ export function PortfolioBuilder({
           size="lg"
           disabled={disabled || !portfolio.strategies.length || Boolean(engineIssue)}
         >
-          {busy
+          {submitting
             ? 'Starting…'
             : uploading
               ? 'Adding strategies…'

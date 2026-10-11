@@ -1,4 +1,13 @@
-import { ChevronLeft, ChevronRight, Pause, Play, RotateCcw, Settings2, X } from 'lucide-react'
+import {
+  ChevronLeft,
+  ChevronRight,
+  Maximize2,
+  Pause,
+  Play,
+  RotateCcw,
+  Settings2,
+  X,
+} from 'lucide-react'
 import {
   type Chart,
   getIndicator,
@@ -143,6 +152,17 @@ function SavedTradeChartWindow({ page, onPage, pageLoading = false }: Props) {
 
   useEffect(() => {
     if (!widget) return
+    // Daily bars use date coordinates, not execution clocks. Format their labels
+    // as recorded session dates without shifting a candle or marker timestamp.
+    if (page.interval === 'D') {
+      const sessionDate = new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'UTC',
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      })
+      widget.chart.setTimeFormatter((time) => sessionDate.format(time * 1000))
+    }
     const restoreGuard = guardSavedTradeIndicators(widget.chart)
     const markers = widget.series.createMarkers()
     markerLayer.current = markers
@@ -200,6 +220,19 @@ function SavedTradeChartWindow({ page, onPage, pageLoading = false }: Props) {
       controller.current = null
     }
   }, [widget, loaded, replaying, bars, initialIndex, syncFrame])
+
+  const fitCandles = useCallback(() => {
+    if (!widget || widget.isDestroyed) return
+    // The series contains only the visible replay prefix. Never fit using the
+    // original full count: future bar positions must not frame replay.
+    const count = widget.series.getData().length
+    if (!count) return
+    const padding = Math.max(1, Math.min(20, Math.ceil(count * 0.04)))
+    widget.chart.setVisibleLogicalRange({ from: -padding, to: count - 1 + padding })
+  }, [widget])
+  useEffect(() => {
+    if (loaded) fitCandles()
+  }, [loaded, fitCandles])
 
   // A hidden tab must never keep consuming the replay in the background.
   useEffect(() => {
@@ -265,6 +298,10 @@ function SavedTradeChartWindow({ page, onPage, pageLoading = false }: Props) {
           {page.interval === 'D' ? 'Daily candles' : '1-minute candles'} · {page.exchange}
           {replaying && ' · Replay'}
         </span>
+        <Button variant="outline" size="sm" disabled={!loaded || pageLoading} onClick={fitCandles}>
+          <Maximize2 className="mr-1 size-3.5" aria-hidden="true" />
+          Fit candles
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" disabled={!loaded || pageLoading}>
@@ -355,8 +392,6 @@ function SavedTradeChartWindow({ page, onPage, pageLoading = false }: Props) {
                   return
                 }
                 if (event.bars > 0) {
-                  if (!loaded && widget)
-                    widget.chart.setVisibleLogicalRange({ from: -1, to: event.bars + 1 })
                   setLoaded(true)
                 }
               }}
@@ -457,6 +492,11 @@ function SavedTradeChartWindow({ page, onPage, pageLoading = false }: Props) {
             <span>Before entry</span>
           )}
       </div>
+      {page.interval === 'D' && (
+        <p className="shrink-0 text-xs text-muted-foreground">
+          Daily chart labels show session dates; entry and exit above use recorded execution dates.
+        </p>
+      )}
       {page.notice && !replaying && (
         <p className="shrink-0 text-xs text-muted-foreground">{page.notice}</p>
       )}

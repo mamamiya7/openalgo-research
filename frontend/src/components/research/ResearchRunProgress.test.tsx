@@ -2,9 +2,13 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { axe } from 'jest-axe'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PortfolioRequest } from '@/api/portfolioResearch'
-import type { ResearchActivity } from '@/api/scannerResearch'
+import type { ResearchActivity, ResearchFailureReceipt } from '@/api/scannerResearch'
 import { researchDefaults } from '@/lib/researchDraft'
-import { ResearchRunProgress, ResearchUploadProgress } from './ResearchRunProgress'
+import {
+  ResearchRunProgress,
+  ResearchUploadProgress,
+  researchRecoveryActions,
+} from './ResearchRunProgress'
 
 const base: ResearchActivity = {
   version: 1,
@@ -29,6 +33,7 @@ const base: ResearchActivity = {
 }
 const job = (activity?: ResearchActivity, status = 'running') => ({
   status,
+  resumable: status === 'paused',
   kind: 'portfolio_optimize',
   activity,
 })
@@ -56,7 +61,171 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+const hoursFailure: ResearchFailureReceipt = {
+  version: 'research-failure-v1',
+  code: 'execution_session_hours_mismatch',
+  stage: 'prepare_prices',
+  retryable: false,
+  actions: ['new_run', 'edit_setup'],
+  message: 'A real hours mismatch',
+  details: {
+    first_affected_session: '2026-01-22',
+    expected_hours: { open: '09:15', close: '15:30' },
+    actual_hours: null,
+    mismatch_count: 1,
+  },
+}
+
 describe('Research progress journey', () => {
+  it('does not tell a paused run to Resume when its checkpoint has become incompatible', () => {
+    render(
+      <ResearchRunProgress
+        job={{
+          ...job(base, 'paused'),
+          resumable: false,
+          failure: hoursFailure,
+          recovery: {
+            version: 'research-recovery-v1',
+            status: 'blocked',
+            actions: ['new_run'],
+            message: 'Start a new run.',
+          },
+        }}
+      />
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent('Session hours differ')
+    expect(
+      screen.queryByText('Progress saved. Resume whenever you’re ready.')
+    ).not.toBeInTheDocument()
+  })
+
+  it('labels native scanner and market-index feature counts explicitly, without inferring roles from legacy totals', () => {
+    const { rerender } = render(
+      <ResearchRunProgress
+        job={job({
+          ...base,
+          stage: 'features',
+          features: {
+            total_symbols: 144,
+            completed_symbols: 10,
+            scanner_symbols: 143,
+            context_symbols: 1,
+          },
+        })}
+      />
+    )
+    expect(screen.getByText('143 scanner symbols + 1 market index')).toBeVisible()
+    expect(screen.getByText(/^10 of 144 symbols/)).toBeVisible()
+    rerender(
+      <ResearchRunProgress
+        job={job({
+          ...base,
+          stage: 'features',
+          features: { total_symbols: 144, completed_symbols: 10 },
+        })}
+      />
+    )
+    expect(screen.queryByText(/scanner symbols|market index/)).not.toBeInTheDocument()
+    expect(screen.getByText(/^10 of 144 symbols/)).toBeVisible()
+  })
+
+  it('admits recovery actions from known server capabilities and suppresses contradictory Resume flags', () => {
+    expect(
+      researchRecoveryActions({ status: 'failed', failure: hoursFailure, resumable: true })
+    ).toEqual(['new_run', 'edit_setup'])
+    expect(
+      researchRecoveryActions({
+        status: 'failed',
+        resumable: true,
+        recovery: {
+          version: 'research-recovery-v1',
+          status: 'blocked',
+          actions: ['resume', 'new_run'],
+          message: 'Cannot resume',
+        },
+      })
+    ).toEqual(['new_run'])
+    expect(
+      researchRecoveryActions({
+        status: 'paused',
+        resumable: true,
+        recovery: {
+          version: 'research-recovery-v1',
+          status: 'available',
+          actions: ['resume'],
+          message: 'Saved',
+        },
+      })
+    ).toEqual(['resume'])
+    expect(researchRecoveryActions({ status: 'running', resumable: true })).toEqual([])
+    expect(
+      researchRecoveryActions({
+        status: 'paused',
+        resumable: false,
+        recovery: {
+          version: 'research-recovery-v1',
+          status: 'available',
+          actions: ['resume'],
+          message: 'Conflicting flags',
+        },
+      })
+    ).toEqual([])
+    expect(
+      researchRecoveryActions({
+        status: 'failed',
+        resumable: true,
+        recovery: {
+          version: 'future-recovery',
+          status: 'available',
+          actions: ['resume'],
+          message: 'Unknown version',
+        } as never,
+      })
+    ).toEqual([])
+  })
+
+  it('keeps an absent recorded session distinct from actual execution hours in issue details', () => {
+    render(<ResearchRunProgress job={{ ...job(base, 'failed'), failure: hoursFailure }} />)
+    expect(screen.getByRole('alert')).toHaveTextContent('Session hours differ on 22 Jan 2026')
+    fireEvent.click(screen.getByText('Run issue details'))
+    expect(screen.getByText('Expected · saved context').nextElementSibling).toHaveTextContent(
+      '09:15–15:30 IST'
+    )
+    expect(screen.getByText('Actual · execution calendar').nextElementSibling).toHaveTextContent(
+      'Not recorded'
+    )
+  })
+
+  it('separates automatic Search settings, Check and Results without calling a custom search validated', () => {
+    const request = {
+      ...portfolio,
+      automatic_research: { version: 'automatic-hypotheses-v7' as const },
+    }
+    const { rerender } = render(
+      <ResearchRunProgress
+        job={{ ...job({ ...base, stage: 'validation' }), specification: { portfolio: request } }}
+      />
+    )
+    const stages = screen.getByRole('list', { name: 'Run stages' })
+    expect(stages).toHaveAttribute('data-steps', '5')
+    expect(within(stages).getByText('Search settings').closest('li')).toHaveAttribute(
+      'data-state',
+      'complete'
+    )
+    expect(within(stages).getByText('Check').closest('li')).toHaveAttribute('aria-current', 'step')
+    expect(within(stages).getByText('Results').closest('li')).toHaveAttribute(
+      'data-state',
+      'waiting'
+    )
+    rerender(
+      <ResearchRunProgress
+        job={{ ...job({ ...base, stage: 'optimizing' }), specification: { portfolio } }}
+      />
+    )
+    expect(screen.queryByText('Check', { exact: true })).not.toBeInTheDocument()
+    expect(stages).toHaveAttribute('data-steps', '4')
+  })
+
   it('distinguishes chart generation from financial validation', () => {
     render(<ResearchRunProgress job={job({ ...base, stage: 'analysis' })} />)
     expect(screen.getByRole('status')).toHaveTextContent('Preparing study charts')

@@ -264,6 +264,7 @@ def run(
     observe=None,
     boundary=None,
     admit_final=None,
+    defer_study_analysis=False,
 ):
     """Search jointly, freeze a selection, then assess it without reranking."""
     import optuna
@@ -984,19 +985,30 @@ def run(
             "result": deepcopy(state["final_report"]),
         }
     result.update(portfolio=deepcopy(evidence["portfolio"]), config={"initial_capital": capital})
+    if not exploratory:
+        from research.automatic_comparison import build as comparison_curves
+
+        result["automatic_research"]["comparison"] = comparison_curves(
+            state.get("baseline_final_report"), state["final_report"]
+        )
     result["source"] = {
         "interval": evidence["snapshot"]["provenance"]["interval"],
         "provider": "OpenAlgo Historify",
         "signal_count": len(window("search")["signals"]),
         "strategy_count": len(base),
     }
-    from research.study_analysis import build_study_analysis
+    if defer_study_analysis:
+        from research.study_diagnostics import deferred
 
-    if activity:
-        activity({"stage": "analysis"})
-    result["experiment"]["study_analysis"] = build_study_analysis(
-        result["experiment"], progress=beat
-    )
+        result["experiment"]["diagnostics"] = deferred()
+    else:
+        from research.study_analysis import build_study_analysis
+
+        if activity:
+            activity({"stage": "analysis"})
+        result["experiment"]["study_analysis"] = build_study_analysis(
+            result["experiment"], progress=beat
+        )
     from research.analytics import add_price_charts
 
     for report, period in [

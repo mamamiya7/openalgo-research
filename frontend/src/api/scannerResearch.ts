@@ -164,7 +164,12 @@ export interface ResearchActivity {
     current_symbol?: string | null
     cache_complete?: boolean
   }
-  features?: { total_symbols?: number; completed_symbols?: number }
+  features?: {
+    total_symbols?: number
+    completed_symbols?: number
+    scanner_symbols?: number
+    context_symbols?: number
+  }
   trials?: {
     total?: number
     completed?: number
@@ -178,7 +183,32 @@ export interface ResearchActivity {
   calculations?: { completed?: number; limit?: number }
   batch_count?: number
 }
+export type ResearchRecoveryAction = 'resume' | 'new_run' | 'edit_setup' | 'reconnect_broker'
+export interface ResearchFailureReceipt {
+  version: 'research-failure-v1'
+  code: string
+  stage: string
+  message: string
+  retryable: boolean
+  actions: ResearchRecoveryAction[]
+  details?: {
+    first_affected_session?: string
+    expected_hours?: { open: string; close: string } | null
+    actual_hours?: { open: string; close: string } | null
+    mismatch_count?: number
+  }
+}
+export interface ResearchRecoveryReceipt {
+  version: 'research-recovery-v1'
+  status: 'not_needed' | 'unavailable' | 'available' | 'blocked'
+  actions: ResearchRecoveryAction[]
+  message: string
+  checkpoint_phase?: string
+}
+
 export interface ResearchJob {
+  failure?: ResearchFailureReceipt | null
+  recovery?: ResearchRecoveryReceipt | null
   id: string
   source_id: string
   status: string

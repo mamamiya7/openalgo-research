@@ -13,7 +13,7 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
-from sqlalchemy import select, update
+from sqlalchemy import case, select, update
 
 from database.research_db import (
     ResearchAttempt,
@@ -153,8 +153,14 @@ def run_one(store, token, stop_requested=None):
             raise Cancelled("Worker lease lost before claim")
         job = db.scalar(
             select(ResearchJob)
+            .outerjoin(ResearchExperiment, ResearchExperiment.job_id == ResearchJob.id)
             .where(ResearchJob.status == "queued")
-            .order_by(ResearchJob.updated_at, ResearchJob.created_at, ResearchJob.id)
+            .order_by(
+                case((ResearchExperiment.kind == "portfolio_analysis", 1), else_=0),
+                ResearchJob.updated_at,
+                ResearchJob.created_at,
+                ResearchJob.id,
+            )
             .limit(1)
         )
         if job is None:
@@ -183,7 +189,7 @@ def run_one(store, token, stop_requested=None):
         except study_activity.ObservationLeaseLost as error:
             raise Cancelled("Cancellation requested or worker lease lost") from error
 
-    def finish_job(state, reason_code, error=None, *, observation_failed=False):
+    def finish_job(state, reason_code, error=None, *, observation_failed=False, failure=None):
         # The same reservation fences both operational observations and job state.
         # A stale worker does nothing; the successor owns interruption reconciliation.
         with store.sessions.begin() as db:
@@ -205,6 +211,12 @@ def run_one(store, token, stop_requested=None):
             current.status, current.updated_at = state, time.time()
             if error is not None:
                 current.error = error
+            if failure is not None:
+                receipt = db.get(ResearchExperiment, job.id)
+                if receipt:
+                    counts = json.loads(receipt.counts)
+                    counts["failure"] = failure
+                    receipt.counts = encoded(counts).decode()
 
     def activity(event, force=False):
         nonlocal activity_state, last_activity_update
@@ -409,6 +421,7 @@ def run_one(store, token, stop_requested=None):
                     job.owner,
                     evidence,
                     spec,
+                    defer_study_analysis=True,
                     **(
                         {"job_id": job.id}
                         if spec["portfolio"].get("automatic_research", {}).get("version")
@@ -679,6 +692,15 @@ def run_one(store, token, stop_requested=None):
                 )
             if history_record is not None:
                 db.add(history_record)
+        # Findings are committed before optional plots. Admission cannot change
+        # the completed study's immutable evidence or completion state.
+        if kind == "portfolio_optimize" and result.get("experiment", {}).get("diagnostics"):
+            try:
+                from services.research_analysis import submit as submit_analysis
+
+                submit_analysis(store, job.owner, job.id)
+            except Exception:
+                logger.exception("Optional saved-study diagnostics were not queued")
     except AcquisitionBatchPending:
         # The checkpoint is already durable. Release this pass without creating
         # another user attempt; the worker picks up the remaining windows itself.
@@ -719,12 +741,16 @@ def run_one(store, token, stop_requested=None):
         )
     except Exception as error:
         logger.exception("Scanner Research calculation failed")
+        from research.failures import failure_receipt
+
+        failure = failure_receipt(error, stage=(activity_state or {}).get("stage", "calculation"))
         finish_job(
             "failed",
             "calculation_failed",
             str(error)
             if isinstance(error, ValueError)
             else "Calculation failed; see the local error log.",
+            failure=failure,
         )
     return True
 

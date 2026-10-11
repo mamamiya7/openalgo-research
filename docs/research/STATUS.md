@@ -1,5 +1,53 @@
 # OpenAlgo Research status
 
+## Workflow refinement — 11 October 2026
+
+The current increment implements the [comprehensive workflow plan](WORKFLOW_REFINEMENT_20261011.md):
+structured checkpoint recovery, preserved daily session hours, independently
+verified selected reports, one-action named tested-setup saving and reuse,
+CSV-first entry, simplified navigation and chosen-setup history. Financial
+findings publish before optional bounded Optuna diagnostics; those diagnostics
+have independent cancellation/retry and lower queue priority than calculations.
+New compatible automatic findings retain aligned original/selected account curves.
+Older artifacts and numerical engine/search identities remain unchanged.
+
+Controlled Chrome acceptance covers CSV counts/dates/duplicate preview, opening
+a draft without starting acquisition, automatic scope selection, preparation of
+the unchanged original report, saving/reopening its named chosen setup and reuse
+with the recorded minute holding rule. That walkthrough found and fixed an
+intraday date conversion defect: setup date bounds now use exchange session
+dates, while saved evidence and trading timestamps remain untouched. Narrow
+Setup has no horizontal document overflow at a 390px viewport. These checks do
+not certify the entire accessibility matrix or a new real-broker download.
+
+Qualification includes 114 recovery/backend cases and 61 independent-diagnostics
+cases in their scoped suites, a final 673-case research frontend regression, and a
+191-case follow-up covering the revised report/header/history path. A final
+14-case backend rerun checks materialisation priority, progress and intraday
+saved dates; eight save/report lifecycle cases include a late-response fence.
+Seventy-seven independently reviewed UI cases additionally cover save/report
+lifetime fences, reuse, comparisons and chart replay. These suite counts overlap
+and are not an additive distinct-case total.
+TypeScript, source lint and the production build pass. Native fd-audit includes
+200 recovery reads and actual diagnostic timeout/cancellation process reaping.
+
+Cached native stock-context preparation has also been profiled using 2,020
+signals and 143 synthetic cached stocks. Repeating a common calendar per stock
+issued 95,667 calendar SQL statements. A bounded shared preparation scope reduces
+that to 669 and DuckDB opens from 143 to nine, retaining the exact same bundle
+hash and issuing zero broker requests. Measured fresh/repeat durations improved
+from 42.12/28.58s to 30.03/17.98s. These are isolated measurements, not a promise
+about live broker latency; artifact/checkpoint persistence remains material.
+The preparation seam passes 97 distinct targeted cases, including matching
+artifact/receipt identities, original-calendar recovery, durable missing-window
+verification and 100 measured scope exits with balanced connections and bounded
+retained memory. Normal-app activation remains the next delivery step.
+
+Public preview.7 is unchanged. Public-main ancestry reconciliation, the complete
+preview.8 Windows/Linux package matrix and broader human/a11y journey gates
+remain separate delivery steps. Installation and Git identities will be recorded
+after the matching source and interface are qualified.
+
 ## Automatic trade timing — 11 October 2026
 
 `automatic-hypotheses-v7` integrates joint stock/market conditions, trailing and

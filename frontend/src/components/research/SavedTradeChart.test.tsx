@@ -108,6 +108,7 @@ vi.mock('@/components/chart/OpenAlgoChart', async () => {
             },
           ],
           setVisibleLogicalRange: vi.fn(),
+          setTimeFormatter: vi.fn(),
           removePrimitive: () => {
             widget.removed = true
           },
@@ -151,6 +152,63 @@ afterEach(() => {
 })
 
 describe('saved native trade chart', () => {
+  it.each([
+    1, 1000,
+  ])('fits a saved %s-candle range without changing candles or inventing a missing exit', async (length) => {
+    const page = savedTradeChartFixture()
+    page.candles = Array.from({ length }, (_, index) => ({
+      ...page.candles[0],
+      time: page.candles[0].time + index * 86400,
+      timestamp: new Date((page.candles[0].time + index * 86400) * 1000).toISOString().slice(0, 10),
+    }))
+    page.markers = []
+    page.window = { ...page.window, total: length, entry_index: null, exit_index: null }
+    render(<SavedTradeChart page={page} onPage={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Fit candles' })).toBeEnabled())
+    await waitFor(() => expect(latest().chart.setVisibleLogicalRange).toHaveBeenCalled())
+    const fit = vi
+      .mocked(latest().chart.setVisibleLogicalRange as ReturnType<typeof vi.fn>)
+      .mock.calls.at(-1)![0] as { from: number; to: number }
+    expect(fit.from).toBeLessThanOrEqual(0)
+    expect(fit.to).toBeGreaterThanOrEqual(length - 1)
+    expect(fit.to).toBeLessThan(length + 21)
+    expect(latest().bars.map((bar) => bar.time)).toEqual(page.candles.map((bar) => bar.time))
+    expect(latest().markers).toHaveLength(0)
+    if (length === 1) expect(screen.getByRole('button', { name: 'Replay' })).toBeDisabled()
+  })
+
+  it('fits recorded candles on open and fits only the revealed prefix during replay', async () => {
+    const page = savedTradeChartFixture()
+    render(<SavedTradeChart page={page} onPage={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Fit candles' })).toBeEnabled())
+    await waitFor(() =>
+      expect(latest().chart.setVisibleLogicalRange).toHaveBeenLastCalledWith({ from: -1, to: 4 })
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Replay' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Next bar' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: 'Fit candles' }))
+    expect(latest().bars).toHaveLength(2)
+    expect(latest().chart.setVisibleLogicalRange).toHaveBeenLastCalledWith({ from: -1, to: 2 })
+    fireEvent.click(screen.getByRole('button', { name: 'Next bar' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Fit candles' }))
+    expect(latest().chart.setVisibleLogicalRange).toHaveBeenLastCalledWith({ from: -1, to: 3 })
+    expect(screen.queryByText(/108.75/)).not.toBeInTheDocument()
+  })
+
+  it('formats daily coordinates as session dates without modifying recorded bars or execution markers', async () => {
+    const page = savedTradeChartFixture()
+    render(<SavedTradeChart page={page} onPage={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Replay' })).toBeEnabled())
+    const formatter = vi.mocked(latest().chart.setTimeFormatter as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as (time: number) => string
+    expect(formatter(page.candles[1].time)).toBe('23 Jan 2026')
+    expect(latest().bars.map((bar) => bar.time)).toEqual(page.candles.map((bar) => bar.time))
+    expect(latest().markers.map((marker) => marker.time)).toEqual(
+      page.markers.map((marker) => marker.time)
+    )
+    expect(screen.getByText(/Daily chart labels show session dates/)).toBeVisible()
+  })
+
   it('carries only study preferences across review/replay, recomputing on the loaded prefix and clearing on a new trade', async () => {
     const page = savedTradeChartFixture()
     const view = render(<SavedTradeChart page={page} onPage={vi.fn()} />)
@@ -183,7 +241,7 @@ describe('saved native trade chart', () => {
     expect(replay.indicatorReadoutLengths.at(-1)).toBe(2)
     fireEvent.click(screen.getAllByRole('button', { name: 'Exit replay' })[0])
     await waitFor(() => expect(screen.getByRole('button', { name: 'Replay' })).toBeEnabled())
-    expect(latest().studies).toHaveLength(1)
+    await waitFor(() => expect(latest().studies).toHaveLength(1))
     expect(latest().studies[0].settings()).toEqual(original.studies[0].settings())
     const restored = latest()
     view.rerender(

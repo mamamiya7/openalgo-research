@@ -96,6 +96,21 @@ def _snapshot(member, portfolio):
     basis = context["evaluation_basis"]
     period = basis.get("period", {}) if basis.get("status") == "verified" else {}
     comparison = basis.get("comparison", {}) if basis.get("status") == "verified" else {}
+
+    def session_date(value):
+        if value is None:
+            return None
+        # A verified minute basis retains observation instants. The setup's
+        # date range is in exchange sessions; its immutable evidence keeps the
+        # exact timestamps. Do not truncate unknown offsets or accept naive time.
+        from research.intraday import stamp
+
+        return (
+            stamp(value).date().isoformat()
+            if "T" in value
+            else date.fromisoformat(value).isoformat()
+        )
+
     snapshot = {
         **{key: member[key] for key in decisions.IDENTITY},
         **{
@@ -112,7 +127,10 @@ def _snapshot(member, portfolio):
         "candidate_name": member["name"],
         "capital": portfolio["capital"],
         "currency": comparison.get("currency"),
-        "dates": {key: period.get(key) or context["dates"].get(key) for key in ("from", "to")},
+        "dates": {
+            key: session_date(period.get(key) or context["dates"].get(key))
+            for key in ("from", "to")
+        },
         "sources": {row["id"]: row["source_id"] for row in portfolio["strategies"]},
     }
     if portfolio.get("entry_conditions") is not None:

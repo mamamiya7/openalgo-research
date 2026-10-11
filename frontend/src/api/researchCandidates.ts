@@ -3,8 +3,9 @@ import { webClient } from './client'
 export interface CandidateReportReceipt {
   config_id: string
   /** Stored zero-based trial number. Add one only for display. */
-  trial_number: number
+  trial_number: number | null
   is_objective_winner: boolean
+  is_selected?: boolean
   status: 'ready' | 'available' | 'queued' | 'running' | 'failed' | 'unavailable' | 'mismatch'
   report_job_id?: string
   error?: string

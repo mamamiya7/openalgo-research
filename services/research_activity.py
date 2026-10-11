@@ -32,7 +32,7 @@ COUNTERS = {
         "unavailable_candles",
         "pending_windows",
     },
-    "features": {"total_symbols", "completed_symbols"},
+    "features": {"total_symbols", "completed_symbols", "scanner_symbols", "context_symbols"},
     "trials": {"total", "completed", "evaluated", "reused", "rejected", "failed"},
     "calculations": {"completed", "limit"},
 }

@@ -1,5 +1,11 @@
 import { webClient } from './client'
-import type { ResearchActivity, ResearchConfig, ResearchSource } from './scannerResearch'
+import type {
+  ResearchActivity,
+  ResearchConfig,
+  ResearchFailureReceipt,
+  ResearchRecoveryReceipt,
+  ResearchSource,
+} from './scannerResearch'
 
 export type PortfolioAxis =
   | 'target_pct'
@@ -270,7 +276,7 @@ export interface PortfolioReportContext {
   parent_job_id?: string
   candidate?: {
     study_job_id: string
-    trial_number: number
+    trial_number?: number | null
     config_id: string
     is_objective_winner: boolean
   }
@@ -453,6 +459,14 @@ export interface PortfolioResult {
   }
 }
 export interface AutomaticResearchFindings {
+  comparison?: {
+    version: 'research-automatic-comparison-v1'
+    status: 'available' | 'unavailable'
+    reason?: string
+    chart?: AnalysisChart
+    observations?: number
+    displayed?: number
+  }
   version: string
   status: 'supported' | 'not_supported' | 'inconclusive'
   selected_config_id: string
@@ -523,7 +537,7 @@ export interface ResearchResultDescriptor {
   candidate: {
     study_job_id: string
     config_id: string
-    trial_number?: number
+    trial_number?: number | null
     is_objective_winner?: boolean
     period?: string
   } | null
@@ -536,6 +550,8 @@ export interface ResearchResultDescriptor {
   setup: { id: string; name: string; number: number; parent_version_id?: string } | null
 }
 export interface PortfolioJob {
+  failure?: ResearchFailureReceipt | null
+  recovery?: ResearchRecoveryReceipt | null
   display?: ResearchResultDescriptor
   updated_at?: number | string
   activity?: ResearchActivity

@@ -42,7 +42,43 @@ def _stock_only(evidence):
     return current
 
 
-def _check_execution(bundle, evidence, symbols):
+def execution_hours(store, evidence):
+    """Use only recorded hours; old daily snapshots can reference their calendar.
+
+    The daily acquisition assembler formerly omitted session_hours. Its saved
+    native calendar already records them under a verified content address. Read
+    that original reference without changing the execution artifact or identity.
+    Missing/partial minute hours and partial daily maps are never inferred.
+    """
+    snapshot = evidence["snapshot"]
+    if "session_hours" in snapshot:
+        return snapshot["session_hours"]
+    if snapshot.get("provenance", {}).get("interval") != "D" or not evidence.get(
+        "reference_artifact"
+    ):
+        return {}
+    calendar = _read(store, evidence["reference_artifact"])
+    sessions, recorded = snapshot["sessions"], calendar.get("sessions", [])
+    replay = bool(evidence.get("replay_origin") or evidence.get("parent_result_artifact"))
+    start = recorded.index(sessions[0]) if sessions and sessions[0] in recorded else -1
+    compatible = recorded == sessions or (
+        replay and start >= 0 and recorded[start : start + len(sessions)] == sessions
+    )
+    if not compatible or (
+        calendar.get("provenance", {}).get("calendar_basis")
+        != snapshot.get("provenance", {}).get("calendar_basis")
+    ):
+        from research.failures import ResearchFailure
+
+        raise ResearchFailure(
+            "execution_calendar_reference_mismatch",
+            "The saved execution calendar belongs to different sessions. "
+            "Start a new run with these signals; this saved run is unchanged.",
+        )
+    return calendar.get("session_hours", {})
+
+
+def _check_execution(bundle, evidence, symbols, *, store=None):
     validate_bundle(bundle)
     recorded, current = bundle["execution_sessions"], evidence["snapshot"]["sessions"]
     replay = bool(evidence.get("replay_origin") or evidence.get("parent_result_artifact"))
@@ -56,9 +92,11 @@ def _check_execution(bundle, evidence, symbols):
         )
     if not matches:
         raise ValueError("Saved stock-market context belongs to different execution inputs")
-    hours = evidence["snapshot"].get("session_hours", {})
-    if any(bundle["market"]["calendar"]["session_hours"][day] != hours.get(day) for day in current):
-        raise ValueError("Saved stock-market context has different execution session hours")
+    from research.failures import check_execution_hours
+
+    check_execution_hours(
+        bundle["market"]["calendar"]["session_hours"], execution_hours(store, evidence), current
+    )
 
 
 def prepare_context(
@@ -69,7 +107,7 @@ def prepare_context(
     symbols = research_stock_features._symbols(evidence)
     incoming = evidence.get(KEY)
     if incoming is not None:
-        _check_execution(incoming, evidence, symbols)
+        _check_execution(incoming, evidence, symbols, store=store)
     recovering = saved is not None and saved.get("phase") == PHASE
     if saved is not None and not recovering and saved.get("phase") != "calculation":
         raise ValueError("Saved stock-market preparation belongs to different inputs")
@@ -142,7 +180,7 @@ def prepare_context(
     else:
         original = evidence
     if incoming is not None:
-        _check_execution(incoming, evidence, symbols)
+        _check_execution(incoming, evidence, symbols, store=store)
         if recovering and not saved["complete"]:
             raise ValueError("Saved stock-market completion is inconsistent")
         return evidence
@@ -197,6 +235,7 @@ def prepare_context(
             event = deepcopy(event)
             if "features" in event:
                 event["features"]["total_symbols"] = total
+                event["features"].update(scanner_symbols=len(symbols), context_symbols=1)
             activity(event)
 
     working = research_stock_features.prepare_context(
@@ -222,7 +261,12 @@ def prepare_context(
         activity(
             {
                 "stage": "features",
-                "features": {"total_symbols": total, "completed_symbols": len(symbols)},
+                "features": {
+                    "total_symbols": total,
+                    "completed_symbols": len(symbols),
+                    "scanner_symbols": len(symbols),
+                    "context_symbols": 1,
+                },
                 "prices": {"current_symbol": "NIFTY"},
             }
         )
@@ -253,7 +297,7 @@ def prepare_context(
     market = {key: market[key] for key in ("evidence", "calendar", "acquisition_receipts")}
     bundle = freeze_bundle(stock_bundle["series"], market, sessions)
     result = {**original, KEY: bundle}
-    _check_execution(bundle, result, symbols)
+    _check_execution(bundle, result, symbols, store=store)
     state["inputs_artifact"] = service.save_artifact(store, result)
     state["complete"] = True
     persist(total)
@@ -262,7 +306,12 @@ def prepare_context(
         activity(
             {
                 "stage": "features",
-                "features": {"total_symbols": total, "completed_symbols": total},
+                "features": {
+                    "total_symbols": total,
+                    "completed_symbols": total,
+                    "scanner_symbols": len(symbols),
+                    "context_symbols": 1,
+                },
                 "prices": {"current_symbol": None},
             }
         )

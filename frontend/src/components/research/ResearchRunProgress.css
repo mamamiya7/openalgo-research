@@ -17,6 +17,8 @@
   gap: 1rem;
 }
 
+.research-stage-track[data-steps='5'] { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+
 .research-stage {
   position: relative;
   display: flex;
@@ -165,7 +167,7 @@
 @keyframes research-stage-beacon { 50% { box-shadow: 0 0 0 6px color-mix(in oklch, var(--research-cyan) 4%, transparent); } }
 
 @media (max-width: 639px) {
-  .research-stage-track { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem 1rem; }
+  .research-stage-track, .research-stage-track[data-steps='5'] { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem 1rem; }
   .research-stage { gap: 0.625rem; }
   .research-stage::after { display: none; }
 }

@@ -25,6 +25,7 @@ import { EvidenceOpened, EvidenceUse, FrozenDecisionReport } from './DecisionEvi
 import { CompareMatchedBaseline } from './MatchedBaseline'
 import { ChooseResearchSetup } from './ResearchChosenSetup'
 import { researchDates } from './researchPresentation'
+import { SaveTestedSetup } from './SaveTestedSetup'
 
 interface Props {
   experimentId: string
@@ -32,6 +33,7 @@ interface Props {
   result: PortfolioResult
   readOnly: boolean
   decisionTarget?: DecisionTarget
+  showSave?: boolean
 }
 export function ResearchResultReview(props: Props) {
   const owner = useAuthStore((state) => state.user?.username ?? 'account')
@@ -55,6 +57,7 @@ function ResultReview({
   result,
   readOnly,
   decisionTarget,
+  showSave = true,
 }: Props & { owner: string }) {
   const client = useQueryClient()
   const location = useLocation()
@@ -256,6 +259,19 @@ function ResultReview({
   return (
     <>
       <section aria-label="Research review" className="flex flex-wrap items-center gap-2">
+        {!later && showSave && (
+          <SaveTestedSetup
+            key={JSON.stringify([owner, job.id, target.config_id, expected])}
+            experimentId={experimentId}
+            target={decisionTarget ?? { ...target, expected_report: expected }}
+            name={
+              result.report_context?.candidate?.trial_number != null
+                ? `Trial ${result.report_context.candidate.trial_number + 1}`
+                : (result.portfolio?.name ?? 'Tested setup')
+            }
+            readOnly={readOnly}
+          />
+        )}
         <CompareMatchedBaseline
           owner={owner}
           experimentId={experimentId}

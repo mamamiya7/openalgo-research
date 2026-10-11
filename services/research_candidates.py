@@ -112,13 +112,15 @@ def _availability_error(store, bundle):
     return None
 
 
-def _receipt(row, study, parent, link, child, unavailable):
+def _receipt(row, study, parent, link, child, unavailable, *, automatic=False):
     value = {
         "config_id": row["config_id"],
         "trial_number": row["trial_number"],
-        "is_objective_winner": study.get("recommendation_id") == row["config_id"],
+        "is_selected": study.get("recommendation_id") == row["config_id"],
+        "is_objective_winner": study.get("objective_winner_id", study.get("recommendation_id"))
+        == row["config_id"],
     }
-    if value["is_objective_winner"]:
+    if value["is_selected"] and not automatic:
         return {**value, "status": "ready", "report_job_id": parent.id}
     if link:
         if (
@@ -159,6 +161,11 @@ def _receipt(row, study, parent, link, child, unavailable):
 
 def availability(store, owner, study_job_id):
     parent, bundle, study, period = _study(store, owner, study_job_id)
+    automatic = bool(bundle["result"].get("automatic_research"))
+    rows = list(study["rows"])
+    selected_id = study.get("recommendation_id")
+    if automatic and not any(row.get("config_id") == selected_id for row in rows):
+        rows.append(_selected(study, selected_id, bundle["result"]))
     with store.sessions() as db:
         links = db.scalars(
             select(ResearchCandidateReport).where(
@@ -196,16 +203,33 @@ def availability(store, owner, study_job_id):
                 if row["config_id"] in linked
                 else None,
                 unavailable,
+                automatic=automatic,
             )
-            for row in study["rows"]
+            for row in rows
         ],
     }
 
 
-def _selected(study, config_id):
+def _selected(study, config_id, result=None):
     if not isinstance(config_id, str) or not re.fullmatch(r"[a-f0-9]{64}", config_id):
         raise ValueError("Choose a saved candidate identity")
     matches = [row for row in study["rows"] if row.get("config_id") == config_id]
+    if (
+        not matches
+        and result
+        and result.get("automatic_research")
+        and config_id == study.get("recommendation_id")
+    ):
+        settings = result.get("strategies")
+        if settings_identity(settings) == config_id:
+            return {
+                "config_id": config_id,
+                "trial_number": None,
+                "strategies": settings,
+                "summary": result["summary"],
+                "analysis": result.get("analysis"),
+                "evaluation_basis": result.get("evaluation_basis"),
+            }
     if len(matches) != 1 or settings_identity(matches[0].get("strategies")) != config_id:
         raise ValueError("Choose a saved candidate from this study")
     return matches[0]
@@ -217,7 +241,7 @@ def prepare(store, owner, study_job_id, config_id):
     from services.research_portfolio import replay_inputs, validate_submission
 
     parent, bundle, study, period = _study(store, owner, study_job_id)
-    selected = _selected(study, config_id)
+    selected = _selected(study, config_id, bundle["result"])
     current = next(
         row
         for row in availability(store, owner, parent.id)["candidates"]
@@ -228,7 +252,14 @@ def prepare(store, owner, study_job_id, config_id):
     # Retain exact expected scalars separately from the new result. They can only
     # validate reconstruction, never replace an engine output or a study row.
     try:
-        _, evidence = replay_inputs(store, owner, parent.id, trial_id=config_id)
+        _, evidence = replay_inputs(
+            store,
+            owner,
+            parent.id,
+            trial_id=config_id
+            if any(row.get("config_id") == config_id for row in study["rows"])
+            else None,
+        )
     except (ValueError, OSError) as error:
         return {**current, "status": "unavailable", "error": str(error)}
     expected_basis = bundle["result"].get("evaluation_basis")

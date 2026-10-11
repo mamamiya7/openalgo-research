@@ -217,6 +217,7 @@ def test_automatic_continuation_preserves_activity_and_yields_to_next_job(app, c
         activity,
         observe=None,
         boundary=None,
+        defer_study_analysis=False,
     ):
         calls.append(saved)
         if len(calls) == 1:
@@ -269,6 +270,7 @@ def test_symbol_transition_is_persisted_before_a_long_request(app, client, monke
         activity,
         observe=None,
         boundary=None,
+        defer_study_analysis=False,
     ):
         for symbol in ("AAA", "BBB"):
             activity({"stage": "download", "prices": {"current_symbol": symbol}})

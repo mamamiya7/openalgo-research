@@ -57,6 +57,7 @@ def run(
     observe=None,
     boundary=None,
     admit_final=None,
+    defer_study_analysis=False,
 ):
     recipe = compile_recipe(evidence)
     if evidence.get("automatic_recipe") != recipe or recipe["version"] != VERSION:
@@ -424,6 +425,11 @@ def run(
         "result": deepcopy(final),
     }
     result.update(portfolio=deepcopy(evidence["portfolio"]), config={"initial_capital": capital})
+    from research.automatic_comparison import build as comparison_curves
+
+    result["automatic_research"]["comparison"] = comparison_curves(
+        state.get("baseline_final_report"), state["final_report"]
+    )
     result["source"] = {
         "interval": evidence["snapshot"]["provenance"]["interval"],
         "provider": "OpenAlgo Historify",
@@ -433,9 +439,14 @@ def run(
     experiment["evaluation_basis_id"] = build_evaluation_basis(search_window, period="selection")[
         "evidence_id"
     ]
-    from research.study_analysis import build_study_analysis
+    if defer_study_analysis:
+        from research.study_diagnostics import deferred
 
-    experiment["study_analysis"] = build_study_analysis(experiment, progress=beat)
+        experiment["diagnostics"] = deferred()
+    else:
+        from research.study_analysis import build_study_analysis
+
+        experiment["study_analysis"] = build_study_analysis(experiment, progress=beat)
     from research.analytics import add_price_charts
 
     for report, context in (

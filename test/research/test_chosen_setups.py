@@ -223,6 +223,12 @@ def test_chosen_history_keep_changes_archive_and_retry_survive_populated_restore
     library.update_experiment(
         store, OWNER, experiment, {"revision": second["revision"], "archived": True}
     )
+    # A completed study now queues optional diagnostics independently. Backup
+    # still requires an idle store; finish that child without rerunning finances.
+    from services.research_analysis import status as analysis_status
+
+    if analysis_status(store, OWNER, job)["status"] == "queued":
+        run_worker(store)
     backup = tmp_path.with_name(tmp_path.name + "-chosen-backup")
     backup_store(store, backup)
     destination = tmp_path.with_name(tmp_path.name + "-chosen-restored")

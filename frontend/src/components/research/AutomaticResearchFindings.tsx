@@ -3,6 +3,7 @@ import type {
   AutomaticResearchFindings as Findings,
   PortfolioSettings,
 } from '@/api/portfolioResearch'
+import { AnalysisFigure } from './AnalysisCharts'
 import { researchDates, strategyRuleSummary } from './researchPresentation'
 import { researchRecipeLabel } from './researchRecipeLabels'
 
@@ -62,7 +63,7 @@ export function AutomaticResearchFindings({
           <h3 className="text-lg font-semibold">{findings.headline}</h3>
           <p className="max-w-3xl text-sm text-muted-foreground">
             {findings.selected_is_baseline
-              ? 'The original settings remain the reference.'
+              ? 'No reliable improvement was found. The original settings remain the reference, not a trading recommendation.'
               : final
                 ? 'Checked on later dates and with higher trading costs.'
                 : 'Best settings found on the available research dates.'}
@@ -131,6 +132,20 @@ export function AutomaticResearchFindings({
         <div className="mt-4 space-y-4">
           <p className="font-medium">{researchRecipeLabel(findings.version)}</p>
           <p className="text-muted-foreground">{findings.selection_basis}</p>
+          {findings.comparison?.status === 'available' && findings.comparison.chart && (
+            <section aria-label="Matching final-period curves" className="space-y-2">
+              <AnalysisFigure chart={findings.comparison.chart} deferred height={280} />
+              <p className="text-muted-foreground">
+                Same final dates, price cohort, cash and costs; recorded observations only.
+                {findings.comparison.displayed !== findings.comparison.observations
+                  ? ` ${findings.comparison.displayed} of ${findings.comparison.observations} points shown.`
+                  : ''}
+              </p>
+            </section>
+          )}
+          {findings.comparison?.status === 'unavailable' && (
+            <p className="text-muted-foreground">Comparison chart: {findings.comparison.reason}</p>
+          )}
           {findings.recipe.validation_mode === 'exploratory_only' ? (
             <p>No untouched later check: the signal history is too short for this holding range.</p>
           ) : (

@@ -1,5 +1,15 @@
 # OpenAlgo Research — integrated delivery plan
 
+**Workflow priority — 11 October:** the current fourteen-step desktop audit leads
+to the [comprehensive workflow refinement plan](WORKFLOW_REFINEMENT_20261011.md).
+Recovery, verified selected reports, independent diagnostics, CSV-first entry,
+save/reuse and aligned comparison curves are implemented and under focused
+qualification. The refinement contract records their actual scope and remaining
+acceptance gates. Next: finish measured cached-context preparation improvements,
+qualify the complete journey and install the matching build, then reconcile the
+public package and complete its supported-platform matrix. This precedes broader
+asset and authoring expansion without changing the v7 search or old saved evidence.
+
 **11 October checkpoint:** the native host is reconciled to OpenAlgo 2.0.2.7 (`12e111465`), with unchanged charts 2.6.0/OpenScript 0.8.1 and numerical engine pins. New optimisation entry chooses the broad recipe automatically, keeping older scope selection advanced. V6 now adds [versioned trailing activation](AUTOMATIC_TRAILING_20261011.md) without increasing the128-proposal/320-calculation bound or changing v5 replay. Preflight records automatic/fixed/unsupported/pending decisions, and explicit unsupported CSV exchanges/assets are rejected before acquisition. Remaining research order: qualified asset/timing admission, comparison curves and native authoring parity. Historical October7 tables below remain dated evidence; [STATUS.md](STATUS.md) owns current activation/publication status.
 
 **Next dependency implemented:** [native timing admission](TIMING_ADMISSION_20261011.md)
@@ -10,9 +20,9 @@ choices, union acquisition and a fixed missing-price cohort as an internal opt-i
 stage. [V7 automatic timing](AUTOMATIC_TIMING_20261011.md) now integrates that
 foundation with joint conditions/trailing, causal context, bounded search and
 saved-clock inspection/replay. STATUS records its current native acceptance and
-activation. New asset profiles remain unqualified. Next, publish immutable
-findings independently of optional bounded diagnostics, then retain aligned
-candidate comparison curves and improve native authoring parity.
+activation. New asset profiles remain unqualified. Independent bounded diagnostics
+and compatible aligned candidate comparison curves are implemented in the current
+workflow increment. Native authoring parity remains a later dependency.
 
 
 **Observed report-preparation bottleneck — 11 October:** a real broad browser study completed all153 native calls and128 proposals, then high-cardinality Optuna fANOVA blocked optional plot preparation. The immediate fix admits fANOVA only through the categorical bound and exposes a separate chart-preparation stage. Next performance work should publish immutable financial findings before optional diagnostics, then give diagnostics their own bounded status, retry and cancellation, preserving frozen source and method provenance. This is planned work, not current background execution.

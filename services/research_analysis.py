@@ -13,6 +13,26 @@ VERSION = "research-analysis-v2"
 READABLE_VERSIONS = {"research-analysis-v1", VERSION}
 
 
+def _complete_analysis(result, *, kind=None):
+    """Financial metrics and optional study plots are separate completion facts."""
+    if result.get("analysis", {}).get("version") != VERSION:
+        return False
+    experiment = result.get("experiment")
+    if not experiment and kind != "portfolio_optimize":
+        return True
+    if not isinstance(experiment, dict):
+        return False
+    study = experiment.get("study_analysis")
+    diagnostics = experiment.get("diagnostics")
+    return bool(
+        isinstance(study, dict)
+        and study.get("version") in READABLE_VERSIONS
+        and isinstance(study.get("charts"), list)
+        and study["charts"]
+        and (not diagnostics or diagnostics.get("status") == "complete")
+    )
+
+
 def validate_request(store, owner, source_id, specification):
     required = {
         "parent_job_id",
@@ -43,6 +63,11 @@ def validate_request(store, owner, source_id, specification):
     if not experiment or experiment.kind not in ("portfolio_backtest", "portfolio_optimize"):
         raise ValueError("Analysis requires a saved portfolio backtest or study")
     result = service.read_artifact(store, parent.result_artifact)["result"]
+    if experiment.kind == "portfolio_optimize" and not isinstance(result.get("experiment"), dict):
+        raise ValueError(
+            "This saved study has no recorded proposals for Optuna charts. "
+            "Its numerical report remains available."
+        )
     parameters = specification["parameters"]
     axes = result.get("experiment", {}).get("search_space", {}).get("axes", {})
     if parameters is not None and (
@@ -195,12 +220,19 @@ def status(store, owner, parent_id):
             response["market_conditions"] = True
         if mapped == "complete":
             response["job"] = service.job_receipt(store, parent, include_result=True)
+            if not _complete_analysis(response["job"]["result"], kind=response["job"]["kind"]):
+                # An older completed overlay can contain financial metrics only.
+                # Keep it readable, but do not let it suppress a deferred study.
+                response["status"] = "missing"
         elif mapped == "failed":
             response["error"] = latest.error or "Analysis stopped. You can prepare it again."
         return response
     if parent.status == "completed":
         result = service.read_artifact(store, parent.result_artifact)["result"]
-        if result.get("analysis", {}).get("version") == VERSION:
+        with store.sessions() as db:
+            experiment = db.get(ResearchExperiment, parent.id)
+            kind = experiment.kind if experiment else None
+        if _complete_analysis(result, kind=kind):
             return {
                 "status": "complete",
                 "job": service.job_receipt(store, parent, include_result=True),
@@ -266,7 +298,7 @@ def submit(
         and benchmark is None
         and market_conditions is None
         and current["status"] == "complete"
-        and current["job"]["result"].get("analysis", {}).get("version") == VERSION
+        and _complete_analysis(current["job"]["result"], kind=current["job"]["kind"])
     ):
         return current
     if (
@@ -361,7 +393,7 @@ def run(
     cancelled=None,
 ):
     from research.analytics import add_price_charts, build_analysis
-    from research.study_analysis import build_study_analysis
+    from research.study_diagnostics import build as build_study_analysis
 
     validate_request(store, owner, source_id, specification)
     outer_progress = progress
@@ -422,11 +454,18 @@ def run(
                 experiment,
                 parameters=parameters,
                 progress=(lambda done, total: progress(2 + done, 15)) if progress else None,
+                cancelled=cancelled,
+                directory=store.root,
             )
         result["experiment"] = {
             "analysis_catalog": analysis["catalog"],
             "row_analysis": rows,
             "study_analysis": study_analysis,
+            "diagnostics": {
+                "version": "research-study-diagnostics-v1",
+                "status": "complete",
+                "required": False,
+            },
         }
     later = original.get("validation", {}).get("result")
     if later:

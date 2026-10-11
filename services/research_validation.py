@@ -173,9 +173,7 @@ def canonical_source(store, owner, experiment_id, job_id, config_id=None):
             raise ValueError("The saved replay inputs do not match their exact source")
         automatic_bridge = (
             bundle["kind"] == "portfolio_backtest"
-            and not candidate_edge
-            and replay_edge
-            and replay_edge[0] == "replay"
+            and (candidate_edge or (replay_edge and replay_edge[0] == "replay"))
             and origin["period"] == "selection"
             and inputs.get("automatic_recipe", {}).get("version")
             in (

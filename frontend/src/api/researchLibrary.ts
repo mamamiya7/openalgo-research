@@ -137,12 +137,17 @@ export const researchLibrary = {
       await webClient.post(`${path(id)}/versions`, { revision, ...(name ? { name } : {}) }, options)
     ).data
   },
-  async restoreVersion(id: string, version: string, revision: number): Promise<ResearchExperiment> {
+  async restoreVersion(
+    id: string,
+    version: string,
+    revision: number,
+    signal?: AbortSignal
+  ): Promise<ResearchExperiment> {
     return (
       await webClient.post(
         `${path(id)}/versions/${encodeURIComponent(version)}/restore`,
         { revision },
-        options
+        { ...options, ...(signal ? { signal } : {}) }
       )
     ).data
   },

@@ -45,6 +45,15 @@ holding rules under **Why these candles?**. New automatic studies compare
 shared Historify price preparation and the same price-complete opportunities.
 Daily inputs remain daily, and saved older studies keep their original scope.
 
+The next workflow increment previews CSV counts and dates before setup, simplifies
+experiment navigation to **Overview → Setup → Results → Saved setups**, and lets
+you prepare the selected tested report once, save it by name and reuse its exact
+rules. Financial findings complete independently of optional, cancellable Optuna
+charts. Compatible new automatic runs can compare the original and selected
+account curves on the same recorded evidence. Recovery actions reflect the actual
+saved checkpoint; incompatible calendar evidence does not offer a futile Resume.
+See the [workflow implementation and acceptance plan](docs/research/WORKFLOW_REFINEMENT_20261011.md).
+
 The public ZIP above remains **preview.7**. Preview.8 is qualified in the local
 application and controlled native journeys; its complete Windows/Linux release
 acceptance remains pending. See [current status](docs/research/STATUS.md), the

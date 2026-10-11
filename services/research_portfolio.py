@@ -364,7 +364,7 @@ def replay_inputs(store, owner, job_id, *, trial_id=None, period="selection"):
                 {
                     "study_job_id": job.id,
                     "trial_number": selected_row["trial_number"],
-                    "is_objective_winner": study.get("recommendation_id") == config_id,
+                    "is_objective_winner": study.get("objective_winner_id", study.get("recommendation_id")) == config_id,
                 }
                 if selected_row is not None
                 else {
@@ -677,6 +677,7 @@ def run(
     observe=None,
     boundary=None,
     job_id=None,
+    defer_study_analysis=False,
 ):
     validate_submission(
         evidence,
@@ -916,6 +917,7 @@ def run(
             activity=activity,
             observe=observe,
             boundary=boundary,
+            defer_study_analysis=defer_study_analysis,
         )
         return result, evidence
 
@@ -1042,11 +1044,16 @@ def run(
         )
         if boundary:
             boundary()
-        from research.study_analysis import build_study_analysis
+        if defer_study_analysis:
+            from research.study_diagnostics import deferred
 
-        result["experiment"]["study_analysis"] = build_study_analysis(
-            result["experiment"], progress=check_control
-        )
+            result["experiment"]["diagnostics"] = deferred()
+        else:
+            from research.study_analysis import build_study_analysis
+
+            result["experiment"]["study_analysis"] = build_study_analysis(
+                result["experiment"], progress=check_control
+            )
         # Every candidate uses the same prepared cohort and price observations.
         # Compact rows reference the study-level basis instead of copying it.
         result["experiment"]["evaluation_basis_id"] = calculation_basis["evidence_id"]

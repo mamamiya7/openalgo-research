@@ -50,6 +50,7 @@ def prepare(
     progress=None,
     cancelled=None,
     warmup_sessions=1,
+    scope=None,
 ):
     # Reporting callers still validate NSE index benchmarks. The acquisition core
     # also owns the already supported native NSE feature-warmup descriptor.
@@ -85,13 +86,15 @@ def prepare(
         _validate_receipts(recorded["acquisition_receipts"])
         if evidence["descriptor"] != descriptor:
             raise ValueError("Saved benchmark preparation changed instrument")
+        if scope is not None:
+            scope.calendar(first, last, warmup_sessions, recorded=recorded["calendar"])
         return recorded
     calendar_id = state.get("reference_artifact")
-    calendar = (
-        service.read_artifact(store, calendar_id)
-        if calendar_id
-        else native_calendar_window(first, last, warmup_sessions=warmup_sessions)
-    )
+    calendar = service.read_artifact(store, calendar_id) if calendar_id else None
+    if scope is not None:
+        calendar = scope.calendar(first, last, warmup_sessions, recorded=calendar)
+    elif calendar is None:
+        calendar = native_calendar_window(first, last, warmup_sessions=warmup_sessions)
     calendar_id = calendar_id or service.save_artifact(store, calendar)
     target, receipts = acquisition_paths(store)
     # Receipt sidecars are a mutable operational cache. Retain their exact bytes
@@ -131,6 +134,7 @@ def prepare(
         checkpoint=persist,
         progress=progress,
         cancelled=cancelled,
+        **({"scope": scope} if scope is not None else {}),
     )
     if response["batch_pending"]:
         raise AcquisitionBatchPending()

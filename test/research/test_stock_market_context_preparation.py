@@ -71,6 +71,11 @@ def test_native_stock_path_and_one_union_reference_preserve_original_inputs(arch
     assert calls == [("AAA", 100, None), ("BBB", 100, None), ("NIFTY", 160, None)]
     assert progress[-1] == (3, 3) and states[-1]["complete"]
     assert any(row.get("prices", {}).get("current_symbol") == "NIFTY" for row in events)
+    assert any(
+        row.get("features", {}).get("scanner_symbols") == 2
+        and row["features"].get("context_symbols") == 1
+        for row in events
+    )
     for state in states:
         assert state["state_id"] == fingerprint({k: v for k, v in state.items() if k != "state_id"})
         for key in ("stock_checkpoint", "market_checkpoint"):

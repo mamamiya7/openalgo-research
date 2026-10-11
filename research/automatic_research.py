@@ -74,6 +74,7 @@ def run(
     activity=None,
     observe=None,
     boundary=None,
+    defer_study_analysis=False,
 ):
     from research.automatic_protocol import STABILITY_VERSION, compile_recipe, slice_period
     from research.evaluation_basis import build_evaluation_basis
@@ -464,9 +465,14 @@ def run(
         },
     }
     experiment["evaluation_basis_id"] = search_basis["evidence_id"]
-    from research.study_analysis import build_study_analysis
+    if defer_study_analysis:
+        from research.study_diagnostics import deferred
 
-    experiment["study_analysis"] = build_study_analysis(experiment, progress=beat)
+        experiment["diagnostics"] = deferred()
+    else:
+        from research.study_analysis import build_study_analysis
+
+        experiment["study_analysis"] = build_study_analysis(experiment, progress=beat)
     from research.analytics import add_price_charts
 
     for report, window in ((result, search_evidence), (later, final_evidence)):

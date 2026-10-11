@@ -42,6 +42,7 @@ def prepare_context(
     store, owner, evidence, *, saved, checkpoint, progress, cancelled, activity=None
 ):
     from services.research_benchmarks import prepare
+    from services.research_market_series import StockFeaturePreparationScope
 
     symbols = _symbols(evidence)
     binding = fingerprint(
@@ -124,84 +125,92 @@ def prepare_context(
         raise ValueError("Saved stock-feature acquisition belongs to another symbol")
     if state["market_checkpoint"] is not None and state["current_symbol"] is None:
         raise ValueError("Saved stock-feature acquisition has no active symbol")
-    # Verify retained leaves before starting any new broker work on resume.
-    feature_bars = 0
-    for symbol, reference in completed.items():
-        record = validate_record(symbol, service.read_artifact(store, reference["inputs_artifact"]))
-        feature_bars += len(record["evidence"]["required_dates"])
-        if feature_bars > MAX_FEATURE_BARS:
-            raise ValueError("Stock-feature history exceeds its total session-bar limit")
-    capital = evidence["portfolio"]["capital"]
-    report_bounds = {
-        "summary": {"initial_capital": capital},
-        "equity_curve": [{"date": day, "equity": capital} for day in sessions],
-    }
-
-    def persist():
-        state.pop("state_id", None)
-        state["state_id"] = fingerprint(state)
-        if activity:
-            activity(
-                {
-                    "stage": "features",
-                    "features": {
-                        "total_symbols": len(symbols),
-                        "completed_symbols": len(completed),
-                    },
-                    "prices": {"current_symbol": state["current_symbol"]},
-                }
+    with StockFeaturePreparationScope(remaining, sessions) as scope:
+        # Verify retained leaves before starting any new broker work on resume.
+        feature_bars = 0
+        for symbol, reference in completed.items():
+            record = validate_record(
+                symbol, service.read_artifact(store, reference["inputs_artifact"])
             )
-        checkpoint(
-            deepcopy(state), {"completed": len(completed), "total": len(symbols), "stage": "prices"}
-        )
+            scope.calendar(sessions[0], sessions[-1], WARMUP_SESSIONS, recorded=record["calendar"])
+            feature_bars += len(record["evidence"]["required_dates"])
+            if feature_bars > MAX_FEATURE_BARS:
+                raise ValueError("Stock-feature history exceeds its total session-bar limit")
+        capital = evidence["portfolio"]["capital"]
+        report_bounds = {
+            "summary": {"initial_capital": capital},
+            "equity_curve": [{"date": day, "equity": capital} for day in sessions],
+        }
 
-    for symbol in remaining:
+        def persist():
+            state.pop("state_id", None)
+            state["state_id"] = fingerprint(state)
+            if activity:
+                activity(
+                    {
+                        "stage": "features",
+                        "features": {
+                            "total_symbols": len(symbols),
+                            "completed_symbols": len(completed),
+                        },
+                        "prices": {"current_symbol": state["current_symbol"]},
+                    }
+                )
+            checkpoint(
+                deepcopy(state),
+                {"completed": len(completed), "total": len(symbols), "stage": "prices"},
+            )
+
+        for symbol in remaining:
+            cancelled()
+            if state["current_symbol"] is None:
+                state["current_symbol"] = symbol
+                state["market_checkpoint"] = None
+                persist()
+            if activity:
+                activity({"stage": "features", "prices": {"current_symbol": symbol}})
+
+            def save_market(native_state, counts):
+                state["market_checkpoint"] = deepcopy(native_state)
+                persist()
+
+            record = prepare(
+                store,
+                owner,
+                report_bounds,
+                normalize_descriptor(
+                    {"symbol": symbol, "exchange": "NSE", "interval": "D", "role": "feature_warmup"}
+                ),
+                saved=state["market_checkpoint"],
+                checkpoint=save_market,
+                progress=lambda done, total: progress(
+                    len(completed) + min(1, max(0, done / max(1, total))), len(symbols)
+                ),
+                cancelled=cancelled,
+                warmup_sessions=WARMUP_SESSIONS,
+                scope=scope,
+            )
+            validate_record(symbol, record)
+            scope.finish(symbol)
+            scope.calendar(sessions[0], sessions[-1], WARMUP_SESSIONS, recorded=record["calendar"])
+            feature_bars += len(record["evidence"]["required_dates"])
+            if feature_bars > MAX_FEATURE_BARS:
+                raise ValueError("Stock-feature history exceeds its total session-bar limit")
+            completed[symbol] = {"inputs_artifact": service.save_artifact(store, record)}
+            state["current_symbol"], state["market_checkpoint"] = None, None
+            persist()
+            progress(len(completed), len(symbols))
         cancelled()
-        if state["current_symbol"] is None:
-            state["current_symbol"] = symbol
-            state["market_checkpoint"] = None
-            persist()
-        if activity:
-            activity({"stage": "features", "prices": {"current_symbol": symbol}})
-
-        def save_market(native_state, counts):
-            state["market_checkpoint"] = deepcopy(native_state)
-            persist()
-
-        record = prepare(
-            store,
-            owner,
-            report_bounds,
-            normalize_descriptor(
-                {"symbol": symbol, "exchange": "NSE", "interval": "D", "role": "feature_warmup"}
-            ),
-            saved=state["market_checkpoint"],
-            checkpoint=save_market,
-            progress=lambda done, total: progress(
-                len(completed) + min(1, max(0, done / max(1, total))), len(symbols)
-            ),
-            cancelled=cancelled,
-            warmup_sessions=WARMUP_SESSIONS,
-        )
-        validate_record(symbol, record)
-        feature_bars += len(record["evidence"]["required_dates"])
-        if feature_bars > MAX_FEATURE_BARS:
-            raise ValueError("Stock-feature history exceeds its total session-bar limit")
-        completed[symbol] = {"inputs_artifact": service.save_artifact(store, record)}
-        state["current_symbol"], state["market_checkpoint"] = None, None
+        payload = {
+            "version": VERSION,
+            "series": {
+                symbol: service.read_artifact(store, completed[symbol]["inputs_artifact"])
+                for symbol in symbols
+            },
+        }
+        bundle = validate_bundle({**payload, "id": fingerprint(payload)})
+        result = {**evidence, "automatic_stock_features": bundle}
+        state["inputs_artifact"] = service.save_artifact(store, result)
+        state["complete"] = True
         persist()
-        progress(len(completed), len(symbols))
-    cancelled()
-    payload = {
-        "version": VERSION,
-        "series": {
-            symbol: service.read_artifact(store, completed[symbol]["inputs_artifact"])
-            for symbol in symbols
-        },
-    }
-    bundle = validate_bundle({**payload, "id": fingerprint(payload)})
-    result = {**evidence, "automatic_stock_features": bundle}
-    state["inputs_artifact"] = service.save_artifact(store, result)
-    state["complete"] = True
-    persist()
-    return result
+        return result
