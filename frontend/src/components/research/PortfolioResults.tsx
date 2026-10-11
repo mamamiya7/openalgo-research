@@ -24,6 +24,7 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuthStore } from '@/stores/authStore'
 import { AutomaticResearchFindings } from './AutomaticResearchFindings'
+import { entryConditionRegimeName } from './ChosenEntryConditions'
 import { PortfolioStudyAnalysis } from './PortfolioAnalysis'
 import { PortfolioContinuousReport } from './PortfolioContinuousReport'
 import { BackToStudy, PortfolioStudyWorkspace } from './PortfolioStudyWorkspace'
@@ -88,7 +89,18 @@ function Pager({
 }
 export function StrategySettings({ strategy }: { strategy: PortfolioSettings }) {
   const config = strategy.config
+  const condition = strategy.entry_condition
   const settings = [
+    ...(condition
+      ? [
+          [
+            'Entry condition',
+            'hypothesis' in condition
+              ? condition.hypothesis.label
+              : entryConditionRegimeName(condition.regime),
+          ],
+        ]
+      : []),
     ['Allocation', number(strategy.allocation_pct, '%')],
     ['Per-trade size', number(config.order_size_pct, '% of allocation')],
     ['Profit target', number(config.target_pct, '%')],

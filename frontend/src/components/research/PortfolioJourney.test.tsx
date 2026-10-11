@@ -27,7 +27,7 @@ import {
   selectPortfolioRun,
   suggestedStrategySearch,
 } from './PortfolioBuilder'
-import { PortfolioResults } from './PortfolioResults'
+import { PortfolioResults, StrategySettings } from './PortfolioResults'
 import { ReportCurrency } from './ReportCurrency'
 
 vi.mock('@/api/portfolioResearch', () => ({
@@ -299,6 +299,45 @@ describe('native portfolio consumer journey', () => {
     original.portfolio.automatic_research = { version: 'automatic-hypotheses-v5' }
     expect(portfolioEngineIssue(original)).toMatch(/need VectorBT/)
     expect(original.portfolio.automatic_research.version).toBe('automatic-hypotheses-v5')
+  })
+
+  it('includes the saved stock entry rule alongside exits in report settings', () => {
+    render(
+      <StrategySettings
+        strategy={{
+          ...strategy,
+          entry_condition: {
+            version: 'research-stock-entry-conditions-v2',
+            hypothesis: {
+              id: 'rsi_14_gt60',
+              family: 'momentum',
+              label: 'RSI 14 above 60',
+              lookback: 14,
+              threshold: 60,
+            },
+          },
+        }}
+      />
+    )
+    expect(screen.getByText('Entry condition').closest('div')).toHaveTextContent('RSI 14 above 60')
+    expect(screen.getByText('Profit target')).toBeVisible()
+  })
+  it('shows a readable saved market rule and omits entry rules from unfiltered settings', () => {
+    const view = render(
+      <StrategySettings
+        strategy={{
+          ...strategy,
+          entry_condition: {
+            dimension: 'trend',
+            regime: 'up',
+            recipe_id: 'saved-recipe',
+          },
+        }}
+      />
+    )
+    expect(screen.getByText('Entry condition').closest('div')).toHaveTextContent('Rising market')
+    view.rerender(<StrategySettings strategy={strategy} />)
+    expect(screen.queryByText('Entry condition')).not.toBeInTheDocument()
   })
 
   it('reopens joint rules in Setup and submits both conditions unchanged', async () => {
