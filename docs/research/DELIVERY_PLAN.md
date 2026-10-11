@@ -4,10 +4,13 @@
 
 **Next dependency implemented:** [native timing admission](TIMING_ADMISSION_20261011.md)
 now identifies actual daily/timed/mixed input and fixed deadline constraints in
-preflight. Calendar-aware diagnostics require native recorded hours. Clock search
-still needs union acquisition and a fixed opportunity cohort before v7 admission;
-new asset profiles remain unqualified. Then continue aligned comparison curves
-and native authoring parity.
+preflight. Calendar-aware diagnostics require native recorded hours. The next
+[shared timing evidence foundation](TIMING_UNION_20261011.md) implements bounded
+choices, union acquisition and a fixed missing-price cohort as an internal opt-in
+stage. V7 still needs joint condition/trailing integration, causal context,
+bounded search and complete worker/findings/replay acceptance before clocks are
+searched automatically. New asset profiles remain unqualified. Then continue
+aligned comparison curves and native authoring parity.
 
 
 **Observed report-preparation bottleneck — 11 October:** a real broad browser study completed all153 native calls and128 proposals, then high-cardinality Optuna fANOVA blocked optional plot preparation. The immediate fix admits fANOVA only through the categorical bound and exposes a separate chart-preparation stage. Next performance work should publish immutable financial findings before optional diagnostics, then give diagnostics their own bounded status, retry and cancellation, preserving frozen source and method provenance. This is planned work, not current background execution.

@@ -42,6 +42,9 @@ it checks later periods, costs and stability when the available history permits.
 Preflight also explains the selected candle interval from actual CSV timing and
 holding rules under **Why these candles?**; automatic clock search remains a
 separate [qualification step](docs/research/TIMING_ADMISSION_20261011.md).
+Its [shared-price foundation](docs/research/TIMING_UNION_20261011.md) now stages
+bounded timing choices on one native Historify union and a fixed evidence cohort;
+automatic clock selection is not enabled in the current Optimize action.
 
 The public ZIP above remains **preview.7**. Preview.8 is qualified in the local
 application and controlled native journeys; its complete Windows/Linux release

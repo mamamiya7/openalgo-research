@@ -95,6 +95,8 @@ REQUIRED_RESEARCH_FILES = {
     "research/automatic_protocol.py",
     "research/automatic_trailing.py",
     "research/timing_admission.py",
+    "research/timing_search.py",
+    "services/research_timing_prices.py",
     "research/joint_stock_market.py",
     "research/stock_market_context.py",
     "services/research_stock_market_context.py",

@@ -42,6 +42,10 @@ cache, engine allocation, connections, threads, subprocesses or file owners.
 
 ## Next qualified search increment
 
+The bounded choice/union/cohort foundation is implemented separately in the
+[shared native timing evidence contract](TIMING_UNION_20261011.md). It remains an
+internal opt-in qualification stage; the current recipe does not search clocks.
+
 1. Define bounded timing choices from the declared horizon and observed signal
    times; do not turn a daily experiment into minute execution silently.
 2. Extend native requirement planning to the union of every admitted candidate

@@ -1,5 +1,22 @@
 # OpenAlgo Research status
 
+## Shared timing price evidence — 11 October 2026
+
+The next source increment implements bounded timing choices, one shared native
+Historify price union and a fixed evidence cohort. Missing required candles
+exclude the same opportunity across branches; intentional clock-rule filters
+remain branch-specific. The opt-in preparation helper reuses native archive and
+broker-history services with immutable, resumable acquisition checkpoints. It
+adds no endpoint or automatic recipe and does not change ordinary v2–v6 runs.
+See the [implementation and qualification contract](TIMING_UNION_20261011.md).
+
+`automatic-hypotheses-v7` remains planned. Its next dependency is integration with
+joint conditions/trailing search, causal context, bounded optimisation and the
+full worker/findings/replay journey. The current normal application remains the
+installed v6/timing-preflight build; this internal foundation has no new consumer
+screen to activate. Public preview.7 and draft PR6's integration gate remain
+unchanged.
+
 ## Native timing admission — 11 October 2026
 
 The next development increment adds a bounded presentation-only timing receipt to
