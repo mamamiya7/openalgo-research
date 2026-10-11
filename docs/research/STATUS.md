@@ -55,6 +55,15 @@ public installation/onboarding/extension support. The complete preview.8
 Windows/Linux package matrix and broader human/a11y journey gates remain separate
 delivery steps. A source push or local activation is not a public ZIP release.
 
+The initial package job stopped at the dependency audit on the
+[braces advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm), reached
+through the test-only Jest type chain. A scoped lock refresh selects `expect`
+30.5.2 and removes that vulnerable chain; the subsequent npm audit reports zero
+advisories. All 673 research frontend cases, TypeScript and build pass again.
+No Python engine, installer or numerical source changes accompany this dependency
+follow-up. Its package/fresh-install checks can run separately from the unchanged
+runtime matrix; both receipts are required before public release.
+
 ## Automatic trade timing — 11 October 2026
 
 `automatic-hypotheses-v7` integrates joint stock/market conditions, trailing and
