@@ -13,7 +13,7 @@ status and do not initiate acquisition. See the
 
 The completed v6 upgrade and matching frontend are pushed on
 `codex/native-research-refinement`; [draft integration PR6](https://github.com/mamamiya7/openalgo-research/pull/6)
-records the divergent public-main ancestry. Public preview.7 remains unchanged.
+records the divergent public-main ancestry. Public preview.7 remains unchanged. Normal-app activation preserves59 saved runs and configuration;162 installed compatibility checks pass. The actual2020-signal daily setup was checked in Chrome without starting a job.
 
 
 ## Automatic trailing selection — 11 October 2026

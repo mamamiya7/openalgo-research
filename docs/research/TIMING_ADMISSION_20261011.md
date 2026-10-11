@@ -74,3 +74,10 @@ omits original CSV bytes and OHLC arrays. The frontend retains the existing
 abortable, debounced account-specific query with finite stale/garbage-collection
 windows. Installation and public-main merge remain separate from this source
 qualification; dated activation evidence is recorded in STATUS.md.
+
+Normal-app activation also passes:59 saved runs, original artifact identities and
+configuration preserved;162 installed compatibility checks pass. The existing
+2020-signal/143-symbol setup resolves to daily candles in Chrome, with the new
+explanation collapsed initially and readable when opened. No research job or
+fresh broker acquisition was started by this check. Development source is pushed
+in draft PR6; public main and preview.7 remain separate from local activation.
