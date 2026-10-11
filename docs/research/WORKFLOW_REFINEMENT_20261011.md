@@ -31,8 +31,10 @@ saving its named tested setup, reopening the chosen setup and reuse into Setup
 with its original minute holding rule. This uses isolated evidence, not a fresh
 broker download. Targeted qualification is recorded in [STATUS](STATUS.md);
 broader journey, accessibility and package acceptance remain explicit gates
-below. Public preview.7 remains unchanged until public-main reconciliation and
-the preview.8 release matrix pass.
+below. Normal-app activation preserves all 60 runs and configuration and passes
+172 installed compatibility checks. Public preview history has been joined into
+the reconciled development branch. Public preview.7 remains unchanged until the
+preview.8 release matrix and publication gates pass.
 
 This plan closes the fourteen workflow steps inspected in the current desktop
 audit. The main journey is usable but requires users to learn research terminology,

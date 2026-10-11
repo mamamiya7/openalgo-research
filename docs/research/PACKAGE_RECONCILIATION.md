@@ -9,9 +9,13 @@ The combined native frontend is committed with its matching entrypoints. Private
 `.research-runtime/` installer caches remain excluded from Git and Docker context.
 
 The development branch incorporates public installation, onboarding, extension
-and release-support files through the reviewed tree reconciliation. Its ancestry
-differs from public main; a source-branch push is separate from merging main or
-publishing a qualified installation ZIP.
+and release-support files through the reviewed tree reconciliation. The October11
+workflow increment joins public main's history while retaining that reviewed
+native tree. A tree comparison confirms the only non-asset public source deletions
+are the two upstream-superseded Telegram service variants. This resolves ancestry
+conflicts without replacing the native host with the older preview.7 tree.
+A source-branch push remains separate from merging main or publishing a qualified
+installation ZIP; the preview.8 supported-platform matrix is still required.
 
 ## Historical October7 development reconciliation
 

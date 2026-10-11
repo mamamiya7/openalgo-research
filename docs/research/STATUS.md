@@ -41,12 +41,19 @@ about live broker latency; artifact/checkpoint persistence remains material.
 The preparation seam passes 97 distinct targeted cases, including matching
 artifact/receipt identities, original-calendar recovery, durable missing-window
 verification and 100 measured scope exits with balanced connections and bounded
-retained memory. Normal-app activation remains the next delivery step.
+retained memory.
 
-Public preview.7 is unchanged. Public-main ancestry reconciliation, the complete
-preview.8 Windows/Linux package matrix and broader human/a11y journey gates
-remain separate delivery steps. Installation and Git identities will be recorded
-after the matching source and interface are qualified.
+Normal-app activation from `c9db75be1565` preserves all 60 saved runs and their
+artifact identities, existing account/Historify and configuration. The matching
+interface is installed, the app/worker are ready, and all 172 installed source
+and dependency compatibility checks pass. A rollback source/interface backup is
+retained locally; no real broker download or trading operation was initiated.
+
+Public preview.7 is unchanged. The development branch now joins public preview
+history while retaining the previously reconciled OpenAlgo 2.0.2.7 tree and its
+public installation/onboarding/extension support. The complete preview.8
+Windows/Linux package matrix and broader human/a11y journey gates remain separate
+delivery steps. A source push or local activation is not a public ZIP release.
 
 ## Automatic trade timing — 11 October 2026
 
