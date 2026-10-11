@@ -1,6 +1,7 @@
 # Research workflow refinement plan
 
-Date: 11 October 2026. Status: implementation and qualification in progress.
+Date: 11 October 2026. Status: implementation, local activation and composed
+Windows/Linux runtime/package qualification complete; public publication separate.
 
 ## Implementation checkpoint
 
@@ -39,11 +40,14 @@ Controlled Chrome acceptance has exercised preparation of an automatic baseline,
 saving its named tested setup, reopening the chosen setup and reuse into Setup
 with its original minute holding rule. This uses isolated evidence, not a fresh
 broker download. Targeted qualification is recorded in [STATUS](STATUS.md);
-broader journey, accessibility and package acceptance remain explicit gates
-below. Normal-app activation preserves all 60 runs and configuration and passes
+broader journey and accessibility coverage remain explicitly unverified below.
+The complete core inventory, corrected test-only follow-ups and actual final-UI
+package/fresh-install gates now pass on Windows/Linux, with unchanged runtime
+and inventory guards retaining the original failed-run evidence. Normal-app
+activation preserves all 60 runs and configuration and passes
 172 installed compatibility checks. Public preview history has been joined into
 the reconciled development branch. Public preview.7 remains unchanged until the
-preview.8 release matrix and publication gates pass.
+separate preview.8 publication step is performed.
 
 This plan closes the fourteen workflow steps inspected in the current desktop
 audit. The main journey is usable but requires users to learn research terminology,

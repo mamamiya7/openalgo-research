@@ -51,9 +51,10 @@ retained locally; no real broker download or trading operation was initiated.
 
 Public preview.7 is unchanged. The development branch now joins public preview
 history while retaining the previously reconciled OpenAlgo 2.0.2.7 tree and its
-public installation/onboarding/extension support. The complete preview.8
-Windows/Linux package matrix and broader human/a11y journey gates remain separate
-delivery steps. A source push or local activation is not a public ZIP release.
+public installation/onboarding/extension support. The composed preview.8
+Windows/Linux runtime and package qualification is recorded below; broader
+human/a11y journey coverage remains future scope. A source push or local
+activation is not a public ZIP release.
 
 The initial package job stopped at the dependency audit on the
 [braces advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm), reached
@@ -128,6 +129,23 @@ qualification cases pass locally. A guarded follow-up runs those contracts on
 both operating systems and the Linux post-core checks skipped by that failure;
 it retains the original failed run as evidence and cannot qualify unrelated
 source changes. This is test/CI-only work and requires no app restart.
+
+Final qualification is complete for this increment. The installed final UI source
+`bc68f2ce0` passes package, image dependency probes and actual Windows/Linux fresh
+install, calculation, reinstall and restart in
+[38130441366](https://github.com/mamamiya7/openalgo-research/actions/runs/38130441366).
+The guarded unchanged-runtime follow-up
+[38130930162](https://github.com/mamamiya7/openalgo-research/actions/runs/38130930162)
+passes both operating systems' corrected package/workflow contracts, plus Linux
+host migration/shutdown/chart checks, the production eventlet boundary, real
+Nautilus fills/process cleanup and repeated core-to-side-runtime calculations.
+Together with the complete core inventory and corrected Windows slice recorded
+above, these receipts establish composed qualification; the original full run's
+two failures remain visible rather than being relabelled as a successful run.
+Later changes are test/CI/documentation only. All 60 saved runs and their artifacts
+remain preserved, 172 installed compatibility checks pass, and the matching UI is
+installed without restarting calculations. Public main and the preview.8 ZIP
+remain separate publication steps; public preview.7 is unchanged.
 
 ## Automatic trade timing — 11 October 2026
 
