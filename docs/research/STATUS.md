@@ -90,6 +90,18 @@ invalid-slice admission pass eight workflow tests. Host migration/shutdown check
 run once per platform, and package/fresh-install checks retain their original
 gates. This changes CI scheduling, not application execution or installation.
 
+The corrected candidate's package and actual fresh-install/calculation/reinstall/
+restart checks pass on Windows and Linux in run
+[38128158644](https://github.com/mamamiya7/openalgo-research/actions/runs/38128158644).
+Windows slices 0 and 1 also pass. Slice 3 exceeded the default 60-second test
+limit while executing a complete real VectorBT/Optuna joint search; the same
+bounded search completes locally in 55.02 seconds with all financial assertions
+passing. That test now uses the existing heavy-search allowance of 300 seconds.
+No application or search budget changes accompany this correction. A guarded
+manual slice recheck preserves the remaining full-run evidence only when runtime,
+dependency files and the complete test-module inventory match the qualified
+candidate. It cannot independently qualify a package or either complete platform.
+
 ## Automatic trade timing — 11 October 2026
 
 `automatic-hypotheses-v7` integrates joint stock/market conditions, trailing and

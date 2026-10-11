@@ -242,6 +242,9 @@ def test_v5_pause_resume_keeps_committed_work_and_retained_rule_identity(monkeyp
     )
 
 
+# This runs the complete bounded native search; imported helpers do not inherit
+# their module's 300-second limit, and hosted Windows can exceed the default 60s.
+@pytest.mark.timeout(300)
 def test_real_vectorbt_recalculates_every_joint_candidate(monkeypatch):
     from research.connectors.vectorbt_portfolio import evaluate
 
