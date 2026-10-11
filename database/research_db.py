@@ -393,6 +393,18 @@ class ResearchStudyProposal(Base):
     checkpointed = Column(Boolean, nullable=False, default=False)
 
 
+class ResearchAutomaticPeriodUse(Base):
+    """Account-wide consumed daily observations, independent of CSV names/IDs."""
+
+    __tablename__ = "research_automatic_period_use"
+    owner = Column(String(255), primary_key=True)
+    day = Column(String(10), primary_key=True)
+    inputs_artifact = Column(String(64), nullable=False)
+    job_id = Column(String(36), nullable=False)
+    role = Column(String(16), nullable=False)
+    created_at = Column(Float, nullable=False)
+
+
 class ResearchStore:
     def __init__(self, root=None):
         self.root = Path(root or os.getenv("RESEARCH_DATA_DIR", "research_data")).resolve()

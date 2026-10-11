@@ -5,21 +5,75 @@ parameters, or retain resources. Optuna and the selected native engine do that.
 """
 
 from copy import deepcopy
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 VERSION = "automatic-trade-management-v1"
+CONDITION_VERSION = "automatic-entry-conditions-v1"
+STABILITY_VERSION = "automatic-trade-management-v2"
+HYPOTHESIS_VERSION = "automatic-hypotheses-v2"
+EXPANDED_VERSION = "automatic-hypotheses-v3"
+BENCHMARK_VERSION = "automatic-hypotheses-v4"
+JOINT_VERSION = "automatic-hypotheses-v5"
+TRAILING_VERSION = "automatic-hypotheses-v6"
+TIMING_VERSION = "automatic-hypotheses-v7"
+HYPOTHESIS_VERSIONS = (
+    HYPOTHESIS_VERSION,
+    EXPANDED_VERSION,
+    BENCHMARK_VERSION,
+    JOINT_VERSION,
+    TRAILING_VERSION,
+    TIMING_VERSION,
+)
 PERIODS = ("search", "check1", "check2", "final")
 MIN_SESSIONS = 100
 
 
+def check_signal_span(portfolio, receipt, *, interval):
+    """Reject provably impossible v2 histories before any price acquisition.
+
+    Calendar days are only an upper bound on sessions, including special sessions.
+    This never invents an exchange calendar or certifies sufficient coverage.
+    """
+    version = portfolio.get("automatic_research", {}).get("version")
+    if version not in (STABILITY_VERSION, *HYPOTHESIS_VERSIONS):
+        return
+    span = (
+        date.fromisoformat(receipt["date_to"]) - date.fromisoformat(receipt["date_from"])
+    ).days + 1
+    minimum = 20 if version in HYPOTHESIS_VERSIONS else MIN_SESSIONS
+    if span < minimum:
+        raise ValueError(
+            f"Automatic research needs {minimum} trading sessions; these signals span only "
+            f"{span} calendar days. Use a longer signal history."
+        )
+    if interval == "D" and version == STABILITY_VERSION:
+        longest = max(
+            row["search"].get("hold_sessions", {}).get("max", row["config"]["hold_sessions"])
+            for row in portfolio["strategies"]
+        )
+        upper_check = (span + 9) // 10
+        if upper_check <= longest + 1:
+            raise ValueError(
+                f"This signal history is too short for the allowed {longest:g}-session hold "
+                "and separate later checks. Shorten the holding period or use longer signal history."
+            )
+
+
 def normalize_auto(raw, strategies=None, engine="vectorbt"):
     """Accept only the named recipe; budgets and evidence gates are versioned."""
-    if not isinstance(raw, dict) or set(raw) != {"version"} or raw["version"] != VERSION:
+    if (
+        not isinstance(raw, dict)
+        or set(raw) != {"version"}
+        or raw["version"]
+        not in (VERSION, CONDITION_VERSION, STABILITY_VERSION, *HYPOTHESIS_VERSIONS)
+    ):
         raise ValueError("Choose the supported automatic research recipe")
     if engine not in ("vectorbt", "nautilus"):
         raise ValueError("Automatic research needs a supported portfolio engine")
-    return {"version": VERSION}
+    if raw["version"] in (CONDITION_VERSION, *HYPOTHESIS_VERSIONS) and engine != "vectorbt":
+        raise ValueError("Automatic entry-condition research currently needs VectorBT")
+    return {"version": raw["version"]}
 
 
 def _range(value, ceiling, *, integer=False):
@@ -48,6 +102,10 @@ def automatic_portfolio(portfolio):
     result["automatic_research"] = normalize_auto(
         result["automatic_research"], result.get("strategies"), result.get("engine", "vectorbt")
     )
+    if result.get("entry_conditions"):
+        raise ValueError(
+            "Use a fixed backtest or custom search for an already chosen entry condition"
+        )
     if result.get("validation"):
         raise ValueError("Automatic research sets its own chronological checks")
     for row in result["strategies"]:
@@ -68,12 +126,24 @@ def automatic_portfolio(portfolio):
             search["hold_minutes"] = _range(cfg["hold_minutes"], 100000, integer=True)
         elif cfg.get("trade_horizon") != "intraday":
             search["hold_sessions"] = _range(cfg["hold_sessions"], 252, integer=True)
-        if cfg["trailing_enabled"]:
+        if cfg["trailing_enabled"] and result["automatic_research"]["version"] not in (
+            TRAILING_VERSION,
+            TIMING_VERSION,
+        ):
             search["trailing_pct"] = _range(cfg["trailing_pct"], 99)
         row["search"] = search
     result["optimization"] = {
         "sampler": "tpe",
-        "trials": 50,
+        "trials": 128
+        if result["automatic_research"]["version"]
+        in (JOINT_VERSION, TRAILING_VERSION, TIMING_VERSION)
+        else 96
+        if result["automatic_research"]["version"] == BENCHMARK_VERSION
+        else 84
+        if result["automatic_research"]["version"] == EXPANDED_VERSION
+        else 60
+        if result["automatic_research"]["version"] == HYPOTHESIS_VERSION
+        else 50,
         "objective": "balanced",
         "seed": 0,
     }
@@ -92,13 +162,22 @@ def compile_recipe(evidence):
         raise ValueError("Automatic research needs dated scanner signals")
     first, last = min(row["date"] for row in signals), max(row["date"] for row in signals)
     sessions = [day for day in snapshot["sessions"] if first <= day <= last]
-    if sessions != sorted(set(sessions)) or len(sessions) < MIN_SESSIONS:
+    intelligent = portfolio["automatic_research"]["version"] in HYPOTHESIS_VERSIONS
+    minimum = 20 if intelligent else MIN_SESSIONS
+    if sessions != sorted(set(sessions)) or len(sessions) < minimum:
         raise ValueError(
-            f"Automatic research needs at least {MIN_SESSIONS} trading sessions between the first "
+            f"Automatic research needs at least {minimum} trading sessions between the first "
             f"and last signal; this file covers {len(sessions)}. Use a longer signal history."
         )
     count = len(sessions)
+    validation_mode = "chronological"
     cuts = (0, count * 60 // 100, count * 70 // 100, count * 80 // 100, count)
+    if intelligent:
+        from research.intelligent_plan import chronology
+
+        cuts, validation_mode = chronology(
+            portfolio, count, snapshot["provenance"]["interval"], snapshot
+        )
     periods = {
         name: {
             "from": sessions[cuts[i]],
@@ -107,8 +186,12 @@ def compile_recipe(evidence):
         }
         for i, name in enumerate(PERIODS)
     }
+    if intelligent and validation_mode == "exploratory_only":
+        periods = {
+            name: {"from": sessions[0], "to": sessions[-1], "sessions": count} for name in PERIODS
+        }
     requirements = requirement_strategies(portfolio, evidence["strategies"])
-    if snapshot["provenance"]["interval"] == "D":
+    if snapshot["provenance"]["interval"] == "D" and not intelligent:
         longest = max(row["config"]["hold_sessions"] for row in requirements)
         shortest = min(periods[name]["sessions"] for name in ("check1", "check2"))
         if shortest <= longest + 1:
@@ -118,7 +201,7 @@ def compile_recipe(evidence):
                 "history or a shorter baseline holding period."
             )
     payload = {
-        "version": VERSION,
+        "version": portfolio["automatic_research"]["version"],
         "scope": "execution management of supplied scanner signals",
         "periods": periods,
         "basis": {
@@ -161,6 +244,128 @@ def compile_recipe(evidence):
             "unsupported": "no indicator, regime, benchmark or original-scanner discovery",
         },
     }
+    if payload["version"] == CONDITION_VERSION:
+        from research.automatic_conditions import catalog
+
+        payload["scope"] = (
+            "bounded market entry conditions and trade management of supplied signals"
+        )
+        payload["condition_catalog"] = catalog(evidence["strategies"])
+        payload["market_evidence_id"] = (
+            evidence.get("entry_condition_market", {}).get("evidence", {}).get("id")
+        )
+        payload["budget"] = {"proposals": 50, "max_simulations": 100, "max_exit_candidates": 4}
+        payload["policies"]["unsupported"] = (
+            "no arbitrary indicators, original-scanner reconstruction or live execution"
+        )
+    if payload["version"] == STABILITY_VERSION:
+        payload["budget"] = {"proposals": 50, "additional_simulations": 68, "max_simulations": 118}
+        payload["stability"] = {
+            "version": "adjacent-grid-v1",
+            "max_neighbors": 8,
+            "max_finalists": 3,
+            "periods": ["check1", "check2"],
+            "min_pass_fraction": 0.75,
+            "policy": "one active axis of one strategy, one declared step, within frozen ranges",
+            "sampling": "balanced strategy, axis and direction counts; bounded deterministic subset",
+            "acceptance": "at least one neighbor; 75% pass ordinary support gates in both development windows",
+        }
+    if intelligent:
+        from research.intelligent_plan import build_plan
+        from research.stock_features import catalog, validate_bundle
+
+        relative = portfolio["automatic_research"]["version"] == BENCHMARK_VERSION
+        expanded = portfolio["automatic_research"]["version"] in (
+            EXPANDED_VERSION,
+            BENCHMARK_VERSION,
+        )
+        if expanded:
+            from research.stock_indicators import catalog
+
+        if relative:
+            from research.stock_relative_strength import catalog, validate_bundle
+        joint = portfolio["automatic_research"]["version"] in (
+            JOINT_VERSION,
+            TRAILING_VERSION,
+            TIMING_VERSION,
+        )
+        if joint:
+            from research.joint_stock_market import catalog
+            from research.stock_market_context import validate_bundle
+        stock = (
+            evidence.get("automatic_stock_market_context")
+            if joint
+            else evidence.get("automatic_stock_features")
+        )
+        if stock is not None:
+            validate_bundle(stock)
+        payload["scope"] = (
+            "joint stock trend, momentum and exit research on supplied scanner opportunities"
+        )
+        if expanded:
+            payload["scope"] = (
+                "joint stock trend, momentum, RSI, Bollinger, ATR and bounded conjunctions with exit research"
+            )
+        payload["validation_mode"] = validation_mode
+        payload["hypothesis_catalog"] = catalog()
+        payload["stock_evidence_id"] = stock["id"] if stock else None
+        payload["research_plan"] = build_plan(
+            portfolio, interval=snapshot["provenance"]["interval"]
+        )
+        payload["budget"] = {
+            "proposals": 96 if relative else 84 if expanded else 60,
+            "max_simulations": 240 if relative else 220 if expanded else 180,
+            "max_finalists": 3,
+            "max_neighbors": 4,
+        }
+        payload["policies"]["unsupported"] = (
+            "original-scanner reconstruction, other indicators, live execution or statistical confidence claims"
+        )
+        if expanded:
+            from research.stock_indicators import recipe as indicator_recipe
+
+            payload["indicator_recipe"] = indicator_recipe()
+            payload["policies"]["unsupported"] = (
+                "original-scanner reconstruction, benchmark/regime stacks, volume, unregistered indicators, live execution or statistical confidence claims"
+            )
+        if relative:
+            from research.stock_relative_strength import recipe as relative_recipe
+
+            payload["indicator_recipe"] = relative_recipe()
+            payload["scope"] = (
+                "joint stock indicators, relative strength against Nifty 50 and exit research"
+            )
+            payload["policies"]["unsupported"] = (
+                "original-scanner reconstruction, market-regime stacks, volume, unregistered indicators, live execution or statistical confidence claims"
+            )
+        if joint:
+            from research.joint_stock_market import recipe as joint_recipe
+
+            payload["scope"] = (
+                "joint stock indicators, relative strength, causal Nifty trend or volatility and exit research"
+            )
+            payload["indicator_recipe"] = joint_recipe()
+            payload["budget"].update(proposals=128, max_simulations=320)
+            payload["policies"]["unsupported"] = (
+                "original-scanner reconstruction, arbitrary Boolean stacks, volume, unregistered indicators, live execution or statistical confidence claims"
+            )
+        if payload["version"] in (TRAILING_VERSION, TIMING_VERSION):
+            from research.automatic_trailing import descriptor
+
+            payload["trailing_research"] = descriptor(evidence["strategies"])
+            payload["policies"]["trailing"] = (
+                "off is one canonical candidate; positive distances enable trailing; "
+                "unchanged original settings remain a separate baseline"
+            )
+        if payload["version"] == TIMING_VERSION:
+            from research.automatic_timing import descriptor as timing_descriptor
+
+            payload["timing_research"] = timing_descriptor(evidence)
+            payload["policies"]["coverage"] = payload["timing_research"]["policy"]
+        if validation_mode == "exploratory_only":
+            payload["policies"]["final"] = (
+                "No untouched later period; exploratory ranking only, never a validated recommendation"
+            )
     return {**payload, "id": fingerprint(payload)}
 
 
@@ -208,6 +413,7 @@ def slice_period(evidence, name):
         for row in requirement_strategies(evidence["portfolio"], evidence["strategies"])
     }
     strategies, purged = [], 0
+    timing_union = recipe["version"] == TIMING_VERSION and evidence.get("timing_cohort") is not None
     for row in evidence["strategies"]:
         chosen = []
         cfg = requirements[row["id"]]["config"]
@@ -235,6 +441,10 @@ def slice_period(evidence, name):
                         purged += 1
             chosen.append(signal)
         strategies.append({**row, "signals": chosen})
+    if timing_union:
+        from research.automatic_timing import period_strategies
+
+        strategies, purged = period_strategies(evidence, first, last, name)
     selected = {
         **evidence,
         "strategies": strategies,
@@ -247,7 +457,7 @@ def slice_period(evidence, name):
     if not selected["signals"]:
         raise ValueError(f"The {name} research period has no scanner signals")
     try:
-        prepared = prepare(selected)
+        prepared = selected if timing_union else prepare(selected)
     except ValueError as error:
         if str(error).startswith("No signals have complete broker prices"):
             raise ValueError(

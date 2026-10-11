@@ -21,7 +21,9 @@ def history(monkeypatch):
     token.get_token = lambda *a: "123"
     monkeypatch.setitem(sys.modules, "database.auth_db", auth)
     monkeypatch.setitem(sys.modules, "database.token_db", token)
-    spec = importlib.util.spec_from_file_location("isolated_history", "services/history_service.py")
+    spec = importlib.util.spec_from_file_location(
+        "isolated_history", Path(__file__).resolve().parents[2] / "services/history_service.py"
+    )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     monkeypatch.setattr(module, "_enforce_rate_limit", lambda: None)
@@ -212,7 +214,7 @@ def test_shared_pacing_and_api_feed_lookup_preserved(history):
 
 def native_methods(broker, names):
     """Execute exact native method ASTs; isolate imports/clients, not method logic."""
-    path = Path("broker") / broker / "api/data.py"
+    path = Path(__file__).resolve().parents[2] / "broker" / broker / "api/data.py"
     tree = ast.parse(path.read_text(encoding="utf-8-sig"))
     cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "BrokerData")
     methods = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name in names]

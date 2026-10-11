@@ -1,6 +1,8 @@
 # Ubuntu Server Installation
 
-> **Installing OpenAlgo Research?** Use [managed Linux source installation](../../research/RUNTIME.md#managed-linux-source-installation), which includes the Research dependencies and worker. For a local desktop installation, use the [guided installer](../../research/RUNTIME.md#easy-local-installation-recommended). The upstream OpenAlgo server installation below does not by itself install this Research distribution.
+The installer starts with **eventlet**. To use **gthread**, finish installation
+then follow the [gthread installation and switching guide](../../gthread/README.md#installing-with-gthread).
+There is currently no worker-selection prompt in this installer.
 
 ### Prerequisites
 

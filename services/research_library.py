@@ -139,6 +139,7 @@ def normalize_draft(store, owner, raw):
             "optimization",
             "validation",
             "automatic_research",
+            "entry_conditions",
             "date_from",
             "date_to",
         },
@@ -169,10 +170,11 @@ def normalize_draft(store, owner, raw):
         if portfolio["validation"].get("mode", "evaluate") not in ("reserve", "evaluate"):
             raise ValueError("Choose reserve or evaluate for the later period")
     if portfolio.get("automatic_research") is not None:
-        from research.automatic_protocol import VERSION as AUTOMATIC_VERSION
+        from research.automatic_protocol import normalize_auto
 
-        if portfolio["automatic_research"] != {"version": AUTOMATIC_VERSION}:
-            raise ValueError("Choose a supported automatic research preset")
+        portfolio["automatic_research"] = normalize_auto(
+            portfolio["automatic_research"], engine=portfolio.get("engine", "vectorbt")
+        )
     rows = portfolio.get("strategies")
     if not isinstance(rows, list) or len(rows) > 8:
         raise ValueError("A draft can contain at most eight strategies")
@@ -180,7 +182,16 @@ def normalize_draft(store, owner, raw):
     for row in rows:
         _object(
             row,
-            {"id", "name", "source_id", "allocation_pct", "config", "search", "type"},
+            {
+                "id",
+                "name",
+                "source_id",
+                "allocation_pct",
+                "config",
+                "search",
+                "type",
+                "entry_condition",
+            },
             "draft strategy",
         )
         identifier = row.get("id")
@@ -221,6 +232,25 @@ def normalize_draft(store, owner, raw):
             source_id and not re.fullmatch(r"[a-f0-9]{32}", source_id)
         ):
             raise ValueError("Invalid draft source identity")
+    if portfolio.get("entry_conditions") is not None:
+        from research.entry_conditions import markers
+        from research.entry_conditions import normalize as normalize_conditions
+        from services.research_portfolio import _canonical_condition_request
+
+        canonical = _canonical_condition_request(portfolio)
+        portfolio["entry_conditions"] = canonical["entry_conditions"]
+        if canonical is not portfolio:
+            portfolio["strategies"] = rows = canonical["strategies"]
+        portfolio["entry_conditions"] = normalize_conditions(
+            portfolio["entry_conditions"], rows, portfolio["engine"]
+        )
+        for row, expected in zip(rows, markers(rows, portfolio["entry_conditions"]), strict=True):
+            if "entry_condition" in row and row["entry_condition"] != expected.get(
+                "entry_condition"
+            ):
+                raise ValueError("The saved strategy entry condition changed")
+    elif any("entry_condition" in row for row in rows):
+        raise ValueError("Retain the complete saved entry-condition recipe")
     supplied = result.get("sources")
     if not isinstance(supplied, dict) or len(supplied) > 8:
         raise ValueError("Invalid draft source list")
@@ -644,16 +674,24 @@ def restore_version(store, owner, identifier, version_id, data):
             )
             .limit(1)
         )
-        if retained_source and evidence_service.read_artifact(store, retained_source).get(
-            "condition_replay"
-        ):
-            raise ValueError(
-                "Open this condition test and use Exact replay to retain its entry rule"
-            )
         draft = json.loads(version.draft)
+        if retained_source:
+            evidence = evidence_service.read_artifact(store, retained_source)
+            if evidence.get("condition_replay"):
+                from research.entry_conditions import VERSION as CONDITIONS_VERSION
+                from research.regimes import recipe
+                from services.research_condition_replay import verify
+
+                verify(store, evidence)
+                draft["portfolio"]["entry_conditions"] = {
+                    "version": CONDITIONS_VERSION,
+                    "recipe": recipe(),
+                    "rules": [deepcopy(evidence["condition_replay"]["condition"])],
+                }
+        draft = normalize_draft(store, owner, draft)
         _check_sources(db, owner, draft)
         _preserve_draft(db, row, draft, "Draft before restoring setup")
-        row.draft = version.draft
+        row.draft = _bounded_json(draft)
         for key in PARENTS:
             setattr(row, key, getattr(version, key))
         row.parent_version_id = version.id
@@ -1025,12 +1063,13 @@ def from_job(store, owner, data):
     if bundle.get("kind") not in ("portfolio_backtest", "portfolio_optimize"):
         raise ValueError("Choose a completed portfolio result")
     report = bundle["result"]
-    if report.get("condition_replay"):
-        raise ValueError(
-            "Use Exact replay for this condition test, or adjust the original unfiltered setup"
-        )
     inputs = evidence_service.read_artifact(store, bundle["inputs_artifact"])
     portfolio = deepcopy(report.get("portfolio") or inputs["portfolio"])
+    from services.research_setup_reuse import retained_entry_conditions
+
+    conditions = retained_entry_conditions(store, bundle)
+    if conditions is not None:
+        portfolio["entry_conditions"] = conditions
     chosen = report["strategies"]
     trial_id = data.get("trial_id")
     if trial_id is not None:
@@ -1050,6 +1089,8 @@ def from_job(store, owner, data):
         strategy.update(
             config=deepcopy(selected["config"]), allocation_pct=selected["allocation_pct"]
         )
+        if "entry_condition" in selected:
+            strategy["entry_condition"] = deepcopy(selected["entry_condition"])
         strategy.setdefault("search", {})
     draft = fresh_draft()
     draft.update(

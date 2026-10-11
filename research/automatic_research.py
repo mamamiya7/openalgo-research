@@ -74,11 +74,15 @@ def run(
     activity=None,
     observe=None,
     boundary=None,
+    defer_study_analysis=False,
 ):
-    from research.automatic_protocol import compile_recipe, slice_period
+    from research.automatic_protocol import STABILITY_VERSION, compile_recipe, slice_period
     from research.evaluation_basis import build_evaluation_basis
 
     recipe = compile_recipe(evidence)
+    version = recipe["version"]
+    stability_enabled = version == STABILITY_VERSION
+    max_simulations = recipe["budget"]["max_simulations"]
     if evidence.get("automatic_recipe") != recipe:
         raise ValueError("The saved automatic research recipe changed")
     binding = fingerprint(
@@ -94,7 +98,7 @@ def run(
         deepcopy(saved)
         if saved
         else {
-            "version": VERSION,
+            "version": version,
             "binding": binding,
             "simulations": 0,
             "evaluations": {},
@@ -107,7 +111,7 @@ def run(
     )
     if saved:
         if (
-            state.get("version") != VERSION
+            state.get("version") != version
             or state.get("binding") != binding
             or state.get("checkpoint_id")
             != _fingerprint(
@@ -116,7 +120,7 @@ def run(
             )
         ):
             raise ValueError("Automatic research checkpoint inputs or evidence changed")
-        if not 0 <= state.get("simulations", -1) <= MAX_SIMULATIONS:
+        if not 0 <= state.get("simulations", -1) <= max_simulations:
             raise ValueError("Invalid automatic research simulation count")
     capital = evidence["portfolio"]["capital"]
     baseline = _settings(evidence["strategies"])
@@ -138,16 +142,16 @@ def run(
         state["checkpoint_id"] = _fingerprint(state, max_bytes=MAX_CHECKPOINT_BYTES)
         checkpoint(
             deepcopy(state),
-            {"completed": state["simulations"], "total": MAX_SIMULATIONS, "stage": stage},
+            {"completed": state["simulations"], "total": max_simulations, "stage": stage},
         )
 
     def beat(done, total):
         cancelled()
-        progress(state["simulations"] + min(1, done / max(1, total)), MAX_SIMULATIONS)
+        progress(state["simulations"] + min(1, done / max(1, total)), max_simulations)
 
     def simulate(settings, period, *, stress=False):
         control()
-        if state["simulations"] >= MAX_SIMULATIONS:
+        if state["simulations"] >= max_simulations:
             raise ValueError("Automatic research reached its saved simulation limit")
         window = window_for(period)
         chosen = {row["id"]: row for row in settings}
@@ -188,7 +192,7 @@ def run(
             # The adapter supplies the exact fixed search window and owns repeated
             # proposal reuse. This wrapper counts actual engine simulations only.
             cancelled()
-            if state["simulations"] >= MAX_SIMULATIONS:
+            if state["simulations"] >= max_simulations:
                 raise ValueError("Automatic research reached its saved simulation limit")
             report = evaluate(rows, snapshot, amount, progress=progress)
             state["simulations"] += 1
@@ -257,6 +261,55 @@ def run(
                     "baseline_summary": stressed_base["summary"],
                     "score_delta": _score(stress["summary"]) - _score(stressed_base["summary"]),
                 }
+            stability = None
+            if stability_enabled and not reasons:
+                from research.automatic_stability import neighbors
+
+                neighborhood = neighbors(settings, recipe["ranges"])
+                tested_neighbors = []
+                for neighbor in neighborhood["neighbors"]:
+                    neighbor_windows, failures = [], []
+                    for period in ("check1", "check2"):
+                        tested = measured(neighbor["strategies"], period)
+                        reference = references[period]["summary"]
+                        failed = _support(tested["summary"], reference, dates=tested["entry_dates"])
+                        failures.extend(f"{period}: {reason}" for reason in failed)
+                        neighbor_windows.append(
+                            {
+                                "period": period,
+                                "summary": tested["summary"],
+                                "baseline_summary": reference,
+                                "entry_dates": tested["entry_dates"],
+                                "score_delta": _score(tested["summary"]) - _score(reference),
+                            }
+                        )
+                    tested_neighbors.append(
+                        {key: value for key, value in neighbor.items() if key != "strategies"}
+                        | {
+                            "eligible": not failures,
+                            "reasons": failures,
+                            "windows": neighbor_windows,
+                        }
+                    )
+                passed = sum(row["eligible"] for row in tested_neighbors)
+                count = len(tested_neighbors)
+                fraction = passed / count if count else None
+                stable = bool(count and fraction >= recipe["stability"]["min_pass_fraction"])
+                stability = {
+                    "status": "stable" if stable else ("fragile" if count else "unavailable"),
+                    "tested": count,
+                    "passed": passed,
+                    "pass_fraction": fraction,
+                    "available": neighborhood["available"],
+                    "truncated": neighborhood["truncated"],
+                    "neighbors": tested_neighbors,
+                }
+                if not stable:
+                    reasons.append(
+                        "Neighbouring settings did not pass both development checks often enough"
+                        if count
+                        else "No adjacent settings are available to verify stability"
+                    )
             checks.append(
                 {
                     "config_id": row["config_id"],
@@ -265,6 +318,7 @@ def run(
                     "reasons": reasons,
                     "windows": windows,
                     "stress": stressed,
+                    **({"stability": stability} if stability_enabled else {}),
                     "selection_score": min(item["score_delta"] for item in windows),
                 }
             )
@@ -343,7 +397,7 @@ def run(
     )
     result["experiment"] = experiment
     result["automatic_research"] = {
-        "version": VERSION,
+        "version": version,
         "status": status,
         "headline": headline,
         "recipe": recipe,
@@ -368,10 +422,15 @@ def run(
         "unsupported_families": [
             "Indicator and market-regime discovery",
             "Independent market benchmark",
-            "Neighbouring-parameter stability",
+            *([] if stability_enabled else ["Neighbouring-parameter stability"]),
         ],
         "evidence_scope": "Exploratory research on supplied scanner observations; prior viewing elsewhere is unknown",
     }
+    if stability_enabled:
+        result["automatic_research"]["selection_basis"] = (
+            "Best worst-window improvement among candidates passing both development windows, "
+            "higher costs and the recorded adjacent-grid stability gates; final dates never rerank settings"
+        )
     search_basis = build_evaluation_basis(search_evidence, period="selection")
     final_evidence = window_for("final")
     later = deepcopy(final_report)
@@ -406,9 +465,14 @@ def run(
         },
     }
     experiment["evaluation_basis_id"] = search_basis["evidence_id"]
-    from research.study_analysis import build_study_analysis
+    if defer_study_analysis:
+        from research.study_diagnostics import deferred
 
-    experiment["study_analysis"] = build_study_analysis(experiment, progress=beat)
+        experiment["diagnostics"] = deferred()
+    else:
+        from research.study_analysis import build_study_analysis
+
+        experiment["study_analysis"] = build_study_analysis(experiment, progress=beat)
     from research.analytics import add_price_charts
 
     for report, window in ((result, search_evidence), (later, final_evidence)):

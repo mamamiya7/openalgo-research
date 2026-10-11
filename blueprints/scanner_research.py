@@ -11,6 +11,7 @@ from services import research_chosen_setups as chosen_setups
 from services import research_comparisons as comparisons
 from services import research_decisions as decisions
 from services import research_library as library
+from services import research_partial_study as partial_study
 from services import research_preferences as preferences
 from services import research_shortlist as shortlist
 from services import research_study_activity as study_activity
@@ -104,6 +105,11 @@ def chartink_too_large(error):
     return jsonify(message=str(error)), 413
 
 
+@scanner_research_bp.errorhandler(partial_study.CheckpointChanged)
+def partial_study_changed(error):
+    return jsonify(message=str(error), code="partial_study_checkpoint_changed"), 409
+
+
 def store():
     return current_app.extensions["research_store"]
 
@@ -148,6 +154,26 @@ def portfolio_study_activity(job_id):
 @scanner_research_bp.get("/portfolio/jobs/<job_id>/candidates")
 def portfolio_candidate_reports(job_id):
     return jsonify(candidates.availability(store(), session["user"], job_id))
+
+
+@scanner_research_bp.get("/portfolio/jobs/<job_id>/partial-study")
+def portfolio_partial_study(job_id):
+    if set(request.args) - {"offset", "limit", "expected_checkpoint"} or any(
+        len(request.args.getlist(key)) != 1 for key in request.args
+    ):
+        raise ValueError("Invalid saved-trial query")
+    response = jsonify(
+        partial_study.read(
+            store(),
+            session["user"],
+            job_id,
+            offset=request.args.get("offset"),
+            limit=request.args.get("limit"),
+            expected_checkpoint=request.args.get("expected_checkpoint"),
+        )
+    )
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
 
 
 @scanner_research_bp.get("/portfolio/jobs/<job_id>/trades/<trade_index>/chart")

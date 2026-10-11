@@ -11,6 +11,7 @@ from sqlalchemy import event, inspect, select, text
 from sqlalchemy.pool import NullPool
 from test_jobs import app, client  # noqa: F401
 from test_portfolio_validation import inputs
+from workflow_job_helpers import complete_optional_jobs
 
 from database.research_db import (
     ResearchExperiment,
@@ -550,6 +551,8 @@ def test_populated_schema_upgrade_backup_restore_and_integrity(app, client, tmp_
     assert service.get_job(store, OWNER, job_id).status == "queued"
     run_worker(store)
     before = copy.deepcopy(client.get(path(job_id)).json)
+    complete_optional_jobs(store)
+    assert client.get(path(job_id)).json == before
     tmp_path = tmp_path_factory.mktemp("study-activity-maintenance")
     backup_store(store, tmp_path / "activity-backup")
     restore_store(tmp_path / "activity-backup", tmp_path / "activity-restored")
@@ -618,3 +621,24 @@ def test_maintenance_accepts_legacy_missing_tables_but_rejects_partial_upgrade(a
     with store.engine.begin() as db:
         db.execute(text("DROP TABLE research_study_executions"))
     assert inspect_storage(store)["database_bytes"] > 0
+
+
+def test_joint_stock_checkpoint_marks_categorical_proposal_durably(app):
+    store, job_id, observer = claimed(app, budget=60)
+    started = {
+        "kind": "proposal_started",
+        "number": 0,
+        "params": {"hypothesis": "ema_above_20", "a.target_pct": 2},
+        "config_id": "a" * 64,
+        "reused": False,
+    }
+    observer(started)
+    finished = complete(observer)
+    state = checkpoint(started, finished)
+    state["calculation"]["version"] = "automatic-hypotheses-v2"
+    with store.sessions.begin() as db:
+        observer.checkpoint(db, state)
+    rows = activity.read(store, OWNER, job_id)["rows"]
+    assert len(rows) == 1 and rows[0]["checkpointed"]
+    assert rows[0]["params"]["hypothesis"] == "ema_above_20"
+    finalize(store, job_id, observer)

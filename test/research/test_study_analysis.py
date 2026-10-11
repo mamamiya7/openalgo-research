@@ -95,6 +95,70 @@ def test_tampered_proposal_is_rejected():
         reconstruct_study(original)
 
 
+def trailing_experiment():
+    from research.automatic_trailing import axes, recipe
+    from research.engine import validate_config
+    from research.joint_stock_market import catalog
+
+    original = experiment()
+    frozen = recipe([{"id": "a", "config": validate_config({"stop_pct": 2})}])
+    original.update(experiment_version="automatic-hypotheses-v6", trailing_research=frozen)
+    original["search_space"]["axes"].update(axes(frozen))
+    choices = [row["id"] for row in catalog()]
+    original["search_space"]["axes"]["hypothesis"] = {"type": "categorical", "choices": choices}
+    for index, trial in enumerate(original["trials"]):
+        trial["params"].update(
+            {
+                "hypothesis": choices[index],
+                "a.trailing_choice": frozen["strategies"][0]["choices"][
+                    index % len(frozen["strategies"][0]["choices"])
+                ],
+            }
+        )
+    return original
+
+
+def test_native_charts_reconstruct_atomic_trailing_states_without_rerunning(monkeypatch):
+    import optuna
+
+    original = trailing_experiment()
+    before = copy.deepcopy(original)
+    monkeypatch.setattr(
+        optuna.study.Study, "optimize", lambda *a, **k: pytest.fail("Analysis ran optimizer")
+    )
+    study, axes = reconstruct_study(original)
+    assert (
+        list(study.trials[0].distributions["a.trailing_choice"].choices)
+        == axes["a.trailing_choice"]["choices"]
+    )
+    result = build_study_analysis(original, parameters=["a.trailing_choice", "a.target_pct"])
+    charts = {row["id"]: row for row in result["charts"]}
+    for key in ("history", "slice", "contour", "parallel", "rank", "edf"):
+        assert charts[key]["status"] == "available", charts[key]
+    assert charts["importance"]["status"] == "unavailable"
+    assert original == before
+
+
+@pytest.mark.parametrize("change", ["version", "contract", "axis", "boolean", "unregistered"])
+def test_numeric_categories_cannot_bypass_recorded_trailing_admission(change):
+    original = trailing_experiment()
+    if change == "version":
+        original["experiment_version"] = "automatic-hypotheses-v5"
+    elif change == "contract":
+        original.pop("trailing_research")
+    elif change == "axis":
+        original["search_space"]["axes"]["a.trailing_choice"]["choices"] = [0, 99]
+    elif change == "boolean":
+        original["trailing_research"]["strategies"][0]["choices"][0] = False
+    else:
+        original["search_space"]["axes"]["unregistered"] = {
+            "type": "categorical",
+            "choices": [0, 1],
+        }
+    with pytest.raises(ValueError):
+        reconstruct_study(original)
+
+
 def test_analysis_checks_cancellation_between_native_charts():
     class Cancelled(Exception):
         pass
@@ -105,3 +169,33 @@ def test_analysis_checks_cancellation_between_native_charts():
 
     with pytest.raises(Cancelled):
         build_study_analysis(experiment(), progress=stop)
+
+
+@pytest.mark.parametrize("scope", ["indicators", "relative", "joint"])
+def test_expanded_categorical_hypotheses_reconstruct_and_render_without_new_search(scope):
+    if scope == "joint":
+        from research.joint_stock_market import catalog
+    elif scope == "relative":
+        from research.stock_relative_strength import catalog
+    else:
+        from research.stock_indicators import catalog
+
+    original = experiment()
+    choices = [row["id"] for row in catalog()]
+    original["search_space"]["axes"]["hypothesis"] = {"type": "categorical", "choices": choices}
+    for index, trial in enumerate(original["trials"]):
+        trial["params"]["hypothesis"] = choices[7 + index % (len(choices) - 7)]
+    before = copy.deepcopy(original)
+    study, axes = reconstruct_study(original)
+    assert len(study.trials[0].distributions["hypothesis"].choices) == (
+        92 if scope == "joint" else 23 if scope == "relative" else 18
+    )
+    result = build_study_analysis(original, parameters=["hypothesis", "a.target_pct"])
+    charts = {chart["id"]: chart for chart in result["charts"]}
+    assert charts["slice"]["status"] == charts["parallel"]["status"] == "available"
+    assert "hypothesis" in axes and original == before
+    json.dumps(result, allow_nan=False)
+    invalid = copy.deepcopy(original)
+    invalid["search_space"]["axes"]["hypothesis"]["choices"] = [str(i) for i in range(33)]
+    with pytest.raises(ValueError, match="bounded categorical"):
+        reconstruct_study(invalid)

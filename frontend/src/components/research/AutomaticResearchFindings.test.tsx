@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { axe } from 'jest-axe'
 import { describe, expect, it } from 'vitest'
 import type { AutomaticResearchFindings as Findings } from '@/api/portfolioResearch'
+import { researchDefaults } from '@/lib/researchDraft'
 import { AutomaticResearchFindings } from './AutomaticResearchFindings'
 
 function findings(): Findings {
@@ -44,9 +45,101 @@ function findings(): Findings {
 }
 
 describe('automatic research findings', () => {
+  it('shows selected timing beside the saved exits without another disclosure', () => {
+    const data = findings()
+    data.version = 'automatic-hypotheses-v7'
+    render(
+      <AutomaticResearchFindings
+        findings={data}
+        selectedSettings={[
+          {
+            id: 'scanner',
+            name: 'Scanner',
+            allocation_pct: 100,
+            config: {
+              ...researchDefaults,
+              trade_horizon: 'intraday',
+              hold_minutes: 60,
+              entry_time: '09:30',
+              exit_time: '15:15',
+            },
+          },
+        ]}
+      />
+    )
+    const settings = screen.getByText(/Enter from 09:30 IST/)
+    expect(settings).toHaveTextContent('Exit by 15:15 IST')
+    expect(settings).toBeVisible()
+  })
+  it.each([
+    false,
+    true,
+  ])('shows the frozen selected exits directly, with trailing enabled=%s', (enabled) => {
+    const data = findings()
+    data.version = 'automatic-hypotheses-v6'
+    render(
+      <AutomaticResearchFindings
+        findings={data}
+        selectedSettings={[
+          {
+            id: 'scanner',
+            name: 'Scanner',
+            allocation_pct: 100,
+            config: {
+              ...researchDefaults,
+              target_pct: 5.25,
+              stop_pct: 2,
+              hold_sessions: 2,
+              trailing_enabled: enabled,
+              trailing_pct: 3.5,
+            },
+          },
+        ]}
+      />
+    )
+    const settings = screen.getByText(/TP 5.25% · SL 2%/)
+    expect(settings).toHaveTextContent(
+      `TP 5.25% · SL 2% · Up to 2 sessions · ${enabled ? 'Trail 3.5%' : 'Trail off'}`
+    )
+    expect(settings).toBeVisible()
+  })
+  it.each([
+    ['automatic-trade-management-v1', 'Exits and holding periods'],
+    ['automatic-hypotheses-v4', 'Smart research'],
+    ['automatic-hypotheses-v5', 'Stock and market research'],
+    ['automatic-hypotheses-v6', 'Stock, market and trailing stops'],
+    ['automatic-hypotheses-v7', 'Stock, market and trade timing'],
+    ['automatic-future-v99', 'Automatic research'],
+  ])('keeps the saved %s scope in the collapsed research details', async (version, label) => {
+    const data = findings()
+    data.version = version
+    render(<AutomaticResearchFindings findings={data} />)
+    const details = screen.getByText('Research details').closest('details') as HTMLElement
+    expect(within(details).getByText(label)).not.toBeVisible()
+    await userEvent.click(screen.getByText('Research details'))
+    expect(within(details).getByText(label)).toBeVisible()
+  })
+
+  it('labels a sampled stability challenge without claiming all nearby settings were tested', async () => {
+    const data = findings()
+    data.version = 'automatic-trade-management-v2'
+    data.checks[0].stability = {
+      status: 'stable',
+      tested: 8,
+      passed: 6,
+      pass_fraction: 0.75,
+      available: 20,
+      truncated: true,
+    }
+    render(<AutomaticResearchFindings findings={data} />)
+    await userEvent.click(screen.getByText('Research details'))
+    expect(screen.getByText('Passed later-date, cost and nearby-setting checks')).toBeVisible()
+    expect(screen.getByText('Nearby settings: 6 of 8 passed · sampled subset')).toBeVisible()
+  })
   it('compares selected and original rules using the final period, with research details collapsed', async () => {
     render(<AutomaticResearchFindings findings={findings()} />)
-    expect(screen.getByText('Exploratory research')).toBeVisible()
+    expect(screen.getByText('Automatic research')).toBeVisible()
+    expect(screen.queryByText('Exploratory research')).not.toBeInTheDocument()
     expect(
       screen.getByRole('heading', { name: 'The improvement held up on later dates' })
     ).toBeVisible()
@@ -96,4 +189,23 @@ describe('automatic research findings', () => {
     await userEvent.click(screen.getByText('Research details'))
     expect((await axe(container)).violations).toEqual([])
   })
+})
+
+it('does not claim later validation for an exploratory-only smart result', async () => {
+  const data = findings()
+  data.version = 'automatic-hypotheses-v2'
+  data.recipe.validation_mode = 'exploratory_only'
+  data.final = null
+  data.checks = []
+  data.status = 'inconclusive'
+  render(<AutomaticResearchFindings findings={data} />)
+  expect(screen.getByText('Best settings found on the available research dates.')).toBeVisible()
+  expect(
+    screen.queryByText('Checked on later dates and with higher trading costs.')
+  ).not.toBeInTheDocument()
+  expect(screen.queryByRole('table', { name: 'Final period comparison' })).not.toBeInTheDocument()
+  await userEvent.click(screen.getByText('Research details'))
+  expect(screen.getByText(/No untouched later check/)).toBeVisible()
+  expect(screen.queryByText('First check')).not.toBeInTheDocument()
+  expect(screen.queryByText('Second check')).not.toBeInTheDocument()
 })

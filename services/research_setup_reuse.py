@@ -14,6 +14,74 @@ from services import research_library as library
 from services import scanner_research_service as service
 
 
+def retained_entry_conditions(store, bundle):
+    """Resolve reusable rules from exact saved evidence, never saved memberships.
+
+    Legacy condition tests kept their rule outside the portfolio. Admission must
+    verify that manifest and its frozen gate before exposing a portable recipe.
+    New runs retain the same descriptor in their portfolio and result.
+    """
+    from research.entry_conditions import VERSION, normalize
+    from research.regimes import recipe
+    from services import research_condition_replay
+
+    report = bundle["result"]
+    evidence = service.read_artifact(store, bundle["inputs_artifact"])
+    saved = report.get("condition_replay")
+    if saved is not None:
+        research_condition_replay.verify(store, evidence)
+        manifest, gate = evidence.get("condition_replay"), evidence.get("condition_gate")
+        if (
+            not manifest
+            or not gate
+            or saved.get("id") != manifest.get("id")
+            or saved.get("condition") != gate.get("condition")
+            or saved.get("counts") != gate.get("counts")
+        ):
+            raise ValueError("The saved entry condition differs from its exact evidence")
+        value = {
+            "version": VERSION,
+            "recipe": recipe(),
+            "rules": [
+                {key: manifest["condition"][key] for key in ("strategy_id", "dimension", "regime")}
+            ],
+        }
+    else:
+        value = report.get("portfolio", {}).get("entry_conditions")
+        if evidence.get("condition_replay"):
+            raise ValueError("The saved report is missing its entry condition")
+        if value != evidence.get("portfolio", {}).get("entry_conditions"):
+            raise ValueError("The saved entry condition differs from its exact evidence")
+        if value is None:
+            return None
+        if report.get("entry_conditions") != value:
+            raise ValueError("The saved report is missing its complete entry condition")
+    if value and value.get("version") in (
+        "research-stock-entry-conditions-v1",
+        "research-stock-entry-conditions-v2",
+        "research-stock-entry-conditions-v3",
+        "research-joint-entry-conditions-v1",
+    ):
+        from research.entry_conditions import stock_module
+        from research.stock_features import validate_bundle
+
+        if value["version"] == "research-joint-entry-conditions-v1":
+            from research.stock_market_context import validate_bundle
+        elif value["version"] == "research-stock-entry-conditions-v3":
+            validate_bundle = stock_module(value["version"]).validate_bundle
+
+        stock = evidence.get(
+            "automatic_stock_market_context"
+            if value["version"] == "research-joint-entry-conditions-v1"
+            else "automatic_stock_features"
+        )
+        validate_bundle(stock)
+        proof = report.get("automatic_stock_condition", {})
+        if proof.get("bundle_id") != stock["id"] or proof.get("hypothesis") != value["hypothesis"]:
+            raise ValueError("The saved stock condition differs from its input evidence")
+    return normalize(value, evidence["portfolio"]["strategies"], evidence["portfolio"]["engine"])
+
+
 def _source_summary(source):
     details = source.get("receipt", {})
     if not isinstance(details, dict) or details.get("input_type") == "portfolio":

@@ -131,10 +131,18 @@ def _evidence(store, job, config_id=None, proposal_number=None):
             "Open an exact backtest of these settings before saving or comparing "
             "this automatic research choice."
         )
-    if result.get("condition_replay"):
-        raise ValueError(
-            "This condition test is saved in Backtests. Entry-condition setups are not yet supported in the shortlist."
-        )
+    if result.get("condition_replay") or result.get("entry_conditions"):
+        from services.research_setup_reuse import retained_entry_conditions
+
+        retained_entry_conditions(store, bundle)
+        if (
+            result.get("condition_replay", {}).get("period", "selection") != "selection"
+            or result.get("replay_origin", {}).get("period", "selection")
+            not in ("full", "selection")
+            or result.get("matched_baseline_origin", {}).get("period", "selection")
+            not in ("full", "selection")
+        ):
+            raise ValueError("Save a selection-period condition test, not later-period evidence")
     if kind == "portfolio_optimize":
         study = result.get("experiment", {})
         if (

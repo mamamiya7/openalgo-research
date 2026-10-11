@@ -3,7 +3,7 @@ import { act, cleanup, render, screen, waitFor, within } from '@testing-library/
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { portfolioResearch } from '@/api/portfolioResearch'
+import { type JointEntryConditions, portfolioResearch } from '@/api/portfolioResearch'
 import {
   type ChosenSetup,
   type ChosenSetupContext,
@@ -161,6 +161,68 @@ beforeEach(() => {
   vi.mocked(portfolioResearch.sources).mockResolvedValue({ items: [source], next_offset: null })
 })
 afterEach(cleanup)
+
+it('shows the retained joint stock-and-market rule in chosen setup and its reuse preview', async () => {
+  const conditions: JointEntryConditions = {
+    version: 'research-joint-entry-conditions-v1',
+    hypothesis: {
+      id: 'trend_up__trend_up',
+      family: 'trend:trend_up',
+      label: 'Above SMA 50 · Rising Nifty trend',
+      stock_hypothesis: {
+        id: 'trend_up',
+        family: 'trend',
+        label: 'Above SMA 50',
+        lookback: 50,
+        threshold: null,
+      },
+      market: { dimension: 'trend', regime: 'up' },
+    },
+  }
+  const saved = { ...choice, entry_conditions: conditions }
+  vi.mocked(researchChosenSetups.context).mockResolvedValue({ ...context, current: saved })
+  const retained = preview()
+  retained.choice = saved
+  retained.draft.portfolio.entry_conditions = conditions
+  vi.mocked(researchChosenSetups.preview).mockResolvedValue(retained)
+  mount(
+    <ResearchChosenSetup experimentId="idea" readOnly={false} onUse={vi.fn()} onReplay={vi.fn()} />
+  )
+  expect(await screen.findByText('Above SMA 50 · Rising Nifty trend entries only.')).toBeVisible()
+  await userEvent.click(screen.getByRole('button', { name: 'Use setup' }))
+  const dialog = await screen.findByRole('dialog')
+  expect(
+    await within(dialog).findByText('Above SMA 50 · Rising Nifty trend entries only.')
+  ).toBeVisible()
+  expect(within(dialog).getByText(/previously viewed dates untouched validation/)).toBeVisible()
+  expect(researchChosenSetups.use).not.toHaveBeenCalled()
+})
+
+it('shows retained entry conditions and the evidence-use warning in chosen setup and reuse', async () => {
+  const conditions = {
+    version: 'research-entry-conditions-v1' as const,
+    recipe: { id: 'recorded-recipe' },
+    rules: [{ strategy_id: 'scanner', dimension: 'trend' as const, regime: 'up' as const }],
+  }
+  const conditionalChoice = { ...choice, entry_conditions: conditions }
+  vi.mocked(researchChosenSetups.context).mockResolvedValue({
+    ...context,
+    current: conditionalChoice,
+  })
+  vi.mocked(researchChosenSetups.preview).mockResolvedValue({
+    ...preview(),
+    choice: conditionalChoice,
+  })
+  mount(
+    <ResearchChosenSetup experimentId="idea" readOnly={false} onUse={vi.fn()} onReplay={vi.fn()} />
+  )
+  await screen.findByText('Momentum: Rising market entries only.')
+  expect(screen.getByText(/previously viewed dates untouched validation/)).toBeVisible()
+  await userEvent.click(screen.getByRole('button', { name: 'Use setup' }))
+  const dialog = await screen.findByRole('dialog')
+  expect(await within(dialog).findByText('Momentum: Rising market entries only.')).toBeVisible()
+  expect(within(dialog).getByText(/saved signal decisions are not copied/)).toBeVisible()
+})
 
 it('chooses the saved Keep event deliberately without applying rules or starting a run', async () => {
   const user = userEvent.setup()

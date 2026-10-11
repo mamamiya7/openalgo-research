@@ -46,6 +46,20 @@ def test_source_check_does_not_inspect_installed_packages():
     assert check(source_only=True, installed_version=unexpected, python="3.12")["ok"]
 
 
+def test_missing_install_template_fails_source_check(monkeypatch, tmp_path):
+    from tools import research_check
+
+    original = research_check.source_path
+    monkeypatch.setattr(
+        research_check,
+        "source_path",
+        lambda root, name: tmp_path / name if name == ".sample.env" else original(root, name),
+    )
+    result = check(source_only=True, python="3.12")
+    assert not result["ok"]
+    assert not next(item for item in result["checks"] if item["name"] == ".sample.env")["ok"]
+
+
 def test_untested_python_version_does_not_pass():
     assert not check(source_only=True, python="3.13")["ok"]
 
@@ -111,3 +125,16 @@ def test_distribution_files_do_not_escape_root(tmp_path):
 
     with pytest.raises(ValueError, match="escapes"):
         source_path(tmp_path, "../elsewhere.py")
+
+
+def test_distribution_includes_native_openscript_host():
+    # The upgraded host's strategy runner lives in a new top-level package.
+    # Omitting it ships a working research page with broken native strategies.
+    names, _, _ = inventory(ROOT)
+    required = {
+        path.relative_to(ROOT).as_posix()
+        for path in (ROOT / "openscript_host").rglob("*.py")
+        if "__pycache__" not in path.parts
+    }
+    assert "openscript_host/openscript_runner.py" in required
+    assert required <= set(names)

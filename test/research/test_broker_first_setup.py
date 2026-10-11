@@ -1,6 +1,7 @@
 """Account-only broker setup must not imply broker/trading authentication."""
 
 import ast
+import json
 import logging
 import sys
 from datetime import UTC, datetime, timedelta
@@ -94,7 +95,7 @@ def test_verified_account_can_configure_before_broker_and_preserves_other_settin
     assert response.status_code == 200 and response.json["restart_required"]
     content = Path(credentials.get_env_path()).read_text()
     assert "APP_KEY='preserved'" in content
-    assert "BROKER_API_KEY='fixture-key'" in content
+    assert "BROKER_API_KEY = 'fixture-key'" in content
     with client.session_transaction() as session:
         assert not session.get("logged_in") and not session.get("broker")
 
@@ -152,11 +153,34 @@ def test_setup_rejects_multiline_credentials(app):
     assert post(client, {"broker_api_key": "key\nFLASK_DEBUG=True"}).status_code == 400
 
 
-def test_credential_backslashes_remain_literal():
-    assert (
-        credentials.update_env_value("BROKER_API_KEY=''\n", "BROKER_API_KEY", r"key\g<1>")
-        == "BROKER_API_KEY='key\\g<1>'\n"
+@pytest.mark.parametrize("value", [None, 1, [], {}, "key\0extra", "key\rFLASK_DEBUG=True"])
+def test_setup_rejects_nontext_or_control_characters_without_writing(app, value):
+    client = app.test_client()
+    account(client)
+    path = Path(credentials.get_env_path())
+    before = path.read_bytes()
+    assert post(client, {"broker_api_key": value}).status_code == 400
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize("payload", [None, [], "text"])
+def test_setup_requires_an_object_body(app, payload):
+    client = app.test_client()
+    account(client)
+    token = client.get("/csrf").json["token"]
+    response = client.post(
+        "/api/broker/credentials",
+        data=json.dumps(payload),
+        content_type="application/json",
+        headers={"X-CSRFToken": token},
     )
+    assert response.status_code == 400
+
+
+def test_credential_backslashes_remain_literal():
+    from utils.env_check import _env_line
+
+    assert _env_line("BROKER_API_KEY", r"key\g<1>") == "BROKER_API_KEY = 'key\\g<1>'"
 
 
 @pytest.mark.parametrize("requires_totp, valid_code", [(False, True), (True, True), (True, False)])

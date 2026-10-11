@@ -96,7 +96,11 @@ def _features(evidence):
     result = [None] * len(days)
     if len(days) < FEATURE_SESSIONS:
         return result
-    prices = np.asarray([bars[day]["close"] if day in bars else np.nan for day in days])
+    # Native OHLC admits whole-number prices too. Float arithmetic prevents
+    # NumPy's divide output from inheriting an integer buffer for efficiency.
+    prices = np.asarray(
+        [bars[day]["close"] if day in bars else np.nan for day in days], dtype=float
+    )
     windows = np.lib.stride_tricks.sliding_window_view(prices, FEATURE_SESSIONS)
     valid = np.flatnonzero(np.isfinite(windows).all(axis=1))
     if not len(valid):

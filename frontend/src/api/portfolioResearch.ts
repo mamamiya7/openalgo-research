@@ -1,5 +1,11 @@
 import { webClient } from './client'
-import type { ResearchActivity, ResearchConfig, ResearchSource } from './scannerResearch'
+import type {
+  ResearchActivity,
+  ResearchConfig,
+  ResearchFailureReceipt,
+  ResearchRecoveryReceipt,
+  ResearchSource,
+} from './scannerResearch'
 
 export type PortfolioAxis =
   | 'target_pct'
@@ -29,8 +35,15 @@ export interface PortfolioStrategy {
   allocation_pct: number
   config: ResearchConfig
   search: Partial<Record<PortfolioAxis, PortfolioRange>>
+  entry_condition?:
+    | { dimension: 'trend' | 'volatility'; regime: string; recipe_id: string }
+    | StockEntryConditions
+    | JointEntryConditions
 }
-export type PortfolioSettings = Pick<PortfolioStrategy, 'id' | 'name' | 'allocation_pct' | 'config'>
+export type PortfolioSettings = Pick<
+  PortfolioStrategy,
+  'id' | 'name' | 'allocation_pct' | 'config' | 'entry_condition'
+>
 export interface AnalysisMetric {
   key: string
   label: string
@@ -263,10 +276,46 @@ export interface PortfolioReportContext {
   parent_job_id?: string
   candidate?: {
     study_job_id: string
-    trial_number: number
+    trial_number?: number | null
     config_id: string
     is_objective_winner: boolean
   }
+}
+export interface StockEntryConditions {
+  version:
+    | 'research-stock-entry-conditions-v1'
+    | 'research-stock-entry-conditions-v2'
+    | 'research-stock-entry-conditions-v3'
+  hypothesis: {
+    id: string
+    family: string
+    label: string
+    lookback: number
+    threshold: number | null
+    operator?: 'gt' | 'lt' | 'and'
+    std_dev?: number
+    components?: string[]
+  }
+}
+export interface JointEntryConditions {
+  version: 'research-joint-entry-conditions-v1'
+  hypothesis: {
+    id: string
+    family: string
+    label: string
+    stock_hypothesis: StockEntryConditions['hypothesis']
+    market: { dimension: 'trend' | 'volatility'; regime: string } | null
+  }
+}
+export type EntryConditions = MarketEntryConditions | StockEntryConditions | JointEntryConditions
+export interface MarketEntryConditions {
+  version: 'research-entry-conditions-v1'
+  recipe: { id: string; [key: string]: unknown }
+  rules: Array<{
+    strategy_id: string
+    dimension: 'trend' | 'volatility'
+    regime: 'up' | 'down' | 'range' | 'normal' | 'high'
+  }>
 }
 export interface PortfolioRequest {
   version: 'research-portfolio-v1'
@@ -274,7 +323,19 @@ export interface PortfolioRequest {
   capital: number
   engine: 'vectorbt' | 'nautilus'
   strategies: PortfolioStrategy[]
-  automatic_research?: { version: 'automatic-trade-management-v1' }
+  automatic_research?: {
+    version:
+      | 'automatic-trade-management-v1'
+      | 'automatic-entry-conditions-v1'
+      | 'automatic-trade-management-v2'
+      | 'automatic-hypotheses-v2'
+      | 'automatic-hypotheses-v3'
+      | 'automatic-hypotheses-v4'
+      | 'automatic-hypotheses-v5'
+      | 'automatic-hypotheses-v6'
+      | 'automatic-hypotheses-v7'
+  }
+  entry_conditions?: EntryConditions
   optimization?: {
     sampler: 'tpe' | 'grid'
     trials: number
@@ -296,7 +357,7 @@ export interface PortfolioTrial {
 }
 export interface PortfolioProposal {
   number: number
-  params: Record<string, number>
+  params: Record<string, number | string>
   config_id: string
   state: 'complete' | 'pruned'
   value: number | null
@@ -305,6 +366,13 @@ export interface PortfolioProposal {
   datetime_complete?: string
 }
 export interface PortfolioResult {
+  entry_conditions?: EntryConditions
+  automatic_stock_condition?: {
+    hypothesis: StockEntryConditions['hypothesis'] | JointEntryConditions['hypothesis']
+    bundle_id: string
+    gate_id: string
+    counts: Record<'allowed' | 'filtered' | 'unknown' | 'original_excluded' | 'pending', number>
+  }
   condition_replay?: ConditionReplayResult
   automatic_research?: AutomaticResearchFindings
   study_continuation?: {
@@ -391,10 +459,19 @@ export interface PortfolioResult {
   }
 }
 export interface AutomaticResearchFindings {
+  comparison?: {
+    version: 'research-automatic-comparison-v1'
+    status: 'available' | 'unavailable'
+    reason?: string
+    chart?: AnalysisChart
+    observations?: number
+    displayed?: number
+  }
   version: string
   status: 'supported' | 'not_supported' | 'inconclusive'
   selected_config_id: string
   selected_is_baseline: boolean
+  selected_condition?: string
   headline: string
   selection_basis: string
   recipe: {
@@ -405,7 +482,16 @@ export interface AutomaticResearchFindings {
   baseline: Record<string, unknown>
   checks: Array<{
     config_id: string
-    trial_number: number
+    trial_number: number | null
+    condition_label?: string
+    stability?: {
+      status: 'stable' | 'fragile' | 'unavailable'
+      tested: number
+      passed: number
+      pass_fraction: number | null
+      available: number
+      truncated: boolean
+    } | null
     eligible: boolean
     reasons: string[]
     windows: Array<{
@@ -451,7 +537,7 @@ export interface ResearchResultDescriptor {
   candidate: {
     study_job_id: string
     config_id: string
-    trial_number?: number
+    trial_number?: number | null
     is_objective_winner?: boolean
     period?: string
   } | null
@@ -464,6 +550,8 @@ export interface ResearchResultDescriptor {
   setup: { id: string; name: string; number: number; parent_version_id?: string } | null
 }
 export interface PortfolioJob {
+  failure?: ResearchFailureReceipt | null
+  recovery?: ResearchRecoveryReceipt | null
   display?: ResearchResultDescriptor
   updated_at?: number | string
   activity?: ResearchActivity
@@ -482,7 +570,60 @@ export interface PortfolioJob {
   source_summary?: { signal_count?: number; date_from?: string; date_to?: string; name?: string }
   result?: PortfolioResult
 }
+export interface TimingAdmission {
+  version: 'research-timing-admission-v1'
+  id: string
+  status: 'pending_calendar' | 'ready' | 'blocked'
+  reason: string | null
+  required_interval: 'D' | '1m'
+  effective_interval: 'D' | '1m'
+  intent: 'daily' | 'timed' | 'mixed'
+  signals: { total: number; timed: number; date_only: number }
+  strategies: Array<{
+    id: string
+    required_interval: 'D' | '1m'
+    reason: string
+    fixed_clocks: { entry_time: string | null; exit_time: string | null }
+    searched_deadline: string | null
+    constraints: Array<{ parameter: string; value?: number | string; maximum?: number }>
+    dormant_parameters: string[]
+  }>
+}
 export interface PortfolioPreview {
+  timing_admission?: TimingAdmission
+  automatic_plan?: {
+    version: string
+    plan_id: string
+    execution_recipe_version: string
+    decisions?: {
+      version: 'automatic-decision-summary-v1'
+      automatic: Array<{ id: string; label: string; decision: string }>
+      retained: Array<{ id: string; label: string; decision: string }>
+      not_searched: Array<{ id: string; label: string; reason: string }>
+      prerequisites: Array<{ id: string; label: string; status: string; reason: string }>
+      scope: { exhaustive: false; recommendation_basis: string; searched_parameters: number }
+    }
+    summary: {
+      searched_parameters: number
+      condition_presets: number
+      max_simulations: number
+    }
+    strategies: Array<{
+      id: string
+      name: string
+      parameters: Array<{
+        id: string
+        label: string
+        status: string
+        reason: string
+        current: unknown
+        domain?: PortfolioRange
+        axis?: string
+        choices?: boolean[]
+        condition?: { trailing_enabled: true }
+      }>
+    }>
+  }
   period_plan?: PortfolioPeriodPlan
   portfolio: PortfolioRequest
   interval: string

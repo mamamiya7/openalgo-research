@@ -344,7 +344,17 @@ def _candidate(strategies, params):
 
 def _settings(strategies):
     return [
-        {key: copy.deepcopy(strategy[key]) for key in ("id", "name", "allocation_pct", "config")}
+        {
+            **{
+                key: copy.deepcopy(strategy[key])
+                for key in ("id", "name", "allocation_pct", "config")
+            },
+            **(
+                {"entry_condition": copy.deepcopy(strategy["entry_condition"])}
+                if "entry_condition" in strategy
+                else {}
+            ),
+        }
         for strategy in strategies
     ]
 

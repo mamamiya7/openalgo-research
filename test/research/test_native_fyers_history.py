@@ -13,6 +13,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from utils.broker_backpressure import BrokerBusyError
+
 CANDLE = [1735776000, 100, 102, 99, 101, 25]
 NO_DATA = {"s": "no_data", "code": 200, "candles": [], "message": "", "nextTime": 0}
 
@@ -31,6 +33,7 @@ def native():
     ]
     calls, sleeps = [], []
     namespace = {
+        "BrokerBusyError": BrokerBusyError,
         "pd": pd,
         "logger": logging.getLogger("native-fyers-history-test"),
         "urllib": urllib,
@@ -55,6 +58,14 @@ def native():
         return handler.get_history("AAA", "NSE", "D", "2025-01-02", last)
 
     return invoke, calls, sleeps
+
+
+def test_broker_busy_is_not_retried_as_a_transport_error(native):
+    invoke, calls, sleeps = native
+    with pytest.raises(BrokerBusyError):
+        invoke([BrokerBusyError()])
+    assert len(calls) == 1
+    assert sleeps == []
 
 
 @pytest.mark.parametrize("reply", [NO_DATA, {"s": "ok", "code": 200, "candles": []}])

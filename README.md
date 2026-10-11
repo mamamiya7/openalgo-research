@@ -20,13 +20,46 @@ a CSV export, or reuse saved signals.
 · [Install and start](docs/research/RUNTIME.md)
 · [Release notes](docs/research/releases/0.1.0-preview.7.md)
 · [Architecture](docs/research/SYSTEM_MAP.md)
-· [Latest source](https://github.com/mamamiya7/openalgo-research/tree/main)
+· [Released source](https://github.com/mamamiya7/openalgo-research/tree/main)
 
 Preview.7 includes [faster Historify cache checks](docs/research/HISTORIFY_CHECKS.md)
 and the patched Axios dependency. Guided setup, Chartink entry and saved reports
 remain available in the same installation. The newer local OpenAlgo 2.0.2.6
 condition-search and unfinished-study features are not included; their
 [reconciliation and package checks](docs/research/PACKAGE_RECONCILIATION.md) are separate.
+
+## Current development
+
+The development source integrates OpenAlgo **2.0.2.7** at reviewed upstream
+`12e111465798`, with native charts 2.6.0 and OpenScript 0.8.1. Research
+**preview.8** adds bounded automatic stock/market-condition research, trailing
+stop and trade-timing selection, concise findings and native chart Values.
+One Optimize action compares the original settings with supported candidates;
+it checks later periods, costs and stability when the available history permits.
+
+[Development source](https://github.com/mamamiya7/openalgo-research/tree/codex/native-research-refinement)
+· [Integration PR](https://github.com/mamamiya7/openalgo-research/pull/6).
+Preflight also explains the selected candle interval from actual CSV timing and
+holding rules under **Why these candles?**. New automatic studies compare
+[meaningful trade clocks](docs/research/AUTOMATIC_TIMING_20261011.md) using one
+shared Historify price preparation and the same price-complete opportunities.
+Daily inputs remain daily, and saved older studies keep their original scope.
+
+The next workflow increment previews CSV counts and dates before setup, simplifies
+experiment navigation to **Overview → Setup → Results → Saved setups**, and lets
+you prepare the selected tested report once, save it by name and reuse its exact
+rules. Financial findings complete independently of optional, cancellable Optuna
+charts. Compatible new automatic runs can compare the original and selected
+account curves on the same recorded evidence. Recovery actions reflect the actual
+saved checkpoint; incompatible calendar evidence does not offer a futile Resume.
+See the [workflow implementation and acceptance plan](docs/research/WORKFLOW_REFINEMENT_20261011.md).
+
+The public ZIP above remains **preview.7**. Preview.8 is qualified in the local
+application and controlled native journeys; its complete Windows/Linux release
+acceptance remains pending. See [current status](docs/research/STATUS.md), the
+[trailing-selection contract](docs/research/AUTOMATIC_TRAILING_20261011.md),
+[native refinement plan](docs/research/DELIVERY_PLAN.md) and
+[upstream update](docs/research/UPSTREAM_UPDATE_20261011.md).
 
 ## What do I need to download?
 

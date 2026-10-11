@@ -86,6 +86,26 @@ def canonical_source(store, owner, experiment_id, job_id, config_id=None):
         ):
             raise ValueError("The saved result does not retain a native portfolio")
         origin = result.get("replay_origin")
+        if not result.get("automatic_research") and (
+            result.get("condition_replay") or result.get("entry_conditions")
+        ):
+            from services.research_setup_reuse import retained_entry_conditions
+
+            retained_entry_conditions(store, bundle)
+            if (
+                result.get("condition_replay", {}).get("period", "selection") != "selection"
+                or result.get("replay_origin", {}).get("period", "selection")
+                not in ("full", "selection")
+                or result.get("matched_baseline_origin", {}).get("period", "selection")
+                not in ("full", "selection")
+            ):
+                raise ValueError(
+                    "Choose a selection-period condition test, not later-period evidence"
+                )
+            actual = settings_identity(result.get("strategies"))
+            if actual is None or (config_id is not None and config_id != actual):
+                raise ValueError("The saved result does not match this conditional candidate")
+            return job, actual
         if not origin and not candidate_edge:
             if result.get("automatic_research"):
                 raise ValueError(
@@ -153,11 +173,19 @@ def canonical_source(store, owner, experiment_id, job_id, config_id=None):
             raise ValueError("The saved replay inputs do not match their exact source")
         automatic_bridge = (
             bundle["kind"] == "portfolio_backtest"
-            and not candidate_edge
-            and replay_edge
-            and replay_edge[0] == "replay"
+            and (candidate_edge or (replay_edge and replay_edge[0] == "replay"))
             and origin["period"] == "selection"
-            and inputs.get("automatic_recipe", {}).get("version") == "automatic-trade-management-v1"
+            and inputs.get("automatic_recipe", {}).get("version")
+            in (
+                "automatic-trade-management-v1",
+                "automatic-trade-management-v2",
+                "automatic-hypotheses-v2",
+                "automatic-hypotheses-v3",
+                "automatic-hypotheses-v4",
+                "automatic-hypotheses-v5",
+                "automatic-hypotheses-v6",
+                "automatic-hypotheses-v7",
+            )
         )
         del inputs, bundle, result
         with store.sessions() as db:
@@ -166,10 +194,17 @@ def canonical_source(store, owner, experiment_id, job_id, config_id=None):
                 raise ValueError("The original saved result changed; reopen it before continuing")
         if automatic_bridge:
             parent_bundle = service.read_artifact(store, parent_artifact)
-            if (
-                parent_bundle.get("kind") == "portfolio_optimize"
-                and parent_bundle.get("result", {}).get("automatic_research", {}).get("version")
-                == "automatic-trade-management-v1"
+            if parent_bundle.get("kind") == "portfolio_optimize" and parent_bundle.get(
+                "result", {}
+            ).get("automatic_research", {}).get("version") in (
+                "automatic-trade-management-v1",
+                "automatic-trade-management-v2",
+                "automatic-hypotheses-v2",
+                "automatic-hypotheses-v3",
+                "automatic-hypotheses-v4",
+                "automatic-hypotheses-v5",
+                "automatic-hypotheses-v6",
+                "automatic-hypotheses-v7",
             ):
                 # The automatic finding is not an ordinary objective-winning
                 # trial. Its exact fixed replay is a real backtest, with its own

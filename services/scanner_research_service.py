@@ -13,7 +13,7 @@ from contextlib import ExitStack, contextmanager
 from contextvars import ContextVar
 from threading import get_ident
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import case, func, or_, select, update
 
 from database.research_db import (
     ResearchAttempt,
@@ -1062,13 +1062,12 @@ def job_receipt(store, job, include_result=False, *, experiment_id=None):
             kind=experiment.kind if experiment else "backtest",
             specification=json.loads(experiment.specification) if experiment else {},
             counts=json.loads(experiment.counts) if experiment else {},
-            resumable=bool(
-                experiment
-                and experiment.checkpoint
-                and job.status in ("interrupted", "failed", "cancelled", "paused")
-            ),
             pausable=_pausable(job, experiment),
         )
+        from services.research_recovery import assessment
+
+        value["failure"], value["recovery"] = assessment(store, job, experiment)
+        value["resumable"] = value["recovery"]["status"] == "available"
         if experiment and experiment.kind in ("portfolio_backtest", "portfolio_optimize"):
             from research.result_descriptor import display_result
             from services.research_activity import initial_activity
@@ -1093,19 +1092,26 @@ def job_receipt(store, job, include_result=False, *, experiment_id=None):
                 value["activity"] = initial_activity(
                     source_summary, value["specification"].get("portfolio", {}), job.created_at
                 )
+        queue_priority = case((ResearchExperiment.kind == "portfolio_analysis", 1), else_=0)
+        current_priority = 1 if experiment and experiment.kind == "portfolio_analysis" else 0
         value["queue_position"] = (
             db.scalar(
                 select(func.count())
                 .select_from(ResearchJob)
+                .outerjoin(ResearchExperiment, ResearchExperiment.job_id == ResearchJob.id)
                 .where(
                     ResearchJob.status == "queued",
                     or_(
-                        ResearchJob.updated_at < job.updated_at,
-                        (ResearchJob.updated_at == job.updated_at)
-                        & (ResearchJob.created_at < job.created_at),
-                        (ResearchJob.updated_at == job.updated_at)
-                        & (ResearchJob.created_at == job.created_at)
-                        & (ResearchJob.id <= job.id),
+                        queue_priority < current_priority,
+                        (queue_priority == current_priority)
+                        & or_(
+                            ResearchJob.updated_at < job.updated_at,
+                            (ResearchJob.updated_at == job.updated_at)
+                            & (ResearchJob.created_at < job.created_at),
+                            (ResearchJob.updated_at == job.updated_at)
+                            & (ResearchJob.created_at == job.created_at)
+                            & (ResearchJob.id <= job.id),
+                        ),
                     ),
                 )
             )
@@ -1173,6 +1179,11 @@ def resume(store, owner, job_id):
     evidence = source_for(store, owner, job.source_id)
     with store.sessions() as db:
         saved_experiment = db.get(ResearchExperiment, job_id)
+    from services.research_recovery import assessment
+
+    _, recovery = assessment(store, job, saved_experiment)
+    if job.status not in ACTIVE and recovery["status"] != "available":
+        raise ValueError(recovery["message"])
     saved_spec = json.loads(saved_experiment.specification) if saved_experiment else {}
     if saved_experiment and saved_experiment.kind in ("portfolio_backtest", "portfolio_optimize"):
         from services.research_portfolio import validate_submission
@@ -1196,6 +1207,11 @@ def resume(store, owner, job_id):
             or not experiment.checkpoint
         ):
             raise ValueError("This run has no resumable checkpoint")
+        # Recheck under the transition fence; a concurrent failure publication
+        # cannot turn an incompatible stopped checkpoint into queued work.
+        _, recovery = assessment(store, current, experiment)
+        if recovery["status"] != "available":
+            raise ValueError(recovery["message"])
         checkpoint = read_artifact(store, experiment.checkpoint)
         if (
             checkpoint["identity"] != experiment.identity
@@ -1213,6 +1229,9 @@ def resume(store, owner, job_id):
             None,
             time.time(),
         )
+        counts = json.loads(experiment.counts)
+        counts.pop("failure", None)
+        experiment.counts = encoded(counts).decode()
     return job_receipt(store, get_job(store, owner, job_id))
 
 

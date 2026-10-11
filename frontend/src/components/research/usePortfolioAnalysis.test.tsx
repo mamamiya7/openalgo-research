@@ -6,7 +6,7 @@ import { niftyBenchmark } from './BenchmarkComparison'
 import { usePortfolioAnalysis } from './usePortfolioAnalysis'
 
 vi.mock('@/api/portfolioResearch', () => ({
-  portfolioResearch: { analysis: vi.fn(), prepareAnalysis: vi.fn() },
+  portfolioResearch: { analysis: vi.fn(), prepareAnalysis: vi.fn(), cancel: vi.fn() },
 }))
 const result: PortfolioResult = {
   config: { initial_capital: 1 },
@@ -26,6 +26,33 @@ afterEach(() => {
 })
 
 describe('saved analysis lifecycle', () => {
+  it('cancels only the separate diagnostics job and leaves saved numerical findings readable', async () => {
+    vi.mocked(portfolioResearch.analysis)
+      .mockResolvedValueOnce({ status: 'running', analysis_job_id: 'diagnostics' })
+      .mockResolvedValueOnce({
+        status: 'failed',
+        analysis_job_id: 'diagnostics',
+        error: 'Analysis cancelled.',
+      })
+    vi.mocked(portfolioResearch.cancel).mockResolvedValue({
+      id: 'diagnostics',
+      status: 'cancelling',
+      progress: 0,
+      created_at: 1,
+    })
+    const { result: state } = renderHook(() => usePortfolioAnalysis('parent', result, true, false))
+    await act(async () => {})
+    await act(async () => {
+      await state.current.cancel()
+    })
+    expect(portfolioResearch.cancel).toHaveBeenCalledExactlyOnceWith(
+      'diagnostics',
+      expect.any(AbortSignal)
+    )
+    expect(state.current.result).toBe(result)
+    expect(state.current.busy).toBe(false)
+    expect(portfolioResearch.prepareAnalysis).not.toHaveBeenCalled()
+  })
   it('prepares market conditions only explicitly and retries the original flag and inputs after failure', async () => {
     vi.mocked(portfolioResearch.analysis).mockResolvedValue({ status: 'missing' })
     vi.mocked(portfolioResearch.prepareAnalysis)

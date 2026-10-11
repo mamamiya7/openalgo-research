@@ -1,9 +1,10 @@
 import type { PortfolioDraft } from '@/components/research/PortfolioBuilder'
 import { webClient } from './client'
-import type { PortfolioJob, PortfolioStrategy } from './portfolioResearch'
+import type { EntryConditions, PortfolioJob, PortfolioStrategy } from './portfolioResearch'
 import type { DecisionState } from './researchDecisions'
 import type { ResearchExperiment } from './researchLibrary'
 
+export type ChosenEntryConditions = EntryConditions
 export interface ChosenSetup {
   id: string
   sequence: number
@@ -23,6 +24,7 @@ export interface ChosenSetup {
   capital: number
   currency?: string | null
   dates: { from: string | null; to: string | null }
+  entry_conditions?: ChosenEntryConditions
 }
 export interface ChosenSetupContext {
   revision: number
@@ -39,6 +41,7 @@ export interface ChosenSetupContext {
     currency?: string | null
     period: 'full' | 'selection'
     dates: { from: string | null; to: string | null }
+    entry_conditions?: ChosenEntryConditions
   }
 }
 export interface ReuseSetupSpec {

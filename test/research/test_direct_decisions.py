@@ -14,7 +14,7 @@ from test_comparisons import ready
 from test_decisions import body, evaluation, native_setup
 from test_jobs import app, client
 from test_library import OWNER, create
-from test_report_period_workflow import run_worker
+from workflow_job_helpers import complete_optional_job, complete_optional_jobs
 
 from database.research_db import (
     ResearchComparison,
@@ -217,9 +217,6 @@ def test_direct_retry_conflicts_concurrency_archive_and_atomic_failure(app, clie
         decisions.direct_context(store, "foreign-owner", experiment, job)
 
 
-# Native journeys include several real calculations and durable publications.
-# Keep a finite CI integration budget; other tests retain the 60-second default.
-@pytest.mark.timeout(300)
 def test_direct_later_evidence_opening_and_populated_backup_restore(
     app, client, monkeypatch, tmp_path
 ):
@@ -249,6 +246,7 @@ def test_direct_later_evidence_opening_and_populated_backup_restore(
         store, OWNER, experiment, later, body(evaluation_id=item["id"])
     )
     assert saved["event"]["evidence_use"]["later_used_for_decision"]
+    complete_optional_jobs(store)
     root = tmp_path.with_name(tmp_path.name + "-direct-backup")
     backup_store(store, root)
     restored_path = tmp_path.with_name(tmp_path.name + "-restored-direct")
@@ -375,7 +373,6 @@ def test_backup_rejects_tampered_direct_selection(app, client, frozen_studies, t
         backup_store(store, tmp_path.with_name(tmp_path.name + "-bad-direct"))
 
 
-@pytest.mark.timeout(300)
 def test_direct_later_target_changed_during_review_does_not_publish(app, client, monkeypatch):
     experiment, _, members, job, _, _ = native_setup(app, client, monkeypatch)
     store = app.extensions["research_store"]
@@ -396,7 +393,6 @@ def test_direct_later_target_changed_during_review_does_not_publish(app, client,
 
 
 @pytest.mark.parametrize("later_target", [False, True])
-@pytest.mark.timeout(300)
 def test_displayed_analysis_is_fenced_and_accepted_retry_survives_upgrade_and_backup(
     app, client, frozen_studies, monkeypatch, tmp_path, later_target
 ):
@@ -420,9 +416,9 @@ def test_displayed_analysis_is_fenced_and_accepted_retry_survives_upgrade_and_ba
         store, OWNER, experiment, first["decision"]["id"], first["event"]["id"]
     )
     analysis = research_analysis.submit(store, OWNER, job, symbol="AAA")
-    run_worker(store)
-    analysis_job = service.get_job(store, OWNER, analysis["analysis_job_id"])
+    analysis_job = complete_optional_job(store, analysis["analysis_job_id"])
     assert analysis_job.status == "completed"
+    assert analysis_job.result_artifact
     current = {**expected, "analysis_artifact": analysis_job.result_artifact}
     unchanged = counts(store)
     with pytest.raises(decisions.DecisionEvidenceChanged, match="Reopen the report"):
@@ -490,7 +486,6 @@ def shortlist_artifact_exists(store, artifact):
     return _artifact_present(store, artifact)
 
 
-@pytest.mark.timeout(300)
 def test_later_displayed_analysis_changing_during_save_is_fenced(app, client, monkeypatch):
     from services import research_analysis
 
@@ -498,8 +493,9 @@ def test_later_displayed_analysis_changing_during_save_is_fenced(app, client, mo
     store = app.extensions["research_store"]
     later = evaluation(app, client, experiment, source, members[1]["config_id"])
     upgraded = research_analysis.submit(store, OWNER, later, symbol="AAA")
-    run_worker(store)
-    analysis_job = service.get_job(store, OWNER, upgraded["analysis_job_id"])
+    # Mutate a real published analysis pin during saving, never a queued null.
+    analysis_job = complete_optional_job(store, upgraded["analysis_job_id"])
+    assert analysis_job.result_artifact
     expected = {
         "result_artifact": service.get_job(store, OWNER, later).result_artifact,
         "analysis_artifact": analysis_job.result_artifact,

@@ -9,6 +9,7 @@ import tempfile
 import time
 import uuid
 from contextlib import contextmanager
+from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -98,7 +99,7 @@ def _rows(connection, table, columns):
     return rows
 
 
-def _references(engine):
+def _references(engine, *, store=None):
     """Validate cross-table identity while supporting populated milestone schemas."""
     with engine.connect() as db:
         tables = set(
@@ -122,6 +123,7 @@ def _references(engine):
         from services.research_chosen_setups import references as chosen_references
 
         chosen_roots = chosen_references(db, tables)
+        automatic_roots = _automatic_period_references(db, tables, store=store)
         _study_activity_references(db, tables)
     source_ids, job_ids = {row[0] for row in sources}, {row[0] for row in jobs}
     if any(row[1] not in source_ids for row in jobs):
@@ -142,7 +144,100 @@ def _references(engine):
         | comparison_roots
         | decision_roots
         | chosen_roots
+        | automatic_roots
     )
+
+
+def _automatic_period_references(connection, tables, *, store=None):
+    """Retain consumed-period bindings, including cancelled/orphaned launches.
+
+    Old metadata without this additive table remains valid. Maintenance callers
+    supply the artifact store to also verify every claim's original chronology;
+    only one input artifact is retained in memory at a time.
+    """
+    from services.research_automatic_periods import MAX_ROWS
+
+    table = "research_automatic_period_use"
+    if table not in tables:
+        return set()
+    rows = _rows(
+        connection, table, ("owner", "day", "inputs_artifact", "job_id", "role", "created_at")
+    )
+    if len(rows) > MAX_ROWS:
+        raise ValueError("Saved automatic period history exceeds its maintenance bound")
+    roots, identity = set(), set()
+    retained_digest, periods, sessions = None, None, None
+    jobs = dict(_rows(connection, "research_jobs", ("id", "owner")))
+    for owner, day, digest, job_id, role, created in sorted(rows, key=lambda row: str(row[2])):
+        try:
+            valid_day = isinstance(day, str) and date.fromisoformat(day).isoformat() == day
+        except ValueError:
+            valid_day = False
+        if (
+            not isinstance(owner, str)
+            or not owner.strip()
+            or len(owner) > 255
+            or any(ord(char) < 32 for char in owner)
+            or not valid_day
+            or not isinstance(digest, str)
+            or not re.fullmatch(r"[a-f0-9]{64}", digest)
+            or not isinstance(job_id, str)
+            or not re.fullmatch(r"[A-Za-z0-9_-]{1,36}", job_id)
+            or job_id in jobs
+            and jobs[job_id] != owner
+            or role not in ("development", "final")
+            or type(created) not in (int, float)
+            or not math.isfinite(created)
+            or created < 0
+            or (owner, day) in identity
+        ):
+            raise ValueError("Saved automatic period history has invalid metadata")
+        identity.add((owner, day))
+        roots.add(digest)
+        if store is None:
+            continue
+        if digest != retained_digest:
+            from research.automatic_protocol import CONDITION_VERSION
+            from research.portfolio import fingerprint
+
+            _artifact_path(store.root, digest)
+            evidence = read_artifact(store, digest)
+            recipe = evidence.get("automatic_recipe")
+            if (
+                not isinstance(recipe, dict)
+                or recipe.get("version") != CONDITION_VERSION
+                or recipe.get("id")
+                != fingerprint({key: value for key, value in recipe.items() if key != "id"})
+                or evidence.get("portfolio", {}).get("automatic_research", {}).get("version")
+                != CONDITION_VERSION
+            ):
+                raise ValueError("Saved automatic period history lost its original recipe")
+            periods = recipe.get("periods", {})
+            try:
+                for name in ("search", "check1", "check2", "final"):
+                    for edge in ("from", "to"):
+                        value = periods[name][edge]
+                        if date.fromisoformat(value).isoformat() != value:
+                            raise ValueError
+                    if periods[name]["from"] > periods[name]["to"]:
+                        raise ValueError
+                sessions = set(evidence["snapshot"]["sessions"])
+            except (KeyError, TypeError, ValueError):
+                raise ValueError(
+                    "Saved automatic period history has invalid original dates"
+                ) from None
+            retained_digest = digest
+            del evidence
+        expected_role = (
+            "final" if periods["final"]["from"] <= day <= periods["final"]["to"] else "development"
+        )
+        if (
+            day not in sessions
+            or not periods["search"]["from"] <= day <= periods["final"]["to"]
+            or role != expected_role
+        ):
+            raise ValueError("Saved automatic period history differs from its original chronology")
+    return roots
 
 
 def _study_activity_references(db, tables):
@@ -1189,7 +1284,7 @@ def _closure(store, roots, refresh=lambda: None):
 
 def _inventory(store, refresh=lambda: None):
     _safe_file(store.root / "research.db", store.root)
-    closure = _closure(store, _references(store.engine), refresh)
+    closure = _closure(store, _references(store.engine, store=store), refresh)
     directory = store.root / "artifacts"
     files, unknown = [], []
     if directory.exists():
@@ -1366,7 +1461,7 @@ def backup_store(store, destination):
         _database_copy(store.engine, staging / "research.db", refresh)
         engine = _maintenance_engine(staging / "research.db")
         try:
-            roots = _references(engine)
+            roots = _references(engine, store=store)
         finally:
             engine.dispose()
         closure = _closure(store, roots, refresh)
@@ -1450,7 +1545,7 @@ def restore_store(backup_directory, destination):
                 raise ValueError("Backup changed while restoring")
         engine = _maintenance_engine(staging / "research.db")
         try:
-            roots = _references(engine)
+            roots = _references(engine, store=SimpleNamespace(root=staging))
             closure = _closure(SimpleNamespace(root=staging), roots)
             listed = {
                 name.split("/")[1].split(".")[0]

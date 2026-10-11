@@ -139,6 +139,56 @@ def test_explicit_same_source_keeps_existing_date_filter_and_has_no_false_diff(s
 
 
 @pytest.mark.parametrize("mode", ["backtest", "optimize"])
+def test_new_csv_keeps_complete_condition_recipe_but_never_reuses_old_signal_membership(
+    store, mode
+):
+    from research.regimes import recipe
+
+    original = chosen(store, count=2)
+    original["portfolio"]["entry_conditions"] = {
+        "version": "research-entry-conditions-v1",
+        "recipe": recipe(),
+        "rules": [{"strategy_id": "strategy-0", "dimension": "trend", "regime": "up"}],
+    }
+    frozen = copy.deepcopy(original)
+    replacement = source(store, month=2)
+    prepared = reuse_draft(
+        store, OWNER, original, replacements={"strategy-0": replacement["id"]}, mode=mode
+    )
+    assert (
+        prepared["draft"]["portfolio"]["entry_conditions"]
+        == frozen["portfolio"]["entry_conditions"]
+    )
+    assert prepared["draft"]["portfolio"]["strategies"][0]["source_id"] == replacement["id"]
+    assert prepared["changes"]["rules_unchanged"]
+    assert original == frozen
+    assert not set(prepared["draft"]).intersection(
+        {"condition_gate", "entry_condition_gates", "entry_condition_market"}
+    )
+
+
+@pytest.mark.parametrize("tamper", ["recipe", "missing-rule", "unknown-strategy"])
+def test_condition_reuse_rejects_tampered_or_incomplete_recipe(store, tamper):
+    from research.regimes import recipe
+
+    original = chosen(store, count=1)
+    value = {
+        "version": "research-entry-conditions-v1",
+        "recipe": recipe(),
+        "rules": [{"strategy_id": "strategy-0", "dimension": "trend", "regime": "up"}],
+    }
+    if tamper == "recipe":
+        value["recipe"]["moving_averages"]["windows"] = [10, 20]
+    elif tamper == "missing-rule":
+        value.pop("rules")
+    else:
+        value["rules"][0]["strategy_id"] = "unknown"
+    original["portfolio"]["entry_conditions"] = value
+    with pytest.raises(ValueError, match="entry.condition|strategy"):
+        reuse_draft(store, OWNER, original)
+
+
+@pytest.mark.parametrize("mode", ["backtest", "optimize"])
 def test_refine_search_keeps_chosen_values_and_never_restores_old_search_ranges(store, mode):
     original = chosen(store)
     original["portfolio"]["strategies"][0]["search"] = {

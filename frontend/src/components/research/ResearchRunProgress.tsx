@@ -1,13 +1,131 @@
-import { Check, ChevronDown, Database, FileSpreadsheet, Flag, FlaskConical } from 'lucide-react'
+import {
+  Check,
+  ChevronDown,
+  Database,
+  FileSpreadsheet,
+  Flag,
+  FlaskConical,
+  ShieldCheck,
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { PortfolioJob } from '@/api/portfolioResearch'
-import type { ResearchActivity } from '@/api/scannerResearch'
+import type { ResearchActivity, ResearchRecoveryAction } from '@/api/scannerResearch'
+import { researchFeaturePreparation } from './researchRecipeLabels'
 import './ResearchRunProgress.css'
 
 type ProgressJob = Pick<
   PortfolioJob,
-  'status' | 'kind' | 'activity' | 'queue_position' | 'source_summary' | 'specification'
+  | 'status'
+  | 'kind'
+  | 'activity'
+  | 'queue_position'
+  | 'source_summary'
+  | 'specification'
+  | 'failure'
+  | 'recovery'
+  | 'resumable'
+  | 'error'
 >
+/** Server capability and failure facts outrank a legacy resumable flag. */
+export function researchRecoveryActions(
+  job: Pick<PortfolioJob, 'status' | 'recovery' | 'failure' | 'resumable'>
+): ResearchRecoveryAction[] {
+  if (!['failed', 'paused', 'interrupted', 'cancelled'].includes(job.status)) return []
+  const recovery = job.recovery
+  const failure = job.failure
+  if (recovery && recovery.version !== 'research-recovery-v1') return []
+  if (failure && failure.version !== 'research-failure-v1') return []
+  const supplied = recovery?.actions ?? failure?.actions
+  const known: ResearchRecoveryAction[] = ['resume', 'new_run', 'edit_setup', 'reconnect_broker']
+  const actions = supplied
+    ? known.filter((action) => supplied.includes(action))
+    : [...(job.resumable ? ['resume' as const] : []), 'edit_setup' as const]
+  return actions.filter(
+    (action) =>
+      action !== 'resume' ||
+      (job.resumable === true &&
+        (!recovery || recovery.status === 'available') &&
+        (!failure || (failure.retryable && failure.actions.includes('resume'))))
+  )
+}
+
+function ResearchRecoveryNotice({ job }: { job: ProgressJob }) {
+  if (!['failed', 'paused', 'interrupted', 'cancelled'].includes(job.status)) return null
+  const failure = job.failure?.version === 'research-failure-v1' ? job.failure : undefined
+  const recovery = job.recovery?.version === 'research-recovery-v1' ? job.recovery : undefined
+  if (
+    !failure &&
+    (!recovery || (job.status === 'paused' && researchRecoveryActions(job).includes('resume')))
+  )
+    return null
+  const details = failure?.details
+  const affected = details?.first_affected_session
+  const parsedDate =
+    affected && /^\d{4}-\d{2}-\d{2}$/.test(affected) ? new Date(`${affected}T00:00:00Z`) : null
+  const date =
+    parsedDate && Number.isFinite(parsedDate.getTime())
+      ? new Intl.DateTimeFormat('en-IN', {
+          timeZone: 'UTC',
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        }).format(parsedDate)
+      : affected
+  const message =
+    failure?.code === 'execution_session_hours_mismatch' && date
+      ? `Session hours differ on ${date}. Review the setup before starting a new run.`
+      : (failure?.message ?? recovery?.message)
+  if (!message) return null
+  const hours = (value: { open: string; close: string } | null | undefined) =>
+    value ? `${value.open}–${value.close} IST` : 'Not recorded'
+  return (
+    <div className="space-y-3">
+      <p role={failure ? 'alert' : undefined} className="text-sm text-muted-foreground">
+        {message}
+      </p>
+      {(details || recovery?.checkpoint_phase) && (
+        <details className="text-xs">
+          <summary className="cursor-pointer text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring">
+            Run issue details
+          </summary>
+          <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+            {date && (
+              <div>
+                <dt className="text-muted-foreground">First affected session</dt>
+                <dd>{date}</dd>
+              </div>
+            )}
+            {details && Object.hasOwn(details, 'expected_hours') && (
+              <div>
+                <dt className="text-muted-foreground">Expected · saved context</dt>
+                <dd>{hours(details.expected_hours)}</dd>
+              </div>
+            )}
+            {details && Object.hasOwn(details, 'actual_hours') && (
+              <div>
+                <dt className="text-muted-foreground">Actual · execution calendar</dt>
+                <dd>{hours(details.actual_hours)}</dd>
+              </div>
+            )}
+            {details?.mismatch_count != null && (
+              <div>
+                <dt className="text-muted-foreground">Affected sessions</dt>
+                <dd>{details.mismatch_count}</dd>
+              </div>
+            )}
+            {recovery?.checkpoint_phase && (
+              <div>
+                <dt className="text-muted-foreground">Saved checkpoint</dt>
+                <dd>{recovery.checkpoint_phase.replaceAll('_', ' ')}</dd>
+              </div>
+            )}
+          </dl>
+        </details>
+      )}
+    </div>
+  )
+}
+
 const valid = (value: number | undefined): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0
 const count = (value: number) => value.toLocaleString('en-IN')
@@ -56,15 +174,16 @@ function priceWindowSummary(job: ProgressJob, interval?: string) {
   return 'Entry-to-exit prices · shared candles counted once'
 }
 
-function stepIndex(stage?: ResearchActivity['stage']): number {
+function stepIndex(stage: ResearchActivity['stage'] | undefined, checking: boolean): number {
   if (!stage) return -1
   if (stage === 'csv') return 0
-  if (['planning', 'cache', 'download', 'verify'].includes(stage)) return 1
-  if (['initializing', 'optimizing', 'backtest', 'validation'].includes(stage)) return 2
-  return stage === 'saving' || stage === 'complete' ? 3 : -1
+  if (['planning', 'cache', 'download', 'verify', 'features'].includes(stage)) return 1
+  if (['initializing', 'optimizing', 'backtest'].includes(stage)) return 2
+  if (stage === 'validation') return checking ? 3 : 2
+  return ['analysis', 'saving', 'complete'].includes(stage) ? (checking ? 4 : 3) : -1
 }
 
-function stageTitle(activity?: ResearchActivity, optimizing = false) {
+function stageTitle(activity?: ResearchActivity, optimizing = false, recipe?: string) {
   const interval = intervalName(activity?.prices?.interval)?.toLowerCase()
   switch (activity?.stage) {
     case 'csv':
@@ -77,6 +196,8 @@ function stageTitle(activity?: ResearchActivity, optimizing = false) {
       return `Downloading ${interval ? `${interval} ` : ''}prices`
     case 'verify':
       return 'Verifying saved prices'
+    case 'features':
+      return researchFeaturePreparation(recipe)
     case 'initializing':
       return 'Preparing the calculation engine'
     case 'optimizing':
@@ -84,7 +205,11 @@ function stageTitle(activity?: ResearchActivity, optimizing = false) {
     case 'backtest':
       return 'Running your backtest'
     case 'validation':
-      return 'Checking the later period'
+      return recipe?.startsWith('automatic-')
+        ? 'Checking shortlisted settings'
+        : 'Checking the later period'
+    case 'analysis':
+      return 'Preparing study charts'
     case 'saving':
       return 'Saving results'
     case 'complete':
@@ -97,7 +222,11 @@ function stageTitle(activity?: ResearchActivity, optimizing = false) {
 function statusTitle(job: ProgressJob, optimizing: boolean) {
   switch (job.status) {
     case 'running':
-      return stageTitle(job.activity, optimizing)
+      return stageTitle(
+        job.activity,
+        optimizing,
+        job.specification?.portfolio?.automatic_research?.version
+      )
     case 'queued':
       return job.activity?.batch_count ? 'Waiting to continue' : 'Waiting to start'
     case 'pausing':
@@ -334,7 +463,17 @@ export function ResearchRunProgress({ job }: { job: ProgressJob }) {
   const activity = job.activity?.version === 1 ? job.activity : undefined
   const optimizing = job.kind === 'portfolio_optimize'
   const running = job.status === 'running' || job.status === 'pausing'
-  const current = job.status === 'completed' ? 4 : stepIndex(activity?.stage)
+  const request = job.specification?.portfolio
+  const checking =
+    optimizing &&
+    Boolean(
+      request?.automatic_research ||
+        request?.validation?.mode === 'evaluate' ||
+        activity?.stage === 'validation'
+    )
+  const resultStage = checking ? 4 : 3
+  const current =
+    job.status === 'completed' ? resultStage + 1 : stepIndex(activity?.stage, checking)
   const title = researchRunStatus(job)
   const inputs = activity?.inputs
   const trials = activity?.trials
@@ -359,14 +498,15 @@ export function ResearchRunProgress({ job }: { job: ProgressJob }) {
           : undefined,
     },
     {
-      name: optimizing ? 'Optimize' : 'Backtest',
+      name: optimizing ? (checking ? 'Search settings' : 'Optimize') : 'Backtest',
       Icon: FlaskConical,
       summary:
         current >= 2 && optimizing && valid(trials?.completed) && valid(trials?.total)
           ? `${count(trials.completed)} / ${count(trials.total)} trials`
           : undefined,
     },
-    { name: 'Results', Icon: Flag, summary: current === 4 ? 'Ready' : undefined },
+    ...(checking ? [{ name: 'Check', Icon: ShieldCheck, summary: undefined }] : []),
+    { name: 'Results', Icon: Flag, summary: job.status === 'completed' ? 'Ready' : undefined },
   ]
   return (
     <div
@@ -374,7 +514,7 @@ export function ResearchRunProgress({ job }: { job: ProgressJob }) {
       data-running={running}
       data-stage={activity?.stage ?? 'unknown'}
     >
-      <ol aria-label="Run stages" className="research-stage-track">
+      <ol aria-label="Run stages" data-steps={steps.length} className="research-stage-track">
         {steps.map(({ name, Icon, summary, dates }, index) => {
           const done = current > index
           return (
@@ -408,12 +548,13 @@ export function ResearchRunProgress({ job }: { job: ProgressJob }) {
           </output>
           <Elapsed activity={activity} running={running} />
         </div>
+        <ResearchRecoveryNotice job={job} />
         {job.status === 'pausing' && (
           <p className="text-sm text-muted-foreground">
             Finishing the current step and saving your trials.
           </p>
         )}
-        {job.status === 'paused' && (
+        {job.status === 'paused' && researchRecoveryActions(job).includes('resume') && (
           <p className="text-sm text-muted-foreground">
             Progress saved. Resume whenever you’re ready.
           </p>
@@ -427,12 +568,40 @@ export function ResearchRunProgress({ job }: { job: ProgressJob }) {
                 : 'Your run is in the queue.'}
           </p>
         )}
-        {activity && current === 1 && (
+        {activity && current === 1 && activity.stage !== 'features' && (
           <PriceProgress
             activity={activity}
             running={running}
             windowSummary={priceWindowSummary(job, activity.prices?.interval)}
           />
+        )}
+        {activity?.stage === 'features' && (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Completed daily prices available before each entry.
+            </p>
+            {valid(activity.features?.scanner_symbols) &&
+              valid(activity.features?.context_symbols) && (
+                <p className="text-xs text-muted-foreground">
+                  {count(activity.features.scanner_symbols)} scanner{' '}
+                  {activity.features.scanner_symbols === 1 ? 'symbol' : 'symbols'}
+                  {activity.features.context_symbols > 0 &&
+                    ` + ${count(activity.features.context_symbols)} market ${activity.features.context_symbols === 1 ? 'index' : 'indices'}`}
+                </p>
+              )}
+            <StageBar
+              label="Indicator history prepared"
+              value={activity.features?.completed_symbols}
+              total={activity.features?.total_symbols}
+            />
+            <p className="text-xs text-muted-foreground">
+              {count(activity.features?.completed_symbols ?? 0)} of{' '}
+              {count(activity.features?.total_symbols ?? 0)} symbols
+              {running && activity.prices?.current_symbol
+                ? ` · ${activity.prices.current_symbol}`
+                : ''}
+            </p>
+          </div>
         )}
         {activity?.stage === 'csv' && (
           <dl className="grid grid-cols-3 gap-4">
@@ -468,6 +637,15 @@ export function ResearchRunProgress({ job }: { job: ProgressJob }) {
             <TrialHistory history={trials} />
           </div>
         )}
+        {activity?.stage === 'validation' &&
+          valid(activity.calculations?.completed) &&
+          valid(activity.calculations?.limit) &&
+          activity.calculations.completed <= activity.calculations.limit && (
+            <p className="text-sm tabular-nums text-muted-foreground">
+              {count(activity.calculations.completed)} calculations completed · limit{' '}
+              {count(activity.calculations.limit)}
+            </p>
+          )}
         {running && current !== 1 && !showTrials && <StageBar label={title} />}
         {activity?.inputs?.excluded_rows ? (
           <p className="text-xs text-muted-foreground">

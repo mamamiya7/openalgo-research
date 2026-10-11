@@ -7,29 +7,47 @@ on:
   workflow_dispatch:
     inputs:
       validation_scope:
-        description: Full validation, or package-only after separately qualifying unchanged runtime code
+        description: Full validation, package-only, one Windows slice, or focused runtime follow-up
         type: choice
-        options: [full, package]
+        options: [full, package, windows-slice, runtime-followup]
         default: full
+      slice_index:
+        description: Manual windows-slice recheck index (0-3); ignored by full/package validation
+        type: choice
+        options: ['0', '1', '2', '3']
+        default: '3'
+        required: true
+      qualified_source_sha:
+        description: Full commit SHA whose unchanged runtime and other slices were qualified separately
+        type: string
+        default: e24c066f7e8fe07965538715b843a69c6fc4fbb8
+        required: true
 
 permissions:
   contents: read
 
 concurrency:
   # A delayed push event must not cancel an explicit release validation run.
-  group: research-${{ github.event_name }}-${{ github.ref }}
+  # A slice recheck also cannot cancel full manual qualification on the same ref.
+  group: research-${{ github.event_name }}-${{ github.ref }}${{ github.event_name == 'workflow_dispatch' && inputs.validation_scope == 'windows-slice' && format('-windows-slice-{0}', inputs.slice_index) || github.event_name == 'workflow_dispatch' && inputs.validation_scope == 'runtime-followup' && '-runtime-followup' || '' }}
   cancel-in-progress: true
 
 jobs:
   supported-runtime:
-    # Only an explicit manual package request can omit the engine matrix.
+    name: supported-runtime (${{ matrix.os }}, ${{ matrix.slice_index }}/${{ matrix.slice_count }})
+    # Explicit package or slice rechecks disclose the omitted complete matrix.
     # Pushes, pull requests and ordinary manual runs always validate it.
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.validation_scope != 'package' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.validation_scope == 'full' }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        include:
+          - {os: ubuntu-latest, slice_index: 0, slice_count: 1}
+          - {os: windows-latest, slice_index: 0, slice_count: 4}
+          - {os: windows-latest, slice_index: 1, slice_count: 4}
+          - {os: windows-latest, slice_index: 2, slice_count: 4}
+          - {os: windows-latest, slice_index: 3, slice_count: 4}
     runs-on: ${{ matrix.os }}
     env:
       PYTHON_DOTENV_DISABLED: '1'
@@ -45,9 +63,10 @@ jobs:
       - run: uv sync --frozen --extra research
       - run: uv run --no-sync python tools/research_check.py
       - name: Engine, native data, saved evidence and lifecycle regressions
-        run: uv run --no-sync pytest test/research test/test_history_service_source_validation.py -q
+        run: uv run --no-sync python tools/research_test_slice.py --index ${{ matrix.slice_index }} --count ${{ matrix.slice_count }}
       - name: Host upgrade migrations, shutdown and chart data contracts
-        run: >-
+        if: matrix.slice_index == 0
+        run: &host_contracts >-
           uv run --no-sync pytest
           test/test_migrate_agent.py test/test_agent_voice.py
           test/test_auth_session_hygiene.py
@@ -57,24 +76,24 @@ jobs:
           test/test_upstox_holdings_mapping.py test/test_upstox_tick_size.py -q
       - name: Production eventlet boundary
         if: runner.os == 'Linux'
-        run: |
+        run: &eventlet_contracts |
           uv pip install "gunicorn==25.3.0" "eventlet==0.41.2"
           uv run --no-sync pytest test/test_sqlite_lock_cooperative.py test/test_eventlet_cross_thread_locks.py -q
       - name: Install and probe the locked Nautilus side runtime
         if: runner.os == 'Linux'
-        run: uv run --no-project python tools/research_install_nautilus.py
+        run: &nautilus_install uv run --no-project python tools/research_install_nautilus.py
       - name: Add locked side-runtime test dependencies
         if: runner.os == 'Linux'
-        run: uv sync --project research/runtimes/nautilus --python 3.12 --frozen --no-dev --group test
+        run: &nautilus_test_dependencies uv sync --project research/runtimes/nautilus --python 3.12 --frozen --no-dev --group test
       - name: Real native fills and owned Linux process cleanup
         if: runner.os == 'Linux'
-        run: |
+        run: &nautilus_contracts |
           PYTHONPATH=. research/runtimes/nautilus/.venv/bin/python -m pytest \
             --confcutdir=test/research test/research/test_nautilus_portfolio.py \
             test/research/test_nautilus_runtime.py test/research/test_analytics.py -q
       - name: Core environment to real Nautilus side-runtime calculation
         if: runner.os == 'Linux'
-        run: |
+        run: &nautilus_bridge |
           uv run --no-sync python - <<'PY'
           import json
           import sys
@@ -105,6 +124,8 @@ jobs:
           PY
 
   package:
+    # A manual runtime slice is not a package or fresh-install qualification.
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.validation_scope == 'full' || inputs.validation_scope == 'package' }}
     # Build and check the frontend/image while the independent engine matrix runs.
     # The overall workflow must pass the engine, package and fresh-install jobs.
     timeout-minutes: 60
@@ -165,6 +186,11 @@ jobs:
           src/components/research/ShortlistCompare.test.tsx
           src/components/research/MatchedBaseline.test.tsx
           src/components/research/ResearchResultReview.test.tsx
+          src/components/research/PrepareTestedReport.test.tsx
+          src/components/research/PrepareTestedReport.lifetime.test.tsx
+          src/components/research/SaveTestedSetup.test.tsx
+          src/components/research/SaveTestedSetup.lifetime.test.tsx
+          src/components/research/PortfolioRecovery.test.tsx
           src/components/research/ResearchChosenSetup.test.tsx
           src/components/research/PortfolioSetupReview.test.tsx
           src/components/research/portfolioTrialMetrics.test.ts
@@ -265,5 +291,234 @@ jobs:
         with:
           name: fresh-install-${{ matrix.os }}
           path: ${{ runner.temp }}/OpenAlgo Research Fresh Install/tmp/install-smoke/receipt.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  windows-slice:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.validation_scope == 'windows-slice' }}
+    name: Windows runtime recheck (${{ inputs.slice_index }}/4)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      PYTHON_DOTENV_DISABLED: '1'
+      PYTHONUTF8: '1'
+      OPENBLAS_NUM_THREADS: '2'
+      NUMBA_NUM_THREADS: '2'
+      RECHECK_SLICE_INDEX: ${{ inputs.slice_index }}
+      QUALIFIED_SOURCE_SHA: ${{ inputs.qualified_source_sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+          enable-cache: true
+      - &runtime_qualification_guard
+        name: Verify unchanged runtime and exact test partition
+        shell: python
+        run: |
+          import hashlib
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path, PurePosixPath
+
+          qualified = os.environ['QUALIFIED_SOURCE_SHA']
+          mode = os.environ.get('RECHECK_MODE', 'windows-slice')
+          if mode not in ('windows-slice', 'runtime-followup'):
+              raise ValueError('Choose an explicit scoped runtime mode')
+          selected_index = os.environ['RECHECK_SLICE_INDEX']
+          if re.fullmatch(r'[0-9a-fA-F]{40}', qualified) is None:
+              raise ValueError('Use a fully pinned 40-character qualified source SHA')
+          if re.fullmatch(r'[0-3]', selected_index) is None:
+              raise ValueError('Choose a Windows slice index from 0 to 3')
+          qualified = qualified.lower()
+          if mode == 'runtime-followup' and qualified != os.environ['FOLLOWUP_QUALIFIED_SOURCE_SHA']:
+              raise ValueError('Runtime follow-up must use its explicitly qualified baseline SHA')
+          root = Path.cwd().resolve()
+
+          def git(*args):
+              return subprocess.run(
+                  ['git', *args], check=True, stdout=subprocess.PIPE,
+                  stderr=subprocess.PIPE, timeout=60,
+              ).stdout
+
+          if Path(git('rev-parse', '--show-toplevel').decode().strip()).resolve() != root:
+              raise ValueError('Run the recheck from the checked-out repository root')
+          if git('rev-parse', '--verify', qualified + '^{commit}').decode().strip() != qualified:
+              raise ValueError('Qualified source must resolve to that exact commit')
+          git('merge-base', '--is-ancestor', qualified, 'HEAD')
+          changed = [name.decode() for name in git(
+              'diff', '--name-only', '-z', '--no-renames', qualified, 'HEAD'
+          ).split(b'\0') if name]
+          allowed_workflow = '.github/workflows/research-distribution.yml'
+          rejected = [name for name in changed if not (
+              name.startswith('test/') or name.startswith('docs/') or name == allowed_workflow
+          )]
+          if rejected:
+              raise ValueError('Scoped recheck cannot qualify runtime changes: ' + repr(rejected))
+          baseline_files = [name.decode() for name in git(
+              'ls-tree', '-r', '--name-only', '-z', qualified
+          ).split(b'\0') if name]
+          baseline_modules = sorted(
+              name for name in baseline_files
+              if name.startswith('test/research/')
+              and PurePosixPath(name).name.startswith('test_')
+              and PurePosixPath(name).suffix == '.py'
+          )
+          history = 'test/test_history_service_source_validation.py'
+          if history not in baseline_files:
+              raise ValueError('Qualified source has no complete test inventory')
+          baseline_modules.append(history)
+          sys.path.insert(0, str(root))
+          from tools.research_test_slice import partition
+
+          inventory = partition(root, 0, 1)
+          if inventory != baseline_modules:
+              raise ValueError('Test-module inventory changed; run the complete matrix instead')
+          if mode == 'runtime-followup':
+              selected = ['test/research/test_release_package.py', 'test/research/test_release_workflow.py']
+              scope = 'Focused package contracts and Linux post-core follow-up only'
+          else:
+              selected = partition(root, int(selected_index), 4)
+              scope = 'Windows runtime slice recheck only'
+          allowed_tests = set(selected) | {'test/research/test_release_workflow.py'}
+          other_tests = [name for name in changed if name.startswith('test/') and name not in allowed_tests]
+          if other_tests:
+              raise ValueError('Changed tests are outside the selected slice: ' + repr(other_tests))
+          metadata = {
+              'scope': scope,
+              'qualified_source_sha': qualified,
+              'current_source_sha': git('rev-parse', 'HEAD').decode().strip(),
+              'slice_index': int(selected_index) if mode == 'windows-slice' else None,
+              'slice_count': 4 if mode == 'windows-slice' else None,
+              'test_inventory_sha256': hashlib.sha256('\n'.join(inventory).encode()).hexdigest(),
+              'selected_modules': selected,
+              'runtime_unchanged': True,
+              'inventory_unchanged': True,
+          }
+          receipt = root / '.agent-native/runtime-recheck/qualification.json'
+          receipt.parent.mkdir(parents=True, exist_ok=True)
+          receipt.write_text(json.dumps(metadata, indent=2), encoding='utf-8')
+          summary = os.environ.get('GITHUB_STEP_SUMMARY')
+          if summary:
+              if mode == 'runtime-followup':
+                  disclosure = (
+                      'Focused release-package/workflow contracts on both operating systems, '
+                      'then Linux host, eventlet and Nautilus integration only. '
+                      'This is not a full matrix or package/fresh-install qualification. '
+                      'Combine the separately recorded 2,516 core passes with the corrected '
+                      'package contracts and post-core checks only when the runtime is unchanged. '
+                      'The original failing full run remains recorded; cite both runs.\n\n'
+                  )
+              else:
+                  disclosure = (
+                      f'Slice index {selected_index}/4 only ({len(selected)} modules). '
+                      'This cannot independently qualify the complete Windows/Linux platform, '
+                      'the package, or fresh installation. Cite the separate full qualification '
+                      'of the unchanged runtime and the other slices.\n\n'
+                  )
+              with open(summary, 'a', encoding='utf-8') as report:
+                  report.write(
+                      '## Scoped runtime requalification\n' + disclosure +
+                      f'Qualified source: `{qualified}`. '
+                      f'Rechecked source: `{metadata["current_source_sha"]}`. '
+                      'Runtime code and the complete test-module inventory match; changed '
+                      'tests must be in this run, alongside documentation and this workflow.\n'
+                  )
+      - run: uv sync --frozen --extra research
+      - run: uv run --no-sync python tools/research_check.py
+      - name: Qualify the scoped workflow contracts
+        run: uv run --no-sync pytest test/research/test_release_workflow.py -q
+      - name: Recheck selected Windows research slice
+        shell: python
+        run: |
+          import os
+          import subprocess
+
+          subprocess.run(
+              ['uv', 'run', '--no-sync', 'python', 'tools/research_test_slice.py',
+               '--index', os.environ['RECHECK_SLICE_INDEX'], '--count', '4'],
+              check=True,
+          )
+      - name: Host upgrade migrations, shutdown and chart data contracts
+        if: ${{ inputs.slice_index == '0' }}
+        run: >-
+          uv run --no-sync pytest
+          test/test_migrate_agent.py test/test_agent_voice.py
+          test/test_auth_session_hygiene.py
+          test/test_graceful_shutdown.py
+          test/test_strategy_builder_chart_window.py
+          test/test_strategy_builder_chart_reference.py
+          test/test_upstox_holdings_mapping.py test/test_upstox_tick_size.py -q
+      - name: Retain scoped source and partition receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-runtime-recheck-${{ inputs.slice_index }}
+          path: .agent-native/runtime-recheck/qualification.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  runtime-followup:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.validation_scope == 'runtime-followup' }}
+    name: Focused runtime follow-up (${{ matrix.os }})
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      PYTHON_DOTENV_DISABLED: '1'
+      PYTHONUTF8: '1'
+      OPENBLAS_NUM_THREADS: '2'
+      NUMBA_NUM_THREADS: '2'
+      RECHECK_MODE: runtime-followup
+      RECHECK_SLICE_INDEX: ${{ inputs.slice_index }}
+      QUALIFIED_SOURCE_SHA: ${{ inputs.qualified_source_sha }}
+      FOLLOWUP_QUALIFIED_SOURCE_SHA: bc68f2ce0ee1927da9c6857df71f874b7e968990
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+          enable-cache: true
+      - *runtime_qualification_guard
+      - run: uv sync --frozen --extra research
+      - run: uv run --no-sync python tools/research_check.py
+      - name: Corrected package contracts and scoped workflow qualification
+        run: uv run --no-sync pytest test/research/test_release_package.py test/research/test_release_workflow.py -q
+      - name: Host upgrade migrations, shutdown and chart data contracts
+        if: runner.os == 'Linux'
+        run: *host_contracts
+      - name: Production eventlet boundary
+        if: runner.os == 'Linux'
+        run: *eventlet_contracts
+      - name: Install and probe the locked Nautilus side runtime
+        if: runner.os == 'Linux'
+        run: *nautilus_install
+      - name: Add locked side-runtime test dependencies
+        if: runner.os == 'Linux'
+        run: *nautilus_test_dependencies
+      - name: Real native fills and owned Linux process cleanup
+        if: runner.os == 'Linux'
+        run: *nautilus_contracts
+      - name: Core environment to real Nautilus side-runtime calculation
+        if: runner.os == 'Linux'
+        run: *nautilus_bridge
+      - name: Retain focused source and inventory receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: runtime-followup-${{ matrix.os }}
+          path: .agent-native/runtime-recheck/qualification.json
           if-no-files-found: warn
           retention-days: 14

@@ -25,7 +25,9 @@ import { AnalysisMetricTable } from './AnalysisMetricTable'
 import { AutomaticResearchFindings } from './AutomaticResearchFindings'
 import { AnalysisBasis, AnalysisPreparation } from './PortfolioAnalysis'
 import { PortfolioTrials } from './PortfolioTrials'
+import { PrepareTestedReport } from './PrepareTestedReport'
 import { availableTrialMetrics, trialMetricText, trialMetricValue } from './portfolioTrialMetrics'
+import { researchRecipeLabel } from './researchRecipeLabels'
 import { SaveToShortlist } from './SaveToShortlist'
 import { StudyActivity } from './StudyActivity'
 import { StudyContinuation } from './StudyContinuation'
@@ -100,7 +102,7 @@ function StudyWorkspace({
     queryFn: ({ signal }) => researchCandidates.get(job.id, signal),
     retry: false,
     staleTime: 15000,
-    enabled: !automatic,
+    enabled: true,
     refetchInterval: (query) =>
       query.state.data?.candidates.some((item) => ['queued', 'running'].includes(item.status))
         ? 1500
@@ -124,7 +126,7 @@ function StudyWorkspace({
     candidate && experiment.trials?.find((item) => item.number === candidate.proposalNumber)
   const receipt = (configId: string): CandidateReportReceipt | undefined =>
     reports.data?.candidates.find((item) => item.config_id === configId) ??
-    (configId === experiment.recommendation_id
+    (!automatic && configId === experiment.recommendation_id
       ? {
           config_id: configId,
           trial_number: winner?.trial_number ?? 0,
@@ -150,6 +152,7 @@ function StudyWorkspace({
     busy: analysis.busy,
     response: analysis.response,
     onPrepare: analysis.prepare,
+    onCancel: analysis.cancel,
     readOnly,
     exportUrl: portfolioResearch.analysisExportUrl(job.id),
   }
@@ -179,7 +182,6 @@ function StudyWorkspace({
       opener.current = document.getElementById(`study-chart-${job.id}-${chartId}`)
   }
   const reportAction = (configId: string) => {
-    if (automatic) return { label: 'Backtest these settings', disabled: readOnly || rerunning }
     const item = receipt(configId)
     return {
       label:
@@ -192,16 +194,12 @@ function StudyWorkspace({
     }
   }
   function showReport(configId: string) {
-    if (automatic) {
-      if (!readOnly && !rerunning) onRerun(configId)
-      return
-    }
     const item = receipt(configId)
     if (item?.status === 'ready' && item.report_job_id) onOpenReport(item.report_job_id)
     else inspect(configId)
   }
   async function prepare() {
-    if (automatic || !candidate || preparing || readOnly || report?.status !== 'available') return
+    if (!candidate || preparing || readOnly || report?.status !== 'available') return
     const controller = new AbortController()
     request.current = controller
     setPreparing(true)
@@ -277,7 +275,7 @@ function StudyWorkspace({
           </h2>
           <p className="text-sm text-muted-foreground">
             {result.automatic_research
-              ? 'Automatic trade-management research'
+              ? researchRecipeLabel(result.automatic_research.version)
               : `${experiment.optimizer.objective_definition} · Maximize`}
             {result.report_context?.period_label ? ` · ${result.report_context.period_label}` : ''}
           </p>
@@ -308,10 +306,13 @@ function StudyWorkspace({
           )}
         </div>
         <div className="flex flex-wrap items-start gap-2">
-          {automatic && !readOnly && (
-            <Button disabled={rerunning} onClick={() => onRerun()}>
-              {rerunning ? 'Starting…' : 'Backtest these settings'}
-            </Button>
+          {automatic && (
+            <PrepareTestedReport
+              jobId={job.id}
+              configId={experiment.recommendation_id}
+              readOnly={readOnly}
+              onOpen={onOpenReport}
+            />
           )}
           {experimentId && result.report_context?.result_artifact && !result.automatic_research && (
             <StudyContinuation
@@ -333,29 +334,33 @@ function StudyWorkspace({
         </div>
       </header>
       {result.automatic_research && (
-        <AutomaticResearchFindings findings={result.automatic_research} />
+        <AutomaticResearchFindings
+          findings={result.automatic_research}
+          selectedSettings={result.experiment?.selected_strategies}
+        />
       )}
-      {automatic && !readOnly && (
-        <p className="text-xs text-muted-foreground">
-          Open an exact backtest to compare or save this setup.
+      <details className="border-y py-3 text-xs text-muted-foreground">
+        <summary className="cursor-pointer">Search details</summary>
+        <dl className="grid grid-cols-2 gap-5 py-4 sm:grid-cols-4">
+          {[
+            [
+              'Proposals',
+              `${number(counts.proposed)} / ${number(experiment.search_space?.proposal_budget ?? experiment.specification.trials)}`,
+            ],
+            ['Distinct portfolios', number(counts.distinct)],
+            ['Repeated proposals', number(counts.reused)],
+            ['Highest search score', number(objectiveWinner?.score)],
+          ].map(([label, value]) => (
+            <div key={label}>
+              <dt className="text-xs text-muted-foreground">{label}</dt>
+              <dd className="mt-2 text-xl font-semibold tabular-nums">{value}</dd>
+            </div>
+          ))}
+        </dl>
+        <p>
+          The highest score describes the search period. It is not a later-period recommendation.
         </p>
-      )}
-      <dl className="grid grid-cols-2 gap-5 border-y py-5 sm:grid-cols-4">
-        {[
-          [
-            'Proposals',
-            `${number(counts.proposed)} / ${number(experiment.search_space?.proposal_budget ?? experiment.specification.trials)}`,
-          ],
-          ['Distinct portfolios', number(counts.distinct)],
-          ['Repeated proposals', number(counts.reused)],
-          ['Best objective score', number(objectiveWinner?.score)],
-        ].map(([label, value]) => (
-          <div key={label}>
-            <dt className="text-xs text-muted-foreground">{label}</dt>
-            <dd className="mt-2 text-xl font-semibold tabular-nums">{value}</dd>
-          </div>
-        ))}
-      </dl>
+      </details>
       <Tabs
         value={view.section}
         onValueChange={(section) => setView({ ...view, section: section as typeof view.section })}
@@ -561,15 +566,10 @@ function StudyWorkspace({
                     readOnly={readOnly}
                   />
                 )}
-                {automatic && !readOnly && (
-                  <Button disabled={rerunning} onClick={() => onRerun(candidate.configId)}>
-                    Backtest these settings
-                  </Button>
-                )}
-                {!automatic && report?.status === 'ready' && report.report_job_id && (
+                {report?.status === 'ready' && report.report_job_id && (
                   <Button onClick={() => onOpenReport(report.report_job_id!)}>Open report</Button>
                 )}
-                {!automatic && report?.status === 'available' && !readOnly && (
+                {report?.status === 'available' && !readOnly && (
                   <Button disabled={preparing} onClick={() => void prepare()}>
                     {preparing ? 'Preparing report…' : 'Prepare report'}
                   </Button>
@@ -603,7 +603,7 @@ function StudyWorkspace({
                     : 'The statistics are saved. Prepare the full report using this trial’s saved settings and prices.'}
                 </p>
               )}
-              {!automatic && !report && reports.isPending && (
+              {!report && reports.isPending && (
                 <output className="text-xs text-muted-foreground">Checking saved reports…</output>
               )}
               {report?.error && (

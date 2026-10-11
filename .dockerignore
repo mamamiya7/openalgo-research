@@ -76,4 +76,6 @@ frontend/docs/
 !frontend/dist/
 .agent-native/
 research_data/
+
+# Private guided-install Python runtime and cache
 .research-runtime/

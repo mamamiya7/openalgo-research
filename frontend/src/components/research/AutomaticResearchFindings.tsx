@@ -1,6 +1,11 @@
 import { Check, ChevronDown, FlaskConical } from 'lucide-react'
-import type { AutomaticResearchFindings as Findings } from '@/api/portfolioResearch'
-import { researchDates } from './researchPresentation'
+import type {
+  AutomaticResearchFindings as Findings,
+  PortfolioSettings,
+} from '@/api/portfolioResearch'
+import { AnalysisFigure } from './AnalysisCharts'
+import { researchDates, strategyRuleSummary } from './researchPresentation'
+import { researchRecipeLabel } from './researchRecipeLabels'
 
 const number = (value: unknown, suffix = '') =>
   typeof value === 'number' && Number.isFinite(value)
@@ -13,7 +18,13 @@ const periods = [
   ['final', 'Final check'],
 ] as const
 
-export function AutomaticResearchFindings({ findings }: { findings: Findings }) {
+export function AutomaticResearchFindings({
+  findings,
+  selectedSettings,
+}: {
+  findings: Findings
+  selectedSettings?: PortfolioSettings[]
+}) {
   const final = findings.final
   const selected = findings.checks.find((check) => check.config_id === findings.selected_config_id)
   const comparisons: Array<[string, Record<string, number | string | null>]> = final
@@ -22,7 +33,10 @@ export function AutomaticResearchFindings({ findings }: { findings: Findings }) 
         ...(!findings.selected_is_baseline
           ? [
               [
-                selected ? `Trial ${selected.trial_number + 1}` : 'Selected settings',
+                findings.selected_condition ||
+                  (selected?.trial_number != null
+                    ? `Trial ${selected.trial_number + 1}`
+                    : 'Selected settings'),
                 final.summary,
               ] as [string, Record<string, number | string | null>],
             ]
@@ -44,14 +58,26 @@ export function AutomaticResearchFindings({ findings }: { findings: Findings }) 
         </span>
         <div className="min-w-0 space-y-1">
           <p className="text-xs font-medium tracking-wide text-muted-foreground">
-            Exploratory research
+            {final ? 'Automatic research' : 'Exploratory research'}
           </p>
           <h3 className="text-lg font-semibold">{findings.headline}</h3>
           <p className="max-w-3xl text-sm text-muted-foreground">
             {findings.selected_is_baseline
-              ? 'The original settings remain the reference.'
-              : 'Checked on later dates and with higher trading costs.'}
+              ? 'No reliable improvement was found. The original settings remain the reference, not a trading recommendation.'
+              : final
+                ? 'Checked on later dates and with higher trading costs.'
+                : 'Best settings found on the available research dates.'}
           </p>
+          {findings.selected_condition && (
+            <p className="text-sm">Entry condition: {findings.selected_condition}</p>
+          )}
+          {['automatic-hypotheses-v6', 'automatic-hypotheses-v7'].includes(findings.version) &&
+            selectedSettings?.map((strategy) => (
+              <p key={strategy.id} className="text-sm">
+                {selectedSettings.length > 1 && `${strategy.name} · `}
+                {strategyRuleSummary({ config: strategy.config, search: {} }, false, true)}
+              </p>
+            ))}
         </div>
       </div>
       {final && (
@@ -104,20 +130,39 @@ export function AutomaticResearchFindings({ findings }: { findings: Findings }) 
           />
         </summary>
         <div className="mt-4 space-y-4">
+          <p className="font-medium">{researchRecipeLabel(findings.version)}</p>
           <p className="text-muted-foreground">{findings.selection_basis}</p>
-          <dl className="grid gap-4 sm:grid-cols-4">
-            {periods.map(([key, label]) => (
-              <div key={key} className="border-t-2 border-cyan-500/30 pt-2">
-                <dt className="font-medium">{label}</dt>
-                <dd className="mt-1 text-muted-foreground">
-                  {researchDates(
-                    findings.recipe.periods[key].from,
-                    findings.recipe.periods[key].to
-                  )}
-                </dd>
-              </div>
-            ))}
-          </dl>
+          {findings.comparison?.status === 'available' && findings.comparison.chart && (
+            <section aria-label="Matching final-period curves" className="space-y-2">
+              <AnalysisFigure chart={findings.comparison.chart} deferred height={280} />
+              <p className="text-muted-foreground">
+                Same final dates, price cohort, cash and costs; recorded observations only.
+                {findings.comparison.displayed !== findings.comparison.observations
+                  ? ` ${findings.comparison.displayed} of ${findings.comparison.observations} points shown.`
+                  : ''}
+              </p>
+            </section>
+          )}
+          {findings.comparison?.status === 'unavailable' && (
+            <p className="text-muted-foreground">Comparison chart: {findings.comparison.reason}</p>
+          )}
+          {findings.recipe.validation_mode === 'exploratory_only' ? (
+            <p>No untouched later check: the signal history is too short for this holding range.</p>
+          ) : (
+            <dl className="grid gap-4 sm:grid-cols-4">
+              {periods.map(([key, label]) => (
+                <div key={key} className="border-t-2 border-cyan-500/30 pt-2">
+                  <dt className="font-medium">{label}</dt>
+                  <dd className="mt-1 text-muted-foreground">
+                    {researchDates(
+                      findings.recipe.periods[key].from,
+                      findings.recipe.periods[key].to
+                    )}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          )}
           <p className="text-muted-foreground">
             {number(findings.counts.proposals)} proposals · {number(findings.counts.simulations)}{' '}
             simulations · {number(findings.counts.finalists)} finalists
@@ -126,11 +171,24 @@ export function AutomaticResearchFindings({ findings }: { findings: Findings }) 
             <div className="divide-y">
               {findings.checks.map((check) => (
                 <div key={check.config_id} className="flex flex-wrap justify-between gap-2 py-2">
-                  <span>Trial {check.trial_number + 1}</span>
+                  <span>
+                    {check.trial_number == null
+                      ? 'Original exit settings'
+                      : `Trial ${check.trial_number + 1}`}
+                    {check.condition_label ? ` · ${check.condition_label}` : ''}
+                  </span>
                   <span className="max-w-xl text-muted-foreground">
                     {check.eligible
-                      ? 'Passed later-date and cost checks'
+                      ? check.stability?.status === 'stable'
+                        ? 'Passed later-date, cost and nearby-setting checks'
+                        : 'Passed later-date and cost checks'
                       : check.reasons.join(' · ') || 'Did not pass the checks'}
+                    {check.stability && (
+                      <span className="block mt-1">
+                        Nearby settings: {check.stability.passed} of {check.stability.tested} passed
+                        {check.stability.truncated ? ' · sampled subset' : ''}
+                      </span>
+                    )}
                   </span>
                 </div>
               ))}
@@ -140,8 +198,9 @@ export function AutomaticResearchFindings({ findings }: { findings: Findings }) 
             <p className="text-muted-foreground">Final check: {final.reasons.join(' · ')}</p>
           )}
           <p className="text-muted-foreground">
-            The detailed report covers the search dates. Final-check values above use the same later
-            dates and starting cash for both settings.
+            {final
+              ? 'The detailed report covers the search dates. Final-check values above use the same later dates and starting cash for both settings.'
+              : 'These settings were selected on the research dates. Later evidence is needed before calling them validated.'}
           </p>
           {findings.unsupported_families.length > 0 && (
             <p className="text-muted-foreground">

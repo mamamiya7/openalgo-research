@@ -24,6 +24,7 @@ export interface AnalysisActions {
     benchmark?: BenchmarkRequest,
     marketConditions?: boolean
   ) => void
+  onCancel?: () => void
   readOnly: boolean
   exportUrl: string
   freezeAnalysis?: boolean
@@ -33,6 +34,7 @@ export function AnalysisPreparation({
   busy,
   response,
   onPrepare,
+  onCancel,
   readOnly,
   missing,
   conditionReplay,
@@ -40,10 +42,18 @@ export function AnalysisPreparation({
   if (response.requested_benchmark || response.requested_market_conditions) return null
   if (busy) {
     return (
-      <output className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-        {response.status === 'running' ? 'Preparing analysis…' : 'Analysis queued…'}
-      </output>
+      <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+        <output className="flex items-center gap-2">
+          <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+          {response.status === 'running' ? 'Preparing analysis…' : 'Analysis queued…'}
+        </output>
+        {onCancel && response.analysis_job_id && !readOnly && (
+          <Button size="sm" variant="ghost" onClick={onCancel}>
+            Cancel analysis
+          </Button>
+        )}
+        {response.error && <p role="alert">{response.error}</p>}
+      </div>
     )
   }
   if (response.status !== 'failed' && !missing) return null

@@ -1,5 +1,14 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Archive, ArrowLeft, ArrowUpRight, MoreHorizontal, Pin, Plus, Search } from 'lucide-react'
+import {
+  Archive,
+  ArrowLeft,
+  ArrowUpRight,
+  FileSpreadsheet,
+  MoreHorizontal,
+  Pin,
+  Plus,
+  Search,
+} from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { type PortfolioJob, type PortfolioSource, portfolioResearch } from '@/api/portfolioResearch'
@@ -11,16 +20,23 @@ import {
   researchLibrary,
   type SetupVersionSummary,
 } from '@/api/researchLibrary'
+import type { ResearchSource } from '@/api/scannerResearch'
 import { ChartinkConnect } from '@/components/research/ChartinkConnect'
 import { ChartinkImport } from '@/components/research/ChartinkImport'
 import { ChartinkSource } from '@/components/research/ChartinkSource'
+import { ChosenEntryConditions } from '@/components/research/ChosenEntryConditions'
 import { addPortfolioSource, freshPortfolioDraft } from '@/components/research/PortfolioBuilder'
+import { PortfolioCsvHelp } from '@/components/research/PortfolioCsvHelp'
 import { ResearchChosenSetup } from '@/components/research/ResearchChosenSetup'
 import { ResearchComparisons } from '@/components/research/ResearchComparisons'
 import { ResearchDecisions } from '@/components/research/ResearchDecisions'
-import { researchRunStatus } from '@/components/research/ResearchRunProgress'
+import {
+  researchRecoveryActions,
+  researchRunStatus,
+} from '@/components/research/ResearchRunProgress'
 import { ResearchShortlist } from '@/components/research/ResearchShortlist'
 import {
+  researchDates,
   researchResultPeriod,
   researchResultRole,
   strategyRuleSummary,
@@ -33,6 +49,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -53,7 +75,8 @@ const date = (time: number | string) => {
     ? ''
     : value.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 }
-const count = (value: number, word: string) => `${value} ${word}${value === 1 ? '' : 's'}`
+const count = (value: number, word: string) =>
+  `${value.toLocaleString('en-IN')} ${word}${value === 1 ? '' : 's'}`
 const active = (job: PortfolioJob) =>
   ['queued', 'running', 'pausing', 'cancelling', 'cancel_requested'].includes(job.status)
 const stopped = (job: PortfolioJob) =>
@@ -67,13 +90,15 @@ const nonnegative = (value: string | null) =>
   Math.max(0, Math.min(100000, Number.parseInt(value ?? '0', 10) || 0))
 const label = (job: PortfolioJob) =>
   job.specification?.portfolio?.name ?? job.source_summary?.name ?? job.title ?? 'Saved run'
+const resultTitle = (job: PortfolioJob) =>
+  researchResultRole(job).replace('Optimization study', 'Optimisation')
 const sourceLabel = (source: PortfolioSource) =>
   source.receipt.name || source.receipt.filename || count(source.receipt.signal_count, 'signal')
 const tabs = [
   ['experiments', 'Experiments'],
-  ['studies', 'Studies'],
-  ['setups', 'Setups'],
-  ['sources', 'Sources'],
+  ['studies', 'Optimisations'],
+  ['setups', 'Saved setups'],
+  ['sources', 'Saved signals'],
   ['archived', 'Archived'],
   ['previous', 'Previous runs'],
 ] as const
@@ -124,7 +149,29 @@ function Pages({
     </div>
   )
 }
-function JobRows({ jobs, open }: { jobs: PortfolioJob[]; open: (job: PortfolioJob) => void }) {
+const runDate = (time: number | string) => {
+  const parsed = new Date(typeof time === 'number' ? time * 1000 : time)
+  return Number.isFinite(parsed.getTime())
+    ? new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(parsed)
+    : ''
+}
+
+function JobRows({
+  jobs,
+  open,
+  inExperiment = false,
+}: {
+  jobs: PortfolioJob[]
+  open: (job: PortfolioJob) => void
+  inExperiment?: boolean
+}) {
   return (
     <div className="divide-y">
       {jobs.map((job) => (
@@ -135,13 +182,15 @@ function JobRows({ jobs, open }: { jobs: PortfolioJob[]; open: (job: PortfolioJo
           className="flex w-full items-center justify-between gap-4 py-4 text-left hover:text-primary focus-visible:outline-2 focus-visible:outline-ring"
         >
           <span className="min-w-0">
-            <span className="block truncate font-medium">{label(job)}</span>
+            <span className="block truncate font-medium">
+              {inExperiment ? resultTitle(job) : label(job)}
+              {inExperiment && job.display?.setup ? ` · Setup ${job.display.setup.number}` : ''}
+            </span>
             <span className="mt-1 block text-xs text-muted-foreground">
-              {researchResultRole(job)}
-              {researchResultPeriod(job) ? ` · ${researchResultPeriod(job)}` : ''}
-              {job.display?.setup ? ` · Setup ${job.display.setup.number}` : ''}
-              {' · '}
-              {date(job.created_at)}
+              {!inExperiment && `${researchResultRole(job)} · `}
+              {researchResultPeriod(job) ? `${researchResultPeriod(job)} · ` : ''}
+              {!inExperiment && job.display?.setup ? `Setup ${job.display.setup.number} · ` : ''}
+              {runDate(job.created_at)}
             </span>
           </span>
           <span className="shrink-0 text-xs text-muted-foreground">{researchRunStatus(job)}</span>
@@ -238,7 +287,12 @@ function LibraryIndex({
   const locked = useRef(false)
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const newResearchOpener = useRef<HTMLButtonElement | null>(null)
   const [name, setName] = useState('')
+  const [readingCsv, setReadingCsv] = useState(false)
+  const [newSource, setNewSource] = useState<ResearchSource | null>(null)
+  const uploadRequest = useRef<AbortController | null>(null)
+  useEffect(() => () => uploadRequest.current?.abort(), [])
   const filter = { search, archived: tab === 'archived', limit: 20, offset }
   const experiments = useQuery({
     queryKey: ['research-library', owner, tab, search, offset],
@@ -313,8 +367,16 @@ function LibraryIndex({
   }
   async function create() {
     await action(async () => {
-      const draft = freshPortfolioDraft()
-      draft.portfolio.name = name.trim() || 'Untitled experiment'
+      const draft = newSource
+        ? addPortfolioSource(freshPortfolioDraft(), newSource, sourceLabel(newSource))
+        : freshPortfolioDraft()
+      draft.portfolio.name =
+        name.trim() ||
+        (newSource
+          ? sourceLabel(newSource)
+              .replace(/\.csv$/i, '')
+              .slice(0, 120)
+          : 'Untitled experiment')
       const experiment = await researchLibrary.create({
         name: draft.portfolio.name,
         draft,
@@ -322,6 +384,32 @@ function LibraryIndex({
       queryClient.setQueryData(['research-experiment', owner, experiment.id], experiment)
       setCreating(false)
       open(experiment.id, 'setup')
+    })
+  }
+  async function readCsv(file: File) {
+    await action(async () => {
+      const controller = new AbortController()
+      uploadRequest.current = controller
+      // A replacement must not keep the old file eligible after validation fails.
+      setNewSource(null)
+      setReadingCsv(true)
+      try {
+        const source = await portfolioResearch.upload(file, controller.signal)
+        if (
+          controller.signal.aborted ||
+          (useAuthStore.getState().user?.username ?? 'account') !== owner
+        )
+          return
+        setNewSource(source)
+        setName(
+          (source.receipt.chartink?.title || source.receipt.filename || file.name)
+            .replace(/\.csv$/i, '')
+            .slice(0, 120)
+        )
+      } finally {
+        if (uploadRequest.current === controller) uploadRequest.current = null
+        setReadingCsv(false)
+      }
     })
   }
   async function chooseSource(source: PortfolioSource) {
@@ -352,20 +440,22 @@ function LibraryIndex({
         <div className="flex flex-wrap gap-2">
           <ChartinkConnect />
           <Button
+            ref={newResearchOpener}
             onClick={() => {
               setCreating(true)
               setName('')
+              setNewSource(null)
               setError(null)
             }}
             disabled={busy}
           >
             <Plus className="mr-2 size-4" />
-            New experiment
+            New research
           </Button>
         </div>
       </header>
       <nav aria-label="Research library" className="flex gap-1 overflow-x-auto border-b pb-2">
-        {tabs.map(([id, title]) => (
+        {tabs.slice(0, 3).map(([id, title]) => (
           <Button
             key={id}
             variant={tab === id ? 'secondary' : 'ghost'}
@@ -377,6 +467,26 @@ function LibraryIndex({
             {title}
           </Button>
         ))}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant={['sources', 'archived', 'previous'].includes(tab) ? 'secondary' : 'ghost'}
+              size="sm"
+            >
+              {tabs.find(
+                ([id]) => id === tab && ['sources', 'archived', 'previous'].includes(id)
+              )?.[1] ?? 'More'}
+              <MoreHorizontal className="ml-1 size-4" aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {tabs.slice(3).map(([id, title]) => (
+              <DropdownMenuItem key={id} onSelect={() => libraryParams({ library: id })}>
+                {title}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </nav>
       {!['sources', 'previous'].includes(tab) && (
         <div className="relative max-w-md">
@@ -399,7 +509,9 @@ function LibraryIndex({
         </div>
       )}
       <ErrorNotice
-        error={error ?? (selected.error ? researchError(selected.error) : null)}
+        error={
+          (!creating ? error : null) ?? (selected.error ? researchError(selected.error) : null)
+        }
         retry={
           selected.error
             ? () => {
@@ -461,8 +573,21 @@ function LibraryIndex({
                   </h2>
                   {!search && tab !== 'archived' && (
                     <p className="mt-2 text-sm text-muted-foreground">
-                      Import from Chartink, or create an experiment to upload a signal CSV.
+                      Import a CSV or send a scanner’s history from Chartink.
                     </p>
+                  )}
+                  {!search && tab !== 'archived' && (
+                    <Button
+                      className="mt-4"
+                      onClick={() => {
+                        setName('')
+                        setNewSource(null)
+                        setError(null)
+                        setCreating(true)
+                      }}
+                    >
+                      <FileSpreadsheet className="mr-2 size-4" aria-hidden="true" /> Upload CSV
+                    </Button>
                   )}
                 </div>
               )}
@@ -480,7 +605,8 @@ function LibraryIndex({
                   <span className="min-w-0">
                     <span className="block truncate font-medium">{label(item)}</span>
                     <span className="mt-1 block text-xs text-muted-foreground">
-                      {item.experiment_name} · {date(item.created_at)}
+                      {researchResultRole(item)} · {runDate(item.created_at)}
+                      {item.display?.setup ? ` · Setup ${item.display.setup.number}` : ''}
                     </span>
                   </span>
                   <span className="text-xs capitalize text-muted-foreground">{item.status}</span>
@@ -488,7 +614,7 @@ function LibraryIndex({
               ))}
               {studies.data && !studies.data.items.length && (
                 <p className="py-12 text-center text-sm text-muted-foreground">
-                  No studies yet. Optimize a setup in an experiment.
+                  No optimisations yet. Start with a CSV or open an experiment’s setup.
                 </p>
               )}
             </div>
@@ -611,11 +737,19 @@ function LibraryIndex({
         </>
       )}
       <Dialog open={creating} onOpenChange={(open) => !busy && setCreating(open)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent
+          className="max-h-[90dvh] overflow-y-auto sm:max-w-md"
+          onCloseAutoFocus={(event) => {
+            if (newResearchOpener.current?.isConnected) {
+              event.preventDefault()
+              newResearchOpener.current.focus()
+            }
+          }}
+        >
           <DialogHeader>
-            <DialogTitle>New experiment</DialogTitle>
-            <DialogDescription className="sr-only">
-              Name the idea you want to research.
+            <DialogTitle>New research</DialogTitle>
+            <DialogDescription>
+              Start with your signal CSV. Review trading assumptions on the next screen.
             </DialogDescription>
           </DialogHeader>
           <form
@@ -626,18 +760,70 @@ function LibraryIndex({
             }}
           >
             <div className="space-y-2">
-              <Label htmlFor="experiment-name">Research question or name</Label>
+              <Label htmlFor="new-research-csv">Signal CSV</Label>
+              <Input
+                id="new-research-csv"
+                type="file"
+                accept=".csv,text/csv"
+                disabled={busy}
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  event.target.value = ''
+                  if (file) void readCsv(file)
+                }}
+              />
+              <PortfolioCsvHelp />
+              {readingCsv && (
+                <output className="block text-sm text-muted-foreground">Reading signals…</output>
+              )}
+              {newSource && (
+                <div aria-live="polite" className="space-y-1 text-sm">
+                  <p>
+                    {count(newSource.receipt.signal_count, 'signal')} ·{' '}
+                    {count(newSource.receipt.symbol_count, 'symbol')}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {researchDates(newSource.receipt.date_from, newSource.receipt.date_to)}
+                  </p>
+                  {newSource.receipt.duplicates_removed > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {count(newSource.receipt.duplicates_removed, 'duplicate')} removed
+                    </p>
+                  )}
+                  {newSource.receipt.warnings.length > 0 && (
+                    <details className="text-xs text-muted-foreground">
+                      <summary className="cursor-pointer">
+                        CSV notes ({newSource.receipt.warnings.length})
+                      </summary>
+                      {newSource.receipt.warnings.map((warning) => (
+                        <p className="mt-1" key={warning}>
+                          {warning}
+                        </p>
+                      ))}
+                    </details>
+                  )}
+                </div>
+              )}
+              {!newSource && !busy && (
+                <p className="text-xs text-muted-foreground">
+                  You can also continue with an empty setup and add CSVs or saved signals there.
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="experiment-name">Research name</Label>
               <Input
                 id="experiment-name"
                 value={name}
                 maxLength={120}
-                placeholder="For example, breakout entries"
+                placeholder="Filled from your CSV; optional"
+                disabled={busy}
                 onChange={(event) => setName(event.target.value)}
               />
             </div>
             {error && <ErrorNotice error={error} />}
             <Button type="submit" disabled={busy}>
-              {busy ? 'Creating…' : 'Create experiment'}
+              {busy ? (readingCsv ? 'Reading CSV…' : 'Creating…') : 'Continue to setup'}
             </Button>
           </form>
         </DialogContent>
@@ -695,7 +881,21 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
   const queryClient = useQueryClient()
   const jobId = params.get('job')
   const returnResearch = researchBackParams(params.get('return_research'), server.id)
-  const requestedView = params.get('view') ?? 'overview'
+  const rawView = params.get('view') ?? 'overview'
+  // Presentation aliases preserve all existing saved URLs and return chains.
+  const latestResultView =
+    [...server.jobs].sort((left, right) => jobCreatedAt(right) - jobCreatedAt(left))[0]?.kind ===
+    'portfolio_optimize'
+      ? 'studies'
+      : 'backtests'
+  const selectedJob = server.jobs.find((job) => job.id === jobId)
+  const linkedResultView = selectedJob
+    ? selectedJob.kind === 'portfolio_optimize'
+      ? 'studies'
+      : 'backtests'
+    : latestResultView
+  const requestedView =
+    rawView === 'results' ? linkedResultView : rawView === 'review' ? 'decisions' : rawView
   const view = [
     'overview',
     'setup',
@@ -708,11 +908,11 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
   ].includes(requestedView)
     ? requestedView
     : 'overview'
-  const primaryView = ['shortlist', 'comparisons', 'decisions'].includes(view)
-    ? 'review'
-    : view === 'setups'
-      ? 'setup'
-      : view
+  const primaryView = ['backtests', 'studies', 'shortlist', 'comparisons', 'decisions'].includes(
+    view
+  )
+    ? 'results'
+    : view
   const experimentNav = useRef<HTMLElement | null>(null)
   useEffect(() => {
     const nav = experimentNav.current
@@ -947,7 +1147,11 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
     .sort((left, right) => jobCreatedAt(right) - jobCreatedAt(left))
   const continuation =
     recentRuns.find(active) ??
-    recentRuns.find((job) => job.status === 'completed' || (stopped(job) && job.resumable)) ??
+    recentRuns.find(
+      (job) =>
+        job.status === 'completed' ||
+        (stopped(job) && researchRecoveryActions(job).includes('resume'))
+    ) ??
     recentRuns.find(stopped)
   const selectedVersion = params.get('version')
   const versionQuery = useQuery({
@@ -960,6 +1164,36 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
   })
   const displayedVersions =
     selectedVersion && versionQuery.data ? [versionQuery.data] : server.versions
+  const chosenSetup = (
+    <ResearchChosenSetup
+      experimentId={server.id}
+      readOnly={server.archived || model.state === 'conflict'}
+      onUse={(request, signal) =>
+        operation(async () => {
+          await model.flush()
+          if (signal.aborted) return
+          const next = await researchChosenSetups.use(server.id, request, signal)
+          if (signal.aborted) return
+          model.accept(next.experiment)
+          changeView('setup')
+        })
+      }
+      onReplay={(choice, revision, requestId, signal) =>
+        operation(async () => {
+          await model.flush()
+          if (signal.aborted) return
+          const next = await researchChosenSetups.replay(
+            server.id,
+            { choice_id: choice.id, revision, request_id: requestId },
+            signal
+          )
+          if (signal.aborted) return
+          model.accept(next.experiment)
+          changeView('backtests', next.job.id)
+        })
+      }
+    />
+  )
   return (
     <ResearchWorkspaceMutations.Provider
       value={{
@@ -1111,7 +1345,14 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
           aria-label="Experiment"
           className="flex gap-1 overflow-x-auto border-b pb-2"
         >
-          {(['overview', 'setup', 'backtests', 'studies', 'review'] as const).map((item) => (
+          {(
+            [
+              ['overview', 'Overview'],
+              ['setup', 'Setup'],
+              ['results', 'Results'],
+              ['setups', 'Saved setups'],
+            ] as const
+          ).map(([item, title]) => (
             <Button
               key={item}
               variant={primaryView === item ? 'secondary' : 'ghost'}
@@ -1123,30 +1364,23 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
               onClick={() => {
                 void action(async () => {
                   await model.flush()
-                  changeView(item === 'review' ? 'decisions' : item)
+                  changeView(item === 'results' ? latestResultView : item)
                 })
               }}
             >
-              {item.charAt(0).toUpperCase() + item.slice(1)}
+              {title}
             </Button>
           ))}
         </nav>
-        {!jobId && ['review', 'setup'].includes(primaryView) && (
-          <nav
-            aria-label={primaryView === 'review' ? 'Review' : 'Setup'}
-            className="flex flex-wrap gap-1"
-          >
-            {(primaryView === 'review'
-              ? [
-                  ['decisions', 'Decisions'],
-                  ['shortlist', 'Shortlist'],
-                  ['comparisons', 'Comparisons'],
-                ]
-              : [
-                  ['setup', 'Current setup'],
-                  ['setups', 'Saved setups'],
-                ]
-            ).map(([item, text]) => (
+        {!jobId && primaryView === 'results' && (
+          <nav aria-label="Result tools" className="flex flex-wrap gap-1">
+            {[
+              ['backtests', 'Backtests'],
+              ['studies', 'Optimisations'],
+              ['decisions', 'Decisions'],
+              ['shortlist', 'Shortlist'],
+              ['comparisons', 'Comparisons'],
+            ].map(([item, text]) => (
               <Button
                 key={item}
                 variant={view === item ? 'secondary' : 'ghost'}
@@ -1201,8 +1435,8 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
                   : params.get('return_shortlist')
                     ? 'Back to shortlist'
                     : params.get('return_job')
-                      ? 'Back to study'
-                      : `Back to ${view === 'studies' ? 'studies' : 'backtests'}`}
+                      ? 'Back to optimisation'
+                      : `Back to ${view === 'studies' ? 'optimisations' : 'backtests'}`}
               </Button>
             </div>
           )}
@@ -1221,6 +1455,26 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
                 onReplay: (origin, trialId, period) =>
                   operation(() => replay(origin, trialId, period)),
                 onJobUpdate: model.reflectJob,
+                onRecoverSetup: (job, signal) =>
+                  operation(async () => {
+                    const latest = await model.flush()
+                    if (signal.aborted) return
+                    if (job.display?.setup?.id) {
+                      const next = await researchLibrary.restoreVersion(
+                        server.id,
+                        job.display.setup.id,
+                        latest.revision,
+                        signal
+                      )
+                      if (
+                        signal.aborted ||
+                        (useAuthStore.getState().user?.username ?? 'account') !== owner
+                      )
+                        return
+                      model.accept(next)
+                    }
+                    if (!signal.aborted) changeView('setup')
+                  }),
                 onOpenJob: (job, returnStudyId) => {
                   if (params.get('return_shortlist')) {
                     const next = new URLSearchParams(params)
@@ -1294,34 +1548,7 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
         )}
         {!jobId && view === 'overview' && (
           <div className="space-y-7">
-            <ResearchChosenSetup
-              experimentId={server.id}
-              readOnly={server.archived || model.state === 'conflict'}
-              onUse={(request, signal) =>
-                operation(async () => {
-                  await model.flush()
-                  if (signal.aborted) return
-                  const next = await researchChosenSetups.use(server.id, request, signal)
-                  if (signal.aborted) return
-                  model.accept(next.experiment)
-                  changeView('setup')
-                })
-              }
-              onReplay={(choice, revision, requestId, signal) =>
-                operation(async () => {
-                  await model.flush()
-                  if (signal.aborted) return
-                  const next = await researchChosenSetups.replay(
-                    server.id,
-                    { choice_id: choice.id, revision, request_id: requestId },
-                    signal
-                  )
-                  if (signal.aborted) return
-                  model.accept(next.experiment)
-                  changeView('backtests', next.job.id)
-                })
-              }
-            />
+            {chosenSetup}
             {server.notes && (
               <p className="max-w-3xl whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
                 {server.notes}
@@ -1329,7 +1556,14 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
             )}
             <div className="flex flex-wrap items-center justify-between gap-4 border-b pb-6">
               <div>
-                <h2 className="font-medium">{draft.portfolio.name}</h2>
+                <h2 className="font-medium">
+                  {continuation ? resultTitle(continuation) : 'Current setup'}
+                </h2>
+                {continuation && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {researchRunStatus(continuation)} · {runDate(continuation.created_at)}
+                  </p>
+                )}
                 <p className="mt-1 text-sm text-muted-foreground">
                   {count(draft.portfolio.strategies.length, 'strategy')} ·{' '}
                   {count(server.version_count, 'saved setup')}
@@ -1350,7 +1584,7 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
                   ? active(continuation)
                     ? 'View progress'
                     : stopped(continuation)
-                      ? continuation.resumable && !server.archived
+                      ? researchRecoveryActions(continuation).includes('resume') && !server.archived
                         ? 'Resume run'
                         : 'View run'
                       : 'Continue research'
@@ -1363,6 +1597,7 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
               <section>
                 <h2 className="text-sm font-medium">In progress</h2>
                 <JobRows
+                  inExperiment
                   jobs={inProgress}
                   open={(job) =>
                     changeView(job.kind === 'portfolio_optimize' ? 'studies' : 'backtests', job.id)
@@ -1373,7 +1608,8 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
             <section>
               <h2 className="text-sm font-medium">Recent results</h2>
               <JobRows
-                jobs={server.jobs.filter((job) => !active(job)).slice(0, 5)}
+                inExperiment
+                jobs={recentRuns.filter((job) => !active(job)).slice(0, 5)}
                 open={(job) =>
                   changeView(job.kind === 'portfolio_optimize' ? 'studies' : 'backtests', job.id)
                 }
@@ -1388,10 +1624,15 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
         )}
         {!jobId && (view === 'backtests' || view === 'studies') && (
           <>
-            <JobRows jobs={jobs} open={(job) => changeView(view, job.id)} />
+            <JobRows inExperiment jobs={jobs} open={(job) => changeView(view, job.id)} />
             {!jobs.length && (
               <p className="py-10 text-center text-sm text-muted-foreground">
-                No {view} in this experiment yet.
+                No {view === 'studies' ? 'optimisations' : 'backtests'} in this experiment yet.
+                {!server.archived && (
+                  <Button variant="link" disabled={busy} onClick={() => changeView('setup')}>
+                    Open setup
+                  </Button>
+                )}
               </p>
             )}
             {server.jobs_next_offset != null && (
@@ -1413,77 +1654,99 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
           </>
         )}
         {!jobId && view === 'setups' && (
-          <div className="divide-y">
-            <ErrorNotice error={versionQuery.error ? researchError(versionQuery.error) : null} />
-            {displayedVersions.map((version) => (
-              <div
-                key={version.id}
-                className="flex flex-wrap items-center justify-between gap-4 py-4"
-              >
-                <div>
-                  <h2 className="font-medium">{version.name}</h2>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Version {version.number} · {date(version.created_at)} ·{' '}
-                    {count(version.draft.portfolio.strategies.length, 'strategy')}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {version.draft.portfolio.strategies.length === 1
-                      ? strategyRuleSummary(
-                          version.draft.portfolio.strategies[0],
-                          version.draft.optimizing
-                        )
-                      : version.draft.portfolio.strategies
-                          .map((strategy) => strategy.name)
-                          .join(' · ')}
-                  </p>
-                  <details className="mt-2 text-xs">
-                    <summary className="cursor-pointer text-muted-foreground">View rules</summary>
-                    <ul className="mt-2 space-y-2">
-                      {version.draft.portfolio.strategies.map((strategy) => (
-                        <li key={strategy.id}>
-                          {strategy.name}: {strategyRuleSummary(strategy, version.draft.optimizing)}{' '}
-                          · Allocation {strategy.allocation_pct}% · Trade size{' '}
-                          {strategy.config.order_size_pct}% of allocation · Costs{' '}
-                          {strategy.config.cost_bps} bps/side · Slippage{' '}
-                          {strategy.config.slippage_bps} bps/side
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy || server.archived}
-                  onClick={() => {
-                    void action(() => restore(version.id))
-                  }}
-                >
-                  Use setup
-                </Button>
-              </div>
-            ))}
-            {!server.versions.length && (
-              <p className="py-10 text-center text-sm text-muted-foreground">
-                Save a setup or run a backtest to keep a version.
+          <div className="space-y-6">
+            {chosenSetup}
+            <details open={Boolean(selectedVersion) || !server.chosen_setup}>
+              <summary className="cursor-pointer text-sm text-muted-foreground">
+                Setup history
+              </summary>
+              <p className="pt-2 text-xs text-muted-foreground">
+                Saved drafts, run versions and earlier choices remain available here.
               </p>
-            )}
-            {!selectedVersion && server.versions_next_offset != null && (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  void action(async () => {
-                    const latest = await model.flush()
-                    const page = await researchLibrary.get(server.id, undefined, {
-                      versions_offset: latest.versions_next_offset ?? 0,
-                    })
-                    model.accept({ ...page, versions: [...latest.versions, ...page.versions] })
-                  })
-                }}
-              >
-                More setups
-              </Button>
-            )}
+              <div className="divide-y">
+                <ErrorNotice
+                  error={versionQuery.error ? researchError(versionQuery.error) : null}
+                />
+                {displayedVersions.map((version) => (
+                  <div
+                    key={version.id}
+                    className="flex flex-wrap items-center justify-between gap-4 py-4"
+                  >
+                    <div>
+                      <h2 className="font-medium">{version.name}</h2>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Version {version.number} · {runDate(version.created_at)} ·{' '}
+                        {count(version.draft.portfolio.strategies.length, 'strategy')}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {version.draft.portfolio.strategies.length === 1
+                          ? strategyRuleSummary(
+                              version.draft.portfolio.strategies[0],
+                              version.draft.optimizing
+                            )
+                          : version.draft.portfolio.strategies
+                              .map((strategy) => strategy.name)
+                              .join(' · ')}
+                      </p>
+                      <details className="mt-2 text-xs">
+                        <summary className="cursor-pointer text-muted-foreground">
+                          View rules
+                        </summary>
+                        <ul className="mt-2 space-y-2">
+                          {version.draft.portfolio.strategies.map((strategy) => (
+                            <li key={strategy.id}>
+                              {strategy.name}:{' '}
+                              {strategyRuleSummary(strategy, version.draft.optimizing)} · Allocation{' '}
+                              {strategy.allocation_pct}% · Trade size{' '}
+                              {strategy.config.order_size_pct}% of allocation · Costs{' '}
+                              {strategy.config.cost_bps} bps/side · Slippage{' '}
+                              {strategy.config.slippage_bps} bps/side
+                            </li>
+                          ))}
+                        </ul>
+                        <div className="mt-2">
+                          <ChosenEntryConditions
+                            conditions={version.draft.portfolio.entry_conditions}
+                            strategies={version.draft.portfolio.strategies}
+                          />
+                        </div>
+                      </details>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy || server.archived}
+                      onClick={() => {
+                        void action(() => restore(version.id))
+                      }}
+                    >
+                      Use setup
+                    </Button>
+                  </div>
+                ))}
+                {!server.versions.length && (
+                  <p className="py-10 text-center text-sm text-muted-foreground">
+                    Save a setup or run a backtest to keep a version.
+                  </p>
+                )}
+                {!selectedVersion && server.versions_next_offset != null && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      void action(async () => {
+                        const latest = await model.flush()
+                        const page = await researchLibrary.get(server.id, undefined, {
+                          versions_offset: latest.versions_next_offset ?? 0,
+                        })
+                        model.accept({ ...page, versions: [...latest.versions, ...page.versions] })
+                      })
+                    }}
+                  >
+                    More setups
+                  </Button>
+                )}
+              </div>
+            </details>
           </div>
         )}
         <Dialog open={editing} onOpenChange={(open) => !busy && setEditing(open)}>

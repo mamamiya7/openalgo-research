@@ -75,6 +75,26 @@ def _params(value):
     if not isinstance(value, dict) or len(value) > MAX_PARAMS:
         raise ValueError("Invalid study activity parameters")
     for key, item in value.items():
+        if key == "hypothesis" and isinstance(item, str):
+            from research.joint_stock_market import catalog as joint_catalog
+            from research.stock_relative_strength import catalog
+
+            if item not in {row["id"] for row in [*catalog(), *joint_catalog()]}:
+                raise ValueError("Invalid study activity hypothesis")
+            continue
+        if (
+            isinstance(key, str)
+            and re.fullmatch(r"[A-Za-z0-9_-]{1,64}\.timing_choice", key)
+            and isinstance(item, str)
+        ):
+            # Operational capture admits only the bounded native state grammar.
+            # The scientific recipe separately verifies membership in its exact
+            # frozen choices before evaluation; observations cannot create one.
+            if item != "original" and not re.fullmatch(
+                r"(?:entry|exit)_(?:[01][0-9]|2[0-3])[0-5][0-9]", item
+            ):
+                raise ValueError("Invalid study activity timing choice")
+            continue
         if (
             not isinstance(key, str)
             or not 1 <= len(key) <= 160
@@ -315,7 +335,11 @@ class StudyObserver:
         calculation = state.get("calculation")
         if not isinstance(calculation, dict):
             return
-        if calculation.get("version") == "automatic-trade-management-v1":
+        if calculation.get("version") in (
+            "automatic-trade-management-v1",
+            "automatic-entry-conditions-v1",
+            "automatic-trade-management-v2",
+        ):
             calculation = calculation.get("search_checkpoint") or (
                 calculation.get("search_result") or {}
             ).get("experiment")

@@ -23,6 +23,7 @@ import { researchError } from '@/hooks/useResearchExperiment'
 import { researchReturnLocation } from '@/hooks/useResearchNavigation'
 import { useResearchWorkspaceMutations } from '@/hooks/useResearchWorkspaceMutations'
 import { useAuthStore } from '@/stores/authStore'
+import { ChosenEntryConditions } from './ChosenEntryConditions'
 import { ReuseChosenSetup } from './ReuseChosenSetup'
 import { researchDates, strategyRuleSummary } from './researchPresentation'
 
@@ -237,6 +238,10 @@ function ChooseSetup({
                     </span>
                   </p>
                 ))}
+                <ChosenEntryConditions
+                  conditions={data.eligibility.entry_conditions}
+                  strategies={data.eligibility.strategies}
+                />
               </div>
               {data.current && data.current.event_id !== event.id && (
                 <p className="text-xs text-muted-foreground">
@@ -434,6 +439,10 @@ function ChosenSetupPanel({
               <span className="text-muted-foreground">{strategyRuleSummary(strategy)}</span>
             </p>
           ))}
+          <ChosenEntryConditions
+            conditions={choice.entry_conditions}
+            strategies={choice.strategies}
+          />
         </div>
         <div className="flex flex-wrap gap-2">
           <ReuseChosenSetup

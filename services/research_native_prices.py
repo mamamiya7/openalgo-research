@@ -815,6 +815,13 @@ def _acquire_prices(
     }
     if "calendar_admission" in calendar_snapshot.get("provenance", {}):
         provenance["calendar_admission"] = calendar_snapshot["provenance"]["calendar_admission"]
+    # Daily OHLC still belongs to specific exchange sessions. Keep the frozen
+    # hours for causal auxiliary-context admission and later recovery, even when
+    # no minute timeline is needed. This does not alter OHLC or execution math.
+    if "session_hours" in calendar_snapshot:
+        snapshot["session_hours"] = copy.deepcopy(calendar_snapshot["session_hours"])
+        if "session_hours_source" in calendar_snapshot:
+            snapshot["session_hours_source"] = calendar_snapshot["session_hours_source"]
     if interval == "1m":
         snapshot.update(
             timeline=list(grid), session_hours=copy.deepcopy(plan.get("session_hours", {}))

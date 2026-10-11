@@ -13,6 +13,7 @@ from test_native_price_workflow import prepare_archive
 from test_portfolio_validation import inputs
 from test_portfolio_workflow import portfolio as request_for
 from test_vectorbt_portfolio import signal, snapshot, strategy
+from workflow_job_helpers import complete_optional_jobs
 
 from database.research_db import ResearchStore
 from research import portfolio
@@ -212,6 +213,8 @@ def test_selected_trial_survives_orphan_pruning_backup_and_restore(
         lambda *args, **kwargs: pytest.fail("Frozen replay must not fetch replacement prices"),
     )
     work(store, "review-replay")
+    complete_optional_jobs(store)
+    assert saved.get_job(store, owner, replay["id"]).status == "completed"
     orphan = saved.save_artifact(store, {"abandoned": "not part of either completed run"})
     for path in (store.root / "artifacts").iterdir():
         os.utime(path, (time.time() - 7200, time.time() - 7200))

@@ -13,6 +13,7 @@ from test_library import OWNER, create, run
 from test_portfolio_validation import inputs
 from test_report_period_workflow import draft, run_worker
 from test_shortlist import change_result
+from workflow_job_helpers import complete_optional_jobs, numerical_job_count
 
 from database.research_db import (
     ResearchEvidenceOpen,
@@ -28,6 +29,7 @@ from services import research_candidates as candidates
 from services import research_library as library
 from services import research_validation as validation
 from services import scanner_research_service as service
+from services import scanner_research_worker as worker
 from services.research_storage import backup_store, restore_store
 
 
@@ -85,6 +87,8 @@ def request(store, experiment, source, config=None, token="validate-once"):
 
 
 def count(store, model):
+    if model is ResearchJob:
+        return numerical_job_count(store)
     with store.sessions() as db:
         return db.scalar(select(func.count()).select_from(model))
 
@@ -346,6 +350,7 @@ def test_validation_request_receipts_survive_native_backup_restore(
     run_worker(store)
     backup = tmp_path.with_name(tmp_path.name + "-backup")
     restored_path = tmp_path.with_name(tmp_path.name + "-restored")
+    complete_optional_jobs(store)
     backup_store(store, backup)
     restore_store(backup, restored_path)
     restored = ResearchStore(restored_path)
@@ -378,10 +383,22 @@ def test_stopped_evaluation_is_reopened_without_automatic_resume(app, client, mo
     store, experiment, source, row = setup(app, client, monkeypatch)
     data = request(store, experiment, source, row["config_id"])
     accepted = validation.prepare(store, OWNER, experiment, source.id, data)
+    # Stop real execution after the worker commits its frozen-input checkpoint.
+    # A source report artifact is evidence, not a resumable checkpoint envelope.
+    with monkeypatch.context() as interrupted:
+        interrupted.setattr(
+            "research.connectors.vectorbt_portfolio.evaluate",
+            lambda *a, **kw: (_ for _ in ()).throw(worker.Interrupted()),
+        )
+        run_worker(store)
+    with store.sessions() as db:
+        checkpoint_id = db.get(ResearchExperiment, accepted["job"]["id"]).checkpoint
+    checkpoint = service.read_artifact(store, checkpoint_id)
+    assert checkpoint["state"]["phase"] == "calculation"
+    assert checkpoint["state"]["inputs_artifact"]
     with store.sessions.begin() as db:
         job = db.get(ResearchJob, accepted["job"]["id"])
         job.status = status
-        db.get(ResearchExperiment, job.id).checkpoint = source.result_artifact
         job.progress = 25
     view = validation.context(store, OWNER, experiment, source.id, row["config_id"])
     assert view["action"] == {"kind": "progress", "job_id": accepted["job"]["id"]}
@@ -389,6 +406,28 @@ def test_stopped_evaluation_is_reopened_without_automatic_resume(app, client, mo
     reused = validation.prepare(store, OWNER, experiment, source.id, data)
     assert reused["reused"] and reused["job"]["status"] == status
     assert reused["job"]["progress"] == 25 and count(store, ResearchJob) == 2
+
+
+def test_source_result_artifact_cannot_impersonate_a_resumable_evaluation_checkpoint(
+    app, client, monkeypatch
+):
+    store, experiment, source, row = setup(app, client, monkeypatch)
+    data = request(store, experiment, source, row["config_id"])
+    accepted = validation.prepare(store, OWNER, experiment, source.id, data)
+    with store.sessions.begin() as db:
+        job = db.get(ResearchJob, accepted["job"]["id"])
+        job.status = "interrupted"
+        db.get(ResearchExperiment, job.id).checkpoint = source.result_artifact
+    view = validation.context(store, OWNER, experiment, source.id, row["config_id"])
+    assert not view["evaluations"][0]["resumable"]
+    receipt = service.job_receipt(store, service.get_job(store, OWNER, accepted["job"]["id"]))
+    assert receipt["recovery"]["status"] == "blocked"
+    assert "resume" not in receipt["recovery"]["actions"]
+    with pytest.raises(ValueError, match="cannot be resumed"):
+        service.resume(store, OWNER, accepted["job"]["id"])
+    reused = validation.prepare(store, OWNER, experiment, source.id, data)
+    assert reused["reused"] and reused["job"]["status"] == "interrupted"
+    assert count(store, ResearchJob) == 2
 
 
 def test_selection_dates_use_verified_timeline_even_with_padded_coverage(app, client, monkeypatch):

@@ -4,13 +4,13 @@
 import copy
 
 import pytest
-from sqlalchemy import func, select
 from test_jobs import app, client
 from test_library import OWNER, create, run
 from test_portfolio_validation import inputs
 from test_report_period_workflow import draft, run_worker
+from workflow_job_helpers import complete_optional_jobs, numerical_job_count
 
-from database.research_db import ResearchExperiment, ResearchJob
+from database.research_db import ResearchExperiment
 from research.portfolio_coverage import prepare
 from services import research_library as library
 from services import research_study_continuation as continuation
@@ -133,8 +133,10 @@ def test_bounds_owner_revision_evidence_and_request_identity(app, client, monkey
     assert continuation.extend(store, OWNER, experiment, parent, request)["job"]["id"] == child
     with pytest.raises(ValueError, match="request identity"):
         continuation.extend(store, OWNER, experiment, parent, {**request, "additional_trials": 3})
-    with store.sessions() as db:
-        assert db.scalar(select(func.count()).select_from(ResearchJob)) == 2
+    assert numerical_job_count(store) == 2
+    with pytest.raises(AssertionError, match="only queued analysis"):
+        complete_optional_jobs(store)
+    assert service.get_job(store, OWNER, child).status == "queued"
 
 
 def test_missing_checkpoint_is_actionable_and_does_not_launch(app, client, monkeypatch):
@@ -157,6 +159,7 @@ def test_pinned_parent_checkpoint_is_in_backup_closure(app, client, monkeypatch,
         db.get(ResearchExperiment, parent).checkpoint = None
     outside = tmp_path_factory.mktemp("continuation-backup")
     archive = outside / "backup"
+    complete_optional_jobs(store)
     backup_store(store, archive)
     restored_path = outside / "restored"
     restore_store(archive, restored_path)

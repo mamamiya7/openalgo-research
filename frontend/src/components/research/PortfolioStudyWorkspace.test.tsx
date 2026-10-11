@@ -245,6 +245,52 @@ afterEach(() => {
 })
 
 describe('connected study exploration', () => {
+  it.each([
+    ['automatic-trade-management-v1', 'Exits and holding periods'],
+    ['automatic-trade-management-v2', 'Stability-checked exits'],
+    ['automatic-entry-conditions-v1', 'Exits and market entry conditions'],
+    ['automatic-hypotheses-v2', 'Trend and momentum'],
+    ['automatic-hypotheses-v3', 'Stock indicators'],
+    ['automatic-hypotheses-v4', 'Smart research'],
+    ['automatic-hypotheses-v5', 'Stock and market research'],
+    ['automatic-hypotheses-v6', 'Stock, market and trailing stops'],
+    ['automatic-hypotheses-v7', 'Stock, market and trade timing'],
+    ['automatic-future-v99', 'Automatic research'],
+  ])('identifies the actual saved %s scope without relabeling the manual objective', (version, label) => {
+    const data = result()
+    data.automatic_research = {
+      version,
+      status: 'inconclusive',
+      headline: 'More signals are needed',
+      selected_config_id: 'config-0',
+      selected_is_baseline: false,
+      selection_basis: 'An exploratory run.',
+      recipe: {
+        version,
+        periods: {
+          search: { from: '2026-01-01', to: '2026-04-30' },
+          check1: { from: '2026-05-01', to: '2026-05-31' },
+          check2: { from: '2026-06-01', to: '2026-06-30' },
+          final: { from: '2026-07-01', to: '2026-08-31' },
+        },
+      },
+      baseline: {},
+      checks: [],
+      final: null,
+      counts: { proposals: 5, simulations: 5, finalists: 0 },
+      unsupported_families: [],
+    }
+    mount({ data })
+    const header = screen.getByRole('heading', { name: 'Study results' }).closest('header')
+    expect(header).toHaveTextContent(label)
+    expect(header).not.toHaveTextContent('Return less drawdown · Maximize')
+  })
+
+  it('preserves the manual study objective label', () => {
+    mount()
+    expect(screen.getByText('Return less drawdown · Maximize')).toBeVisible()
+  })
+
   it('opens a retained baseline report even when automatic checks select no searched candidate', async () => {
     const data = result()
     data.experiment!.objective_winner_id = 'config-0'
@@ -274,20 +320,26 @@ describe('connected study exploration', () => {
     const { onOpenReport, onRerun } = mount({ data, experimentId: 'saved-experiment' })
     expect(screen.getByRole('region', { name: 'Automatic research findings' })).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Best report' })).not.toBeInTheDocument()
-    expect(screen.getByText('Best objective score').parentElement).toHaveTextContent('3')
-    expect(researchCandidates.get).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByText('Search details'))
+    expect(screen.getByText('Highest search score').parentElement).toHaveTextContent('3')
+    expect(researchCandidates.get).toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: 'Add trials' })).not.toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Backtest these settings' }))
-    expect(onRerun).toHaveBeenCalledWith()
+    expect(onRerun).not.toHaveBeenCalled()
     await userEvent.click(screen.getByRole('button', { name: 'Selected settings report' }))
     expect(onOpenReport).toHaveBeenCalledWith(studyId)
     await userEvent.click(screen.getByRole('button', { name: 'Point in history' }))
     const dialog = screen.getByRole('dialog')
     expect(
-      within(dialog).queryByRole('button', { name: /Save|Prepare report|Adjust & test/ })
+      within(dialog).queryByRole('button', { name: 'Backtest these settings' })
     ).not.toBeInTheDocument()
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Backtest these settings' }))
-    expect(onRerun).toHaveBeenLastCalledWith('config-1')
+    expect(await within(dialog).findByRole('button', { name: 'Prepare report' })).toBeEnabled()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Prepare report' }))
+    expect(researchCandidates.prepare).toHaveBeenCalledWith(
+      studyId,
+      'config-1',
+      expect.any(AbortSignal)
+    )
+    expect(onRerun).not.toHaveBeenCalled()
   })
 
   it('loads durable activity only on the Activity tab and retains the native timeline', async () => {
@@ -320,6 +372,8 @@ describe('connected study exploration', () => {
     data.experiment!.specification.trials = 100
     data.experiment!.search_space!.proposal_budget = 5
     const view = mount({ data })
+    expect(screen.getByText('4 / 5')).not.toBeVisible()
+    await userEvent.click(screen.getByText('Search details'))
     expect(screen.getByText('4 / 5')).toBeVisible()
     expect(screen.queryByText('999')).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Point in history' }))

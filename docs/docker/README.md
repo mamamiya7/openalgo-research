@@ -1,8 +1,5 @@
 # Docker Documentation
 
-**OpenAlgo Research:** use the [guided Windows/Linux installation](../research/RUNTIME.md#easy-local-installation-recommended) for local use, or the [Research Docker service instructions](../research/RUNTIME.md#docker-service) for the current Compose setup. Public CI verifies the image build and engine dependencies; full container first-run and recovery remain unverified for this preview. The documents below include upstream and historical development references.
-
-
 Complete Docker deployment and troubleshooting documentation for OpenAlgo.
 
 ---
@@ -12,6 +9,7 @@ Complete Docker deployment and troubleshooting documentation for OpenAlgo.
 ### Getting Started
 
 - **[docker.md](docker.md)** - Basic Docker deployment guide
+- **[Optional gthread worker](../gthread/README.md#installing-with-gthread)** - Select gthread, configure the 45-second shutdown grace, verify it, and switch back to eventlet
 - **[DOCKER_BUILD_GUIDE.md](DOCKER_BUILD_GUIDE.md)** - Complete build and deployment guide (12 KB)
   - Build process details
   - Configuration requirements

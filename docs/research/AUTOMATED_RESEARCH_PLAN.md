@@ -1,7 +1,40 @@
 # One-click strategy research
 
-**Product contract, 12 September 2026. First trade-management mode installed;
-broader indicator/regime protocol remains planned.** Requested after the
+## Benchmark-aware relative strength — 1 October 2026
+
+Smart research now defaults to `automatic-hypotheses-v4`:23 registered stock
+conditions across eight families. It adds stock-versus-Nifty relative price-return
+ratios over5/20/60 completed sessions (zero and2% thresholds), plus one fixed
+EMA20-and-relative-strength pair. Original18 trend/momentum/RSI/bands/ATR choices
+retain their descriptors and math. Sixty-four balanced family proposals precede
+32 refinements; the total native-call reservation ceiling is240. Existing account
+risk assumptions, unchanged reference and feasible later checks remain fixed.
+
+OpenAlgo prepares one shared NIFTY/NSE_INDEX daily series through the same
+Historify/history facade and connected broker. It reuses100-session stock warmup
+and freezes both instruments on identical recorded calendars. Relative strength
+is the stock growth factor divided by the index growth factor, minus one; it is
+neither RSI nor the difference in their percentage returns. Prices are native
+provider prices, without a total-return claim. Every intermediate required
+session must be observed and available before entry; there is no filling, date
+skipping or future-price use. Missing observed Nifty bars make those gates
+unknown; existing stock-only gates retain their actual coverage. Hard broker
+failures preserve progress for reconnect/resume.
+
+Benchmark evidence is acquired once, retained through durable stock/context
+checkpoints and reused across every proposal. Pause/resume, exact offline replay,
+trial reports and the Keep/Choose/reuse journey retain the appropriate rule and
+both instrument identities. New versioned context and numerical manifests do not
+rewrite saved v2/v3 recipes, proposal schedules or reports. OpenAlgo SDK2.0.5
+remains pinned; older scopes stay available in the native selector.
+
+Next admission: jointly test recorded market trend/volatility conditions with
+stock filters and exits. Market-regime stacks, broader filter combinations,
+volume, automatic risk sizing and live execution remain outside this increment.
+
+**Product contract, updated 30 September 2026. First trade-management mode installed;
+bounded Nifty-condition extension implemented in development; broader indicator
+protocol remains planned.** Requested after the
 chosen-setup increment. This specifies the automatic mode of Optimize within
 OpenAlgo Research; it is not another application or a replacement calculation
 engine. [DELIVERY_PLAN.md](DELIVERY_PLAN.md) owns implementation order.
@@ -12,8 +45,44 @@ historical condition attribution uses causal native daily features and independe
 price evidence. **16 September:** actual conditional portfolio replay is also
 implemented: a saved known cohort can run a complete native account comparison
 with its original baseline, without another download. Automatic condition search,
-condition-aware setup reuse and later shadow/live risk controls remain separate
-delivery stages. An exploratory improvement is not proof of future performance.
+condition-aware setup reuse are now implemented in development (30 September);
+later shadow/live risk controls remain separate delivery stages. An exploratory
+improvement is not proof of future performance.
+
+## Bounded market-entry extension — development, 30 September 2026
+
+The optional `automatic-entry-conditions-v1` recipe uses VectorBT and the existing
+causal Nifty daily regime recipe. Its four fixed presets are no extra filter,
+rising trend, normal volatility and high volatility. Every strategy uses the
+selected portfolio-wide preset; unknown history excludes entry rather than
+inventing eligibility. It gates original signals before whole-account execution,
+not completed ledger rows after calculation. Existing exclusions remain intact.
+
+The unchanged baseline and 50 seeded exits-only proposals run on the search
+window. Original settings plus up to three exit alternatives are screened against
+four presets (at most 16 combinations). Only up to three top search-score
+alternatives face both development checks and higher-cost checks; the original
+baseline remains the fallback. The existing 60/10/10/20 chronological split,
+shared purge, support thresholds and final-without-reranking rule remain. The
+100-calculation ceiling covers all steps, including exact reconstruction.
+Inactive top-scoring candidates can yield an inconclusive baseline fallback;
+the mode does not claim to test every viable combination in later windows.
+
+Frozen market evidence, rule/configuration identities and checkpoints survive
+recovery. Account-owned final dates must not overlap previously recorded research
+observations. All evaluation dates are conservatively reserved before search
+starts, including on cancellation; only the same durable job may resume the
+claim. Previous final dates cannot become development data. Pruning and backup/
+restore retain the claim inputs even if its job was removed. Unknown earlier
+report dates fail closed; prior activity outside this installation remains unknown.
+
+**Backtest these settings** creates a fixed exact replay before selection.
+Rules remain visible in saved chosen setups and survive custom exit optimization
+and new-source reuse; reuse acquires a new causal Nifty series for the new dates.
+Results from an already reserved later test remain inspection-only. Old recipe
+and unfiltered settings identities remain compatible. This does not add
+stock-indicator search, arbitrary thresholds, stacked filters, adaptive live
+trading, Nautilus condition execution or partial-result publication.
 
 Its D2 dependency, completed-study **Add trials**, separates scientific identity
 from execution budget and retains exact saved prices/checkpoints in linked

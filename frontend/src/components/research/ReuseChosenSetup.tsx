@@ -20,6 +20,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { researchError } from '@/hooks/useResearchExperiment'
 import { useResearchWorkspaceMutations } from '@/hooks/useResearchWorkspaceMutations'
+import { ChosenEntryConditions } from './ChosenEntryConditions'
 import type { PortfolioDraft } from './PortfolioBuilder'
 import { researchDates, strategyRuleSummary } from './researchPresentation'
 
@@ -223,6 +224,16 @@ export function ReuseChosenSetup({
           )}
           {draft && (
             <div className="space-y-5">
+              <ChosenEntryConditions
+                conditions={choice.entry_conditions}
+                strategies={choice.strategies}
+              />
+              {choice.entry_conditions && (
+                <p className="text-xs text-muted-foreground">
+                  Entry rules remain fixed. New signals prepare their own market history; saved
+                  signal decisions are not copied.
+                </p>
+              )}
               {draft.portfolio.strategies.map((strategy) => {
                 const selectedId = sources[strategy.id] ?? strategy.source_id
                 const originalId = choice.strategies.find(

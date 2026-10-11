@@ -31,11 +31,13 @@ export function usePortfolioAnalysis(
     marketConditions?: boolean
   } | null>(null)
   const submission = useRef(false)
+  const cancellation = useRef<AbortController | null>(null)
   frozen.current = freezeAnalysis
   useEffect(() => {
     alive.current = true
     return () => {
       alive.current = false
+      cancellation.current?.abort()
       generation.current += 1
     }
   }, [])
@@ -62,6 +64,8 @@ export function usePortfolioAnalysis(
   )
   useEffect(() => {
     generation.current += 1
+    cancellation.current?.abort()
+    cancellation.current = null
     setResponse({ status: 'missing' })
     setLoaded((value) => (!freezeAnalysis && value?.id === identity ? value : null))
     setSubmitting(false)
@@ -190,11 +194,39 @@ export function usePortfolioAnalysis(
     }
   }
   const fullResult = !freezeAnalysis && loaded?.id === identity ? loaded.result : undefined
+  const cancel = async () => {
+    if (
+      frozen.current ||
+      activeIdentity.current !== identity ||
+      !response.analysis_job_id ||
+      !busy ||
+      cancellation.current
+    )
+      return
+    const controller = new AbortController()
+    cancellation.current = controller
+    const current = generation.current
+    try {
+      await portfolioResearch.cancel(response.analysis_job_id, controller.signal)
+      const value = await portfolioResearch.analysis(id, controller.signal)
+      if (!controller.signal.aborted && alive.current && generation.current === current)
+        receive(value)
+    } catch {
+      if (!controller.signal.aborted && alive.current && generation.current === current)
+        setResponse((previous) => ({
+          ...previous,
+          error: 'Could not cancel analysis. Check progress and try again.',
+        }))
+    } finally {
+      if (cancellation.current === controller) cancellation.current = null
+    }
+  }
   const result = (laterPeriod ? fullResult?.validation?.result : fullResult) ?? initialResult
   return {
     result: freezeAnalysis ? initialResult : result,
     busy,
     response: freezeAnalysis ? { status: 'complete' as const } : response,
     prepare,
+    cancel,
   }
 }

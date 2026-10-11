@@ -76,23 +76,42 @@ def test_route_saves_linked_native_job_and_repeat_is_idempotent(saved):
         )
     assert count(store) == before + 1
     experiment = library.get_experiment(store, "owner", experiment_id)
-    with pytest.raises(ValueError, match="Exact replay"):
-        library.restore_version(
-            store, "owner", experiment_id, links[0].version_id, {"revision": experiment["revision"]}
-        )
+    original_version = library.get_version(store, "owner", experiment_id, links[0].version_id)
+    restored = library.restore_version(
+        store, "owner", experiment_id, links[0].version_id, {"revision": experiment["revision"]}
+    )
+    expected_rule = {key: request[key] for key in ("strategy_id", "dimension", "regime")}
+    assert restored["draft"]["portfolio"]["entry_conditions"]["rules"] == [expected_rule]
+    assert (
+        library.get_version(store, "owner", experiment_id, links[0].version_id) == original_version
+    )
+    assert count(store) == before + 1
     run(store)
     report = service.get_job(store, "owner", identifier)
     assert report.status == "completed", report.error
-    with pytest.raises(ValueError, match="Exact replay"):
-        library.from_job(
-            store,
-            "owner",
-            {"job_id": identifier, "mode": "optimize", "request_id": "condition-copy-blocked"},
-        )
-    from services.research_shortlist import _evidence
+    original_evidence = service.encoded(service.read_artifact(store, report.result_artifact))
+    optimized = library.from_job(
+        store,
+        "owner",
+        {"job_id": identifier, "mode": "optimize", "request_id": "condition-copy-preserved"},
+    )
+    assert optimized["draft"]["optimizing"]
+    assert optimized["draft"]["portfolio"]["entry_conditions"]["rules"] == [expected_rule]
+    assert count(store) == before + 1
+    from services.research_shortlist import _evidence, save_candidate
 
-    with pytest.raises(ValueError, match="not yet supported"):
-        _evidence(store, report)
+    _, retained, selected, origin = _evidence(store, report)
+    assert retained["condition_replay"]["condition"] == selected["condition_replay"]["condition"]
+    assert all(
+        retained["condition_replay"]["condition"][key] == value
+        for key, value in expected_rule.items()
+    )
+    bookmark = save_candidate(store, "owner", experiment_id, {"job_id": identifier})
+    assert bookmark["candidate"]["source_job_id"] == identifier
+    assert bookmark["candidate"]["config_id"] == origin["config_id"]
+    assert (
+        service.encoded(service.read_artifact(store, report.result_artifact)) == original_evidence
+    )
     assert client.post(path(parent), json=data).json["id"] == identifier
     assert count(store) == before + 1
     assert (

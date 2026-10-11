@@ -4,7 +4,6 @@
 
 import io
 
-import pytest
 from flask import Flask
 from flask_wtf.csrf import CSRFProtect
 from sqlalchemy import func, select
@@ -15,10 +14,6 @@ from test_report_period_workflow import run_worker
 
 from blueprints.scanner_research import scanner_research_bp
 from database.research_db import ResearchJob, ResearchSetupVersion
-
-# These HTTP journeys prepare multiple real worker jobs and durable evidence.
-# Give Windows CI storage a bounded integration budget; unit tests retain 60s.
-pytestmark = pytest.mark.timeout(300)
 
 
 def test_chosen_rules_new_csv_and_exact_replay_are_separate_native_actions(

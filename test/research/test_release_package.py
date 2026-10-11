@@ -2,14 +2,18 @@
 
 import hashlib
 import json
+import os
+import shutil
 import subprocess
+import time
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from tools.research_check import REQUIRED_RESEARCH_FILES, distribution
-from tools.research_release import package, permitted, run
+from tools.research_release import cleanup_staging, package, permitted, run, staging_directory
 
 
 @pytest.fixture
@@ -55,7 +59,6 @@ def source(tmp_path):
         "test/research/token.db",
         "extensions/chartink/signals.csv",
         "extensions/chartink/node_modules/pkg/private.js",
-        ".research-runtime/cache/private.json",
     ]:
         path = tmp_path / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -114,6 +117,167 @@ def test_failed_build_releases_stage_and_never_publishes_archive(source):
     assert not list(output.glob("*.zip"))
 
 
+def windows_cleanup_error():
+    error = OSError(145, "The directory is not empty")
+    error.winerror = 145
+    return error
+
+
+def test_transient_windows_staging_cleanup_still_returns_valid_package(source, monkeypatch):
+    from tools import research_release
+
+    output = source / ".agent-native/release/cleanup-retry"
+    cleanup = research_release.tempfile.TemporaryDirectory.cleanup
+    attempts = []
+    waits = []
+    native_sleep = time.sleep
+
+    def temporarily_locked(temporary):
+        path = temporary.name
+        if Path(path).name.startswith("staging-") and Path(path).parent.samefile(output):
+            attempts.append(Path(path))
+            if len(attempts) == 1:
+                raise windows_cleanup_error()
+        return cleanup(temporary)
+
+    # Inject at the owned cleanup boundary, rather than assuming tempfile's
+    # stdlib-internal shutil reference shares this module's import on every OS.
+    monkeypatch.setattr(research_release.tempfile.TemporaryDirectory, "cleanup", temporarily_locked)
+    # Patch this owner's binding: subprocess also uses the stdlib time module
+    # for its POSIX wait loop, which must retain real sleeps during packaging.
+    monkeypatch.setattr(research_release, "time", SimpleNamespace(sleep=waits.append))
+    assert time.sleep is native_sleep
+    artifact = package(source, output, build)
+    assert zipfile.is_zipfile(artifact)
+    assert (output / "manifest.json").is_file()
+    assert len(attempts) == 2
+    assert waits == [0.25]
+    assert not list(output.glob("staging-*"))
+
+
+@pytest.mark.parametrize("target", ["output", "outside", "ordinary", "nested", "parent_escape"])
+def test_cleanup_refuses_every_path_except_owned_direct_staging_child(
+    tmp_path, monkeypatch, target
+):
+    from tools import research_release
+
+    output = tmp_path / "release-output"
+    output.mkdir()
+    paths = {
+        "output": output,
+        "outside": tmp_path / "staging-outside",
+        "ordinary": output / "manifest-files",
+        "nested": output / "nested/staging-child",
+        "parent_escape": output / "../staging-escape",
+    }
+    removed = []
+    monkeypatch.setattr(research_release.shutil, "rmtree", removed.append)
+    with pytest.raises(ValueError, match="Refusing cleanup"):
+        cleanup_staging(paths[target], output)
+    assert removed == []
+
+
+def test_permanent_cleanup_failure_is_bounded_and_visible(tmp_path, monkeypatch):
+    from tools import research_release
+
+    output = tmp_path / "release-output"
+    stage = output / "staging-stuck"
+    stage.mkdir(parents=True)
+    failure = windows_cleanup_error()
+    attempts, waits = [], []
+
+    def locked(path):
+        attempts.append(Path(path))
+        raise failure
+
+    monkeypatch.setattr(research_release.shutil, "rmtree", locked)
+    monkeypatch.setattr(research_release, "time", SimpleNamespace(sleep=waits.append))
+    with pytest.raises(RuntimeError, match="temporary files remain") as caught:
+        cleanup_staging(stage, output)
+    assert caught.value.__cause__ is failure
+    assert len(attempts) == 5
+    assert all(path.samefile(stage) for path in attempts)
+    assert waits == [0.25, 0.5, 1.0, 2.0]
+    assert stage.is_dir()
+
+
+def test_build_exception_survives_cleanup_failure_with_visible_note(tmp_path, monkeypatch):
+    from tools import research_release
+
+    original = RuntimeError("original builder failure")
+
+    def locked(*_args, **_kwargs):
+        raise windows_cleanup_error()
+
+    monkeypatch.setattr(research_release.tempfile.TemporaryDirectory, "cleanup", locked)
+    monkeypatch.setattr(research_release, "time", SimpleNamespace(sleep=lambda _: None))
+    with pytest.raises(RuntimeError, match="original builder failure") as caught:
+        with staging_directory(tmp_path):
+            raise original
+    assert caught.value is original
+    assert "cleanup also failed" in original.__notes__[0]
+    assert "temporary files remain" in original.__notes__[0]
+
+
+def test_staging_cleanup_keeps_native_read_only_file_handling(tmp_path):
+    with staging_directory(tmp_path) as stage:
+        readonly = stage / "readonly.js"
+        readonly.write_text("temporary build dependency")
+        readonly.chmod(0o444)
+    assert not stage.exists()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows extended-length filesystem regression")
+def test_staging_cleanup_removes_real_windows_long_paths_and_readonly_files(tmp_path):
+    # Real filesystem operations: npm dependencies can exceed MAX_PATH below a
+    # managed source checkout even though every individual name is short enough.
+    output = tmp_path / "release-output"
+    output.mkdir()
+    outside = tmp_path / "keep.txt"
+    outside.write_text("outside the release")
+    with staging_directory(output) as stage:
+        leaf = stage / "frontend/node_modules"
+        for index in range(5):
+            leaf /= f"dependency-{index}-" + "x" * 48
+        leaf /= "variable_anchor_offset_collection.mjs.map"
+        assert len(str(leaf)) > 260
+        native_leaf = Path("\\\\?\\" + str(leaf))
+        native_leaf.parent.mkdir(parents=True)
+        native_leaf.write_text("real long-path dependency")
+        native_leaf.chmod(0o444)
+        assert native_leaf.read_text() == "real long-path dependency"
+    assert not stage.exists()
+    assert list(output.iterdir()) == []
+    assert outside.read_text() == "outside the release"
+
+
+def test_cleanup_revalidates_resolved_boundary_before_retry(tmp_path, monkeypatch):
+    from tools import research_release
+
+    output = tmp_path / "release-output"
+    stage = output / "staging-replaced"
+    stage.mkdir(parents=True)
+    resolve = Path.resolve
+    attempts = []
+
+    def moved(path, *args, **kwargs):
+        if path == stage and attempts:
+            return tmp_path / "outside/staging-replaced"
+        return resolve(path, *args, **kwargs)
+
+    def locked(path):
+        attempts.append(path)
+        raise windows_cleanup_error()
+
+    monkeypatch.setattr(Path, "resolve", moved)
+    monkeypatch.setattr(research_release.shutil, "rmtree", locked)
+    monkeypatch.setattr(research_release, "time", SimpleNamespace(sleep=lambda _: None))
+    with pytest.raises(ValueError, match="Refusing cleanup"):
+        cleanup_staging(stage, output)
+    assert len(attempts) == 1
+    assert Path(attempts[0]).samefile(stage)
+
+
 def test_link_escape_is_rejected(source, tmp_path):
     path = source / "research/escape.py"
     try:
@@ -134,8 +298,6 @@ def test_link_escape_is_rejected(source, tmp_path):
         "frontend/node_modules/pkg/a.js",
         "research/secrets.json",
         "data/raw.csv",
-        ".research-runtime/bin/uv.exe",
-        "tools/.research-runtime/private.json",
     ],
 )
 def test_sensitive_and_escape_names_are_not_sources(name):
@@ -175,9 +337,24 @@ def test_output_cannot_escape_release_area(source):
         package(source, source / "public-output", build)
 
 
+def test_missing_install_template_blocks_package_before_build(source):
+    (source / ".sample.env").unlink()
+
+    def unexpected(*_):
+        pytest.fail("Package build started without the fresh-install template")
+
+    with pytest.raises(ValueError, match=r"\.sample\.env"):
+        package(source, source / ".agent-native/release/missing-template", unexpected)
+
+
 @pytest.mark.parametrize(
     "module",
-    ["research_native_prices", "research_library", "research_activity", "research_result_presentation"],
+    [
+        "research_native_prices",
+        "research_library",
+        "research_activity",
+        "research_result_presentation",
+    ],
 )
 def test_missing_native_module_blocks_package(source, module):
     (source / f"services/{module}.py").unlink()

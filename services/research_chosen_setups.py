@@ -77,12 +77,41 @@ def _source_fence(db, owner, experiment_id, snapshot):
     return source
 
 
+def _condition_fence(store, snapshot):
+    """Bind portable legacy rules to their original content-addressed report.
+
+    Old condition reports intentionally keep their original trade-settings hash,
+    so a valid but different condition must not pass on that hash alone.
+    """
+    from services.research_setup_reuse import retained_entry_conditions
+
+    original = service.read_artifact(store, snapshot["source_result_artifact"])
+    actual = retained_entry_conditions(store, original)
+    if actual != snapshot.get("entry_conditions"):
+        raise ValueError("The chosen entry conditions differ from their original saved evidence")
+
+
 def _snapshot(member, portfolio):
     context = member["report_context"]
     basis = context["evaluation_basis"]
     period = basis.get("period", {}) if basis.get("status") == "verified" else {}
     comparison = basis.get("comparison", {}) if basis.get("status") == "verified" else {}
-    return {
+
+    def session_date(value):
+        if value is None:
+            return None
+        # A verified minute basis retains observation instants. The setup's
+        # date range is in exchange sessions; its immutable evidence keeps the
+        # exact timestamps. Do not truncate unknown offsets or accept naive time.
+        from research.intraday import stamp
+
+        return (
+            stamp(value).date().isoformat()
+            if "T" in value
+            else date.fromisoformat(value).isoformat()
+        )
+
+    snapshot = {
         **{key: member[key] for key in decisions.IDENTITY},
         **{
             key: member[key]
@@ -98,9 +127,15 @@ def _snapshot(member, portfolio):
         "candidate_name": member["name"],
         "capital": portfolio["capital"],
         "currency": comparison.get("currency"),
-        "dates": {key: period.get(key) or context["dates"].get(key) for key in ("from", "to")},
+        "dates": {
+            key: session_date(period.get(key) or context["dates"].get(key))
+            for key in ("from", "to")
+        },
         "sources": {row["id"]: row["source_id"] for row in portfolio["strategies"]},
     }
+    if portfolio.get("entry_conditions") is not None:
+        snapshot["entry_conditions"] = copy.deepcopy(portfolio["entry_conditions"])
+    return snapshot
 
 
 def _prepared_rules(store, owner, member):
@@ -115,8 +150,13 @@ def _prepared_rules(store, owner, member):
     # Reusable input/date/reserve intent belongs to the pinned original request;
     # only the selected candidate's actual rules/weights come from this report.
     original = service.read_artifact(store, member["source_result_artifact"])
+    from services.research_setup_reuse import retained_entry_conditions
+
+    conditions = retained_entry_conditions(store, original)
     inputs = service.read_artifact(store, original["inputs_artifact"])
     portfolio = copy.deepcopy(inputs["portfolio"])
+    if conditions is not None:
+        portfolio["entry_conditions"] = conditions
     del inputs, original
     selected = {item["id"]: item for item in result["strategies"]}
     if set(selected) != {item["id"] for item in portfolio["strategies"]}:
@@ -130,6 +170,8 @@ def _prepared_rules(store, owner, member):
             allocation_pct=chosen["allocation_pct"],
             search={},
         )
+        if "entry_condition" in chosen:
+            row["entry_condition"] = copy.deepcopy(chosen["entry_condition"])
     draft = library.fresh_draft()
     draft.update(portfolio=portfolio, optimizing=False, equalWeights=False)
     draft = library.normalize_draft(store, owner, draft)
@@ -189,6 +231,11 @@ def _summary(db, experiment, choice, *, current_id=None):
         "dates": snapshot["dates"],
         "candidate_name": snapshot["candidate_name"],
         "trial_number": snapshot["trial_number"],
+        **(
+            {"entry_conditions": snapshot["entry_conditions"]}
+            if "entry_conditions" in snapshot
+            else {}
+        ),
     }
 
 
@@ -275,6 +322,11 @@ def context(store, owner, experiment_id, *, decision_id=None, event_id=None):
                 capital=snapshot["capital"],
                 currency=snapshot["currency"],
                 dates=snapshot["dates"],
+                **(
+                    {"entry_conditions": snapshot["entry_conditions"]}
+                    if "entry_conditions" in snapshot
+                    else {}
+                ),
             )
         except (ValueError, OSError) as error:
             reason = str(error)
@@ -476,6 +528,8 @@ def _prepare_use(store, owner, experiment_id, data):
         summary = _summary(db, experiment, choice, current_id=choice.id)
         draft = json.loads(version.draft)
         marker = _version_identity(choice, version)
+        snapshot = json.loads(choice.snapshot)
+    _condition_fence(store, snapshot)
     prepared = reuse_draft(
         store, owner, draft, replacements=data.get("sources"), mode=data.get("mode", "backtest")
     )
@@ -625,6 +679,7 @@ def replay_choice(store, owner, experiment_id, data):
                 store, owner, experiment_id, response["version_id"], response["job_id"]
             ),
         }
+    _condition_fence(store, snapshot)
     source, evidence = replay_inputs(store, owner, snapshot["source_job_id"], trial_id=trial_id)
     if (
         source.result_artifact != snapshot["source_result_artifact"]
@@ -706,7 +761,7 @@ def validate_snapshot(value):
     }
     if (
         not isinstance(value, dict)
-        or set(value) != fields
+        or set(value) not in (fields, fields | {"entry_conditions"})
         or len(service.encoded(value)) > MAX_SNAPSHOT_BYTES
     ):
         raise ValueError("Invalid chosen setup identity")
@@ -753,6 +808,12 @@ def validate_snapshot(value):
         if not isinstance(strategy, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", strategy):
             raise ValueError("Invalid chosen strategy identity")
         shortlist._hex(source, 32, "chosen source")
+    if "entry_conditions" in value:
+        from research.entry_conditions import normalize as normalize_conditions
+
+        # JSON object keys have no strategy ordering. The frozen portfolio
+        # below binds the canonical rule order; validate membership here only.
+        normalize_conditions(value["entry_conditions"], [{"id": key} for key in value["sources"]])
 
 
 def validate_version(choice, version):
@@ -769,6 +830,7 @@ def validate_version(choice, version):
         or settings_identity(draft.get("portfolio", {}).get("strategies")) != snapshot["config_id"]
         or portfolio.get("capital") != snapshot["capital"]
         or draft.get("portfolio") != portfolio
+        or portfolio.get("entry_conditions") != snapshot.get("entry_conditions")
         or any(row.get("search") for row in portfolio["strategies"])
         or {row["id"]: row["source_id"] for row in portfolio["strategies"]} != snapshot["sources"]
         or version.parent_job_id != snapshot["source_job_id"]

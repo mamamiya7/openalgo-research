@@ -43,3 +43,23 @@ The analysis catalog covers **121 VectorBT metrics** (27 common account metrics 
 Only the selected winner retains its full curves, available cash, detailed ledger and strategy attribution. Those winner-only values must not be copied into other trial rows. Computing additional historical metrics for old non-winning trials can require explicit replay because their full curves/ledgers were not retained.
 
 Displaying the already saved fields needs no broker request, price download, new trial or change to existing evidence.
+
+## Unfinished studies: saved trials
+
+Paused, cancelled, interrupted and failed portfolio optimizations offer **Saved
+trials** beside Resume and Activity. Opening it reads committed scientific
+checkpoints only. The compact table shows return, drawdown and closed trades;
+**View settings** opens a dialog at the current position. Pages contain at most
+25 portfolios and remain pinned to one saved checkpoint. If progress changes,
+**Load latest** restarts inspection without mixing pages.
+
+Repeated proposals and rejected allocations are not fabricated into distinct
+evaluated portfolios. Missing old checkpoints, acquisition-only progress and
+unverifiable evidence give a concise unavailable explanation. Operational Activity
+observations that were never committed are excluded. Automatic research exposes
+only its exit-search period; screening/check/final outcomes stay separate.
+
+These rows are unfinished-study evidence, not a selected recommendation or a
+completed tear sheet. Inspection never resumes a run, recalculates a metric,
+downloads prices, publishes a full report or promotes a setup. Existing Resume
+and completed-study actions retain their normal contracts.

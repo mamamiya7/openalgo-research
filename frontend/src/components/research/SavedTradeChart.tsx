@@ -1,7 +1,26 @@
-import { ChevronLeft, ChevronRight, Pause, Play, RotateCcw, Settings2, X } from 'lucide-react'
-import { ReplayController, type ReplayState } from 'openalgo-charts'
+import {
+  ChevronLeft,
+  ChevronRight,
+  Maximize2,
+  Pause,
+  Play,
+  RotateCcw,
+  Settings2,
+  X,
+} from 'lucide-react'
+import {
+  type Chart,
+  getIndicator,
+  INDICATOR_SOURCES,
+  type IndicatorInput,
+  type IndicatorSettings,
+  indicatorStyleInputs,
+  isKnownInterval,
+  ReplayController,
+  type ReplayState,
+} from 'openalgo-charts'
 import type { Widget } from 'openalgo-charts/widget'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { SavedTradeChartPage } from '@/api/researchTradeChart'
 import { OpenAlgoChart } from '@/components/chart/OpenAlgoChart'
 import { REPLAY_SPEEDS } from '@/components/chart/useChartReplay'
@@ -12,6 +31,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { resetSavedTradeReadout, SavedTradeValues } from './SavedTradeValues'
 import {
   createSavedTradeFeed,
   savedTradeBars,
@@ -27,6 +47,51 @@ interface Props {
   pageLoading?: boolean
 }
 
+interface SavedStudyPreferences {
+  indicatorId: string
+  settings: IndicatorSettings
+  visible: boolean
+}
+
+function safeStudyValue(input: IndicatorInput, value: unknown): boolean {
+  switch (input.type) {
+    case 'number':
+      return (
+        typeof value === 'number' &&
+        Number.isFinite(value) &&
+        (input.min == null || value >= input.min) &&
+        (input.max == null || value <= input.max)
+      )
+    case 'boolean':
+      return typeof value === 'boolean'
+    case 'source':
+      return INDICATOR_SOURCES.some((source) => source.value === value)
+    case 'select':
+      return input.options.some((option) => option.value === value)
+    case 'interval':
+      return typeof value === 'string' && (value === '' || isKnownInterval(value))
+    case 'color':
+      return typeof value === 'string' && value.length > 0 && value.length <= 100
+    default:
+      return false
+  }
+}
+
+/** Preferences only: never retain layout, drawings, dependencies or computed values. */
+export function savedStudyPreferences(chart: Chart): SavedStudyPreferences[] {
+  return chart.indicators().flatMap((instance) => {
+    const descriptor = SAVED_TRADE_INDICATORS.find((item) => item.id === instance.indicatorId)
+    if (!descriptor || getIndicator(descriptor.id) !== descriptor) return []
+    const current = instance.settings()
+    const settings: IndicatorSettings = {}
+    for (const input of [...descriptor.inputs, ...indicatorStyleInputs(descriptor)]) {
+      if (Object.hasOwn(current, input.key) && safeStudyValue(input, current[input.key]))
+        settings[input.key] = current[input.key]
+    }
+    return [{ indicatorId: descriptor.id, settings, visible: instance.visible() }]
+  })
+}
+
 /** Every page/replay mode has its own disposable native workspace. */
 export default function SavedTradeChart(props: Props) {
   const { identity, window } = props.page
@@ -39,6 +104,8 @@ export default function SavedTradeChart(props: Props) {
 }
 
 function SavedTradeChartWindow({ page, onPage, pageLoading = false }: Props) {
+  const valuesId = useId()
+  const [valuesOpen, setValuesOpen] = useState(false)
   const [replaying, setReplaying] = useState(false)
   const [widget, setWidget] = useState<Widget | null>(null)
   const [loaded, setLoaded] = useState(false)
@@ -50,6 +117,7 @@ function SavedTradeChartWindow({ page, onPage, pageLoading = false }: Props) {
   const cursor = useRef<number | null>(null)
   const widgetRef = useRef<Widget | null>(null)
   const controller = useRef<ReplayController | null>(null)
+  const pendingStudies = useRef<SavedStudyPreferences[] | null>(null)
   const markerLayer = useRef<ReturnType<Widget['series']['createMarkers']> | null>(null)
   const bars = useMemo(() => savedTradeBars(page), [page])
   const initialIndex = Math.max(
@@ -69,6 +137,7 @@ function SavedTradeChartWindow({ page, onPage, pageLoading = false }: Props) {
       const chart = widgetRef.current
       if (chart && !chart.isDestroyed) {
         for (const indicator of chart.chart.indicators()) indicator.updateLegendValues(next.index)
+        resetSavedTradeReadout(chart.chart, next)
       }
       setFrame(next)
     },
@@ -83,6 +152,17 @@ function SavedTradeChartWindow({ page, onPage, pageLoading = false }: Props) {
 
   useEffect(() => {
     if (!widget) return
+    // Daily bars use date coordinates, not execution clocks. Format their labels
+    // as recorded session dates without shifting a candle or marker timestamp.
+    if (page.interval === 'D') {
+      const sessionDate = new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'UTC',
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      })
+      widget.chart.setTimeFormatter((time) => sessionDate.format(time * 1000))
+    }
     const restoreGuard = guardSavedTradeIndicators(widget.chart)
     const markers = widget.series.createMarkers()
     markerLayer.current = markers
@@ -99,6 +179,22 @@ function SavedTradeChartWindow({ page, onPage, pageLoading = false }: Props) {
   }, [widget, page])
 
   useEffect(() => {
+    if (!widget || !loaded || !pendingStudies.current) return
+    const retained = pendingStudies.current
+    pendingStudies.current = null
+    // The private feed has already loaded only the completed replay prefix.
+    // Rebuild computations on that source; never restore the old study instance.
+    for (const study of retained) {
+      try {
+        const indicator = widget.chart.addIndicator(study.indicatorId, study.settings)
+        indicator.setVisible(study.visible)
+      } catch {
+        // A registry change cannot bypass the per-chart built-in guard.
+      }
+    }
+  }, [widget, loaded])
+
+  useEffect(() => {
     if (!widget || !loaded || !replaying || controller.current) return
     // Native ReplayController truncates the source before indicator recalculation.
     // The private feed's cursor also prevents a refresh from returning future bars.
@@ -107,6 +203,9 @@ function SavedTradeChartWindow({ page, onPage, pageLoading = false }: Props) {
       bars,
       startIndex: initialIndex,
       speed: speedRef.current,
+      // Saved OHLC has no observed intrabar tick order. Preserve completed-bar
+      // replay when native charts also offer simulated intrabar playback.
+      simulate: undefined,
       onFrame: syncFrame,
     })
     controller.current = replay
@@ -122,6 +221,19 @@ function SavedTradeChartWindow({ page, onPage, pageLoading = false }: Props) {
     }
   }, [widget, loaded, replaying, bars, initialIndex, syncFrame])
 
+  const fitCandles = useCallback(() => {
+    if (!widget || widget.isDestroyed) return
+    // The series contains only the visible replay prefix. Never fit using the
+    // original full count: future bar positions must not frame replay.
+    const count = widget.series.getData().length
+    if (!count) return
+    const padding = Math.max(1, Math.min(20, Math.ceil(count * 0.04)))
+    widget.chart.setVisibleLogicalRange({ from: -padding, to: count - 1 + padding })
+  }, [widget])
+  useEffect(() => {
+    if (loaded) fitCandles()
+  }, [loaded, fitCandles])
+
   // A hidden tab must never keep consuming the replay in the background.
   useEffect(() => {
     const pause = () => {
@@ -135,6 +247,7 @@ function SavedTradeChartWindow({ page, onPage, pageLoading = false }: Props) {
 
   const changeReplay = (active: boolean) => {
     controller.current?.pause()
+    if (widget && !widget.isDestroyed) pendingStudies.current = savedStudyPreferences(widget.chart)
     // Rebuilding rather than restoring drawings prevents full-result annotations
     // from revealing future exits. No chart layout is persisted to localStorage.
     cursor.current = active ? initialIndex : null
@@ -185,6 +298,10 @@ function SavedTradeChartWindow({ page, onPage, pageLoading = false }: Props) {
           {page.interval === 'D' ? 'Daily candles' : '1-minute candles'} · {page.exchange}
           {replaying && ' · Replay'}
         </span>
+        <Button variant="outline" size="sm" disabled={!loaded || pageLoading} onClick={fitCandles}>
+          <Maximize2 className="mr-1 size-3.5" aria-hidden="true" />
+          Fit candles
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" disabled={!loaded || pageLoading}>
@@ -211,6 +328,16 @@ function SavedTradeChartWindow({ page, onPage, pageLoading = false }: Props) {
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+        <Button
+          variant={valuesOpen ? 'secondary' : 'outline'}
+          size="sm"
+          aria-expanded={valuesOpen}
+          aria-controls={valuesOpen && widget && loaded ? valuesId : undefined}
+          disabled={!loaded || pageLoading}
+          onClick={() => setValuesOpen((open) => !open)}
+        >
+          Values
+        </Button>
         <Button
           variant="outline"
           size="icon"
@@ -239,36 +366,41 @@ function SavedTradeChartWindow({ page, onPage, pageLoading = false }: Props) {
         </p>
       )}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border">
-        <OpenAlgoChart
-          key={replaying ? 'replay' : 'review'}
-          feed={feed}
-          dataEndsAt={bars.at(-1)?.time}
-          symbol={page.symbol}
-          exchange={page.exchange}
-          interval={page.interval}
-          intervals={[page.interval]}
-          lookbackBars={savedTradeLookback(page)}
-          topbar={false}
-          rail={!replaying}
-          // The widget status line caches a hovered OHLC bar independently of
-          // replay. Keep it out of replay so stepping back cannot retain a future
-          // price, timestamp, change or full-series count in its readout.
-          statusline={!replaying}
-          indicators={false}
-          customIndicators={false}
-          onReady={onReady}
-          onData={(event) => {
-            if (event.error) {
-              setError('Saved prices could not be displayed. Reopen the chart.')
-              return
-            }
-            if (event.bars > 0) {
-              if (!loaded && widget)
-                widget.chart.setVisibleLogicalRange({ from: -1, to: event.bars + 1 })
-              setLoaded(true)
-            }
-          }}
-        />
+        <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <OpenAlgoChart
+              key={replaying ? 'replay' : 'review'}
+              feed={feed}
+              dataEndsAt={bars.at(-1)?.time}
+              symbol={page.symbol}
+              exchange={page.exchange}
+              interval={page.interval}
+              intervals={[page.interval]}
+              lookbackBars={savedTradeLookback(page)}
+              topbar={false}
+              rail={!replaying}
+              // The widget status line caches a hovered OHLC bar independently of
+              // replay. Keep it out of replay so stepping back cannot retain a future
+              // price, timestamp, change or full-series count in its readout.
+              statusline={!replaying}
+              indicators={false}
+              customIndicators={false}
+              onReady={onReady}
+              onData={(event) => {
+                if (event.error) {
+                  setError('Saved prices could not be displayed. Reopen the chart.')
+                  return
+                }
+                if (event.bars > 0) {
+                  setLoaded(true)
+                }
+              }}
+            />
+          </div>
+          {valuesOpen && widget && loaded && (
+            <SavedTradeValues chart={widget.chart} id={valuesId} />
+          )}
+        </div>
         {replaying && (
           <div className="flex shrink-0 flex-wrap items-center gap-1 border-t bg-muted/30 p-2 text-xs">
             <span className="mr-1 font-medium">{paged ? 'Section replay' : 'Bar replay'}</span>
@@ -360,6 +492,11 @@ function SavedTradeChartWindow({ page, onPage, pageLoading = false }: Props) {
             <span>Before entry</span>
           )}
       </div>
+      {page.interval === 'D' && (
+        <p className="shrink-0 text-xs text-muted-foreground">
+          Daily chart labels show session dates; entry and exit above use recorded execution dates.
+        </p>
+      )}
       {page.notice && !replaying && (
         <p className="shrink-0 text-xs text-muted-foreground">{page.notice}</p>
       )}

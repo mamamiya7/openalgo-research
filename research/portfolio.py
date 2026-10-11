@@ -43,6 +43,7 @@ def normalize(raw):
         "date_to",
         "validation",
         "automatic_research",
+        "entry_conditions",
     }:
         raise ValueError("Invalid portfolio settings")
     if raw.get("version", VERSION) != VERSION:
@@ -71,6 +72,7 @@ def normalize(raw):
             "config",
             "search",
             "type",
+            "entry_condition",
         }:
             raise ValueError("Invalid strategy settings")
         identifier = row.get("id")
@@ -142,6 +144,22 @@ def normalize(raw):
         "engine": engine,
         "strategies": strategies,
     }
+    if raw.get("entry_conditions") is not None:
+        from research.entry_conditions import normalize as normalize_conditions
+
+        result["entry_conditions"] = normalize_conditions(
+            raw["entry_conditions"], strategies, engine
+        )
+        from research.entry_conditions import markers
+
+        expected = markers(strategies, result["entry_conditions"])
+        for original, canonical, marked in zip(rows, strategies, expected, strict=True):
+            if "entry_condition" in original:
+                if original["entry_condition"] != marked.get("entry_condition"):
+                    raise ValueError("The saved strategy entry condition changed")
+                canonical["entry_condition"] = deepcopy(original["entry_condition"])
+    elif any("entry_condition" in row for row in rows):
+        raise ValueError("Retain the complete entry-condition recipe with these settings")
     for key in ("date_from", "date_to"):
         value = raw.get(key)
         if value:
@@ -348,6 +366,13 @@ def execution_versions(portfolio, recorded=None):
     }
     if portfolio.get("automatic_research"):
         versions["automatic_research_version"] = portfolio["automatic_research"]["version"]
+    if (
+        portfolio.get("entry_conditions")
+        or portfolio.get("automatic_research", {}).get("version") == "automatic-entry-conditions-v1"
+    ):
+        versions["entry_conditions_version"] = portfolio.get("entry_conditions", {}).get(
+            "version", "research-entry-conditions-v1"
+        )
     for name in (engine, "optuna") if portfolio.get("optimization") else (engine,):
         if name == "nautilus":
             versions["engine_version"] = runtime["tested_version"]
@@ -364,6 +389,66 @@ def execution_versions(portfolio, recorded=None):
         from research.connectors.optuna_portfolio import ADAPTER_VERSION as OPTUNA_ADAPTER_VERSION
 
         versions.update(optimizer="optuna", optimizer_adapter_version=OPTUNA_ADAPTER_VERSION)
+    stock = portfolio.get("automatic_research", {}).get("version") in (
+        "automatic-hypotheses-v2",
+        "automatic-hypotheses-v3",
+        "automatic-hypotheses-v4",
+        "automatic-hypotheses-v5",
+        "automatic-hypotheses-v6",
+        "automatic-hypotheses-v7",
+    ) or portfolio.get("entry_conditions", {}).get("version") in (
+        "research-stock-entry-conditions-v1",
+        "research-stock-entry-conditions-v2",
+        "research-stock-entry-conditions-v3",
+        "research-joint-entry-conditions-v1",
+    )
+    if stock:
+        versions["stock_features_version"] = "research-stock-features-v1"
+        versions["entry_conditions_version"] = "research-stock-entry-conditions-v1"
+    expanded = (
+        portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v3"
+        or portfolio.get("entry_conditions", {}).get("version")
+        == "research-stock-entry-conditions-v2"
+    )
+    relative = (
+        portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v4"
+        or portfolio.get("entry_conditions", {}).get("version")
+        == "research-stock-entry-conditions-v3"
+    )
+    joint = (
+        portfolio.get("automatic_research", {}).get("version")
+        in ("automatic-hypotheses-v5", "automatic-hypotheses-v6", "automatic-hypotheses-v7")
+        or portfolio.get("entry_conditions", {}).get("version")
+        == "research-joint-entry-conditions-v1"
+    )
+    if expanded or relative or joint:
+        from research.stock_indicators import ENTRY_VERSION, FEATURE_VERSION, runtime_version
+
+        versions.update(
+            entry_conditions_version=ENTRY_VERSION,
+            stock_indicators_version=FEATURE_VERSION,
+            indicator_runtime_version=runtime_version(),
+        )
+    if relative or joint:
+        from research.stock_relative_strength import ENTRY_VERSION, FEATURE_VERSION
+        from research.stock_relative_strength import VERSION as CONTEXT_VERSION
+
+        versions.update(
+            entry_conditions_version=ENTRY_VERSION,
+            stock_features_version=CONTEXT_VERSION,
+            relative_strength_version=FEATURE_VERSION,
+        )
+    if joint:
+        from research.joint_stock_market import ENTRY_VERSION, FEATURE_VERSION
+        from research.regimes import VERSION as REGIME_VERSION
+        from research.stock_market_context import VERSION as CONTEXT_VERSION
+
+        versions.update(
+            entry_conditions_version=ENTRY_VERSION,
+            stock_features_version=CONTEXT_VERSION,
+            joint_stock_market_version=FEATURE_VERSION,
+            market_regimes_version=REGIME_VERSION,
+        )
     if recorded is not None and versions != recorded:
         raise ValueError(
             "This saved run needs its original engine versions. Start a new run to use the current release."

@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { Bar, DataFeed, SeriesMarker } from 'openalgo-charts'
+import { type Bar, type DataFeed, ReplayController, type SeriesMarker } from 'openalgo-charts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SavedTradeChart from './SavedTradeChart'
 import { savedTradeChartFixture } from './savedTradeChartFixture'
@@ -14,10 +14,28 @@ interface StubWidget {
   destroyed: boolean
   chart: Record<string, unknown>
   series: Record<string, unknown>
+  studies: Array<{
+    indicatorId: string
+    settings: () => Record<string, unknown>
+    setSettings: (patch: Record<string, unknown>) => void
+    visible: () => boolean
+    setVisible: (visible: boolean) => void
+    updateLegendValues: () => void
+  }>
+  indicatorSourceSnapshots: Bar[][]
 }
 const harness = vi.hoisted(() => ({
   widgets: [] as StubWidget[],
   props: [] as Record<string, unknown>[],
+  readings: [] as { destroy: ReturnType<typeof vi.fn> }[],
+}))
+
+vi.mock('@/components/chart/mountChartDataWindow', () => ({
+  mountChartDataWindow: () => {
+    const readings = { destroy: vi.fn() }
+    harness.readings.push(readings)
+    return readings
+  },
 }))
 
 vi.mock('@/components/chart/OpenAlgoChart', async () => {
@@ -42,6 +60,8 @@ vi.mock('@/components/chart/OpenAlgoChart', async () => {
           destroyed: false,
           nativeSourceSnapshots: [],
           indicatorReadoutLengths: [],
+          studies: [],
+          indicatorSourceSnapshots: [],
           chart: {},
           series: {},
         }
@@ -60,8 +80,27 @@ vi.mock('@/components/chart/OpenAlgoChart', async () => {
           createMarkers: () => markers,
         }
         widget.chart = {
-          addIndicator: vi.fn(),
+          addIndicator: vi.fn((indicatorId: string, inputs = {}) => {
+            let settings = { ...inputs }
+            let visible = true
+            const study = {
+              indicatorId,
+              settings: () => ({ ...settings }),
+              setSettings: (patch: Record<string, unknown>) => {
+                settings = { ...settings, ...patch }
+              },
+              visible: () => visible,
+              setVisible: (next: boolean) => {
+                visible = next
+              },
+              updateLegendValues: () => widget.indicatorReadoutLengths.push(widget.bars.length),
+            }
+            widget.studies.push(study)
+            widget.indicatorSourceSnapshots.push(widget.bars.slice())
+            return study
+          }),
           indicators: () => [
+            ...widget.studies,
             {
               updateLegendValues: () => {
                 widget.indicatorReadoutLengths.push(widget.bars.length)
@@ -69,6 +108,7 @@ vi.mock('@/components/chart/OpenAlgoChart', async () => {
             },
           ],
           setVisibleLogicalRange: vi.fn(),
+          setTimeFormatter: vi.fn(),
           removePrimitive: () => {
             widget.removed = true
           },
@@ -105,12 +145,165 @@ const latest = () => harness.widgets.at(-1)!
 beforeEach(() => {
   harness.widgets.length = 0
   harness.props.length = 0
+  harness.readings.length = 0
 })
 afterEach(() => {
   vi.useRealTimers()
 })
 
 describe('saved native trade chart', () => {
+  it.each([
+    1, 1000,
+  ])('fits a saved %s-candle range without changing candles or inventing a missing exit', async (length) => {
+    const page = savedTradeChartFixture()
+    page.candles = Array.from({ length }, (_, index) => ({
+      ...page.candles[0],
+      time: page.candles[0].time + index * 86400,
+      timestamp: new Date((page.candles[0].time + index * 86400) * 1000).toISOString().slice(0, 10),
+    }))
+    page.markers = []
+    page.window = { ...page.window, total: length, entry_index: null, exit_index: null }
+    render(<SavedTradeChart page={page} onPage={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Fit candles' })).toBeEnabled())
+    await waitFor(() => expect(latest().chart.setVisibleLogicalRange).toHaveBeenCalled())
+    const fit = vi
+      .mocked(latest().chart.setVisibleLogicalRange as ReturnType<typeof vi.fn>)
+      .mock.calls.at(-1)![0] as { from: number; to: number }
+    expect(fit.from).toBeLessThanOrEqual(0)
+    expect(fit.to).toBeGreaterThanOrEqual(length - 1)
+    expect(fit.to).toBeLessThan(length + 21)
+    expect(latest().bars.map((bar) => bar.time)).toEqual(page.candles.map((bar) => bar.time))
+    expect(latest().markers).toHaveLength(0)
+    if (length === 1) expect(screen.getByRole('button', { name: 'Replay' })).toBeDisabled()
+  })
+
+  it('fits recorded candles on open and fits only the revealed prefix during replay', async () => {
+    const page = savedTradeChartFixture()
+    render(<SavedTradeChart page={page} onPage={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Fit candles' })).toBeEnabled())
+    await waitFor(() =>
+      expect(latest().chart.setVisibleLogicalRange).toHaveBeenLastCalledWith({ from: -1, to: 4 })
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Replay' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Next bar' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: 'Fit candles' }))
+    expect(latest().bars).toHaveLength(2)
+    expect(latest().chart.setVisibleLogicalRange).toHaveBeenLastCalledWith({ from: -1, to: 2 })
+    fireEvent.click(screen.getByRole('button', { name: 'Next bar' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Fit candles' }))
+    expect(latest().chart.setVisibleLogicalRange).toHaveBeenLastCalledWith({ from: -1, to: 3 })
+    expect(screen.queryByText(/108.75/)).not.toBeInTheDocument()
+  })
+
+  it('formats daily coordinates as session dates without modifying recorded bars or execution markers', async () => {
+    const page = savedTradeChartFixture()
+    render(<SavedTradeChart page={page} onPage={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Replay' })).toBeEnabled())
+    const formatter = vi.mocked(latest().chart.setTimeFormatter as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as (time: number) => string
+    expect(formatter(page.candles[1].time)).toBe('23 Jan 2026')
+    expect(latest().bars.map((bar) => bar.time)).toEqual(page.candles.map((bar) => bar.time))
+    expect(latest().markers.map((marker) => marker.time)).toEqual(
+      page.markers.map((marker) => marker.time)
+    )
+    expect(screen.getByText(/Daily chart labels show session dates/)).toBeVisible()
+  })
+
+  it('carries only study preferences across review/replay, recomputing on the loaded prefix and clearing on a new trade', async () => {
+    const page = savedTradeChartFixture()
+    const view = render(<SavedTradeChart page={page} onPage={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Indicators' })).toBeEnabled())
+    await userEvent.click(screen.getByRole('button', { name: 'Indicators' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'EMA', exact: true }))
+    const original = latest()
+    original.studies[0].setSettings({
+      length: 3,
+      source: 'close',
+      color: '#ff0000',
+      'ma:width': 3,
+      'ma:lineStyle': 'dashed',
+    })
+    original.studies[0].setVisible(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Replay' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Next bar' })).toBeEnabled())
+    const replay = latest()
+    expect(original.destroyed).toBe(true)
+    expect(replay.studies).toHaveLength(1)
+    expect(replay.studies[0]).not.toBe(original.studies[0])
+    expect(replay.studies[0].settings()).toEqual(original.studies[0].settings())
+    expect(replay.studies[0].visible()).toBe(false)
+    expect(replay.indicatorSourceSnapshots[0]).toHaveLength(2)
+    expect(replay.indicatorSourceSnapshots[0].map((bar) => bar.time)).toEqual(
+      page.candles.slice(0, 2).map((bar) => bar.time)
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Next bar' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Previous bar' }))
+    expect(replay.indicatorReadoutLengths.at(-1)).toBe(2)
+    fireEvent.click(screen.getAllByRole('button', { name: 'Exit replay' })[0])
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Replay' })).toBeEnabled())
+    await waitFor(() => expect(latest().studies).toHaveLength(1))
+    expect(latest().studies[0].settings()).toEqual(original.studies[0].settings())
+    const restored = latest()
+    view.rerender(
+      <SavedTradeChart
+        page={{
+          ...page,
+          identity: { ...page.identity, trade_index: page.identity.trade_index + 1 },
+        }}
+        onPage={vi.fn()}
+      />
+    )
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Replay' })).toBeEnabled())
+    expect(restored.destroyed).toBe(true)
+    expect(latest().studies).toHaveLength(0)
+  })
+
+  it('opens Values only on request and releases it on close, replay rebuild and unmount', async () => {
+    const page = savedTradeChartFixture()
+    const view = render(<SavedTradeChart page={page} onPage={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Values' })).toBeEnabled())
+    expect(screen.getByRole('button', { name: 'Values' })).toHaveAttribute('aria-expanded', 'false')
+    expect(harness.readings).toHaveLength(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Values' }))
+    expect(screen.getByRole('complementary', { name: 'Saved chart values' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Values' })).toHaveAttribute(
+      'aria-controls',
+      screen.getByRole('complementary').id
+    )
+    expect(harness.readings).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Values' }))
+    expect(harness.readings[0].destroy).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Values' }))
+    const reviewReadings = harness.readings.at(-1)!
+    fireEvent.click(screen.getByRole('button', { name: 'Replay' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Next bar' })).toBeEnabled())
+    expect(reviewReadings.destroy).toHaveBeenCalledTimes(1)
+    expect(harness.readings.at(-1)).not.toBe(reviewReadings)
+    const replayReadings = harness.readings.at(-1)!
+    view.unmount()
+    expect(replayReadings.destroy).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps native replay on observed completed candles without simulated intrabar prices', async () => {
+    const state = vi.spyOn(ReplayController.prototype, 'state')
+    try {
+      const page = savedTradeChartFixture()
+      render(<SavedTradeChart page={page} onPage={vi.fn()} />)
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Replay' })).toBeEnabled())
+      fireEvent.click(screen.getByRole('button', { name: 'Replay' }))
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Next bar' })).toBeEnabled())
+      fireEvent.click(screen.getByRole('button', { name: 'Next bar' }))
+      expect(state).toHaveBeenCalled()
+      expect(state.mock.results.every((result) => result.value?.simulated === false)).toBe(true)
+      expect(latest().bars.map((bar) => bar.close)).toEqual(
+        page.candles.slice(0, 3).map((bar) => bar.close)
+      )
+    } finally {
+      state.mockRestore()
+    }
+  })
+
   it('only offers volume studies when every saved candle retains volume', async () => {
     const user = userEvent.setup()
     const page = savedTradeChartFixture()
@@ -176,6 +369,11 @@ describe('saved native trade chart', () => {
     expect(latest().bars).toHaveLength(3)
     expect(latest().nativeSourceSnapshots.at(-1)).toHaveLength(3)
     expect(latest().indicatorReadoutLengths.at(-1)).toBe(3)
+    expect(latest().chart.emit).toHaveBeenLastCalledWith('crosshair:readout', {
+      index: 2,
+      point: null,
+      time: page.candles[2].time,
+    })
     expect(latest().markers).toHaveLength(1)
     expect(screen.queryByText(/108.75/)).not.toBeInTheDocument()
   })

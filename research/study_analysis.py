@@ -6,12 +6,121 @@ The caller is the research calculation worker, never the web request process.
 
 import json
 import math
+import re
 from datetime import datetime
 
 VERSION = "research-analysis-v1"
 MAX_TRIALS = 1000
-MAX_AXES = 56
+MAX_AXES = 57
 MAX_FIGURE_BYTES = 8 * 1024 * 1024
+# fANOVA integrates all one-hot dimensions of a categorical parameter jointly.
+# Its tree midpoint Cartesian product can grow exponentially with the category
+# count. Bound admission before fitting; proposal count alone does not bound it.
+MAX_FANOVA_CATEGORIES = 8
+
+
+def _trailing_axes(experiment):
+    """Admit only the frozen, finite atomic states of the v6 recipe."""
+    specification = experiment.get("trailing_research")
+    if specification is None:
+        return {}
+    from research.automatic_trailing import VERSION as TRAILING_VERSION
+    from research.connectors.optuna_portfolio import _axis, _values
+
+    if (
+        experiment.get("experiment_version")
+        not in ("automatic-hypotheses-v6", "automatic-hypotheses-v7")
+        or not isinstance(specification, dict)
+        or specification.get("version") != TRAILING_VERSION
+        or not isinstance(specification.get("strategies"), list)
+        or not 1 <= len(specification["strategies"]) <= 8
+    ):
+        raise ValueError("Invalid recorded trailing research contract")
+    result = {}
+    for row in specification["strategies"]:
+        if (
+            not isinstance(row, dict)
+            or not isinstance(row.get("id"), str)
+            or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", row["id"])
+        ):
+            raise ValueError("Invalid recorded trailing strategy")
+        name = f"{row['id']}.trailing_choice"
+        domain = _axis("trailing_pct", row.get("domain"))
+        choices = row.get("choices")
+        if (
+            name in result
+            or domain["min"] <= 0
+            or not isinstance(choices, list)
+            or not 2 <= len(choices) <= 8
+            or any(type(value) not in (int, float) or not math.isfinite(value) for value in choices)
+            or choices != [0.0, *_values(domain)]
+        ):
+            raise ValueError("Invalid recorded conditional trailing choices")
+        result[name] = {"type": "categorical", "choices": choices}
+    return result
+
+
+def _timing_axes(experiment):
+    """Read only finite, frozen native clock states; never infer a new clock."""
+    specification = experiment.get("timing_research")
+    if specification is None:
+        return {}
+    from research.automatic_timing import VERSION as TIMING_VERSION
+    from research.engine import validate_config
+
+    if (
+        experiment.get("experiment_version") != "automatic-hypotheses-v7"
+        or not isinstance(specification, dict)
+        or specification.get("version") != TIMING_VERSION
+        or specification.get("interval") not in ("D", "1m")
+        or not isinstance(specification.get("strategies"), list)
+        or not 1 <= len(specification["strategies"]) <= 8
+    ):
+        raise ValueError("Invalid recorded timing research contract")
+    result = {}
+    for row in specification["strategies"]:
+        if (
+            not isinstance(row, dict)
+            or not isinstance(row.get("id"), str)
+            or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", row["id"])
+            or not isinstance(row.get("original"), dict)
+            or set(row["original"]) - {"entry_time", "exit_time"}
+            or not isinstance(row.get("branches"), list)
+            or not 1 <= len(row["branches"]) <= 4
+        ):
+            raise ValueError("Invalid recorded timing strategy")
+        name = f"{row['id']}.timing_choice"
+        choices = []
+        for branch in row["branches"]:
+            if (
+                not isinstance(branch, dict)
+                or set(branch) != {"id", "label", "changes"}
+                or not isinstance(branch["id"], str)
+                or not re.fullmatch(r"original|(?:entry|exit)_[0-9]{4}", branch["id"])
+                or not isinstance(branch["label"], str)
+                or len(branch["label"]) > 80
+                or not isinstance(branch["changes"], dict)
+                or set(branch["changes"]) - {"entry_time", "exit_time"}
+                or (branch["id"] == "original" and branch["changes"])
+                or (branch["id"] != "original" and len(branch["changes"]) != 1)
+            ):
+                raise ValueError("Invalid recorded timing choice")
+            if branch["id"] != "original":
+                key = "entry_time" if branch["id"].startswith("entry_") else "exit_time"
+                clock = branch["id"].split("_", 1)[1]
+                if branch["changes"] != {key: f"{clock[:2]}:{clock[2:]}"}:
+                    raise ValueError("Recorded timing clock differs from its registered identity")
+            validate_config({**row["original"], **branch["changes"]})
+            choices.append(branch["id"])
+        if (
+            name in result
+            or choices[0] != "original"
+            or len(set(choices)) != len(choices)
+            or (specification["interval"] == "D" and choices != ["original"])
+        ):
+            raise ValueError("Invalid recorded timing choices")
+        result[name] = {"type": "categorical", "choices": choices}
+    return result
 
 
 def reconstruct_study(experiment):
@@ -23,9 +132,36 @@ def reconstruct_study(experiment):
         raise ValueError("Study analysis supports at most 1,000 recorded proposals")
     if not isinstance(axes, dict) or len(axes) > MAX_AXES:
         raise ValueError("Invalid recorded study parameter space")
+    trailing_axes = _trailing_axes(experiment)
+    if any(axes.get(name) != axis for name, axis in trailing_axes.items()):
+        raise ValueError("Recorded trailing parameters differ from their frozen contract")
+    timing_axes = _timing_axes(experiment)
+    if any(axes.get(name) != axis for name, axis in timing_axes.items()):
+        raise ValueError("Recorded timing parameters differ from their frozen contract")
+    if any(name.endswith(".timing_choice") and name not in timing_axes for name in axes):
+        raise ValueError("Recorded timing parameters need their frozen contract")
     distributions = {}
     for name, axis in axes.items():
-        if name.rsplit(".", 1)[-1] in ("hold_sessions", "hold_minutes"):
+        if axis.get("type") == "categorical":
+            choices = axis.get("choices")
+            limit = 32
+            if name == "hypothesis":
+                from research.joint_stock_market import catalog
+
+                if choices == [row["id"] for row in catalog()]:
+                    limit = 92
+            if (
+                not isinstance(choices, list)
+                or not 1 <= len(choices) <= limit
+                or (
+                    name not in trailing_axes
+                    and any(not isinstance(value, str) for value in choices)
+                )
+                or len(set(choices)) != len(choices)
+            ):
+                raise ValueError("Invalid bounded categorical study parameter")
+            distributions[name] = optuna.distributions.CategoricalDistribution(choices)
+        elif name.rsplit(".", 1)[-1] in ("hold_sessions", "hold_minutes"):
             distributions[name] = optuna.distributions.IntDistribution(
                 int(axis["min"]), int(axis["max"]), step=int(axis["step"])
             )
@@ -122,6 +258,19 @@ def build_study_analysis(experiment, *, parameters=None, progress=None):
 
     empty = None if completed else "This study needs a completed trial."
     need_params = empty or (None if params else "This study has no searched parameters.")
+    large_categories = [
+        (name, len(axis["choices"]))
+        for name, axis in axes.items()
+        if axis.get("type") == "categorical" and len(axis["choices"]) > MAX_FANOVA_CATEGORIES
+    ]
+    importance_limit = (
+        "Parameter importance is unavailable: native fANOVA is limited to "
+        f"{MAX_FANOVA_CATEGORIES} choices per categorical parameter to keep report preparation bounded. "
+        + "; ".join(f"{name}: {count} choices" for name, count in large_categories)
+        + ". Other study charts and saved calculation results remain available."
+        if large_categories
+        else None
+    )
     need_pair = empty or (
         None
         if len(params) == 2 and all(p in varied for p in params)
@@ -142,6 +291,7 @@ def build_study_analysis(experiment, *, parameters=None, progress=None):
             target_name=target_name,
         ),
         empty
+        or importance_limit
         or (
             None
             if len(completed) >= 3 and varied and len({t.value for t in completed}) > 1
@@ -191,7 +341,7 @@ def build_study_analysis(experiment, *, parameters=None, progress=None):
         lambda: visual.plot_timeline(study),
         None
         if timed
-        else "This older study did not record trial start and finish times. New studies include them.",
+        else "This recorded study does not include original trial start and finish times.",
     )
     add(
         "intermediate",
@@ -220,7 +370,9 @@ def build_study_analysis(experiment, *, parameters=None, progress=None):
         "basis": [
             f"Optuna {optuna.__version__} native visualizations; recorded proposals and objective scores.",
             "Repeated proposals and rejected allocations remain in the study. No trial was rerun.",
-            "Parameter importance uses seeded fANOVA (32 trees, depth 8); it describes this search, not future performance.",
+            "Parameter importance, when available, uses seeded fANOVA (32 trees, depth 8); "
+            f"categorical parameters above {MAX_FANOVA_CATEGORIES} choices are not estimated. "
+            "It describes this search, not future performance.",
             "Timeline uses the original calculation runtime's local clock where recorded.",
         ],
         "parameters": params,

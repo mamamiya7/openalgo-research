@@ -14,8 +14,64 @@ from research import portfolio as contract
 from services import scanner_research_service as service
 
 
+def _same_wire_value(actual, expected):
+    """JSON has one number type; Python evidence keeps its canonical representation."""
+    from math import isfinite
+
+    if type(actual) in (int, float) and type(expected) in (int, float):
+        return actual == expected and isfinite(actual) and isfinite(expected)
+    if type(actual) is not type(expected):
+        return False
+    if isinstance(expected, dict):
+        return actual.keys() == expected.keys() and all(
+            _same_wire_value(actual[key], value) for key, value in expected.items()
+        )
+    if isinstance(expected, list):
+        return len(actual) == len(expected) and all(
+            _same_wire_value(a, b) for a, b in zip(actual, expected, strict=True)
+        )
+    return actual == expected
+
+
+def _canonical_condition_request(request):
+    """Admit an exact registered rule after a browser's numeric JSON round trip.
+
+    Restoring 60 to the registered 60.0 is a transport conversion, not a different
+    hypothesis. Global fingerprint and saved-recipe validation remain strict.
+    Unknown rules, booleans, extra fields and changed values are never repaired.
+    """
+    if not isinstance(request, dict):
+        return request
+    condition = request.get("entry_conditions")
+    from research.entry_conditions import STOCK_VERSIONS, stock_module
+
+    if (
+        not isinstance(condition, dict)
+        or set(condition) != {"version", "hypothesis"}
+        or condition.get("version") not in STOCK_VERSIONS
+    ):
+        return request
+    for expected in stock_module(condition["version"]).catalog():
+        if _same_wire_value(condition["hypothesis"], expected):
+            canonical = dict(request)
+            canonical["entry_conditions"] = {**condition, "hypothesis": expected}
+            rows = request.get("strategies")
+            if isinstance(rows, list):
+                canonical["strategies"] = []
+                for row in rows:
+                    if isinstance(row, dict) and "entry_condition" in row:
+                        if not _same_wire_value(
+                            row["entry_condition"], canonical["entry_conditions"]
+                        ):
+                            raise ValueError("The saved strategy entry condition changed")
+                        row = {**row, "entry_condition": deepcopy(canonical["entry_conditions"])}
+                    canonical["strategies"].append(row)
+            return canonical
+    return request
+
+
 def resolve_inputs(store, owner, request):
-    portfolio = contract.normalize(request)
+    portfolio = contract.normalize(_canonical_condition_request(request))
     versions = contract.execution_versions(portfolio)
     strategies, signals, input_rows = [], [], 0
     first, last = portfolio.get("date_from", ""), portfolio.get("date_to", "9999-12-31")
@@ -51,6 +107,25 @@ def resolve_inputs(store, owner, request):
         "input_type": "portfolio",
         "warnings": [],
     }
+    if portfolio.get("automatic_research"):
+        from research.automatic_protocol import check_signal_span
+
+        check_signal_span(portfolio, receipt, interval=interval)
+        if (
+            portfolio["automatic_research"]["version"]
+            in (
+                "automatic-hypotheses-v2",
+                "automatic-hypotheses-v3",
+                "automatic-hypotheses-v4",
+                "automatic-hypotheses-v5",
+                "automatic-hypotheses-v6",
+                "automatic-hypotheses-v7",
+            )
+            and receipt["symbol_count"] > 200
+        ):
+            raise ValueError(
+                "Smart research supports at most 200 NSE stocks; shorten the source universe"
+            )
     result = {
         "portfolio": portfolio,
         "strategies": strategies,
@@ -77,12 +152,28 @@ def resolve_inputs(store, owner, request):
 
 def preview(store, owner, request):
     evidence = resolve_inputs(store, owner, request)
+    from research.timing_admission import build_admission
+
+    timing = build_admission(
+        evidence["portfolio"],
+        evidence["strategies"],
+        interval=evidence["snapshot"]["provenance"]["interval"],
+    )
+    automatic_plan = {}
+    if evidence["portfolio"].get("automatic_research"):
+        from services.research_automatic_catalog import build_plan
+
+        automatic_plan["automatic_plan"] = build_plan(
+            evidence["portfolio"], interval=evidence["snapshot"]["provenance"]["interval"]
+        )
     return {
         "portfolio": evidence["portfolio"],
         "receipt": evidence["receipt"],
         "interval": evidence["snapshot"]["provenance"]["interval"],
         "versions": evidence["versions"],
+        "timing_admission": timing,
         **({"period_plan": evidence["period_plan"]} if evidence.get("period_plan") else {}),
+        **automatic_plan,
     }
 
 
@@ -185,6 +276,11 @@ def replay_inputs(store, owner, job_id, *, trial_id=None, period="selection"):
         verify(store, evidence)
         if trial_id is not None or period != "selection":
             raise ValueError("Replay this saved condition test on its recorded period")
+    if (
+        period == "evaluation"
+        and evidence.get("automatic_recipe", {}).get("validation_mode") == "exploratory_only"
+    ):
+        raise ValueError("This exploratory study has no untouched later period")
     has_split = bool(
         evidence.get("portfolio", {}).get("validation")
         or evidence.get("portfolio", {}).get("automatic_research")
@@ -221,9 +317,31 @@ def replay_inputs(store, owner, job_id, *, trial_id=None, period="selection"):
     portfolio.pop("optimization", None)
     portfolio.pop("validation", None)
     portfolio.pop("automatic_research", None)
+    selected_conditions = (
+        report.get("entry_conditions")
+        if (trial_id is None or not report.get("automatic_research"))
+        else None
+    )
+    if report.get("automatic_research", {}).get("version") in (
+        "automatic-hypotheses-v2",
+        "automatic-hypotheses-v3",
+        "automatic-hypotheses-v4",
+        "automatic-hypotheses-v5",
+        "automatic-hypotheses-v6",
+        "automatic-hypotheses-v7",
+    ):
+        marker = selected[0].get("entry_condition")
+        selected_conditions = deepcopy(marker) if marker else None
+    if selected_conditions:
+        portfolio["entry_conditions"] = deepcopy(selected_conditions)
+    else:
+        portfolio.pop("entry_conditions", None)
     for item in portfolio["strategies"]:
         chosen = definitions[item["id"]]
         item.update(config=chosen["config"], allocation_pct=chosen["allocation_pct"], search={})
+        item.pop("entry_condition", None)
+        if chosen.get("entry_condition"):
+            item["entry_condition"] = deepcopy(chosen["entry_condition"])
     portfolio = contract.normalize(portfolio)
     versions = contract.execution_versions(portfolio)
     if any(evidence["versions"].get(key) != value for key, value in versions.items()):
@@ -246,7 +364,7 @@ def replay_inputs(store, owner, job_id, *, trial_id=None, period="selection"):
                 {
                     "study_job_id": job.id,
                     "trial_number": selected_row["trial_number"],
-                    "is_objective_winner": study.get("recommendation_id") == config_id,
+                    "is_objective_winner": study.get("objective_winner_id", study.get("recommendation_id")) == config_id,
                 }
                 if selected_row is not None
                 else {
@@ -298,7 +416,7 @@ def validate_submission(evidence, kind, spec):
 
 
 def _prepare_prices(
-    store, owner, evidence, *, saved, checkpoint, progress, cancelled, activity=None
+    store, owner, evidence, *, saved, checkpoint, progress, cancelled, activity=None, calendar=None
 ):
     from services.research_acquisition import _save_receipt, acquisition_receipts
     from services.research_checkpoint import MinuteCheckpointWriter, unpack_checkpoint
@@ -315,7 +433,7 @@ def _prepare_prices(
     writer = MinuteCheckpointWriter(store, receipts_dir, saved)
     restored = unpack_checkpoint(store, saved) if saved else None
     reference_id = restored.get("reference_artifact") if restored else None
-    calendar = (
+    calendar = calendar or (
         service.read_artifact(store, reference_id)
         if reference_id
         else native_calendar_snapshot(
@@ -441,6 +559,110 @@ def _prepare_prices(
     return prepared
 
 
+def _prepare_automatic_timing(
+    store, owner, evidence, *, saved, checkpoint, progress, cancelled, activity=None
+):
+    """Resolve actual exchange hours once, then acquire the v7 clock union once."""
+    from research.automatic_protocol import compile_recipe
+    from research.timing_search import build_union, propose
+    from services.research_native_calendar import native_calendar_snapshot
+    from services.research_timing_prices import PHASE, READY_PHASE
+    from services.research_timing_prices import prepare as prepare_union
+
+    if contract.interval_for(evidence["portfolio"], evidence["strategies"]) == "D":
+        return _prepare_prices(
+            store,
+            owner,
+            evidence,
+            saved=saved,
+            checkpoint=checkpoint,
+            progress=progress,
+            cancelled=cancelled,
+            activity=activity,
+        )
+
+    def complete(sessions, hours):
+        native = {
+            "sessions": sessions,
+            "session_hours": hours,
+            "provenance": {"exchange": "NSE", "calendar_basis": "openalgo-market-calendar-v1"},
+        }
+        return propose(evidence["portfolio"], evidence["strategies"], native)["status"] in (
+            "ready",
+            "not_applicable",
+        )
+
+    reference_id = (saved or {}).get("reference_artifact")
+    calendar = (
+        service.read_artifact(store, reference_id)
+        if reference_id
+        else native_calendar_snapshot(
+            evidence["signals"],
+            warmup_sessions=0,
+            tail_sessions=contract.calendar_tail_sessions(
+                evidence["portfolio"], evidence["strategies"]
+            ),
+            completion_check=complete,
+        )
+    )
+    if reference_id:
+        from research.calendar_coverage import check_saved_calendar
+
+        check_saved_calendar(calendar)
+    descriptor = propose(evidence["portfolio"], evidence["strategies"], calendar)
+    if descriptor["status"] == "not_applicable":
+        if saved and saved.get("phase") in (PHASE, READY_PHASE):
+            raise ValueError("Saved timing union no longer matches the native clock choices")
+        prepared = _prepare_prices(
+            store,
+            owner,
+            evidence,
+            saved=saved,
+            checkpoint=checkpoint,
+            progress=progress,
+            cancelled=cancelled,
+            activity=activity,
+            calendar=calendar,
+        )
+        return {
+            **prepared,
+            "timing_descriptor": propose(
+                prepared["portfolio"], prepared["strategies"], prepared["snapshot"]
+            ),
+        }
+    if descriptor["status"] != "ready":
+        raise ValueError(descriptor.get("reason") or "Native timing history is incomplete")
+    plan = build_union(evidence["portfolio"], evidence["strategies"], calendar, descriptor)
+    # Admission is price independent; fail before broker work for invalid history.
+    compile_recipe(
+        {
+            **evidence,
+            "timing_descriptor": descriptor,
+            "timing_union": plan,
+            "snapshot": {**calendar, "provenance": {**calendar["provenance"], "interval": "1m"}},
+        }
+    )
+    return prepare_union(
+        store,
+        owner,
+        evidence,
+        calendar,
+        descriptor=descriptor,
+        saved=saved,
+        checkpoint=lambda state, counts: checkpoint(
+            state,
+            {
+                **counts,
+                "completed": 0.6 * counts["completed"],
+                "stage": "prices",
+            },
+        ),
+        progress=progress,
+        cancelled=cancelled,
+        activity=activity,
+    )
+
+
 def run(
     store,
     owner,
@@ -454,6 +676,8 @@ def run(
     activity=None,
     observe=None,
     boundary=None,
+    job_id=None,
+    defer_study_analysis=False,
 ):
     validate_submission(
         evidence,
@@ -463,7 +687,13 @@ def run(
     portfolio = evidence["portfolio"]
     if activity:
         activity({"stage": "planning"})
-    if saved and saved.get("phase") == "calculation":
+    if saved and saved.get("phase") in (
+        "calculation",
+        "condition_prices",
+        "stock_feature_prices",
+        "stock_context_prices",
+        "stock_market_context_prices",
+    ):
         evidence = service.read_artifact(store, saved["inputs_artifact"])
         if evidence["portfolio"] != portfolio or evidence["versions"] != spec["versions"]:
             raise ValueError("Saved calculation inputs do not match this portfolio")
@@ -495,7 +725,12 @@ def run(
             {"completed": 60, "total": 100, "stage": "backtest"},
         )
     else:
-        evidence = _prepare_prices(
+        prepare_prices = (
+            _prepare_automatic_timing
+            if portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v7"
+            else _prepare_prices
+        )
+        evidence = prepare_prices(
             store,
             owner,
             evidence,
@@ -512,6 +747,107 @@ def run(
         inputs_id = service.save_artifact(store, evidence)
         checkpoint(
             {"phase": "calculation", "inputs_artifact": inputs_id, "calculation": None},
+            {"completed": 60, "total": 100, "stage": "backtest"},
+        )
+    from research.automatic_protocol import (
+        CONDITION_VERSION,
+        HYPOTHESIS_VERSIONS,
+        STABILITY_VERSION,
+    )
+
+    stock_condition = portfolio.get("entry_conditions", {}).get("version") in (
+        "research-stock-entry-conditions-v1",
+        "research-stock-entry-conditions-v2",
+        "research-stock-entry-conditions-v3",
+        "research-joint-entry-conditions-v1",
+    )
+    needs_stock = (
+        stock_condition
+        or portfolio.get("automatic_research", {}).get("version") in HYPOTHESIS_VERSIONS
+    )
+    if needs_stock:
+        from services.research_stock_features import prepare_context as prepare_stock
+
+        stock_saved = saved
+        if (
+            portfolio.get("automatic_research", {}).get("version")
+            in ("automatic-hypotheses-v5", "automatic-hypotheses-v6", "automatic-hypotheses-v7")
+            or portfolio.get("entry_conditions", {}).get("version")
+            == "research-joint-entry-conditions-v1"
+        ):
+            from services.research_stock_market_context import prepare_context as prepare_stock
+
+            if stock_saved and stock_saved.get("phase") not in (
+                "stock_market_context_prices",
+                "calculation",
+            ):
+                stock_saved = None
+        elif (
+            portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v4"
+            or portfolio.get("entry_conditions", {}).get("version")
+            == "research-stock-entry-conditions-v3"
+        ):
+            from services.research_stock_context import prepare_context as prepare_stock
+
+            # Execution acquisition has finished. Only this context's own durable
+            # phase or a calculation checkpoint belongs to the context wrapper.
+            if stock_saved and stock_saved.get("phase") not in (
+                "stock_context_prices",
+                "calculation",
+            ):
+                stock_saved = None
+
+        evidence = prepare_stock(
+            store,
+            owner,
+            evidence,
+            saved=stock_saved,
+            checkpoint=checkpoint,
+            progress=progress,
+            cancelled=cancelled,
+            activity=activity,
+        )
+        if portfolio.get("automatic_research"):
+            from research.automatic_protocol import compile_recipe
+
+            evidence["automatic_recipe"] = compile_recipe(evidence)
+        inputs_id = service.save_artifact(store, evidence)
+        checkpoint(
+            {
+                "phase": "calculation",
+                "inputs_artifact": inputs_id,
+                "calculation": (saved or {}).get("calculation"),
+            },
+            {"completed": 60, "total": 100, "stage": "optimization"},
+        )
+    needs_conditions = (
+        bool(portfolio.get("entry_conditions"))
+        and not stock_condition
+        or (portfolio.get("automatic_research", {}).get("version") == CONDITION_VERSION)
+    )
+    if needs_conditions:
+        from services.research_entry_conditions import prepare_context
+
+        evidence = prepare_context(
+            store,
+            owner,
+            evidence,
+            saved=saved,
+            checkpoint=checkpoint,
+            progress=progress,
+            cancelled=cancelled,
+        )
+        if portfolio.get("automatic_research"):
+            from research.automatic_protocol import compile_recipe
+
+            evidence["automatic_recipe"] = compile_recipe(evidence)
+        inputs_id = service.save_artifact(store, evidence)
+        checkpoint(
+            {
+                "phase": "calculation",
+                "inputs_artifact": inputs_id,
+                "calculation": (saved or {}).get("calculation"),
+            },
             {"completed": 60, "total": 100, "stage": "backtest"},
         )
     if boundary:
@@ -535,7 +871,30 @@ def run(
         from research.connectors.vectorbt_portfolio import evaluate
 
     if portfolio.get("automatic_research"):
-        from research.automatic_research import run as automatic_run
+        if portfolio["automatic_research"]["version"] in HYPOTHESIS_VERSIONS:
+            from research.automatic_hypotheses import run as automatic_run
+            from services.research_automatic_periods import claim
+
+            if not job_id:
+                raise ValueError("Smart research needs its durable job identity")
+            if evidence["automatic_recipe"]["validation_mode"] != "exploratory_only":
+                claim(store, owner, inputs_id, evidence, job_id)
+        elif portfolio["automatic_research"]["version"] == CONDITION_VERSION:
+            from research.automatic_conditions import run as automatic_run
+            from services.research_automatic_periods import claim
+
+            if not job_id:
+                raise ValueError("Automatic condition research needs its durable job identity")
+            claim(store, owner, inputs_id, evidence, job_id)
+        else:
+            from research.automatic_research import run as automatic_run
+
+            if portfolio["automatic_research"]["version"] == STABILITY_VERSION:
+                from services.research_automatic_periods import claim
+
+                if not job_id:
+                    raise ValueError("Automatic stability research needs its durable job identity")
+                claim(store, owner, inputs_id, evidence, job_id)
 
         def persist_automatic(state, counts):
             checkpoint(
@@ -558,6 +917,7 @@ def run(
             activity=activity,
             observe=observe,
             boundary=boundary,
+            defer_study_analysis=defer_study_analysis,
         )
         return result, evidence
 
@@ -587,6 +947,30 @@ def run(
                 "status": "reserved",
             }
             validation_evidence = None
+
+    if portfolio.get("entry_conditions"):
+        from research.entry_conditions import apply
+
+        context = (
+            evidence["automatic_stock_market_context"]
+            if portfolio["entry_conditions"]["version"] == "research-joint-entry-conditions-v1"
+            else evidence["automatic_stock_features"]
+            if stock_condition
+            else evidence["entry_condition_market"]
+        )
+        calculation_evidence = apply(calculation_evidence, context)
+        if validation_evidence is not None:
+            validation_evidence = apply(validation_evidence, context)
+        native_evaluate = evaluate
+
+        def evaluate(rows, snapshot, amount, progress=None):
+            from research.entry_conditions import markers
+
+            calculated = native_evaluate(rows, snapshot, amount, progress=progress)
+            calculated["strategies"] = markers(
+                calculated["strategies"], portfolio["entry_conditions"]
+            )
+            return calculated
 
     from research.evaluation_basis import build_evaluation_basis
 
@@ -660,11 +1044,16 @@ def run(
         )
         if boundary:
             boundary()
-        from research.study_analysis import build_study_analysis
+        if defer_study_analysis:
+            from research.study_diagnostics import deferred
 
-        result["experiment"]["study_analysis"] = build_study_analysis(
-            result["experiment"], progress=check_control
-        )
+            result["experiment"]["diagnostics"] = deferred()
+        else:
+            from research.study_analysis import build_study_analysis
+
+            result["experiment"]["study_analysis"] = build_study_analysis(
+                result["experiment"], progress=check_control
+            )
         # Every candidate uses the same prepared cohort and price observations.
         # Compact rows reference the study-level basis instead of copying it.
         result["experiment"]["evaluation_basis_id"] = calculation_basis["evidence_id"]
@@ -738,6 +1127,12 @@ def run(
             later["analysis"] = add_price_charts(
                 later["analysis"], later, validation_evidence["snapshot"]
             )
+    if portfolio.get("entry_conditions"):
+        from research.entry_conditions import enrich
+
+        enrich(result, calculation_evidence)
+        if validation_evidence is not None:
+            enrich(result["validation"]["result"], validation_evidence)
     if evidence.get("candidate_report"):
         from services.research_candidates import verify_reconstruction
 

@@ -2,8 +2,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { Pause, Play } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { type PortfolioJob, type PortfolioSource, portfolioResearch } from '@/api/portfolioResearch'
+import { PartialStudy } from '@/components/research/PartialStudy'
 import {
   addPortfolioSource,
   freshPortfolioDraft,
@@ -16,6 +17,7 @@ import { PortfolioResults } from '@/components/research/PortfolioResults'
 import {
   ResearchRunProgress,
   type ResearchUploadActivity,
+  researchRecoveryActions,
 } from '@/components/research/ResearchRunProgress'
 import { StudyActivity } from '@/components/research/StudyActivity'
 import { Button } from '@/components/ui/button'
@@ -112,6 +114,7 @@ export default function PortfolioResearch({
       period?: 'selection' | 'evaluation'
     ) => Promise<PortfolioJob>
     onJobUpdate?: (job: PortfolioJob) => void
+    onRecoverSetup?: (job: PortfolioJob, signal: AbortSignal) => Promise<void>
     disabled?: boolean
     readOnly?: boolean
   }
@@ -130,6 +133,7 @@ export default function PortfolioResearch({
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [activityIdentity, setActivityIdentity] = useState<string | null>(null)
+  const [partialIdentity, setPartialIdentity] = useState<string | null>(null)
   const reportRequest = useRef<AbortController | null>(null)
   const actionRequest = useRef<AbortController | null>(null)
   const actionKey = JSON.stringify([owner, jobId, Boolean(workspace?.readOnly)])
@@ -139,6 +143,7 @@ export default function PortfolioResearch({
   useEffect(() => {
     setBusy(false)
     setError(null)
+    setPartialIdentity(null)
     return () => {
       actionRequest.current?.abort()
       actionRequest.current = null
@@ -378,7 +383,40 @@ export default function PortfolioResearch({
     changeDraft(freshPortfolioDraft())
     setParams({})
   }
-  function editSetup() {
+  async function editSetup() {
+    if (current.data && current.data.status !== 'completed') {
+      if (actionRequest.current) return
+      const request = new AbortController()
+      const identity = actionKey
+      actionRequest.current = request
+      const stillCurrent = () =>
+        !request.signal.aborted &&
+        actionRequest.current === request &&
+        actionIdentity.current === identity
+      setBusy(true)
+      setError(null)
+      try {
+        if (workspace?.onRecoverSetup) await workspace.onRecoverSetup(current.data, request.signal)
+        else {
+          // No completed result exists to replay. Do not call fromJob or replace
+          // an unrelated browser draft with an unverified failed-run payload.
+          const next = new URLSearchParams(params)
+          next.delete('job')
+          next.delete('report')
+          next.delete('return_job')
+          if (workspace?.experimentId) next.set('view', 'setup')
+          setParams(next)
+        }
+      } catch (cause) {
+        if (stillCurrent()) setError(message(cause))
+      } finally {
+        if (stillCurrent()) {
+          actionRequest.current = null
+          setBusy(false)
+        }
+      }
+      return
+    }
     if (onUseSetup && current.data) {
       void reuseSetup('backtest')
       return
@@ -410,7 +448,11 @@ export default function PortfolioResearch({
   const visibleError =
     error ??
     (current.error ? message(current.error) : null) ??
-    (job?.error && job.status !== 'completed' ? job.error : null)
+    (job?.error && job.status !== 'completed' && job.failure?.version !== 'research-failure-v1'
+      ? job.error
+      : null)
+  const recoveryActions = job ? researchRecoveryActions(job) : []
+  const hasLinkedSetup = Boolean(job?.display?.setup?.id && workspace?.onRecoverSetup)
   const savedRows =
     saved.data?.items.filter((item) => (earlier ? !isPortfolio(item) : isPortfolio(item))) ?? []
   const Container = workspace ? 'section' : 'main'
@@ -420,11 +462,6 @@ export default function PortfolioResearch({
         workspace ? 'space-y-3' : 'mx-auto w-full max-w-6xl space-y-7 px-4 py-6 sm:px-6 sm:py-8'
       }
     >
-      <style>
-        {
-          '@media (prefers-reduced-motion: reduce) { [data-slot="sheet-overlay"], [data-slot="sheet-content"], [data-slot="dialog-overlay"], [data-slot="dialog-content"] { animation: none !important; transition: none !important; } }'
-        }
-      </style>
       {!workspace && params.get('return_job') && (
         <Button
           variant="ghost"
@@ -479,6 +516,7 @@ export default function PortfolioResearch({
             void run()
           }}
           busy={busy || workspace?.disabled === true}
+          submitting={busy}
           uploading={uploading}
           uploadActivity={uploadActivity}
           capabilities={capabilities.data}
@@ -603,7 +641,7 @@ export default function PortfolioResearch({
               </>
             ) : (
               <>
-                {job.resumable && !workspace?.readOnly && (
+                {recoveryActions.includes('resume') && !workspace?.readOnly && (
                   <Button
                     type="button"
                     disabled={busy}
@@ -615,11 +653,31 @@ export default function PortfolioResearch({
                     Resume run
                   </Button>
                 )}
-                {!workspace?.readOnly && (
-                  <Button type="button" variant="outline" onClick={editSetup}>
-                    Edit setup
+                {recoveryActions.includes('reconnect_broker') && !workspace?.readOnly && (
+                  <Button variant="outline" asChild>
+                    <Link to="/broker" target="_blank" rel="noopener noreferrer">
+                      Reconnect broker
+                    </Link>
                   </Button>
                 )}
+                {!workspace?.readOnly &&
+                  (recoveryActions.includes('new_run') ||
+                    recoveryActions.includes('edit_setup')) && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => {
+                        void editSetup()
+                      }}
+                    >
+                      {hasLinkedSetup
+                        ? recoveryActions.includes('new_run')
+                          ? 'Prepare new run'
+                          : 'Edit setup'
+                        : 'Open current setup'}
+                    </Button>
+                  )}
               </>
             )}
             {job.kind === 'portfolio_optimize' && (
@@ -639,7 +697,40 @@ export default function PortfolioResearch({
                 Activity
               </Button>
             )}
+            {job.kind === 'portfolio_optimize' &&
+              ['paused', 'interrupted', 'cancelled', 'failed'].includes(job.status) && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  aria-expanded={partialIdentity === JSON.stringify([owner, job.id, job.status])}
+                  aria-controls="portfolio-saved-trials"
+                  onClick={() =>
+                    setPartialIdentity((previous) =>
+                      previous === JSON.stringify([owner, job.id, job.status])
+                        ? null
+                        : JSON.stringify([owner, job.id, job.status])
+                    )
+                  }
+                >
+                  Saved trials
+                </Button>
+              )}
           </div>
+          {!active(job.status) &&
+            !workspace?.readOnly &&
+            (recoveryActions.includes('new_run') || recoveryActions.includes('edit_setup')) && (
+              <p className="text-xs text-muted-foreground">
+                {hasLinkedSetup
+                  ? 'Review the saved setup, then start a separate run. Your existing draft and this stopped run are preserved.'
+                  : 'This run has no linked setup version. Open your current setup to review it; this run’s settings will not replace your draft.'}
+              </p>
+            )}
+          {job.kind === 'portfolio_optimize' &&
+            partialIdentity === JSON.stringify([owner, job.id, job.status]) && (
+              <div id="portfolio-saved-trials" className="border-t pt-6">
+                <PartialStudy jobId={job.id} jobStatus={job.status} />
+              </div>
+            )}
           {job.kind === 'portfolio_optimize' &&
             activityIdentity === JSON.stringify([owner, job.id]) && (
               <div id="portfolio-study-activity" className="border-t pt-6">

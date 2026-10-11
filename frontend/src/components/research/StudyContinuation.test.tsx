@@ -344,6 +344,7 @@ describe('integrated study continuation journey', () => {
     await open(user)
     await confirm(user)
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(new URLSearchParams(screen.getByLabelText('Location').textContent!).get('job')).toBe('continued-study'))
     const params = new URLSearchParams(screen.getByLabelText('Location').textContent!)
     expect(params.get('experiment')).toBe('idea')
     expect(params.get('view')).toBe('studies')

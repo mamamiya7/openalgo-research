@@ -5,15 +5,25 @@ import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
 import { Layout } from './Layout'
 
+const reducedMotion =
+  '@media (prefers-reduced-motion: reduce) { [data-slot="sheet-overlay"], [data-slot="sheet-content"], [data-slot="dialog-overlay"], [data-slot="dialog-content"] { animation: none !important; transition: none !important; } }'
+
 /** Credential authentication is sufficient for retained historical evidence. */
 export function ResearchLayout() {
   const user = useAuthStore((state) => state.user)
   const { mode, appMode, toggleMode } = useThemeStore()
   const themeLabel = mode === 'light' ? 'Switch to dark mode' : 'Switch to light mode'
   if (!user?.username) return <Navigate to="/login" replace />
-  if (user.isLoggedIn && user.broker) return <Layout />
+  if (user.isLoggedIn && user.broker)
+    return (
+      <>
+        <style>{reducedMotion}</style>
+        <Layout />
+      </>
+    )
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <style>{reducedMotion}</style>
       <header className="border-b">
         <nav
           aria-label="Research navigation"

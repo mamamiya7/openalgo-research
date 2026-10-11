@@ -7,6 +7,26 @@ from datetime import datetime, timedelta, timezone
 
 MAX_SIGNALS = 25000
 IST = timezone(timedelta(hours=5, minutes=30))
+# Optional explicit declarations narrow intake to the existing execution
+# contract. Absence retains the plain Chartink Date/Symbol convention; this is
+# not an instrument-master lookup or a migration of previously saved sources.
+NSE_CASH_EXCHANGES = frozenset({"NSE", "NSEEQ", "NSECM"})
+CASH_EQUITY_ASSETS = frozenset(
+    {"EQ", "EQUITY", "EQUITIES", "CASH", "CASHEQUITY", "STOCK", "STOCKS"}
+)
+
+
+def _declared_scope(row, columns, number):
+    for key, admitted, label in (
+        ("exchange", NSE_CASH_EXCHANGES, "exchange"),
+        ("asset_class", CASH_EQUITY_ASSETS, "asset class"),
+    ):
+        value = row[columns[key]].strip() if key in columns else ""
+        if value and re.sub(r"[\s_-]", "", value.upper()) not in admitted:
+            raise ValueError(
+                f"Row {number}: {label} '{value[:60]}' is unsupported. "
+                "Research currently supports long NSE cash-equity signals."
+            )
 
 
 def signal_time(value):
@@ -46,6 +66,11 @@ def normalize_csv(content: bytes) -> dict:
             "industry": "sector",
             "marketcapname": "marketcapname",
             "marketcap": "marketcapname",
+            "exchange": "exchange",
+            "tradingexchange": "exchange",
+            "assetclass": "asset_class",
+            "assettype": "asset_class",
+            "instrumenttype": "asset_class",
         }
         columns = {}
         for name in reader.fieldnames or []:
@@ -62,6 +87,7 @@ def normalize_csv(content: bytes) -> dict:
                 raise ValueError(f"At most {MAX_SIGNALS} input rows are supported")
             if None in row or any(value is None for value in row.values()):
                 raise ValueError(f"Row {count + 1}: column count does not match header")
+            _declared_scope(row, columns, count + 1)
             raw_date = row[columns["date"]].strip() if "date" in columns else ""
             date = None
             timestamp = None

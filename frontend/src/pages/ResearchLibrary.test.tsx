@@ -7,6 +7,7 @@ import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { portfolioResearch } from '@/api/portfolioResearch'
 import { type LibraryJob, type ResearchExperiment, researchLibrary } from '@/api/researchLibrary'
+import type { ResearchSource } from '@/api/scannerResearch'
 import { freshPortfolioDraft } from '@/components/research/PortfolioBuilder'
 import type { ResearchShortlist } from '@/components/research/ResearchShortlist'
 import type PortfolioResearch from '@/pages/PortfolioResearch'
@@ -21,11 +22,18 @@ vi.mock('@/api/researchLibrary', () => ({
     get: vi.fn(),
     create: vi.fn(),
     saveDraft: vi.fn(),
+    restoreVersion: vi.fn(),
     run: vi.fn(),
   },
 }))
 vi.mock('@/api/portfolioResearch', () => ({
-  portfolioResearch: { sources: vi.fn(), jobs: vi.fn(), job: vi.fn(), resume: vi.fn() },
+  portfolioResearch: {
+    sources: vi.fn(),
+    jobs: vi.fn(),
+    job: vi.fn(),
+    resume: vi.fn(),
+    upload: vi.fn(),
+  },
 }))
 vi.mock('@/pages/PortfolioResearch', () => ({
   default: ({ workspace }: ComponentProps<typeof PortfolioResearch>) =>
@@ -47,6 +55,30 @@ vi.mock('@/pages/PortfolioResearch', () => ({
           onClick={() => void workspace.onRun().then(workspace.onOpenJob)}
         >
           Start calculation
+        </button>
+        <button
+          type="button"
+          disabled={workspace.disabled}
+          onClick={() =>
+            void workspace.onRecoverSetup?.(
+              { id: 'stopped-job', display: { setup: { id: 'original-version' } } } as never,
+              new AbortController().signal
+            )
+          }
+        >
+          Recover linked stopped setup
+        </button>
+        <button
+          type="button"
+          disabled={workspace.disabled}
+          onClick={() =>
+            void workspace.onRecoverSetup?.(
+              { id: 'stopped-job' } as never,
+              new AbortController().signal
+            )
+          }
+        >
+          Open unlinked current setup
         </button>
       </div>
     ),
@@ -144,6 +176,7 @@ function show(url = '/scanner-research', client?: QueryClient) {
 beforeEach(() => {
   vi.resetAllMocks()
   sessionStorage.clear()
+  localStorage.clear()
   useAuthStore.setState({ user: null })
   vi.mocked(researchLibrary.list).mockResolvedValue({ items: [], next_offset: null })
   vi.mocked(researchLibrary.get).mockResolvedValue(blank())
@@ -156,7 +189,283 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
+const importedSignals = (): ResearchSource => ({
+  id: 'uploaded-signals',
+  receipt: {
+    filename: 'Momentum.csv',
+    input_rows: 4,
+    signal_count: 3,
+    duplicates_removed: 1,
+    date_from: '2026-01-22',
+    date_to: '2026-04-02',
+    symbol_count: 2,
+    warnings: [],
+  },
+  coverage: {},
+  provenance: {
+    provider: 'csv',
+    exchange: 'NSE',
+    interval: 'D',
+    adjustment_basis: 'unadjusted',
+    calendar_basis: 'signals',
+    synthetic: false,
+  },
+})
+
 describe('research library navigation and lost-work boundaries', () => {
+  it('flushes the current draft before restoring a stopped run’s exact linked version, without submitting or replaying', async () => {
+    const restored = { ...blank(), revision: 3, draft: freshPortfolioDraft() }
+    restored.draft.portfolio.name = 'Original stopped setup'
+    vi.mocked(researchLibrary.restoreVersion).mockResolvedValue(restored)
+    const user = userEvent.setup()
+    show('/scanner-research?experiment=experiment-1&view=setup')
+    await user.clear(await screen.findByLabelText('Setup title'))
+    await user.type(screen.getByLabelText('Setup title'), 'My newer draft')
+    await user.click(screen.getByRole('button', { name: 'Recover linked stopped setup' }))
+    await waitFor(() =>
+      expect(screen.getByLabelText('Setup title')).toHaveValue('Original stopped setup')
+    )
+    expect(researchLibrary.saveDraft).toHaveBeenCalledWith(
+      'experiment-1',
+      1,
+      expect.objectContaining({ portfolio: expect.objectContaining({ name: 'My newer draft' }) })
+    )
+    expect(researchLibrary.restoreVersion).toHaveBeenCalledWith(
+      'experiment-1',
+      'original-version',
+      2,
+      expect.any(AbortSignal)
+    )
+    expect(researchLibrary.run).not.toHaveBeenCalled()
+    expect(portfolioResearch.resume).not.toHaveBeenCalled()
+  })
+
+  it('opens current setup for an unlinked stopped run without restoring another version or changing its draft', async () => {
+    const user = userEvent.setup()
+    show('/scanner-research?experiment=experiment-1&job=stopped-job&view=studies')
+    const before = (await screen.findByLabelText('Setup title')).getAttribute('value')
+    await user.click(screen.getByRole('button', { name: 'Open unlinked current setup' }))
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('view=setup'))
+    expect(screen.getByTestId('location')).not.toHaveTextContent('job=')
+    expect(screen.getByLabelText('Setup title')).toHaveValue(before)
+    expect(researchLibrary.restoreVersion).not.toHaveBeenCalled()
+    expect(researchLibrary.saveDraft).not.toHaveBeenCalled()
+    expect(researchLibrary.run).not.toHaveBeenCalled()
+  })
+
+  it('returns keyboard focus to New research after Escape without creating or running work', async () => {
+    const user = userEvent.setup()
+    show()
+    const opener = await screen.findByRole('button', { name: 'New research' })
+    opener.focus()
+    await user.keyboard('{Enter}')
+    expect(screen.getByRole('dialog', { name: 'New research' })).toBeVisible()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(opener).toHaveFocus()
+    expect(researchLibrary.create).not.toHaveBeenCalled()
+    expect(researchLibrary.run).not.toHaveBeenCalled()
+    expect(portfolioResearch.upload).not.toHaveBeenCalled()
+  })
+
+  it('reads a CSV before asking for an editable name and creates a native setup without starting acquisition', async () => {
+    const user = userEvent.setup()
+    vi.mocked(portfolioResearch.upload).mockResolvedValue(importedSignals())
+    show()
+    await user.click(await screen.findByRole('button', { name: 'New research' }))
+    const dialog = within(screen.getByRole('dialog', { name: 'New research' }))
+    await user.upload(
+      dialog.getByLabelText('Signal CSV'),
+      new File(['date,symbol\n2026-01-22,HINDZINC'], 'Momentum.csv', { type: 'text/csv' })
+    )
+    expect(await dialog.findByText('3 signals · 2 symbols')).toBeVisible()
+    expect(dialog.getByText('1 duplicate removed')).toBeVisible()
+    expect(dialog.getByText(/22 Jan.*2 Apr 2026/)).toBeVisible()
+    expect(dialog.getByLabelText('Research name')).toHaveValue('Momentum')
+    expect(researchLibrary.create).not.toHaveBeenCalled()
+    expect(researchLibrary.run).not.toHaveBeenCalled()
+    await user.clear(dialog.getByLabelText('Research name'))
+    await user.type(dialog.getByLabelText('Research name'), 'My momentum research')
+    await user.click(dialog.getByRole('button', { name: 'Continue to setup' }))
+    await screen.findByLabelText('Setup title')
+    expect(researchLibrary.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'My momentum research',
+        draft: expect.objectContaining({
+          portfolio: expect.objectContaining({
+            name: 'My momentum research',
+            capital: 100000,
+            engine: 'vectorbt',
+            strategies: [
+              expect.objectContaining({ source_id: 'uploaded-signals', name: 'Momentum' }),
+            ],
+          }),
+          sources: expect.objectContaining({
+            'uploaded-signals': expect.objectContaining({ id: 'uploaded-signals' }),
+          }),
+        }),
+      })
+    )
+    expect(portfolioResearch.upload).toHaveBeenCalledTimes(1)
+    expect(researchLibrary.run).not.toHaveBeenCalled()
+  })
+
+  it('clears a previously selected CSV if its replacement fails native validation', async () => {
+    const user = userEvent.setup()
+    vi.mocked(portfolioResearch.upload)
+      .mockResolvedValueOnce(importedSignals())
+      .mockRejectedValueOnce(new Error('CSV has no usable signals'))
+    show()
+    await user.click(await screen.findByRole('button', { name: 'New research' }))
+    await user.upload(
+      screen.getByLabelText('Signal CSV'),
+      new File(['valid'], 'Momentum.csv', { type: 'text/csv' })
+    )
+    await screen.findByText('3 signals · 2 symbols')
+    await user.upload(
+      screen.getByLabelText('Signal CSV'),
+      new File(['invalid'], 'Invalid.csv', { type: 'text/csv' })
+    )
+    await screen.findAllByText('CSV has no usable signals')
+    expect(screen.queryByText('3 signals · 2 symbols')).not.toBeInTheDocument()
+    expect(researchLibrary.create).not.toHaveBeenCalled()
+    expect(researchLibrary.run).not.toHaveBeenCalled()
+  })
+
+  it('aborts an unfinished native CSV read when leaving the library', async () => {
+    const pending = deferred<ResearchSource>()
+    vi.mocked(portfolioResearch.upload).mockReturnValue(pending.promise)
+    const user = userEvent.setup()
+    const view = show()
+    await user.click(await screen.findByRole('button', { name: 'New research' }))
+    await user.upload(
+      screen.getByLabelText('Signal CSV'),
+      new File(['data'], 'Momentum.csv', { type: 'text/csv' })
+    )
+    expect(screen.getByText('Reading signals…')).toBeVisible()
+    const signal = vi.mocked(portfolioResearch.upload).mock.calls[0][1]!
+    view.unmount()
+    expect(signal.aborted).toBe(true)
+    await act(async () => pending.resolve(importedSignals()))
+    expect(researchLibrary.create).not.toHaveBeenCalled()
+  })
+
+  it('keeps legacy study links in Results and leaves the saved query intact', async () => {
+    show('/scanner-research?experiment=experiment-1&view=studies&q=momentum')
+    expect(await screen.findByRole('button', { name: 'Results', exact: true })).toHaveAttribute(
+      'aria-current',
+      'page'
+    )
+    expect(screen.getByRole('button', { name: 'Optimisations', exact: true })).toHaveAttribute(
+      'aria-current',
+      'page'
+    )
+    expect(screen.getByTestId('location')).toHaveTextContent('view=studies')
+    expect(screen.getByTestId('location')).toHaveTextContent('q=momentum')
+    expect(researchLibrary.saveDraft).not.toHaveBeenCalled()
+  })
+
+  it('opens Results on optimisations when that is the newest saved operation', async () => {
+    const experiment = blank()
+    experiment.jobs = [
+      {
+        id: 'old-test',
+        kind: 'portfolio_backtest',
+        status: 'completed',
+        progress: 100,
+        created_at: 1,
+        experiment_id: experiment.id,
+      },
+      {
+        id: 'latest-study',
+        kind: 'portfolio_optimize',
+        status: 'completed',
+        progress: 100,
+        created_at: 2,
+        experiment_id: experiment.id,
+      },
+    ]
+    vi.mocked(researchLibrary.get).mockResolvedValue(experiment)
+    show('/scanner-research?experiment=experiment-1&view=results')
+    expect(await screen.findByRole('button', { name: 'Results', exact: true })).toHaveAttribute(
+      'aria-current',
+      'page'
+    )
+    expect(screen.getByRole('button', { name: 'Optimisations', exact: true })).toHaveAttribute(
+      'aria-current',
+      'page'
+    )
+    expect(screen.getByTestId('location')).toHaveTextContent('view=results')
+    expect(researchLibrary.saveDraft).not.toHaveBeenCalled()
+  })
+
+  it('opens Results on the latest operation type without rewriting historical evidence links', async () => {
+    show('/scanner-research?experiment=experiment-1&view=results')
+    expect(await screen.findByRole('button', { name: 'Results', exact: true })).toHaveAttribute(
+      'aria-current',
+      'page'
+    )
+    expect(screen.getByRole('button', { name: 'Backtests', exact: true })).toHaveAttribute(
+      'aria-current',
+      'page'
+    )
+    expect(screen.getByRole('button', { name: 'Open setup' })).toBeVisible()
+    expect(screen.getByTestId('location')).toHaveTextContent('view=results')
+  })
+
+  it.each([
+    ['portfolio_optimize', 'portfolio_backtest', 'optimisations', 'studies', 'Optimisations'],
+    ['portfolio_backtest', 'portfolio_optimize', 'backtests', 'backtests', 'Backtests'],
+  ] as const)('returns a legacy Results link for an older %s to its own list despite a newer %s', async (selectedKind, newerKind, backLabel, destination, tabName) => {
+    const user = userEvent.setup()
+    const experiment = blank()
+    experiment.jobs = [
+      {
+        id: 'older-result',
+        kind: selectedKind,
+        status: 'completed',
+        progress: 100,
+        created_at: 1,
+        experiment_id: experiment.id,
+      },
+      {
+        id: 'newer-result',
+        kind: newerKind,
+        status: 'completed',
+        progress: 100,
+        created_at: 2,
+        experiment_id: experiment.id,
+      },
+    ]
+    vi.mocked(researchLibrary.get).mockResolvedValue(experiment)
+    show('/scanner-research?experiment=experiment-1&view=results&job=older-result')
+    const back = await screen.findByRole('button', { name: `Back to ${backLabel}`, exact: true })
+    expect(screen.getByTestId('location')).toHaveTextContent('view=results&job=older-result')
+    await user.click(back)
+    expect(screen.getByTestId('location')).toHaveTextContent(`view=${destination}`)
+    expect(screen.getByTestId('location')).not.toHaveTextContent('job=')
+    expect(screen.getByRole('button', { name: tabName, exact: true })).toHaveAttribute(
+      'aria-current',
+      'page'
+    )
+    expect(researchLibrary.saveDraft).not.toHaveBeenCalled()
+    expect(researchLibrary.run).not.toHaveBeenCalled()
+  })
+
+  it('opens the published Chartink connection guide without creating an experiment', async () => {
+    const user = userEvent.setup()
+    show()
+    await user.click(await screen.findByRole('button', { name: 'Import from Chartink' }))
+    expect(screen.getByRole('dialog', { name: 'Chartink to OpenAlgo' })).toBeVisible()
+    expect(screen.getByRole('textbox', { name: 'Your OpenAlgo address' })).toHaveValue(
+      window.location.origin
+    )
+    expect(researchLibrary.create).not.toHaveBeenCalled()
+    expect(researchLibrary.run).not.toHaveBeenCalled()
+    await user.keyboard('{Escape}')
+    expect(screen.getByRole('button', { name: 'Import from Chartink' })).toHaveFocus()
+  })
+
   const savedJob = (
     id: string,
     status: string,
@@ -244,16 +553,6 @@ describe('research library navigation and lost-work boundaries', () => {
     expect(researchLibrary.get).not.toHaveBeenCalled()
     expect(researchLibrary.list).not.toHaveBeenCalled()
   })
-  it('opens Chartink onboarding without creating an empty experiment or starting research', async () => {
-    const user = userEvent.setup()
-    show()
-    await user.click(await screen.findByRole('button', { name: 'Import from Chartink' }))
-    expect(screen.getByRole('dialog', { name: 'Chartink to OpenAlgo' })).toBeInTheDocument()
-    expect(researchLibrary.create).not.toHaveBeenCalled()
-    expect(researchLibrary.run).not.toHaveBeenCalled()
-    await user.keyboard('{Escape}')
-    expect(screen.getByRole('heading', { name: 'Research library' })).toBeInTheDocument()
-  })
   it('refreshes the library after creating an experiment despite the host cache policy', async () => {
     const user = userEvent.setup()
     vi.mocked(researchLibrary.list)
@@ -261,9 +560,9 @@ describe('research library navigation and lost-work boundaries', () => {
       .mockResolvedValue({ items: [blank()], next_offset: null })
     show()
     await screen.findByText('Start with your signals')
-    await user.click(screen.getByRole('button', { name: 'New experiment', exact: true }))
-    await user.type(screen.getByLabelText('Research question or name'), 'Breakout research')
-    await user.click(screen.getByRole('button', { name: 'Create experiment' }))
+    await user.click(screen.getByRole('button', { name: 'New research', exact: true }))
+    await user.type(screen.getByLabelText('Research name'), 'Breakout research')
+    await user.click(screen.getByRole('button', { name: 'Continue to setup' }))
     await screen.findByLabelText('Setup title')
     expect(researchLibrary.create).toHaveBeenCalledWith({
       name: 'Breakout research',
@@ -368,8 +667,8 @@ describe('research library navigation and lost-work boundaries', () => {
     expect(await screen.findByText('Saved decisions editable')).toBeVisible()
     expect(
       within(screen.getByRole('navigation', { name: 'Experiment' })).getAllByRole('button')
-    ).toHaveLength(5)
-    expect(screen.getByRole('button', { name: 'Review', exact: true })).toHaveAttribute(
+    ).toHaveLength(4)
+    expect(screen.getByRole('button', { name: 'Results', exact: true })).toHaveAttribute(
       'aria-current',
       'page'
     )
@@ -400,7 +699,7 @@ describe('research library navigation and lost-work boundaries', () => {
             height: 40,
             toJSON: () => ({}),
           }
-        if (this.getAttribute('aria-current') === 'page' && this.textContent === 'Review')
+        if (this.getAttribute('aria-current') === 'page' && this.textContent === 'Results')
           return {
             left: 450,
             right: 550,

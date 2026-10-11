@@ -18,6 +18,7 @@ from test_portfolio_validation import inputs
 from test_report_period_workflow import draft, run_worker
 from test_shortlist import change_result
 from test_shortlist import save as save_candidate
+from workflow_job_helpers import complete_optional_job, complete_optional_jobs
 
 from database.research_db import (
     ResearchDecision,
@@ -211,9 +212,6 @@ def test_concurrent_retries_and_same_candidate_across_comparisons_share_head(
         assert len(db.scalars(select(ResearchDecisionEvent)).all()) == 2
 
 
-# Native journeys include several real calculations and durable publications.
-# Keep a finite CI integration budget; other tests retain the 60-second default.
-@pytest.mark.timeout(300)
 def test_exact_nonwinner_later_evidence_is_discovered_attached_and_frozen(
     app, client, frozen_studies, monkeypatch
 ):
@@ -284,7 +282,6 @@ def test_opened_is_explicit_deduplicated_and_request_bound(app, client, frozen_s
     assert context["evidence_use"]["coverage"] == "legacy_unknown"
 
 
-@pytest.mark.timeout(300)
 def test_recorded_full_period_calculation_is_overlap_not_untouched(app, client, monkeypatch):
     experiment, comparison, members, job, _, base = native_setup(app, client, monkeypatch)
     store = app.extensions["research_store"]
@@ -302,7 +299,6 @@ def test_recorded_full_period_calculation_is_overlap_not_untouched(app, client, 
     assert "untouched" not in json.dumps(after).lower()
 
 
-@pytest.mark.timeout(300)
 def test_legacy_embedded_later_belongs_only_to_actual_winner(app, client, monkeypatch):
     experiment, comparison, members, job, _, base = native_setup(
         app, client, monkeypatch, legacy=True
@@ -329,7 +325,6 @@ def test_legacy_embedded_later_belongs_only_to_actual_winner(app, client, monkey
 
 
 @pytest.mark.parametrize("mutation", ["origin", "prices"])
-@pytest.mark.timeout(300)
 def test_same_settings_later_report_with_wrong_origin_or_prices_is_not_admitted(
     app, client, monkeypatch, mutation
 ):
@@ -355,7 +350,6 @@ def test_same_settings_later_report_with_wrong_origin_or_prices_is_not_admitted(
     assert response.status_code in (400, 409), response.json
 
 
-@pytest.mark.timeout(300)
 def test_analysis_pin_and_original_null_survive_later_upgrade(app, client, monkeypatch):
     from services import research_analysis
 
@@ -368,7 +362,8 @@ def test_analysis_pin_and_original_null_survive_later_upgrade(app, client, monke
     first_path = f"{base}/decisions/{first['decision']['id']}/events/{first['event']['id']}/report?evidence=evaluation"
     before = client.get(first_path).json
     upgraded = research_analysis.submit(store, OWNER, later, symbol="AAA")
-    run_worker(store)
+    analysis_job = complete_optional_job(store, upgraded["analysis_job_id"])
+    assert analysis_job.result_artifact
     refreshed = client.get(path + "/decision").json["evaluation"]["items"][0]
     assert refreshed["id"] != original["id"]
     assert (
@@ -390,7 +385,6 @@ def test_analysis_pin_and_original_null_survive_later_upgrade(app, client, monke
     assert client.get(second_path).json == pinned
 
 
-@pytest.mark.timeout(300)
 def test_populated_backup_restores_decisions_openings_and_pinned_later_evidence(
     app, client, monkeypatch, tmp_path
 ):
@@ -420,6 +414,7 @@ def test_populated_backup_restores_decisions_openings_and_pinned_later_evidence(
     )
     for member in members:
         client.delete(f"{base}/shortlist/{member['id']}", json={"revision": 1})
+    complete_optional_jobs(store)
     change_result(store, later, lambda result: result["summary"].update(net_return_pct=999))
     backup = tmp_path.with_name(tmp_path.name + "-decisions-backup")
     backup_store(store, backup)

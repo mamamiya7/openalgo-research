@@ -26,6 +26,16 @@ import dotenv
 dotenv.load_dotenv = lambda *args, **kwargs: False
 dotenv.main.load_dotenv = dotenv.load_dotenv
 
+# Bind ``openalgo`` to the installed SDK before pytest sets up the repository
+# root. The root carries an ``__init__.py``, so pytest imports it as a package
+# named ``openalgo`` during setup and puts its parent directory first on
+# sys.path. A module that first imported ``openalgo.ta`` after that point got
+# the repository instead of the SDK, and every agent toolkit built on it was
+# silently skipped, so whether a test saw the market tools depended on which
+# test had happened to import the SDK first. Production never has the parent
+# directory on sys.path; this is confined to the test harness.
+import openalgo  # noqa: E402,F401
+
 # Assigned unconditionally: test isolation must not be overridable from the
 # environment.
 os.environ["DATABASE_URL"] = "sqlite:///db/openalgo-test.db"
@@ -53,3 +63,38 @@ collect_ignore = [
     "test_websocket.py",
     "test_websocket_service.py",
 ]
+
+
+# The OpenScript state files, kept out of the operator's own.
+#
+# Three files under strategies/ say what each deployment runs on, which
+# deployments a trader means to have running, and what has been asked of a run
+# that is still going. They are the same class of thing as the databases and the
+# log above: a test that writes one is writing a trader's own state.
+#
+# This is not hypothetical. The runner blueprint restores schedules and runs at
+# import, which reads the running file, and a run recorded there whose process
+# has gone is started again or dropped. A suite run on a machine with live
+# strategies cleared the record of every one of them, so the next restart of the
+# real application brought none of them back.
+#
+# Reassigned rather than configured, because these are not settings: nothing an
+# operator installs should have a knob for where a trader's strategies live.
+def _isolate_openscript_state() -> None:
+    from pathlib import Path
+
+    here = Path("strategies") / "test"
+    here.mkdir(parents=True, exist_ok=True)
+
+    from services import openscript_commands, openscript_run_config, openscript_running
+
+    openscript_run_config.CONFIG_FILE = here / "openscript_run_configs.json"
+    openscript_running.STATE_FILE = here / "openscript_running.json"
+    openscript_commands.COMMAND_FILE = here / "openscript_commands.json"
+
+    import blueprints.openscript_runner as runner_blueprint
+
+    runner_blueprint.SCHEDULES_FILE = here / "openscript_runner_schedules.json"
+
+
+_isolate_openscript_state()

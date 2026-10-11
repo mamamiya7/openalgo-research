@@ -10,6 +10,7 @@ from flask import Flask
 from flask_wtf.csrf import CSRFProtect
 from test_jobs import app, client
 from test_study_continuation import body, setup
+from workflow_job_helpers import complete_optional_jobs
 
 from blueprints.scanner_research import scanner_research_bp
 from database.research_db import ResearchExperiment, ResearchJob, ResearchWorker
@@ -95,6 +96,7 @@ def test_inflight_pause_commits_trial_then_resumes_exactly_without_recalculation
     # Paused state is at rest and remains valid in backup/restore, including its
     # execution metadata and immutable continuation parent.
     outside = tmp_path_factory.mktemp("pause-backup")
+    complete_optional_jobs(store)
     backup_store(store, outside / "archive")
     restore_store(outside / "archive", outside / "restored")
 
@@ -153,6 +155,7 @@ def test_ready_queued_resume_can_pause_without_worker_or_new_evaluation(app, cli
     service.resume(store, OWNER, child)
     assert client.post(path(child)).json["status"] == "paused"
     assert client.post(path(child)).json["status"] == "paused"
+    complete_optional_jobs(store)
     worker.acquire(store, "idle-paused")
     try:
         assert worker.run_one(store, "idle-paused") is False
