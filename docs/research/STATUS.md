@@ -114,6 +114,21 @@ report pages also avoid document overflow at 390px. Browser controls did not
 expose actual 200% zoom or reduced-motion emulation, so these checks remain
 targeted evidence rather than a complete accessibility certification.
 
+Composed Windows runtime qualification now passes all four slices: 2,504 core
+cases pass and 46 platform/optional cases skip, with the 173 host migration,
+shutdown and chart-contract cases also passing. Slices 0-2 are recorded in
+38128158644; the guarded corrected slice 3 passes in
+[38129762477](https://github.com/mamamiya7/openalgo-research/actions/runs/38129762477).
+The unchanged numerical source and complete module inventory are retained.
+Linux completes with 2,516 passes, 33 skips and one packaging-test collision:
+mocking the shared stdlib `time.sleep` also intercepted subprocess's POSIX wait
+loop. The tests now replace only the packaging module's time binding; real
+subprocess waits remain untouched. All 30 packaging cases and 32 workflow
+qualification cases pass locally. A guarded follow-up runs those contracts on
+both operating systems and the Linux post-core checks skipped by that failure;
+it retains the original failed run as evidence and cannot qualify unrelated
+source changes. This is test/CI-only work and requires no app restart.
+
 ## Automatic trade timing — 11 October 2026
 
 `automatic-hypotheses-v7` integrates joint stock/market conditions, trailing and

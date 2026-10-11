@@ -22,7 +22,7 @@ def test_complete_engine_matrix_is_skipped_only_by_explicit_manual_package_or_sl
     triggers = config["on"]
     choice = triggers["workflow_dispatch"]["inputs"]["validation_scope"]
     assert choice["default"] == "full"
-    assert choice["options"] == ["full", "package", "windows-slice"]
+    assert choice["options"] == ["full", "package", "windows-slice", "runtime-followup"]
     assert triggers["push"]["branches"] == ["main"]
     assert "pull_request" in triggers
     assert config["jobs"]["supported-runtime"]["if"] == (
@@ -34,7 +34,7 @@ def test_package_scope_retains_exact_artifact_installation_and_discloses_skipped
     jobs = workflow()["jobs"]
     package = jobs["package"]
     assert package["if"] == (
-        "${{ github.event_name != 'workflow_dispatch' || inputs.validation_scope != 'windows-slice' }}"
+        "${{ github.event_name != 'workflow_dispatch' || inputs.validation_scope == 'full' || inputs.validation_scope == 'package' }}"
     )
     steps = package["steps"]
     disclosure = next(step for step in steps if step.get("name") == "Record validation scope")
@@ -185,6 +185,7 @@ def qualified_repository(tmp_path):
         "test/research/test_b.py": "# Another slice\n",
         "test/research/test_c.py": "# Another slice\n",
         "test/research/test_existing.py": "def test_existing(): pass\n",
+        "test/research/test_release_package.py": "# Corrected package contracts\n",
         "test/research/test_release_workflow.py": "# Explicit requalification contracts\n",
         "test/test_history_service_source_validation.py": "# Controlled test inventory\n",
         "tools/research_test_slice.py": (
@@ -201,7 +202,7 @@ def qualified_repository(tmp_path):
     return tmp_path, git_at(tmp_path, "rev-parse", "HEAD")
 
 
-def run_guard(root, qualified, *, index="3"):
+def run_guard(root, qualified, *, index="3", mode="windows-slice", followup_sha=None):
     return subprocess.run(
         [sys.executable, "-c", recheck_guard()],
         cwd=root,
@@ -209,6 +210,8 @@ def run_guard(root, qualified, *, index="3"):
             **isolated_environment(),
             "QUALIFIED_SOURCE_SHA": qualified,
             "RECHECK_SLICE_INDEX": index,
+            "RECHECK_MODE": mode,
+            "FOLLOWUP_QUALIFIED_SOURCE_SHA": followup_sha or qualified,
             "GITHUB_STEP_SUMMARY": str(root / "summary.txt"),
         },
         capture_output=True,
@@ -313,3 +316,92 @@ def test_recheck_inputs_are_validated_before_git_and_never_interpolated_into_she
     )
     assert "not a git repository" not in result.stderr
     assert "${{" not in recheck_guard() and "shell=True" not in recheck_guard()
+
+
+def test_runtime_followup_checks_only_corrected_contracts_then_remaining_linux_steps():
+    config = workflow()
+    assert "inputs.validation_scope == 'runtime-followup'" in config["concurrency"]["group"]
+    assert "'-runtime-followup'" in config["concurrency"]["group"]
+    job = config["jobs"]["runtime-followup"]
+    assert job["if"] == (
+        "${{ github.event_name == 'workflow_dispatch' && inputs.validation_scope == 'runtime-followup' }}"
+    )
+    assert job["timeout-minutes"] == "45"
+    assert job["strategy"]["matrix"]["os"] == ["ubuntu-latest", "windows-latest"]
+    assert job["env"]["FOLLOWUP_QUALIFIED_SOURCE_SHA"] == (
+        "bc68f2ce0ee1927da9c6857df71f874b7e968990"
+    )
+    assert job["env"]["RECHECK_MODE"] == "runtime-followup"
+    assert job["env"]["OPENBLAS_NUM_THREADS"] == job["env"]["NUMBA_NUM_THREADS"] == "2"
+    steps = job["steps"]
+    guard = next(
+        step
+        for step in steps
+        if step.get("name") == "Verify unchanged runtime and exact test partition"
+    )
+    assert guard["run"] == recheck_guard()
+    assert any(
+        step.get("run")
+        == "uv run --no-sync pytest test/research/test_release_package.py test/research/test_release_workflow.py -q"
+        for step in steps
+    )
+    assert not any(
+        "research_test_slice.py" in step.get("run", "") for step in steps if step is not guard
+    )
+    full_steps = config["jobs"]["supported-runtime"]["steps"]
+    for step in steps:
+        if step.get("if") == "runner.os == 'Linux'":
+            original = next(
+                original for original in full_steps if original.get("name") == step["name"]
+            )
+            assert step["run"] == original["run"]
+    assert sum(step.get("if") == "runner.os == 'Linux'" for step in steps) == 6
+    assert not any("tools/research_release.py" in step.get("run", "") for step in steps)
+
+
+def test_runtime_followup_accepts_exact_allowlist_and_discloses_combined_qualification(
+    qualified_repository,
+):
+    root, sha = qualified_repository
+    for name in (
+        "test/research/test_release_package.py",
+        "test/research/test_release_workflow.py",
+        "docs/research/receipt.md",
+        ".github/workflows/research-distribution.yml",
+    ):
+        commit_change(root, name)
+    result = run_guard(root, sha, mode="runtime-followup")
+    assert result.returncode == 0, result.stderr
+    receipt = json.loads((root / ".agent-native/runtime-recheck/qualification.json").read_text())
+    assert receipt["selected_modules"] == [
+        "test/research/test_release_package.py",
+        "test/research/test_release_workflow.py",
+    ]
+    assert receipt["slice_index"] is None and receipt["runtime_unchanged"]
+    summary = (root / "summary.txt").read_text()
+    assert "2,516 core passes" in summary and "not a full matrix" in summary
+    assert "only when the runtime is unchanged" in summary
+
+
+@pytest.mark.parametrize(
+    "path", ["test/research/test_existing.py", "test/research/helper.py", "services/unchanged.py"]
+)
+def test_runtime_followup_rejects_changes_outside_its_exact_contract_allowlist(
+    qualified_repository, path
+):
+    root, sha = qualified_repository
+    commit_change(root, path)
+    result = run_guard(root, sha, mode="runtime-followup")
+    assert result.returncode != 0
+    assert (
+        "outside the selected slice" in result.stderr
+        or "cannot qualify runtime changes" in result.stderr
+    )
+
+
+def test_runtime_followup_requires_its_explicit_fully_pinned_qualified_baseline(
+    qualified_repository,
+):
+    root, sha = qualified_repository
+    result = run_guard(root, sha, mode="runtime-followup", followup_sha="f" * 40)
+    assert result.returncode != 0 and "explicitly qualified baseline SHA" in result.stderr

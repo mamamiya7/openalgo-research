@@ -5,8 +5,10 @@ import json
 import os
 import shutil
 import subprocess
+import time
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -128,6 +130,7 @@ def test_transient_windows_staging_cleanup_still_returns_valid_package(source, m
     cleanup = research_release.tempfile.TemporaryDirectory.cleanup
     attempts = []
     waits = []
+    native_sleep = time.sleep
 
     def temporarily_locked(temporary):
         path = temporary.name
@@ -140,7 +143,10 @@ def test_transient_windows_staging_cleanup_still_returns_valid_package(source, m
     # Inject at the owned cleanup boundary, rather than assuming tempfile's
     # stdlib-internal shutil reference shares this module's import on every OS.
     monkeypatch.setattr(research_release.tempfile.TemporaryDirectory, "cleanup", temporarily_locked)
-    monkeypatch.setattr(research_release.time, "sleep", waits.append)
+    # Patch this owner's binding: subprocess also uses the stdlib time module
+    # for its POSIX wait loop, which must retain real sleeps during packaging.
+    monkeypatch.setattr(research_release, "time", SimpleNamespace(sleep=waits.append))
+    assert time.sleep is native_sleep
     artifact = package(source, output, build)
     assert zipfile.is_zipfile(artifact)
     assert (output / "manifest.json").is_file()
@@ -185,7 +191,7 @@ def test_permanent_cleanup_failure_is_bounded_and_visible(tmp_path, monkeypatch)
         raise failure
 
     monkeypatch.setattr(research_release.shutil, "rmtree", locked)
-    monkeypatch.setattr(research_release.time, "sleep", waits.append)
+    monkeypatch.setattr(research_release, "time", SimpleNamespace(sleep=waits.append))
     with pytest.raises(RuntimeError, match="temporary files remain") as caught:
         cleanup_staging(stage, output)
     assert caught.value.__cause__ is failure
@@ -204,7 +210,7 @@ def test_build_exception_survives_cleanup_failure_with_visible_note(tmp_path, mo
         raise windows_cleanup_error()
 
     monkeypatch.setattr(research_release.tempfile.TemporaryDirectory, "cleanup", locked)
-    monkeypatch.setattr(research_release.time, "sleep", lambda _: None)
+    monkeypatch.setattr(research_release, "time", SimpleNamespace(sleep=lambda _: None))
     with pytest.raises(RuntimeError, match="original builder failure") as caught:
         with staging_directory(tmp_path):
             raise original
@@ -265,7 +271,7 @@ def test_cleanup_revalidates_resolved_boundary_before_retry(tmp_path, monkeypatc
 
     monkeypatch.setattr(Path, "resolve", moved)
     monkeypatch.setattr(research_release.shutil, "rmtree", locked)
-    monkeypatch.setattr(research_release.time, "sleep", lambda _: None)
+    monkeypatch.setattr(research_release, "time", SimpleNamespace(sleep=lambda _: None))
     with pytest.raises(ValueError, match="Refusing cleanup"):
         cleanup_staging(stage, output)
     assert len(attempts) == 1
