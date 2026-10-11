@@ -81,6 +81,15 @@ the implemented v7. These are test-only corrections; public release still needs
 the corrected full platform qualification. The running installed financial
 runtime and frontend are unchanged by this follow-up.
 
+Windows broad qualification exceeded the useful single-runner budget: only 36%
+of the suite completed in 42 minutes. The same complete test inventory now runs
+in four deterministic, non-overlapping Windows slices on separate runners, so
+their databases and temporary files cannot collide. Linux retains one complete
+suite. All slices include newly added test modules automatically; coverage and
+invalid-slice admission pass eight workflow tests. Host migration/shutdown checks
+run once per platform, and package/fresh-install checks retain their original
+gates. This changes CI scheduling, not application execution or installation.
+
 ## Automatic trade timing — 11 October 2026
 
 `automatic-hypotheses-v7` integrates joint stock/market conditions, trailing and
