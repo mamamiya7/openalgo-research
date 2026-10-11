@@ -1,5 +1,8 @@
 # OpenAlgo Research — integrated delivery plan
 
+**11 October checkpoint:** the native host is reconciled to OpenAlgo 2.0.2.7 (`12e111465`), with unchanged charts 2.6.0/OpenScript 0.8.1 and numerical engine pins. New optimisation entry now chooses the qualified broad recipe automatically, keeping older scope selection advanced. Preflight records automatic/fixed/unsupported/pending decisions, and explicit unsupported CSV exchanges/assets are rejected before acquisition. Remaining research order: versioned trailing activation, qualified asset/timing admission, comparison curves and native authoring parity. Historical October7 tables below remain dated evidence; [STATUS.md](STATUS.md) owns current activation/publication status.
+
+
 **7 October implementation checkpoint:** shared labels, role-specific context, native saved Values and bounded joint search passed their scoped numerical and native journey checks. The [implementation contract](NATIVE_REFINEMENT_20261007.md) records this increment. Whole phases remain open until their acceptance gates are met.
 
 ## Native product refinement plan — 7 October 2026

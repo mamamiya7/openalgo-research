@@ -24,6 +24,7 @@ import {
   portfolioDraftIssue,
   portfolioEngineIssue,
   portfolioPayload,
+  selectPortfolioRun,
   suggestedStrategySearch,
 } from './PortfolioBuilder'
 import { PortfolioResults } from './PortfolioResults'
@@ -230,12 +231,35 @@ afterEach(() => {
 })
 
 describe('native portfolio consumer journey', () => {
-  it('explicitly opts into stock-and-market research while retaining the current default and account inputs', async () => {
+  it('selects the broad automatic recipe when Optimize is first chosen, without tuning cash or costs', () => {
+    const original = draft()
+    const optimized = selectPortfolioRun(original, true)
+    expect(optimized.optimizing).toBe(true)
+    expect(optimized.portfolio.automatic_research).toEqual({ version: 'automatic-hypotheses-v5' })
+    expect(optimized.portfolio.strategies).toEqual(original.portfolio.strategies)
+    expect(optimized.portfolio.capital).toBe(original.portfolio.capital)
+    expect(original.portfolio.automatic_research).toBeUndefined()
+  })
+  it('preserves saved scopes, custom ranges and chosen entry conditions when switching run type', () => {
+    const saved = draft()
+    saved.portfolio.automatic_research = { version: 'automatic-hypotheses-v4' }
+    expect(selectPortfolioRun(saved, true).portfolio.automatic_research).toEqual(
+      saved.portfolio.automatic_research
+    )
+    const custom = applySuggestedSearch(draft())
+    expect(selectPortfolioRun(custom, true).portfolio.automatic_research).toBeUndefined()
+    const conditioned = draft()
+    conditioned.portfolio.entry_conditions = { version: 'research-entry-conditions-v1', rules: [] }
+    expect(selectPortfolioRun(conditioned, true).portfolio.automatic_research).toBeUndefined()
+  })
+
+  it('defaults new automatic research to stock-and-market while retaining account inputs', async () => {
     const original = draft()
     savedDraft({ ...original, optimizing: true })
     mount()
     await userEvent.click(await screen.findByRole('button', { name: 'Automatic research' }))
-    expect(screen.getByLabelText('Research scope')).toHaveValue('automatic-hypotheses-v4')
+    expect(screen.getByLabelText('Research scope')).toHaveValue('automatic-hypotheses-v5')
+    await userEvent.click(screen.getByText('Advanced research options'))
     await userEvent.selectOptions(
       screen.getByLabelText('Research scope'),
       'automatic-hypotheses-v5'
@@ -243,7 +267,7 @@ describe('native portfolio consumer journey', () => {
     expect(
       screen.getByText(/Tests stock signals, Nifty trend or volatility, and exits together/)
     ).toHaveTextContent('320 calculations')
-    await userEvent.click(screen.getByRole('button', { name: 'Research settings' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Optimize automatically' }))
     await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
     const sent = vi.mocked(portfolioResearch.submit).mock.calls[0][0]
     expect(sent.automatic_research).toEqual({ version: 'automatic-hypotheses-v5' })
@@ -254,6 +278,20 @@ describe('native portfolio consumer journey', () => {
     expect(sent.validation).toBeUndefined()
   })
 
+  it('does not upgrade a saved automatic recipe when its active approach is clicked', async () => {
+    const original = draft()
+    original.optimizing = true
+    original.portfolio.automatic_research = { version: 'automatic-hypotheses-v4' }
+    savedDraft(original)
+    mount()
+    await userEvent.click(await screen.findByRole('button', { name: 'Automatic research' }))
+    expect(screen.getByLabelText('Research scope')).toHaveValue('automatic-hypotheses-v4')
+    await userEvent.click(screen.getByRole('button', { name: 'Optimize automatically' }))
+    await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(portfolioResearch.submit).mock.calls[0][0].automatic_research).toEqual({
+      version: 'automatic-hypotheses-v4',
+    })
+  })
   it('rejects a persisted VectorBT-only research scope on Nautilus without changing its recipe', () => {
     const original = draft()
     original.optimizing = true
@@ -302,7 +340,7 @@ describe('native portfolio consumer journey', () => {
     original.portfolio.strategies[0].config.cost_bps = 7
     savedDraft(original)
     mount()
-    const start = await screen.findByRole('button', { name: 'Research settings' })
+    const start = await screen.findByRole('button', { name: 'Optimize automatically' })
     expect(screen.queryByRole('region', { name: 'Optimization ranges' })).not.toBeInTheDocument()
     expect(screen.queryByRole('spinbutton', { name: 'Trials' })).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Reserve a later period')).not.toBeInTheDocument()
@@ -329,7 +367,7 @@ describe('native portfolio consumer journey', () => {
     savedDraft(original)
     mount()
     await userEvent.click(await screen.findByRole('button', { name: 'Automatic research' }))
-    expect(screen.getByRole('button', { name: 'Research settings' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Optimize automatically' })).toBeVisible()
     await userEvent.click(screen.getByRole('button', { name: 'Settings for Breakout' }))
     expect(screen.queryByLabelText('Optimize Stop loss (%)')).not.toBeInTheDocument()
     await userEvent.keyboard('{Escape}')
@@ -350,12 +388,12 @@ describe('native portfolio consumer journey', () => {
     savedDraft({ ...original, optimizing: true })
     mount()
     await userEvent.click(await screen.findByRole('button', { name: 'Automatic research' }))
-    expect(screen.getByLabelText('Research scope')).toHaveValue('automatic-hypotheses-v4')
-    expect(screen.getByText(/Tests daily stock indicators, strength versus Nifty 50/)).toBeVisible()
-    await userEvent.click(screen.getByRole('button', { name: 'Research settings' }))
+    expect(screen.getByLabelText('Research scope')).toHaveValue('automatic-hypotheses-v5')
+    expect(screen.getByText(/Tests stock signals, Nifty trend or volatility/)).not.toBeVisible()
+    await userEvent.click(screen.getByRole('button', { name: 'Optimize automatically' }))
     await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
     const sent = vi.mocked(portfolioResearch.submit).mock.calls[0][0]
-    expect(sent.automatic_research).toEqual({ version: 'automatic-hypotheses-v4' })
+    expect(sent.automatic_research).toEqual({ version: 'automatic-hypotheses-v5' })
     expect(sent.capital).toBe(original.portfolio.capital)
     expect(sent.strategies[0].config).toEqual(original.portfolio.strategies[0].config)
     expect(sent.strategies[0].allocation_pct).toBe(original.portfolio.strategies[0].allocation_pct)
@@ -367,12 +405,13 @@ describe('native portfolio consumer journey', () => {
     savedDraft({ ...draft(), optimizing: true })
     mount()
     await userEvent.click(await screen.findByRole('button', { name: 'Automatic research' }))
+    await userEvent.click(screen.getByText('Advanced research options'))
     await userEvent.selectOptions(
       screen.getByLabelText('Research scope'),
       'automatic-entry-conditions-v1'
     )
     expect(screen.getByText(/Compares no filter, rising Nifty trend/)).toBeVisible()
-    await userEvent.click(screen.getByRole('button', { name: 'Research settings' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Optimize automatically' }))
     await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
     expect(vi.mocked(portfolioResearch.submit).mock.calls[0][0].automatic_research).toEqual({
       version: 'automatic-entry-conditions-v1',
@@ -383,12 +422,13 @@ describe('native portfolio consumer journey', () => {
     savedDraft({ ...draft(), optimizing: true })
     mount()
     await userEvent.click(await screen.findByRole('button', { name: 'Automatic research' }))
+    await userEvent.click(screen.getByText('Advanced research options'))
     await userEvent.selectOptions(
       screen.getByLabelText('Research scope'),
       'automatic-trade-management-v2'
     )
     expect(screen.getByText(/Challenges nearby settings/)).toBeVisible()
-    await userEvent.click(screen.getByRole('button', { name: 'Research settings' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Optimize automatically' }))
     await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
     const sent = vi.mocked(portfolioResearch.submit).mock.calls[0][0]
     expect(sent.automatic_research).toEqual({ version: 'automatic-trade-management-v2' })
@@ -551,6 +591,7 @@ describe('native portfolio consumer journey', () => {
     savedDraft()
     mount()
     await userEvent.click(screen.getByRole('button', { name: 'Optimize', exact: true }))
+    await userEvent.click(screen.getByRole('button', { name: 'Custom search', exact: true }))
     expect(screen.getByLabelText('Trials')).toHaveValue(25)
     expect(screen.getByRole('button', { name: 'Suggested search' })).toBeVisible()
     expect(screen.getByRole('region', { name: 'Optimization ranges' })).toHaveTextContent(
@@ -894,6 +935,7 @@ describe('native portfolio consumer journey', () => {
     savedDraft()
     mount()
     await userEvent.click(screen.getByRole('button', { name: 'Optimize', exact: true }))
+    await userEvent.click(screen.getByRole('button', { name: 'Custom search', exact: true }))
     expect(screen.getByRole('region', { name: 'Optimization ranges' })).toHaveTextContent(
       'Profit target 5–15% (step 5)'
     )
@@ -958,6 +1000,7 @@ describe('native portfolio consumer journey', () => {
     expect(portfolioResearch.preflight).not.toHaveBeenCalled()
     await userEvent.click(screen.getByRole('button', { name: 'Equal split' }))
     await userEvent.click(screen.getByRole('button', { name: 'Optimize', exact: true }))
+    await userEvent.click(screen.getByRole('button', { name: 'Custom search', exact: true }))
     await userEvent.click(screen.getByRole('button', { name: 'Run optimization' }))
     await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
     const payload = vi.mocked(portfolioResearch.preflight).mock.calls[0][0]

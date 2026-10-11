@@ -3,8 +3,8 @@
   "version": "0.1.0-preview.8",
   "format": "openalgo-research-distribution-v1",
   "delivery": "native-openalgo-distribution",
-  "openalgo_version": "2.0.2.6",
-  "upstream_baseline": "ee26e4e24caeeb68a27a5417bf3744bc0c5e1964",
+  "openalgo_version": "2.0.2.7",
+  "upstream_baseline": "12e1114657981a3e50dde8c8ce04eb778ae1cf2f",
   "python": "3.12",
   "packages": {
     "vectorbt": "0.28.5",

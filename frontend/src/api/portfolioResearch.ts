@@ -557,6 +557,14 @@ export interface PortfolioPreview {
     version: string
     plan_id: string
     execution_recipe_version: string
+    decisions?: {
+      version: 'automatic-decision-summary-v1'
+      automatic: Array<{ id: string; label: string; decision: string }>
+      retained: Array<{ id: string; label: string; decision: string }>
+      not_searched: Array<{ id: string; label: string; reason: string }>
+      prerequisites: Array<{ id: string; label: string; status: string; reason: string }>
+      scope: { exhaustive: false; recommendation_basis: string; searched_parameters: number }
+    }
     summary: {
       searched_parameters: number
       condition_presets: number

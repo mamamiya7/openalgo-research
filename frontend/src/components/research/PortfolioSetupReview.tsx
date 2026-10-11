@@ -71,9 +71,45 @@ export function PortfolioSetupReview({ draft }: { draft: PortfolioDraft }) {
                       .join(', ')}
                   </p>
                 ))}
-                <p>
-                  Starting cash, allocation and trade size stay fixed. Prices are prepared once.
-                </p>
+                {automatic.decisions ? (
+                  <>
+                    <dl className="grid gap-2 sm:grid-cols-2">
+                      {automatic.decisions.automatic.map((item) => (
+                        <div key={item.id}>
+                          <dt className="font-medium text-foreground">{item.label}</dt>
+                          <dd>{item.decision}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                    <p>{automatic.decisions.scope.recommendation_basis}</p>
+                    <details>
+                      <summary className="w-fit cursor-pointer text-foreground">
+                        Assumptions and limits
+                      </summary>
+                      <div className="mt-2 space-y-2">
+                        {automatic.decisions.retained.map((item) => (
+                          <p key={item.id}>
+                            <span className="font-medium">{item.label}</span> · {item.decision}
+                          </p>
+                        ))}
+                        {automatic.decisions.not_searched.map((item) => (
+                          <p key={item.id}>
+                            <span className="font-medium">{item.label}</span> · {item.reason}
+                          </p>
+                        ))}
+                        {automatic.decisions.prerequisites.map((item) => (
+                          <p key={item.id}>
+                            <span className="font-medium">{item.label}</span> · {item.reason}
+                          </p>
+                        ))}
+                      </div>
+                    </details>
+                  </>
+                ) : (
+                  <p>
+                    Starting cash, allocation and trade size stay fixed. Prices are prepared once.
+                  </p>
+                )}
               </div>
             </details>
           )}

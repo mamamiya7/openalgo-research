@@ -52,6 +52,38 @@ export function equalSplit(strategies: PortfolioStrategy[]): PortfolioStrategy[]
       index === strategies.length - 1 ? Number((100 - amount * index).toFixed(2)) : amount,
   }))
 }
+// Infer the supported recipe only for a new optimization. Saved automatic
+// recipes, custom ranges and chosen entry conditions retain their identity.
+export function selectPortfolioRun(draft: PortfolioDraft, optimizing: boolean): PortfolioDraft {
+  if (!optimizing) return { ...draft, optimizing }
+  const hasCustomRanges = draft.portfolio.strategies.some(
+    (strategy) => Object.keys(strategy.search).length > 0
+  )
+  if (
+    !draft.optimizing &&
+    !draft.portfolio.automatic_research &&
+    !draft.portfolio.entry_conditions &&
+    !hasCustomRanges
+  ) {
+    return {
+      ...draft,
+      optimizing: true,
+      portfolio: {
+        ...draft.portfolio,
+        automatic_research: {
+          version:
+            draft.portfolio.engine === 'vectorbt'
+              ? 'automatic-hypotheses-v5'
+              : 'automatic-trade-management-v2',
+        },
+      },
+    }
+  }
+  return draft.portfolio.automatic_research
+    ? { ...draft, optimizing }
+    : applySuggestedSearch({ ...draft, optimizing }, true)
+}
+
 function activeSearch(strategy: PortfolioStrategy): PortfolioStrategy['search'] {
   const search = { ...strategy.search }
   if (strategy.config.hold_minutes != null || strategy.config.trade_horizon === 'intraday')
@@ -557,13 +589,7 @@ export function PortfolioBuilder({
                 size="sm"
                 variant={draft.optimizing === optimizing ? 'secondary' : 'ghost'}
                 aria-pressed={draft.optimizing === optimizing}
-                onClick={() =>
-                  onChange(
-                    optimizing
-                      ? applySuggestedSearch({ ...draft, optimizing }, true)
-                      : { ...draft, optimizing }
-                  )
-                }
+                onClick={() => onChange(selectPortfolioRun(draft, optimizing))}
               >
                 {optimizing ? 'Optimize' : 'Backtest'}
               </Button>
@@ -591,18 +617,29 @@ export function PortfolioBuilder({
                       ? 'Use Custom search to preserve this setup’s saved entry conditions.'
                       : undefined
                   }
-                  onClick={() =>
+                  onClick={() => {
+                    if (enabled && automatic) return
+                    if (!enabled) {
+                      onChange(
+                        applySuggestedSearch(
+                          {
+                            ...draft,
+                            portfolio: { ...portfolio, automatic_research: undefined },
+                          },
+                          true
+                        )
+                      )
+                      return
+                    }
                     update({
-                      automatic_research: enabled
-                        ? {
-                            version:
-                              portfolio.engine === 'vectorbt'
-                                ? 'automatic-hypotheses-v4'
-                                : 'automatic-trade-management-v1',
-                          }
-                        : undefined,
+                      automatic_research: {
+                        version:
+                          portfolio.engine === 'vectorbt'
+                            ? 'automatic-hypotheses-v5'
+                            : 'automatic-trade-management-v2',
+                      },
                     })
-                  }
+                  }}
                 >
                   {enabled && <Sparkles className="size-4" aria-hidden="true" />}
                   {enabled ? 'Automatic research' : 'Custom search'}
@@ -617,99 +654,108 @@ export function PortfolioBuilder({
                 Searches supported ideas together, then challenges the settings against the
                 original.
               </p>
-              <div className="mt-3 space-y-2">
-                <Label htmlFor="automatic-research-scope">Research scope</Label>
-                <select
-                  id="automatic-research-scope"
-                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                  value={portfolio.automatic_research?.version}
-                  onChange={(event) =>
-                    update({
-                      automatic_research: {
-                        version: event.target.value as NonNullable<
-                          PortfolioRequest['automatic_research']
-                        >['version'],
-                      },
-                    })
-                  }
-                >
-                  <option
-                    value="automatic-hypotheses-v5"
-                    disabled={portfolio.engine !== 'vectorbt'}
-                  >
-                    Stock and market
-                  </option>
-                  <option
-                    value="automatic-hypotheses-v4"
-                    disabled={portfolio.engine !== 'vectorbt'}
-                  >
-                    {researchRecipeLabel('automatic-hypotheses-v4')}
-                  </option>
-                  <option
-                    value="automatic-hypotheses-v3"
-                    disabled={portfolio.engine !== 'vectorbt'}
-                  >
-                    {researchRecipeLabel('automatic-hypotheses-v3')}
-                  </option>
-                  <option
-                    value="automatic-hypotheses-v2"
-                    disabled={portfolio.engine !== 'vectorbt'}
-                  >
-                    {researchRecipeLabel('automatic-hypotheses-v2')}
-                  </option>
-                  <option value="automatic-trade-management-v1">
-                    {researchRecipeLabel('automatic-trade-management-v1')}
-                  </option>
-                  <option value="automatic-trade-management-v2">
-                    {researchRecipeLabel('automatic-trade-management-v2')}
-                  </option>
-                  <option
-                    value="automatic-entry-conditions-v1"
-                    disabled={
-                      portfolio.engine !== 'vectorbt' || Boolean(portfolio.entry_conditions)
+              <p className="mt-3 text-xs text-muted-foreground">
+                {researchRecipeLabel(portfolio.automatic_research?.version)} · Price history, search
+                ranges and validation are selected automatically.
+              </p>
+              <details className="mt-3 text-sm">
+                <summary className="w-fit cursor-pointer text-muted-foreground">
+                  Advanced research options
+                </summary>
+                <div className="mt-3 space-y-2">
+                  <Label htmlFor="automatic-research-scope">Research scope</Label>
+                  <select
+                    id="automatic-research-scope"
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                    value={portfolio.automatic_research?.version}
+                    onChange={(event) =>
+                      update({
+                        automatic_research: {
+                          version: event.target.value as NonNullable<
+                            PortfolioRequest['automatic_research']
+                          >['version'],
+                        },
+                      })
                     }
                   >
-                    {researchRecipeLabel('automatic-entry-conditions-v1')}
-                  </option>
-                </select>
-                {portfolio.automatic_research?.version === 'automatic-hypotheses-v5' && (
-                  <p className="text-xs text-muted-foreground">
-                    Tests stock signals, Nifty trend or volatility, and exits together. Up to 320
-                    calculations.
-                  </p>
-                )}
-                {portfolio.automatic_research?.version === 'automatic-hypotheses-v4' && (
-                  <p className="text-xs text-muted-foreground">
-                    Tests daily stock indicators, strength versus Nifty 50 and trading settings. Up
-                    to 240 calculations.
-                  </p>
-                )}
-                {portfolio.automatic_research?.version === 'automatic-hypotheses-v3' && (
-                  <p className="text-xs text-muted-foreground">
-                    Tests trend, momentum, RSI, bands and volatility with trading settings. Up to
-                    220 calculations.
-                  </p>
-                )}
-                {portfolio.automatic_research?.version === 'automatic-hypotheses-v2' && (
-                  <p className="text-xs text-muted-foreground">
-                    Tests stock trend and momentum with trading settings. Up to 180 calculations;
-                    short history gets an exploratory result.
-                  </p>
-                )}
-                {portfolio.automatic_research?.version === 'automatic-trade-management-v2' && (
-                  <p className="text-xs text-muted-foreground">
-                    Challenges nearby settings on later dates before the final check. Up to 118
-                    calculations; use final dates not previously tested in this account.
-                  </p>
-                )}
-                {portfolio.automatic_research?.version === 'automatic-entry-conditions-v1' && (
-                  <p className="text-xs text-muted-foreground">
-                    Compares no filter, rising Nifty trend, normal volatility and high volatility.
-                    Uses completed market history before entry and up to 100 calculations. Final
-                    dates must not have been used in earlier research in this account.
-                  </p>
-                )}
-              </div>
+                    <option
+                      value="automatic-hypotheses-v5"
+                      disabled={portfolio.engine !== 'vectorbt'}
+                    >
+                      Stock and market
+                    </option>
+                    <option
+                      value="automatic-hypotheses-v4"
+                      disabled={portfolio.engine !== 'vectorbt'}
+                    >
+                      {researchRecipeLabel('automatic-hypotheses-v4')}
+                    </option>
+                    <option
+                      value="automatic-hypotheses-v3"
+                      disabled={portfolio.engine !== 'vectorbt'}
+                    >
+                      {researchRecipeLabel('automatic-hypotheses-v3')}
+                    </option>
+                    <option
+                      value="automatic-hypotheses-v2"
+                      disabled={portfolio.engine !== 'vectorbt'}
+                    >
+                      {researchRecipeLabel('automatic-hypotheses-v2')}
+                    </option>
+                    <option value="automatic-trade-management-v1">
+                      {researchRecipeLabel('automatic-trade-management-v1')}
+                    </option>
+                    <option value="automatic-trade-management-v2">
+                      {researchRecipeLabel('automatic-trade-management-v2')}
+                    </option>
+                    <option
+                      value="automatic-entry-conditions-v1"
+                      disabled={
+                        portfolio.engine !== 'vectorbt' || Boolean(portfolio.entry_conditions)
+                      }
+                    >
+                      {researchRecipeLabel('automatic-entry-conditions-v1')}
+                    </option>
+                  </select>
+                  {portfolio.automatic_research?.version === 'automatic-hypotheses-v5' && (
+                    <p className="text-xs text-muted-foreground">
+                      Tests stock signals, Nifty trend or volatility, and exits together. Up to 320
+                      calculations.
+                    </p>
+                  )}
+                  {portfolio.automatic_research?.version === 'automatic-hypotheses-v4' && (
+                    <p className="text-xs text-muted-foreground">
+                      Tests daily stock indicators, strength versus Nifty 50 and trading settings.
+                      Up to 240 calculations.
+                    </p>
+                  )}
+                  {portfolio.automatic_research?.version === 'automatic-hypotheses-v3' && (
+                    <p className="text-xs text-muted-foreground">
+                      Tests trend, momentum, RSI, bands and volatility with trading settings. Up to
+                      220 calculations.
+                    </p>
+                  )}
+                  {portfolio.automatic_research?.version === 'automatic-hypotheses-v2' && (
+                    <p className="text-xs text-muted-foreground">
+                      Tests stock trend and momentum with trading settings. Up to 180 calculations;
+                      short history gets an exploratory result.
+                    </p>
+                  )}
+                  {portfolio.automatic_research?.version === 'automatic-trade-management-v2' && (
+                    <p className="text-xs text-muted-foreground">
+                      Challenges nearby settings on later dates before the final check. Up to 118
+                      calculations; use final dates not previously tested in this account.
+                    </p>
+                  )}
+                  {portfolio.automatic_research?.version === 'automatic-entry-conditions-v1' && (
+                    <p className="text-xs text-muted-foreground">
+                      Compares no filter, rising Nifty trend, normal volatility and high volatility.
+                      Uses completed market history before entry and up to 100 calculations. Final
+                      dates must not have been used in earlier research in this account.
+                    </p>
+                  )}
+                </div>
+              </details>
               <ol
                 aria-label="Automatic research stages"
                 className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-muted-foreground"
@@ -931,7 +977,7 @@ export function PortfolioBuilder({
               ? 'Adding strategies…'
               : draft.optimizing
                 ? automatic
-                  ? 'Research settings'
+                  ? 'Optimize automatically'
                   : 'Run optimization'
                 : 'Run backtest'}
         </Button>

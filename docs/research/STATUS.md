@@ -1,8 +1,15 @@
 # OpenAlgo Research status
 
+**11 October development:** OpenAlgo 2.0.2.7 source is integrated at upstream `12e111465`. New, unconfigured VectorBT optimisations now choose stock-and-market research automatically; older saved recipes and custom ranges retain their identity. Research scopes are under Advanced research options. Preflight distinguishes automatic decisions, fixed financial assumptions, unsearched methods and pending checks. New CSV uploads reject explicitly unsupported exchanges/assets before native price acquisition. See [upstream notes](UPSTREAM_UPDATE_20261011.md) and the current human-flow audit checkpoint below. Public download remains preview.7; local activation is recorded separately.
+
+
 **7 October implementation:** native Values with causal indicator-preserving replay, new bounded stock-and-market research, and source/package reconciliation. See [implementation contract](NATIVE_REFINEMENT_20261007.md). Public download remains preview.7; the new development version is preview.8.
 
 **Local activation and package acceptance:** the normal app preserves its account, configuration and 58 saved runs;160 installed compatibility checks pass. The exact preview.8 ZIP also passes fresh Windows setup, native calculations, exact replay and reinstall/restart with identical saved exports. The full public runtime matrix and fresh preview.8 Linux acceptance remain separate gates. Qualified source is recorded on the local `codex/native-research-refinement` branch; original worktree changes are preserved.
+
+## Local activation — 11 October 2026
+
+The normal app is installed on the combined OpenAlgo2.0.2.7/Research preview.8 source. All160 installed compatibility checks pass;58 saved runs and configuration are preserved. The broad default applies to new, unconfigured optimisation requests; saved automatic and custom recipes keep their identity. Source checks, typed frontend build, focused UI/backend qualification and the current browser walk-through qualify this increment. The controlled browser run uses synthetic native-route inputs with the real VectorBT/Optuna worker; it is not a new live broker-download acceptance. A fresh broker download requires an active connected broker session. Public preview.7 and the wider Windows/Linux release gates remain separate.
 
 ## Planning checkpoint — 7 October 2026
 

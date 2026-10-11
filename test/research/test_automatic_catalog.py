@@ -300,6 +300,71 @@ def test_conditions_cannot_be_announced_for_an_unsupported_engine():
         build_plan(request(version=CONDITION_VERSION, engine="nautilus"), interval="D")
 
 
+@pytest.mark.parametrize(
+    "version,proposals,cap",
+    [
+        (VERSION, 50, 70),
+        (STABILITY_VERSION, 50, 118),
+        ("automatic-hypotheses-v4", 96, 240),
+        ("automatic-hypotheses-v5", 128, 320),
+    ],
+)
+def test_decision_summary_matches_recipe_budget_and_never_certifies_pending_evidence(
+    version, proposals, cap
+):
+    raw = request(version=version, config={"cost_bps": 17, "order_size_pct": 12})
+    original = deepcopy(raw)
+    canonical = normalize(raw)
+    result = build_plan(raw, interval="D")
+    decisions = result["decisions"]
+    automatic = {row["id"]: row for row in decisions["automatic"]}
+    assert automatic["interval"]["decision"] == "Daily candles"
+    assert f"{proposals} proposals" in automatic["search"]["decision"]
+    assert f"{cap} calculations" in automatic["search"]["decision"]
+    assert decisions["scope"]["searched_parameters"] == result["summary"]["searched_parameters"]
+    assert decisions["scope"]["exhaustive"] is False
+    assert "no global optimum" in decisions["scope"]["recommendation_basis"]
+    assert all(row["status"] == "pending" for row in decisions["prerequisites"])
+    assert {row["id"] for row in decisions["prerequisites"]} == {
+        "coverage",
+        "calendar",
+        "runtime",
+        "validation",
+    }
+    assert {row["id"] for row in decisions["retained"]} == {"risk", "costs", "timing"}
+    assert raw == original
+    assert normalize(raw) == canonical
+    assert result["execution_recipe_version"] == version
+    if version.startswith("automatic-hypotheses-"):
+        assert "exploratory" in automatic["checks"]["decision"]
+    else:
+        assert "fails admission" in automatic["checks"]["decision"]
+    decisions["automatic"][0]["decision"] = "invented"
+    assert build_plan(raw, interval="D")["decisions"]["automatic"][0]["decision"] == "Daily candles"
+
+
+def test_minute_and_trailing_decisions_preserve_original_horizon_and_disabled_branch():
+    raw = request(version="automatic-hypotheses-v5", config={"hold_minutes": 45})
+    plan = build_plan(raw, interval="1m")
+    automatic = {row["id"]: row for row in plan["decisions"]["automatic"]}
+    omitted = {row["id"]: row for row in plan["decisions"]["not_searched"]}
+    assert automatic["interval"]["decision"] == "One-minute candles"
+    assert "already enabled" in omitted["trailing_activation"]["reason"]
+    assert "qualified observed volume" in omitted["liquidity"]["reason"]
+    assert parameters(plan)["hold_minutes"]["status"] == "search"
+    assert parameters(plan)["hold_sessions"]["status"] == "unavailable"
+    assert parameters(plan)["trailing_enabled"]["current"] is False
+    assert "trailing_pct" not in normalize(raw)["strategies"][0]["search"]
+
+
+def test_nautilus_decision_does_not_offer_unsupported_trailing_or_upgrade_recipe():
+    plan = build_plan(request(engine="nautilus"), interval="D")
+    omitted = {row["id"]: row for row in plan["decisions"]["not_searched"]}
+    assert "does not support trailing stops" in omitted["trailing_activation"]["reason"]
+    assert plan["execution_recipe_version"] == VERSION
+    assert "liquidity" not in omitted
+
+
 def test_stability_budget_and_causal_gates_are_explicit_and_version_specific():
     plan = build_plan(request(version=STABILITY_VERSION), interval="D")
     assert plan["search"]["budget"]["max_neighbor_simulations"] == 3 * 8 * 2

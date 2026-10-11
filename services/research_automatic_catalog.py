@@ -111,6 +111,136 @@ def _family(identifier, label, status, reason, requirements=(), blockers=()):
     }
 
 
+def _decisions(portfolio, interval, strategies, *, proposals, max_simulations):
+    """Explain automatic choices without claiming a completed admission check.
+
+    This is new preflight presentation evidence only. It never changes a saved
+    execution recipe, the request's version, or any numerical search domain.
+    """
+    intelligent = portfolio["automatic_research"]["version"].startswith("automatic-hypotheses-")
+    return {
+        "version": "automatic-decision-summary-v1",
+        "automatic": [
+            {
+                "id": "interval",
+                "label": "Price interval",
+                "decision": "Daily candles" if interval == "D" else "One-minute candles",
+            },
+            {
+                "id": "history",
+                "label": "Required history",
+                "decision": "Reuse Historify prices; fetch only missing execution and admitted feature windows through the connected broker.",
+            },
+            {
+                "id": "search",
+                "label": "Search budget",
+                "decision": f"Up to {proposals} proposals and {max_simulations} calculations, including comparisons and checks.",
+            },
+            {
+                "id": "ranges",
+                "label": "Trading settings",
+                "decision": "Bounded target, stop and active holding ranges; enabled trailing distance. Original settings remain a separate reference.",
+            },
+            {
+                "id": "checks",
+                "label": "Validation",
+                "decision": "Use recorded sessions and holding limits to test later periods when feasible; insufficient history produces an exploratory result."
+                if intelligent
+                else "Use this recipe's recorded chronological checks; insufficient history fails admission.",
+            },
+        ],
+        "retained": [
+            {
+                "id": "risk",
+                "label": "Account risk",
+                "decision": "Keep capital, allocations, order size and exposure unchanged for a fair comparison.",
+            },
+            {
+                "id": "costs",
+                "label": "Execution costs",
+                "decision": "Keep declared costs and slippage; challenge eligible settings with higher costs.",
+            },
+            {
+                "id": "timing",
+                "label": "Trading horizon and clocks",
+                "decision": "Keep the original intraday or multiday horizon and entry/exit clock rules.",
+            },
+        ],
+        "not_searched": [
+            {
+                "id": "trailing_activation",
+                "label": "Turning trailing stops on or off",
+                "reason": "Search trailing distance only for strategies where it is already enabled."
+                if portfolio["engine"] == "vectorbt"
+                else "The Nautilus OHLC adapter does not support trailing stops.",
+            },
+            {
+                "id": "timing_search",
+                "label": "Alternative entry and exit clocks",
+                "reason": "This recipe retains original execution timing.",
+            },
+            {
+                "id": "portfolio_risk_search",
+                "label": "Larger bets or different allocations",
+                "reason": "Changing account risk would invalidate comparison with the original setup.",
+            },
+            {
+                "id": "original_scanner",
+                "label": "Rebuilding the original scanner",
+                "reason": "A signals CSV cannot establish rules or the non-triggering universe.",
+            },
+            *(
+                [
+                    {
+                        "id": "liquidity",
+                        "label": "Volume and liquidity filters",
+                        "reason": "The frozen auxiliary feature input does not record qualified observed volume.",
+                    }
+                ]
+                if intelligent
+                else []
+            ),
+        ],
+        "prerequisites": [
+            {
+                "id": identifier,
+                "label": label,
+                "status": "pending",
+                "reason": reason,
+            }
+            for identifier, label, reason in (
+                (
+                    "coverage",
+                    "Price coverage",
+                    "Verify native execution and feature prices before scoring; missing observations never pass a filter.",
+                ),
+                (
+                    "calendar",
+                    "Trading sessions",
+                    "Verify the recorded exchange calendar and required session hours.",
+                ),
+                (
+                    "runtime",
+                    "Calculation runtime",
+                    "Check the selected engine and pinned numerical versions before execution.",
+                ),
+                (
+                    "validation",
+                    "Evidence for a recommendation",
+                    "Only completed checks can support an improvement; retaining original settings is a valid result.",
+                ),
+            )
+        ],
+        "scope": {
+            "exhaustive": False,
+            "recommendation_basis": "Strongest supported scenario among the tested settings; no global optimum or guaranteed profit.",
+            "searched_parameters": sum(
+                item["status"] == "search" for row in strategies for item in row["parameters"]
+            ),
+        },
+    }
+
+
 def _families(engine, version):
     conditions = version == CONDITION_VERSION
     stability = version == STABILITY_VERSION
@@ -328,6 +458,13 @@ def build_plan(portfolio, *, interval):
             "families": plan["methods"],
             "data": plan["data"],
             "fixed_assumptions": "Cash, allocation, sizing, exposure and costs stay fixed.",
+            "decisions": _decisions(
+                canonical,
+                interval,
+                strategies,
+                proposals=plan["budget"]["proposals"],
+                max_simulations=plan["budget"]["max_simulations"],
+            ),
         }
         return {**payload, "plan_id": fingerprint(payload)}
     conditions, stability = version == CONDITION_VERSION, version == STABILITY_VERSION
@@ -481,6 +618,13 @@ def build_plan(portfolio, *, interval):
             "search": "Broad bounded hypothesis screening, then refinement of supported parameter neighborhoods.",
             "compatibility": "A new recipe must not reinterpret or extend existing saved v1/v2 runs.",
         },
+        "decisions": _decisions(
+            canonical,
+            interval,
+            strategies,
+            proposals=search["proposals"],
+            max_simulations=max_simulations,
+        ),
     }
     if conditions:
         payload["limitations"].append(

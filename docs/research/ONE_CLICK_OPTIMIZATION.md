@@ -1,5 +1,18 @@
 # One-click research: product and execution contract
 
+## Current default and decision flow — 11 October 2026
+
+A new, unconfigured setup selects `automatic-hypotheses-v5` on VectorBT when the user chooses Optimize. The user confirms original financial and execution assumptions, then clicks **Optimize automatically**. The app plans candle interval, missing native history windows, supported stock/market hypotheses, bounded exit ranges, search budget and chronological checks. Older recipes are available under Advanced research options; explicit saved scopes, custom ranges and chosen rules are never silently upgraded. Nautilus uses the existing stability-checked exit recipe; it does not gain unsupported stock conditions.
+
+The current v5 catalog contains 92 stock/market choices across 32 families, 128 proposals and at most 320 native calculations. A preflight decision receipt separates app-selected work, retained assumptions, unsearched branches and pending admission. It is a plan, not evidence that every market filter passed or that a global optimum exists. Missing benchmark observations remain unknown; infeasible later tests remain exploratory. Valid conclusions include keeping the original setup or insufficient evidence.
+
+The current intake contract is long NSE cash-equity signals. Optional explicit Exchange/TradingExchange and AssetClass/AssetType/InstrumentType columns are checked before registration. Unsupported declarations are rejected with the row and scope. Plain Chartink Date/Symbol CSVs keep the NSE convention. Timestamps determine required candle resolution, not desired intraday versus multiday trading intent; original clocks and horizon remain user assumptions.
+
+Trailing activation, alternative entry/exit clocks, volume filters and account-risk optimisation still require separately versioned, qualified search capabilities. The new flow does not invent them or reinterpret saved results. Next engine admission: finite trailing-on/off branches with identical cash/cost assumptions and frozen-evidence replay before wider timing search.
+
+The dated sections below describe earlier milestones and defaults.
+
+
 ## Benchmark-aware relative strength — 1 October 2026
 
 Smart research now defaults to `automatic-hypotheses-v4`:23 registered stock

@@ -109,6 +109,57 @@ describe('automatic setup date and interval review', () => {
     view.rerender(view.element(changed))
     expect(screen.queryByText('What will be tested')).not.toBeInTheDocument()
   })
+  it('keeps automatic decisions and retained assumptions collapsed and removes stale decisions on edits', async () => {
+    const response = await portfolioResearch.preflight(draft().portfolio)
+    vi.mocked(portfolioResearch.preflight).mockResolvedValue({
+      ...response,
+      automatic_plan: {
+        version: 'automatic-search-plan-v1',
+        plan_id: 'exact',
+        execution_recipe_version: 'automatic-hypotheses-v5',
+        summary: { searched_parameters: 3, condition_presets: 92, max_simulations: 320 },
+        strategies: [],
+        decisions: {
+          version: 'automatic-decision-summary-v1',
+          automatic: [{ id: 'interval', label: 'Price interval', decision: 'Daily candles' }],
+          retained: [
+            { id: 'risk', label: 'Account risk', decision: 'Keep original capital and sizing.' },
+          ],
+          not_searched: [
+            { id: 'trailing', label: 'Trailing activation', reason: 'Retains original switch.' },
+          ],
+          prerequisites: [
+            {
+              id: 'coverage',
+              label: 'Price coverage',
+              status: 'pending',
+              reason: 'Checked before scoring.',
+            },
+          ],
+          scope: {
+            exhaustive: false,
+            recommendation_basis: 'Strongest tested scenario.',
+            searched_parameters: 3,
+          },
+        },
+      },
+    })
+    const view = mount()
+    const plan = (await screen.findByText('What will be tested')).closest('details')!
+    expect(plan.open).toBe(false)
+    plan.open = true
+    expect(screen.getByText('Daily candles')).toBeVisible()
+    expect(screen.getByText('Strongest tested scenario.')).toBeVisible()
+    const assumptions = screen.getByText('Assumptions and limits').closest('details')!
+    expect(assumptions.open).toBe(false)
+    assumptions.open = true
+    expect(screen.getByText(/Keep original capital and sizing/)).toBeVisible()
+    expect(screen.getByText(/Checked before scoring/)).toBeVisible()
+    const changed = draft()
+    changed.portfolio.capital = 200000
+    view.rerender(view.element(changed))
+    expect(screen.queryByText('Daily candles')).not.toBeInTheDocument()
+  })
   it('uses the native preview to show signal and actual reserved ranges', async () => {
     mount()
     expect(await screen.findByText(/Daily candles from OpenAlgo/)).toBeVisible()
