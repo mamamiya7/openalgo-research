@@ -1,5 +1,21 @@
 # OpenAlgo Research status
 
+## Native timing admission — 11 October 2026
+
+The next development increment adds a bounded presentation-only timing receipt to
+native preflight. Actual CSV timestamps and configured clocks/deadlines explain
+the selected daily/minute interval; mixed portfolios retain each strategy’s
+signal rule. Setup keeps the explanation collapsed under **Why these candles?**.
+No new clock search or asset support is claimed. The calendar-aware diagnostic
+uses recorded native NSE hours; setup previews retain pending calendar/coverage
+status and do not initiate acquisition. See the
+[contract and next search prerequisites](TIMING_ADMISSION_20261011.md).
+
+The completed v6 upgrade and matching frontend are pushed on
+`codex/native-research-refinement`; [draft integration PR6](https://github.com/mamamiya7/openalgo-research/pull/6)
+records the divergent public-main ancestry. Public preview.7 remains unchanged.
+
+
 ## Automatic trailing selection — 11 October 2026
 
 The next increment implements `automatic-hypotheses-v6`: new unconfigured VectorBT

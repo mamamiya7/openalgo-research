@@ -151,6 +151,13 @@ def resolve_inputs(store, owner, request):
 
 def preview(store, owner, request):
     evidence = resolve_inputs(store, owner, request)
+    from research.timing_admission import build_admission
+
+    timing = build_admission(
+        evidence["portfolio"],
+        evidence["strategies"],
+        interval=evidence["snapshot"]["provenance"]["interval"],
+    )
     automatic_plan = {}
     if evidence["portfolio"].get("automatic_research"):
         from services.research_automatic_catalog import build_plan
@@ -163,6 +170,7 @@ def preview(store, owner, request):
         "receipt": evidence["receipt"],
         "interval": evidence["snapshot"]["provenance"]["interval"],
         "versions": evidence["versions"],
+        "timing_admission": timing,
         **({"period_plan": evidence["period_plan"]} if evidence.get("period_plan") else {}),
         **automatic_plan,
     }

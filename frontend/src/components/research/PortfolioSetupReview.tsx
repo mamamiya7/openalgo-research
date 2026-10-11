@@ -30,6 +30,7 @@ export function PortfolioSetupReview({ draft }: { draft: PortfolioDraft }) {
   const error = settled === request ? preview.error : null
   const plan = current?.period_plan
   const automatic = current?.automatic_plan
+  const timing = current?.timing_admission
   return (
     <section
       className="space-y-1 text-xs text-muted-foreground"
@@ -42,6 +43,32 @@ export function PortfolioSetupReview({ draft }: { draft: PortfolioDraft }) {
             {current.receipt.signal_count.toLocaleString('en-IN')} signals ·{' '}
             {researchDates(current.receipt.date_from, current.receipt.date_to)}
           </p>
+          {timing && (
+            <details className="pt-1">
+              <summary className="w-fit cursor-pointer text-foreground">Why these candles?</summary>
+              <div className="mt-2 space-y-2">
+                {timing.strategies.map((strategy) => (
+                  <p key={strategy.id}>
+                    <span className="font-medium text-foreground">
+                      {current.portfolio.strategies.find((row) => row.id === strategy.id)?.name ??
+                        'Strategy'}
+                    </span>{' '}
+                    · {strategy.reason}.
+                    {strategy.required_interval !== timing.effective_interval &&
+                      ' Minute candles are shared across this portfolio.'}
+                    {strategy.fixed_clocks.entry_time &&
+                      ` Entry from ${strategy.fixed_clocks.entry_time}.`}
+                    {strategy.fixed_clocks.exit_time &&
+                      ` Exit clock ${strategy.fixed_clocks.exit_time}.`}
+                  </p>
+                ))}
+                {timing.status === 'pending_calendar' && (
+                  <p>Trading hours and holding windows are checked before downloading.</p>
+                )}
+                {timing.status === 'blocked' && <p>{timing.reason}</p>}
+              </div>
+            </details>
+          )}
           {plan && (
             <p>
               Selection signals {researchDates(plan.selection.from, plan.selection.to)} ·{' '}

@@ -160,6 +160,78 @@ describe('automatic setup date and interval review', () => {
     view.rerender(view.element(changed))
     expect(screen.queryByText('Daily candles')).not.toBeInTheDocument()
   })
+  it('keeps timing reasons collapsed and explains daily strategies sharing minute prices', async () => {
+    const response = await portfolioResearch.preflight(draft().portfolio)
+    vi.mocked(portfolioResearch.preflight).mockResolvedValue({
+      ...response,
+      interval: '1m',
+      timing_admission: {
+        version: 'research-timing-admission-v1',
+        id: 'recorded-timing',
+        status: 'pending_calendar',
+        reason: null,
+        required_interval: '1m',
+        effective_interval: '1m',
+        intent: 'mixed',
+        signals: { total: 10, timed: 2, date_only: 8 },
+        strategies: [
+          {
+            id: 'one',
+            required_interval: 'D',
+            reason: 'Daily execution uses the next recorded session after each dated signal',
+            fixed_clocks: { entry_time: null, exit_time: null },
+            searched_deadline: 'hold_sessions',
+            constraints: [{ parameter: 'hold_sessions', value: 5, maximum: 10 }],
+            dormant_parameters: [],
+          },
+        ],
+      },
+    })
+    const view = mount()
+    const explanation = (await screen.findByText('Why these candles?')).closest('details')!
+    expect(explanation.open).toBe(false)
+    expect(screen.getByText(/Daily execution uses/)).not.toBeVisible()
+    explanation.open = true
+    expect(screen.getByText(/Minute candles are shared across this portfolio/)).toBeVisible()
+    expect(screen.getByText(/checked before downloading/)).toBeVisible()
+    const changed = draft()
+    changed.portfolio.capital = 200000
+    view.rerender(view.element(changed))
+    expect(screen.queryByText('Why these candles?')).not.toBeInTheDocument()
+  })
+  it('shows retained clocks without suggesting they are being optimized', async () => {
+    const response = await portfolioResearch.preflight(draft().portfolio)
+    vi.mocked(portfolioResearch.preflight).mockResolvedValue({
+      ...response,
+      interval: '1m',
+      timing_admission: {
+        version: 'research-timing-admission-v1',
+        id: 'clock-timing',
+        status: 'pending_calendar',
+        reason: null,
+        required_interval: '1m',
+        effective_interval: '1m',
+        intent: 'timed',
+        signals: { total: 10, timed: 0, date_only: 10 },
+        strategies: [
+          {
+            id: 'one',
+            required_interval: '1m',
+            reason: 'Entry/exit clocks require minute prices',
+            fixed_clocks: { entry_time: '09:30', exit_time: '15:00' },
+            searched_deadline: null,
+            constraints: [],
+            dormant_parameters: [],
+          },
+        ],
+      },
+    })
+    mount()
+    const explanation = (await screen.findByText('Why these candles?')).closest('details')!
+    explanation.open = true
+    expect(screen.getByText(/Entry from 09:30.*Exit clock 15:00/)).toBeVisible()
+    expect(screen.queryByText(/Minute candles are shared/)).not.toBeInTheDocument()
+  })
   it('uses the native preview to show signal and actual reserved ranges', async () => {
     mount()
     expect(await screen.findByText(/Daily candles from OpenAlgo/)).toBeVisible()

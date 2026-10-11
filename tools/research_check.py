@@ -94,6 +94,7 @@ REQUIRED_RESEARCH_FILES = {
     "research/connectors/optuna_portfolio.py",
     "research/automatic_protocol.py",
     "research/automatic_trailing.py",
+    "research/timing_admission.py",
     "research/joint_stock_market.py",
     "research/stock_market_context.py",
     "services/research_stock_market_context.py",

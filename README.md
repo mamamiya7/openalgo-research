@@ -20,7 +20,7 @@ a CSV export, or reuse saved signals.
 · [Install and start](docs/research/RUNTIME.md)
 · [Release notes](docs/research/releases/0.1.0-preview.7.md)
 · [Architecture](docs/research/SYSTEM_MAP.md)
-· [Latest source](https://github.com/mamamiya7/openalgo-research/tree/main)
+· [Released source](https://github.com/mamamiya7/openalgo-research/tree/main)
 
 Preview.7 includes [faster Historify cache checks](docs/research/HISTORIFY_CHECKS.md)
 and the patched Axios dependency. Guided setup, Chartink entry and saved reports
@@ -36,6 +36,12 @@ The development source integrates OpenAlgo **2.0.2.7** at reviewed upstream
 stop selection, concise findings, retained entry rules and native chart Values.
 One Optimize action compares the original settings with supported candidates;
 it checks later periods, costs and stability when the available history permits.
+
+[Development source](https://github.com/mamamiya7/openalgo-research/tree/codex/native-research-refinement)
+· [Integration PR](https://github.com/mamamiya7/openalgo-research/pull/6).
+Preflight also explains the selected candle interval from actual CSV timing and
+holding rules under **Why these candles?**; automatic clock search remains a
+separate [qualification step](docs/research/TIMING_ADMISSION_20261011.md).
 
 The public ZIP above remains **preview.7**. Preview.8 is qualified in the local
 application and controlled native journeys; its complete Windows/Linux release

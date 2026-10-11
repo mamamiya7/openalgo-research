@@ -553,7 +553,27 @@ export interface PortfolioJob {
   source_summary?: { signal_count?: number; date_from?: string; date_to?: string; name?: string }
   result?: PortfolioResult
 }
+export interface TimingAdmission {
+  version: 'research-timing-admission-v1'
+  id: string
+  status: 'pending_calendar' | 'ready' | 'blocked'
+  reason: string | null
+  required_interval: 'D' | '1m'
+  effective_interval: 'D' | '1m'
+  intent: 'daily' | 'timed' | 'mixed'
+  signals: { total: number; timed: number; date_only: number }
+  strategies: Array<{
+    id: string
+    required_interval: 'D' | '1m'
+    reason: string
+    fixed_clocks: { entry_time: string | null; exit_time: string | null }
+    searched_deadline: string | null
+    constraints: Array<{ parameter: string; value?: number | string; maximum?: number }>
+    dormant_parameters: string[]
+  }>
+}
 export interface PortfolioPreview {
+  timing_admission?: TimingAdmission
   automatic_plan?: {
     version: string
     plan_id: string
