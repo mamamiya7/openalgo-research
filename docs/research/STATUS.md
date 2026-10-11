@@ -21,8 +21,9 @@ Frontend checks and the production build pass. These controlled fixtures are not
 fresh broker-download or real-market performance acceptance.
 
 See the [implementation and acceptance contract](AUTOMATIC_TRAILING_20261011.md).
-Normal-app activation is recorded separately after idle-worker and saved-evidence
-checks. Public preview.7 remains unchanged; broader asset/timing admission,
+Normal-app activation passed the idle-worker and saved-evidence checks: all58
+saved runs, artifact identities and configuration are preserved, and all161
+installed compatibility checks pass. Public preview.7 remains unchanged; broader asset/timing admission,
 comparison curves, native authoring and background diagnostic execution remain
 separate planned increments. Older checkpoints below describe their dated state.
 
