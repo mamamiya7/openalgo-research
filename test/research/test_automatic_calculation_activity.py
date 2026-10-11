@@ -53,7 +53,7 @@ def test_joint_calculation_activity_reports_later_work_without_changing_exact_ev
     display = {}
     for event in events:
         display = merge_activity(display, event, 1)
-    assert display["stage"] == "validation"
+    assert display["stage"] == "analysis"
     assert display["calculations"] == counts[-1]
     # Completed resume exposes the recorded successful calls without new work.
     resumed = []
@@ -64,7 +64,11 @@ def test_joint_calculation_activity_reports_later_work_without_changing_exact_ev
         activity=resumed.append,
     )
     assert repeated == reference
-    assert resumed[-1]["calculations"] == counts[-1]
+    assert resumed[-1]["stage"] == "analysis"
+    assert (
+        next(event["calculations"] for event in reversed(resumed) if "calculations" in event)
+        == counts[-1]
+    )
 
 
 def test_failed_engine_attempt_is_not_displayed_as_completed_calculation():

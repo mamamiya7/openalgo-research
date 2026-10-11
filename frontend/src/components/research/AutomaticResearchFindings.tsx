@@ -48,7 +48,7 @@ export function AutomaticResearchFindings({ findings }: { findings: Findings }) 
         </span>
         <div className="min-w-0 space-y-1">
           <p className="text-xs font-medium tracking-wide text-muted-foreground">
-            Exploratory research
+            {final ? 'Automatic research' : 'Exploratory research'}
           </p>
           <h3 className="text-lg font-semibold">{findings.headline}</h3>
           <p className="max-w-3xl text-sm text-muted-foreground">

@@ -897,6 +897,8 @@ def run(
     }
     from research.study_analysis import build_study_analysis
 
+    if activity:
+        activity({"stage": "analysis"})
     result["experiment"]["study_analysis"] = build_study_analysis(
         result["experiment"], progress=beat
     )

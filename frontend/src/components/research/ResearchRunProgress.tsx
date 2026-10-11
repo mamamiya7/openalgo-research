@@ -62,7 +62,7 @@ function stepIndex(stage?: ResearchActivity['stage']): number {
   if (stage === 'csv') return 0
   if (['planning', 'cache', 'download', 'verify', 'features'].includes(stage)) return 1
   if (['initializing', 'optimizing', 'backtest', 'validation'].includes(stage)) return 2
-  return stage === 'saving' || stage === 'complete' ? 3 : -1
+  return ['analysis', 'saving', 'complete'].includes(stage) ? 3 : -1
 }
 
 function stageTitle(activity?: ResearchActivity, optimizing = false, recipe?: string) {
@@ -90,6 +90,8 @@ function stageTitle(activity?: ResearchActivity, optimizing = false, recipe?: st
       return recipe?.startsWith('automatic-')
         ? 'Checking shortlisted settings'
         : 'Checking the later period'
+    case 'analysis':
+      return 'Preparing study charts'
     case 'saving':
       return 'Saving results'
     case 'complete':

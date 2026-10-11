@@ -143,6 +143,7 @@ export interface ResearchActivity {
     | 'optimizing'
     | 'backtest'
     | 'validation'
+    | 'analysis'
     | 'saving'
     | 'complete'
   started_at: number

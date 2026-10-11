@@ -57,6 +57,12 @@ afterEach(() => {
 })
 
 describe('Research progress journey', () => {
+  it('distinguishes chart generation from financial validation', () => {
+    render(<ResearchRunProgress job={job({ ...base, stage: 'analysis' })} />)
+    expect(screen.getByRole('status')).toHaveTextContent('Preparing study charts')
+    expect(screen.getByRole('progressbar')).toHaveAccessibleName('Preparing study charts')
+    expect(screen.getByRole('status')).not.toHaveTextContent('Checking')
+  })
   it('shows actual calculation counts during automatic checks without treating the budget as an exact total', () => {
     const automatic = {
       ...portfolio,

@@ -12,6 +12,10 @@ VERSION = "research-analysis-v1"
 MAX_TRIALS = 1000
 MAX_AXES = 57
 MAX_FIGURE_BYTES = 8 * 1024 * 1024
+# fANOVA integrates all one-hot dimensions of a categorical parameter jointly.
+# Its tree midpoint Cartesian product can grow exponentially with the category
+# count. Bound admission before fitting; proposal count alone does not bound it.
+MAX_FANOVA_CATEGORIES = 8
 
 
 def reconstruct_study(experiment):
@@ -138,6 +142,19 @@ def build_study_analysis(experiment, *, parameters=None, progress=None):
 
     empty = None if completed else "This study needs a completed trial."
     need_params = empty or (None if params else "This study has no searched parameters.")
+    large_categories = [
+        (name, len(axis["choices"]))
+        for name, axis in axes.items()
+        if axis.get("type") == "categorical" and len(axis["choices"]) > MAX_FANOVA_CATEGORIES
+    ]
+    importance_limit = (
+        "Parameter importance is unavailable: native fANOVA is limited to "
+        f"{MAX_FANOVA_CATEGORIES} choices per categorical parameter to keep report preparation bounded. "
+        + "; ".join(f"{name}: {count} choices" for name, count in large_categories)
+        + ". Other study charts and saved calculation results remain available."
+        if large_categories
+        else None
+    )
     need_pair = empty or (
         None
         if len(params) == 2 and all(p in varied for p in params)
@@ -158,6 +175,7 @@ def build_study_analysis(experiment, *, parameters=None, progress=None):
             target_name=target_name,
         ),
         empty
+        or importance_limit
         or (
             None
             if len(completed) >= 3 and varied and len({t.value for t in completed}) > 1
@@ -236,7 +254,9 @@ def build_study_analysis(experiment, *, parameters=None, progress=None):
         "basis": [
             f"Optuna {optuna.__version__} native visualizations; recorded proposals and objective scores.",
             "Repeated proposals and rejected allocations remain in the study. No trial was rerun.",
-            "Parameter importance uses seeded fANOVA (32 trees, depth 8); it describes this search, not future performance.",
+            "Parameter importance, when available, uses seeded fANOVA (32 trees, depth 8); "
+            f"categorical parameters above {MAX_FANOVA_CATEGORIES} choices are not estimated. "
+            "It describes this search, not future performance.",
             "Timeline uses the original calculation runtime's local clock where recorded.",
         ],
         "parameters": params,

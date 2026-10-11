@@ -14,6 +14,7 @@ STAGES = {
     "optimizing",
     "backtest",
     "validation",
+    "analysis",
     "saving",
     "complete",
 }

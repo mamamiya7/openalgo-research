@@ -76,7 +76,8 @@ describe('automatic research findings', () => {
   })
   it('compares selected and original rules using the final period, with research details collapsed', async () => {
     render(<AutomaticResearchFindings findings={findings()} />)
-    expect(screen.getByText('Exploratory research')).toBeVisible()
+    expect(screen.getByText('Automatic research')).toBeVisible()
+    expect(screen.queryByText('Exploratory research')).not.toBeInTheDocument()
     expect(
       screen.getByRole('heading', { name: 'The improvement held up on later dates' })
     ).toBeVisible()
