@@ -64,6 +64,23 @@ No Python engine, installer or numerical source changes accompany this dependenc
 follow-up. Its package/fresh-install checks can run separately from the unchanged
 runtime matrix; both receipts are required before public release.
 
+The corrected package/fresh-install run
+[38125956498](https://github.com/mamamiya7/openalgo-research/actions/runs/38125956498)
+passes on Windows and Linux, including calculation, reinstall and restart. The
+broader Linux run found 47 failures alongside 2,463 passes: older assertions
+counted optional diagnostics as financial jobs, tried maintenance with queued
+analysis, or treated a result artifact as a resumable checkpoint. Updated tests
+complete real bounded diagnostic jobs and retain numerical artifact, concurrency,
+export and backup identities; 192 affected workflow checks pass locally. Another
+87 packaging, build-reuse and automatic-policy checks pass, with one expected
+platform skip. Two
+packaging fault injections now target the owned temporary-directory cleanup
+boundary, preserving real read-only/long-path and scoped removal checks. An
+unsupported-policy assertion now uses an actually unknown version rather than
+the implemented v7. These are test-only corrections; public release still needs
+the corrected full platform qualification. The running installed financial
+runtime and frontend are unchanged by this follow-up.
+
 ## Automatic trade timing — 11 October 2026
 
 `automatic-hypotheses-v7` integrates joint stock/market conditions, trailing and

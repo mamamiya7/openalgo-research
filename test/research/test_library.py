@@ -18,6 +18,7 @@ from test_acquisition import reference
 from test_jobs import app, client  # noqa: F401
 from test_native_price_workflow import prepare_archive
 from test_portfolio_workflow import portfolio as request_for
+from workflow_job_helpers import complete_optional_jobs
 
 from database.research_db import (
     Base,
@@ -486,6 +487,11 @@ def test_real_search_to_selected_draft_keeps_parent_and_original_evidence(
     from database.research_db import ResearchStore
     from services.research_storage import backup_store, prune_orphans, restore_store
 
+    # Maintenance needs an idle queue; optional analysis may enrich the current
+    # receipt without changing the numerical artifact or its original export.
+    complete_optional_jobs(store)
+    receipt_before_backup = client.get(f"/scanner-research/api/jobs/{job_id}").json["result"]
+    assert hashlib.sha256(client.get(export_url).data).hexdigest() == original_export
     orphan = service.save_artifact(store, {"unused_library_test_artifact": True})
     orphan_path = store.root / "artifacts" / f"{orphan}.json.gz"
     os.utime(orphan_path, (time.time() - 7200, time.time() - 7200))
@@ -506,7 +512,7 @@ def test_real_search_to_selected_draft_keeps_parent_and_original_evidence(
         }
         assert (
             service.job_receipt(restored_store, original_job, include_result=True)["result"]
-            == job["result"]
+            == receipt_before_backup
         )
     finally:
         restored_store.close()

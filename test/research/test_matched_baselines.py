@@ -6,13 +6,14 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 
 import pytest
-from sqlalchemy import event, func, select
+from sqlalchemy import event, select
 from test_jobs import app, client
 from test_library import OWNER, create, run
 from test_portfolio_validation import inputs
 from test_report_period_workflow import draft, run_worker
 from test_shortlist import change_result
 from test_vectorbt_portfolio import snapshot as minute_snapshot
+from workflow_job_helpers import complete_optional_jobs, numerical_job_count
 
 from database.research_db import (
     ResearchJob,
@@ -113,8 +114,7 @@ def result(store, job_id):
 
 
 def count(store):
-    with store.sessions() as db:
-        return db.scalar(select(func.count()).select_from(ResearchJob))
+    return numerical_job_count(store)
 
 
 @pytest.mark.parametrize("reserved", [False, True])
@@ -338,6 +338,7 @@ def test_native_replay_backup_and_restore_keep_matched_baseline_identity(
         tmp_path.with_name(tmp_path.name + "-backup"),
         tmp_path.with_name(tmp_path.name + "-restored"),
     )
+    complete_optional_jobs(store)
     backup_store(store, backup)
     restore_store(backup, restored_path)
     restored = ResearchStore(restored_path)

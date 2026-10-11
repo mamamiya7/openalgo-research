@@ -18,6 +18,7 @@ from test_portfolio_validation import inputs
 from test_report_period_workflow import draft, run_worker
 from test_shortlist import change_result
 from test_shortlist import save as save_candidate
+from workflow_job_helpers import complete_optional_job, complete_optional_jobs
 
 from database.research_db import (
     ResearchDecision,
@@ -361,7 +362,8 @@ def test_analysis_pin_and_original_null_survive_later_upgrade(app, client, monke
     first_path = f"{base}/decisions/{first['decision']['id']}/events/{first['event']['id']}/report?evidence=evaluation"
     before = client.get(first_path).json
     upgraded = research_analysis.submit(store, OWNER, later, symbol="AAA")
-    run_worker(store)
+    analysis_job = complete_optional_job(store, upgraded["analysis_job_id"])
+    assert analysis_job.result_artifact
     refreshed = client.get(path + "/decision").json["evaluation"]["items"][0]
     assert refreshed["id"] != original["id"]
     assert (
@@ -412,6 +414,7 @@ def test_populated_backup_restores_decisions_openings_and_pinned_later_evidence(
     )
     for member in members:
         client.delete(f"{base}/shortlist/{member['id']}", json={"revision": 1})
+    complete_optional_jobs(store)
     change_result(store, later, lambda result: result["summary"].update(net_return_pct=999))
     backup = tmp_path.with_name(tmp_path.name + "-decisions-backup")
     backup_store(store, backup)

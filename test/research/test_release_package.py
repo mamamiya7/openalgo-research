@@ -125,18 +125,21 @@ def test_transient_windows_staging_cleanup_still_returns_valid_package(source, m
     from tools import research_release
 
     output = source / ".agent-native/release/cleanup-retry"
-    remove = shutil.rmtree
+    cleanup = research_release.tempfile.TemporaryDirectory.cleanup
     attempts = []
     waits = []
 
-    def temporarily_locked(path, *args, **kwargs):
+    def temporarily_locked(temporary):
+        path = temporary.name
         if Path(path).name.startswith("staging-") and Path(path).parent.samefile(output):
             attempts.append(Path(path))
             if len(attempts) == 1:
                 raise windows_cleanup_error()
-        return remove(path, *args, **kwargs)
+        return cleanup(temporary)
 
-    monkeypatch.setattr(research_release.shutil, "rmtree", temporarily_locked)
+    # Inject at the owned cleanup boundary, rather than assuming tempfile's
+    # stdlib-internal shutil reference shares this module's import on every OS.
+    monkeypatch.setattr(research_release.tempfile.TemporaryDirectory, "cleanup", temporarily_locked)
     monkeypatch.setattr(research_release.time, "sleep", waits.append)
     artifact = package(source, output, build)
     assert zipfile.is_zipfile(artifact)
@@ -200,7 +203,7 @@ def test_build_exception_survives_cleanup_failure_with_visible_note(tmp_path, mo
     def locked(*_args, **_kwargs):
         raise windows_cleanup_error()
 
-    monkeypatch.setattr(research_release.shutil, "rmtree", locked)
+    monkeypatch.setattr(research_release.tempfile.TemporaryDirectory, "cleanup", locked)
     monkeypatch.setattr(research_release.time, "sleep", lambda _: None)
     with pytest.raises(RuntimeError, match="original builder failure") as caught:
         with staging_directory(tmp_path):

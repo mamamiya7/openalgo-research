@@ -11,6 +11,7 @@ from sqlalchemy import event, inspect, select, text
 from sqlalchemy.pool import NullPool
 from test_jobs import app, client  # noqa: F401
 from test_portfolio_validation import inputs
+from workflow_job_helpers import complete_optional_jobs
 
 from database.research_db import (
     ResearchExperiment,
@@ -550,6 +551,8 @@ def test_populated_schema_upgrade_backup_restore_and_integrity(app, client, tmp_
     assert service.get_job(store, OWNER, job_id).status == "queued"
     run_worker(store)
     before = copy.deepcopy(client.get(path(job_id)).json)
+    complete_optional_jobs(store)
+    assert client.get(path(job_id)).json == before
     tmp_path = tmp_path_factory.mktemp("study-activity-maintenance")
     backup_store(store, tmp_path / "activity-backup")
     restore_store(tmp_path / "activity-backup", tmp_path / "activity-restored")
