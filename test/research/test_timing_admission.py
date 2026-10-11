@@ -271,6 +271,21 @@ def test_receipt_ignores_raw_csv_private_receipts_and_ohlc_but_binds_normalized_
     assert build_admission(portfolio, rows, calendar=native)["inputs_id"] != original["inputs_id"]
 
 
+def test_timing_receipt_cannot_change_a_frozen_automatic_v6_recipe_or_numerical_evidence():
+    from test_automatic_trailing import prepared
+
+    from research.automatic_protocol import compile_recipe
+    from research.portfolio import fingerprint
+
+    value = prepared(sessions=60)
+    before = fingerprint(value)
+    recipe = deepcopy(value["automatic_recipe"])
+    receipt = build_admission(value["portfolio"], value["strategies"])
+    assert receipt["timing_search"]["status"] == "not_searched"
+    assert compile_recipe(value) == recipe
+    assert fingerprint(value) == before
+
+
 def test_bounds_are_enforced_before_timing_loops_or_fingerprints():
     portfolio, rows = inputs()
     rows[0]["signals"] *= 25001
@@ -278,3 +293,6 @@ def test_bounds_are_enforced_before_timing_loops_or_fingerprints():
         build_admission(portfolio, rows)
     with pytest.raises(ValueError, match="eight"):
         build_admission(portfolio, [])
+    portfolio, rows = inputs()
+    with pytest.raises(ValueError, match="3000"):
+        build_admission(portfolio, rows, calendar={"sessions": [DAYS[0]] * 3001})

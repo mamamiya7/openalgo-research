@@ -61,10 +61,10 @@ in [STATUS.md](STATUS.md); the completed trailing increment is recorded in
 
 ## Qualification
 
-24 pure timing cases pass, including385 comparisons against the native
+25 pure timing cases pass, including385 comparisons against the native
 entry/deadline scheduler on regular, short and special sessions. Seven native
 CSV/preflight integration cases pass. Existing automatic catalog and chosen-rule
-regressions bring the backend acceptance to88 distinct cases.80 frontend setup
+regressions bring the backend acceptance to89 distinct cases.80 frontend setup
 and journey cases pass; TypeScript and the production frontend build pass.
 Structural source compatibility checks and changed Python lint pass.
 

@@ -206,6 +206,12 @@ def build_admission(portfolio, strategies, *, interval=None, calendar=None):
         raise ValueError("Timing admission supports one to eight native strategies")
     if sum(len(row["signals"]) for row in strategies) > 25000:
         raise ValueError("Timing admission supports at most 25000 normalized signals")
+    if calendar is not None and (
+        not isinstance(calendar, dict)
+        or not isinstance(calendar.get("sessions", []), list)
+        or len(calendar.get("sessions", [])) > 3000
+    ):
+        raise ValueError("Timing admission needs at most 3000 recorded calendar sessions")
     required = requirement_strategies(portfolio, strategies)
     expected = interval_for(portfolio, strategies)
     effective = expected if interval is None else interval
