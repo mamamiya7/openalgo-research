@@ -33,6 +33,7 @@ COUNTERS = {
     },
     "features": {"total_symbols", "completed_symbols"},
     "trials": {"total", "completed", "evaluated", "reused", "rejected", "failed"},
+    "calculations": {"completed", "limit"},
 }
 
 

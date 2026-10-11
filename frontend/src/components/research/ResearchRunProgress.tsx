@@ -87,7 +87,9 @@ function stageTitle(activity?: ResearchActivity, optimizing = false, recipe?: st
     case 'backtest':
       return 'Running your backtest'
     case 'validation':
-      return 'Checking the later period'
+      return recipe?.startsWith('automatic-')
+        ? 'Checking shortlisted settings'
+        : 'Checking the later period'
     case 'saving':
       return 'Saving results'
     case 'complete':
@@ -494,6 +496,15 @@ export function ResearchRunProgress({ job }: { job: ProgressJob }) {
             <TrialHistory history={trials} />
           </div>
         )}
+        {activity?.stage === 'validation' &&
+          valid(activity.calculations?.completed) &&
+          valid(activity.calculations?.limit) &&
+          activity.calculations.completed <= activity.calculations.limit && (
+            <p className="text-sm tabular-nums text-muted-foreground">
+              {count(activity.calculations.completed)} calculations completed · limit{' '}
+              {count(activity.calculations.limit)}
+            </p>
+          )}
         {running && current !== 1 && !showTrials && <StageBar label={title} />}
         {activity?.inputs?.excluded_rows ? (
           <p className="text-xs text-muted-foreground">

@@ -57,6 +57,36 @@ afterEach(() => {
 })
 
 describe('Research progress journey', () => {
+  it('shows actual calculation counts during automatic checks without treating the budget as an exact total', () => {
+    const automatic = {
+      ...portfolio,
+      automatic_research: { version: 'automatic-hypotheses-v5' as const },
+    }
+    const { rerender } = render(
+      <ResearchRunProgress
+        job={{
+          ...job({ ...base, stage: 'validation', calculations: { completed: 160, limit: 320 } }),
+          specification: { portfolio: automatic },
+        }}
+      />
+    )
+    expect(screen.getByRole('status')).toHaveTextContent('Checking shortlisted settings')
+    expect(screen.getByText('160 calculations completed · limit 320')).toBeVisible()
+    expect(screen.getByRole('progressbar')).not.toHaveAttribute('value')
+    expect(screen.getByRole('status')).not.toHaveTextContent('160')
+    rerender(
+      <ResearchRunProgress
+        job={{
+          ...job({ ...base, stage: 'validation', calculations: { completed: 180, limit: 320 } }),
+          specification: { portfolio: automatic },
+        }}
+      />
+    )
+    expect(screen.getByText('180 calculations completed · limit 320')).toBeVisible()
+    rerender(<ResearchRunProgress job={job({ ...base, stage: 'validation' })} />)
+    expect(screen.getByRole('status')).toHaveTextContent('Checking the later period')
+    expect(screen.queryByText(/calculations completed/)).not.toBeInTheDocument()
+  })
   it('shows the exact planned candles before archive checks finish, without claiming download totals', () => {
     render(<ResearchRunProgress job={job(base)} />)
     expect(screen.getByText('420 signals · 18 symbols')).toBeVisible()

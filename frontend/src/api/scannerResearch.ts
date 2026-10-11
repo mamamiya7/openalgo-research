@@ -174,6 +174,7 @@ export interface ResearchActivity {
     failed?: number
     history?: Array<{ trial: number; score: number }>
   }
+  calculations?: { completed?: number; limit?: number }
   batch_count?: number
 }
 export interface ResearchJob {

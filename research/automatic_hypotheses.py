@@ -355,6 +355,13 @@ def run(
                 "stage": stage,
             },
         )
+        if activity:
+            # Completed calls, not proposals or reserved attempts. The limit is
+            # a policy ceiling, never a claim that this many calls are required.
+            # Keep stage untouched while later-period calculations persist.
+            activity(
+                {"calculations": {"completed": state["simulations"], "limit": max_simulations}}
+            )
 
     def beat(done, total):
         cancelled()
@@ -580,6 +587,7 @@ def run(
         activity(
             {
                 "stage": "validation",
+                "calculations": {"completed": state["simulations"], "limit": max_simulations},
                 "trials": {
                     "total": proposals,
                     "completed": len(state["trials"]),
