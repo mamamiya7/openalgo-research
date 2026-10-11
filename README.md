@@ -30,12 +30,19 @@ condition-search and unfinished-study features are not included; their
 
 ## Current development
 
-The reviewed development source now integrates OpenAlgo main `ee26e4e24cae`,
-including native charts 2.6.0 and OpenScript 0.8.1. The public download above
-remains preview.7. New native chart Values and bounded stock-and-market research
-are being qualified for the next package; they are not included in that ZIP.
-See the [native refinement plan](docs/research/DELIVERY_PLAN.md) and
-[upstream update](docs/research/UPSTREAM_UPDATE_20261007.md).
+The development source integrates OpenAlgo **2.0.2.7** at reviewed upstream
+`12e111465798`, with native charts 2.6.0 and OpenScript 0.8.1. Research
+**preview.8** adds bounded automatic stock/market-condition research and trailing
+stop selection, concise findings, retained entry rules and native chart Values.
+One Optimize action compares the original settings with supported candidates;
+it checks later periods, costs and stability when the available history permits.
+
+The public ZIP above remains **preview.7**. Preview.8 is qualified in the local
+application and controlled native journeys; its complete Windows/Linux release
+acceptance remains pending. See [current status](docs/research/STATUS.md), the
+[trailing-selection contract](docs/research/AUTOMATIC_TRAILING_20261011.md),
+[native refinement plan](docs/research/DELIVERY_PLAN.md) and
+[upstream update](docs/research/UPSTREAM_UPDATE_20261011.md).
 
 ## What do I need to download?
 
