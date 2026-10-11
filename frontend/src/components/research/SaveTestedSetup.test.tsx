@@ -143,6 +143,21 @@ it('does not expose a write action in read-only studies', () => {
   expect(researchDecisions.context).not.toHaveBeenCalled()
 })
 
+it('opens from the keyboard, contains Tab focus, and returns focus to the opener on Escape', async () => {
+  mount()
+  const opener = screen.getByRole('button', { name: 'Save tested setup' })
+  await userEvent.tab()
+  expect(opener).toHaveFocus()
+  await userEvent.keyboard('{Enter}')
+  await screen.findByLabelText('Setup name')
+  const dialog = screen.getByRole('dialog')
+  await userEvent.tab()
+  expect(dialog).toContainElement(document.activeElement as HTMLElement)
+  await userEvent.keyboard('{Escape}')
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  expect(opener).toHaveFocus()
+})
+
 it('aborts a pending Keep when the viewed evidence changes and never chooses its late event', async () => {
   let finish!: (value: Awaited<ReturnType<typeof researchDecisions.save>>) => void
   vi.mocked(researchDecisions.save).mockImplementationOnce(

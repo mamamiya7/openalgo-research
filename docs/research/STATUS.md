@@ -21,7 +21,7 @@ Setup has no horizontal document overflow at a 390px viewport. These checks do
 not certify the entire accessibility matrix or a new real-broker download.
 
 Qualification includes 114 recovery/backend cases and 61 independent-diagnostics
-cases in their scoped suites, a final 673-case research frontend regression, and a
+cases in their scoped suites, a final 681-case research/native-layout frontend regression, and a
 191-case follow-up covering the revised report/header/history path. A final
 14-case backend rerun checks materialisation priority, progress and intraday
 saved dates; eight save/report lifecycle cases include a late-response fence.
@@ -101,6 +101,18 @@ No application or search budget changes accompany this correction. A guarded
 manual slice recheck preserves the remaining full-run evidence only when runtime,
 dependency files and the complete test-module inventory match the qualified
 candidate. It cannot independently qualify a package or either complete platform.
+
+The final controlled keyboard walkthrough found and corrected focus return when
+closing Save tested setup or New research with Escape. Legacy `view=results`
+links now resolve the viewed job's kind before the latest result, preserving the
+correct optimisation/backtest return destination. Keyboard/lifetime/alias
+regressions, TypeScript, build and dependency audit pass. The existing reduced-
+motion rule now belongs to the research layout and covers library dialogs too.
+Invalid, timed and mixed CSV previews do not start a calculation or acquisition;
+browser Back/reload retain the inspected study/trial context. Chosen setup and
+report pages also avoid document overflow at 390px. Browser controls did not
+expose actual 200% zoom or reduced-motion emulation, so these checks remain
+targeted evidence rather than a complete accessibility certification.
 
 ## Automatic trade timing — 11 October 2026
 

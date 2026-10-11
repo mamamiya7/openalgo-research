@@ -18,6 +18,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -195,90 +196,90 @@ export function SaveTestedSetup({
     }
   }
   return (
-    <>
-      <Button size="sm" disabled={readOnly} onClick={() => setOpen(true)}>
-        Save tested setup
-      </Button>
-      <Dialog open={open} onOpenChange={close}>
-        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Save tested setup</DialogTitle>
-            <DialogDescription>
-              Keep these exact rules and their saved evidence together for reuse.
-            </DialogDescription>
-          </DialogHeader>
-          {context.isPending ? (
-            <output>Checking saved evidence…</output>
-          ) : context.isError ? (
-            <p role="alert">
-              {researchError(context.error)}{' '}
-              <Button variant="link" onClick={() => void context.refetch()}>
-                Retry
-              </Button>
-            </p>
-          ) : (
-            <form
-              className="space-y-4"
-              onSubmit={(event) => {
-                event.preventDefault()
-                void save()
-              }}
-            >
+    <Dialog open={open} onOpenChange={close}>
+      <DialogTrigger asChild>
+        <Button size="sm" disabled={readOnly}>
+          Save tested setup
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Save tested setup</DialogTitle>
+          <DialogDescription>
+            Keep these exact rules and their saved evidence together for reuse.
+          </DialogDescription>
+        </DialogHeader>
+        {context.isPending ? (
+          <output>Checking saved evidence…</output>
+        ) : context.isError ? (
+          <p role="alert">
+            {researchError(context.error)}{' '}
+            <Button variant="link" onClick={() => void context.refetch()}>
+              Retry
+            </Button>
+          </p>
+        ) : (
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void save()
+            }}
+          >
+            <div className="space-y-2">
+              <Label htmlFor="tested-setup-name">Setup name</Label>
+              <Input
+                id="tested-setup-name"
+                value={name}
+                maxLength={120}
+                readOnly={busy || Boolean(chooseRequest.current)}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </div>
+            {context.data?.current?.current.state !== 'keep' && (
               <div className="space-y-2">
-                <Label htmlFor="tested-setup-name">Setup name</Label>
-                <Input
-                  id="tested-setup-name"
-                  value={name}
-                  maxLength={120}
-                  readOnly={busy || Boolean(chooseRequest.current)}
-                  onChange={(event) => setName(event.target.value)}
+                <Label htmlFor="tested-setup-note">Note (optional)</Label>
+                <Textarea
+                  id="tested-setup-note"
+                  value={note}
+                  maxLength={2000}
+                  readOnly={busy || Boolean(keepRequest.current)}
+                  onChange={(event) => setNote(event.target.value)}
                 />
               </div>
-              {context.data?.current?.current.state !== 'keep' && (
-                <div className="space-y-2">
-                  <Label htmlFor="tested-setup-note">Note (optional)</Label>
-                  <Textarea
-                    id="tested-setup-note"
-                    value={note}
-                    maxLength={2000}
-                    readOnly={busy || Boolean(keepRequest.current)}
-                    onChange={(event) => setNote(event.target.value)}
-                  />
-                </div>
-              )}
-              <p className="text-sm text-muted-foreground">
-                Records Keep and saves a reusable setup. Trading stays unchanged.
+            )}
+            <p className="text-sm text-muted-foreground">
+              Records Keep and saves a reusable setup. Trading stays unchanged.
+            </p>
+            {error && (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
               </p>
-              {error && (
-                <p role="alert" className="text-sm text-destructive">
-                  {error}
-                </p>
-              )}
-              {blocked ? (
-                <Button
-                  variant="outline"
-                  type="button"
-                  onClick={() => {
-                    setOpen(false)
-                    setParams({ experiment: experimentId, view: 'review' })
-                  }}
-                >
-                  Review saved evidence
-                </Button>
-              ) : (
-                <Button
-                  type="submit"
-                  disabled={
-                    busy || context.isFetching || readOnly || context.data?.archived || !name.trim()
-                  }
-                >
-                  {busy ? 'Saving setup…' : kept.current ? 'Finish saving setup' : 'Save setup'}
-                </Button>
-              )}
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
-    </>
+            )}
+            {blocked ? (
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => {
+                  setOpen(false)
+                  setParams({ experiment: experimentId, view: 'review' })
+                }}
+              >
+                Review saved evidence
+              </Button>
+            ) : (
+              <Button
+                type="submit"
+                disabled={
+                  busy || context.isFetching || readOnly || context.data?.archived || !name.trim()
+                }
+              >
+                {busy ? 'Saving setup…' : kept.current ? 'Finish saving setup' : 'Save setup'}
+              </Button>
+            )}
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }

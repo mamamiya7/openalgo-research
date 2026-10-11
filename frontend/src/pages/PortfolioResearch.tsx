@@ -462,11 +462,6 @@ export default function PortfolioResearch({
         workspace ? 'space-y-3' : 'mx-auto w-full max-w-6xl space-y-7 px-4 py-6 sm:px-6 sm:py-8'
       }
     >
-      <style>
-        {
-          '@media (prefers-reduced-motion: reduce) { [data-slot="sheet-overlay"], [data-slot="sheet-content"], [data-slot="dialog-overlay"], [data-slot="dialog-content"] { animation: none !important; transition: none !important; } }'
-        }
-      </style>
       {!workspace && params.get('return_job') && (
         <Button
           variant="ghost"

@@ -253,6 +253,21 @@ describe('research library navigation and lost-work boundaries', () => {
     expect(researchLibrary.run).not.toHaveBeenCalled()
   })
 
+  it('returns keyboard focus to New research after Escape without creating or running work', async () => {
+    const user = userEvent.setup()
+    show()
+    const opener = await screen.findByRole('button', { name: 'New research' })
+    opener.focus()
+    await user.keyboard('{Enter}')
+    expect(screen.getByRole('dialog', { name: 'New research' })).toBeVisible()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(opener).toHaveFocus()
+    expect(researchLibrary.create).not.toHaveBeenCalled()
+    expect(researchLibrary.run).not.toHaveBeenCalled()
+    expect(portfolioResearch.upload).not.toHaveBeenCalled()
+  })
+
   it('reads a CSV before asking for an editable name and creates a native setup without starting acquisition', async () => {
     const user = userEvent.setup()
     vi.mocked(portfolioResearch.upload).mockResolvedValue(importedSignals())
@@ -396,6 +411,45 @@ describe('research library navigation and lost-work boundaries', () => {
     )
     expect(screen.getByRole('button', { name: 'Open setup' })).toBeVisible()
     expect(screen.getByTestId('location')).toHaveTextContent('view=results')
+  })
+
+  it.each([
+    ['portfolio_optimize', 'portfolio_backtest', 'optimisations', 'studies', 'Optimisations'],
+    ['portfolio_backtest', 'portfolio_optimize', 'backtests', 'backtests', 'Backtests'],
+  ] as const)('returns a legacy Results link for an older %s to its own list despite a newer %s', async (selectedKind, newerKind, backLabel, destination, tabName) => {
+    const user = userEvent.setup()
+    const experiment = blank()
+    experiment.jobs = [
+      {
+        id: 'older-result',
+        kind: selectedKind,
+        status: 'completed',
+        progress: 100,
+        created_at: 1,
+        experiment_id: experiment.id,
+      },
+      {
+        id: 'newer-result',
+        kind: newerKind,
+        status: 'completed',
+        progress: 100,
+        created_at: 2,
+        experiment_id: experiment.id,
+      },
+    ]
+    vi.mocked(researchLibrary.get).mockResolvedValue(experiment)
+    show('/scanner-research?experiment=experiment-1&view=results&job=older-result')
+    const back = await screen.findByRole('button', { name: `Back to ${backLabel}`, exact: true })
+    expect(screen.getByTestId('location')).toHaveTextContent('view=results&job=older-result')
+    await user.click(back)
+    expect(screen.getByTestId('location')).toHaveTextContent(`view=${destination}`)
+    expect(screen.getByTestId('location')).not.toHaveTextContent('job=')
+    expect(screen.getByRole('button', { name: tabName, exact: true })).toHaveAttribute(
+      'aria-current',
+      'page'
+    )
+    expect(researchLibrary.saveDraft).not.toHaveBeenCalled()
+    expect(researchLibrary.run).not.toHaveBeenCalled()
   })
 
   it('opens the published Chartink connection guide without creating an experiment', async () => {

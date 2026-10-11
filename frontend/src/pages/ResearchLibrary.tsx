@@ -287,6 +287,7 @@ function LibraryIndex({
   const locked = useRef(false)
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const newResearchOpener = useRef<HTMLButtonElement | null>(null)
   const [name, setName] = useState('')
   const [readingCsv, setReadingCsv] = useState(false)
   const [newSource, setNewSource] = useState<ResearchSource | null>(null)
@@ -439,6 +440,7 @@ function LibraryIndex({
         <div className="flex flex-wrap gap-2">
           <ChartinkConnect />
           <Button
+            ref={newResearchOpener}
             onClick={() => {
               setCreating(true)
               setName('')
@@ -735,7 +737,15 @@ function LibraryIndex({
         </>
       )}
       <Dialog open={creating} onOpenChange={(open) => !busy && setCreating(open)}>
-        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
+        <DialogContent
+          className="max-h-[90dvh] overflow-y-auto sm:max-w-md"
+          onCloseAutoFocus={(event) => {
+            if (newResearchOpener.current?.isConnected) {
+              event.preventDefault()
+              newResearchOpener.current.focus()
+            }
+          }}
+        >
           <DialogHeader>
             <DialogTitle>New research</DialogTitle>
             <DialogDescription>
@@ -878,8 +888,14 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
     'portfolio_optimize'
       ? 'studies'
       : 'backtests'
+  const selectedJob = server.jobs.find((job) => job.id === jobId)
+  const linkedResultView = selectedJob
+    ? selectedJob.kind === 'portfolio_optimize'
+      ? 'studies'
+      : 'backtests'
+    : latestResultView
   const requestedView =
-    rawView === 'results' ? latestResultView : rawView === 'review' ? 'decisions' : rawView
+    rawView === 'results' ? linkedResultView : rawView === 'review' ? 'decisions' : rawView
   const view = [
     'overview',
     'setup',

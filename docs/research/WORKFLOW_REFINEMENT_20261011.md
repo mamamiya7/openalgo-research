@@ -26,6 +26,15 @@ inside Results. A chosen setup appears before collapsed setup history. Chart
 replay fits its visible candles, and progress distinguishes scanner and market
 context symbols from recorded counts.
 
+Final keyboard acceptance corrects dialog focus return for saving and importing,
+and legacy result aliases preserve the viewed optimisation/backtest list rather
+than following the newest job. Research-layout reduced-motion support applies to
+library dialogs as well as reports. Final frontend/native-layout qualification
+passes 681 cases; targeted browser checks also cover invalid/timed/mixed import
+previews, narrow chosen/report screens and Back/reload of study/trial context.
+Actual 200% zoom and reduced-motion browser emulation remain unverified because
+the available browser controls did not expose them.
+
 Controlled Chrome acceptance has exercised preparation of an automatic baseline,
 saving its named tested setup, reopening the chosen setup and reuse into Setup
 with its original minute holding rule. This uses isolated evidence, not a fresh
