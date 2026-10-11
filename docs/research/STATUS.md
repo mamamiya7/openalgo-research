@@ -22,8 +22,9 @@ timestamps, and its named setup retained those clocks. Regular-session
 preparation/recovery also passed through the native worker. These are controlled
 fixtures, not fresh broker-download or real-market performance acceptance.
 
-Normal-app activation is recorded separately from source qualification and
-public delivery. Public preview.7 remains unchanged; draft PR6 still requires
+Normal-app activation preserves all 60 saved runs, artifact identities and
+configuration, reuses the existing account and Historify, and passes all 165
+installed compatibility checks. Public preview.7 remains unchanged; draft PR6 still requires
 public-main reconciliation and complete preview.8 Windows/Linux release checks.
 Next dependencies are independent bounded diagnostics and aligned candidate
 comparison curves, followed by broader asset qualification and native authoring
