@@ -6,6 +6,7 @@ The caller is the research calculation worker, never the web request process.
 
 import json
 import math
+import re
 from datetime import datetime
 
 VERSION = "research-analysis-v1"
@@ -18,6 +19,46 @@ MAX_FIGURE_BYTES = 8 * 1024 * 1024
 MAX_FANOVA_CATEGORIES = 8
 
 
+def _trailing_axes(experiment):
+    """Admit only the frozen, finite atomic states of the v6 recipe."""
+    specification = experiment.get("trailing_research")
+    if specification is None:
+        return {}
+    from research.automatic_trailing import VERSION as TRAILING_VERSION
+    from research.connectors.optuna_portfolio import _axis, _values
+
+    if (
+        experiment.get("experiment_version") != "automatic-hypotheses-v6"
+        or not isinstance(specification, dict)
+        or specification.get("version") != TRAILING_VERSION
+        or not isinstance(specification.get("strategies"), list)
+        or not 1 <= len(specification["strategies"]) <= 8
+    ):
+        raise ValueError("Invalid recorded trailing research contract")
+    result = {}
+    for row in specification["strategies"]:
+        if (
+            not isinstance(row, dict)
+            or not isinstance(row.get("id"), str)
+            or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", row["id"])
+        ):
+            raise ValueError("Invalid recorded trailing strategy")
+        name = f"{row['id']}.trailing_choice"
+        domain = _axis("trailing_pct", row.get("domain"))
+        choices = row.get("choices")
+        if (
+            name in result
+            or domain["min"] <= 0
+            or not isinstance(choices, list)
+            or not 2 <= len(choices) <= 8
+            or any(type(value) not in (int, float) or not math.isfinite(value) for value in choices)
+            or choices != [0.0, *_values(domain)]
+        ):
+            raise ValueError("Invalid recorded conditional trailing choices")
+        result[name] = {"type": "categorical", "choices": choices}
+    return result
+
+
 def reconstruct_study(experiment):
     import optuna
 
@@ -27,6 +68,9 @@ def reconstruct_study(experiment):
         raise ValueError("Study analysis supports at most 1,000 recorded proposals")
     if not isinstance(axes, dict) or len(axes) > MAX_AXES:
         raise ValueError("Invalid recorded study parameter space")
+    trailing_axes = _trailing_axes(experiment)
+    if any(axes.get(name) != axis for name, axis in trailing_axes.items()):
+        raise ValueError("Recorded trailing parameters differ from their frozen contract")
     distributions = {}
     for name, axis in axes.items():
         if axis.get("type") == "categorical":
@@ -40,7 +84,10 @@ def reconstruct_study(experiment):
             if (
                 not isinstance(choices, list)
                 or not 1 <= len(choices) <= limit
-                or any(not isinstance(value, str) for value in choices)
+                or (
+                    name not in trailing_axes
+                    and any(not isinstance(value, str) for value in choices)
+                )
                 or len(set(choices)) != len(choices)
             ):
                 raise ValueError("Invalid bounded categorical study parameter")

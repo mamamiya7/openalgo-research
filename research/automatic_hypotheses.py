@@ -33,6 +33,7 @@ VERSION = "automatic-hypotheses-v2"
 EXPANDED_VERSION = "automatic-hypotheses-v3"
 BENCHMARK_VERSION = "automatic-hypotheses-v4"
 JOINT_VERSION = "automatic-hypotheses-v5"
+TRAILING_VERSION = "automatic-hypotheses-v6"
 CONDITION_VERSION = "research-stock-entry-conditions-v1"
 MAX_SIMULATIONS = 180
 PROPOSALS = 60
@@ -98,6 +99,8 @@ def policy_for_version(version):
             "max_hypotheses": 92,
             "max_families": 32,
         }
+    if version == TRAILING_VERSION:
+        return {**policy_for_version(JOINT_VERSION), "version": TRAILING_VERSION}
     raise ValueError("Choose a supported automatic hypothesis version")
 
 
@@ -111,6 +114,7 @@ def _gate(
     apply_fn=None,
     markers_fn=None,
     calculation_version=None,
+    trailing_activation=False,
 ):
     """Reuse fixed causal membership, then bind its receipt to the actual exits.
 
@@ -126,6 +130,8 @@ def _gate(
         "trailing_pct",
         "cost_bps",
     }
+    if trailing_activation:
+        exit_only.add("trailing_enabled")
     apply_fn, markers_fn = apply_fn or apply, markers_fn or markers
     key = fingerprint(
         {
@@ -179,6 +185,7 @@ def checkpoint_rows(saved):
         EXPANDED_VERSION,
         BENCHMARK_VERSION,
         JOINT_VERSION,
+        TRAILING_VERSION,
     ):
         raise ValueError("Automatic hypothesis checkpoint inputs or evidence changed")
     policy = policy_for_version(saved["version"])
@@ -227,8 +234,17 @@ def _screening(entries, axes, *, policy=None):
             # Remaining screening trials draw their exits from seeded Optuna.
             if attempt < 3:
                 for name, domain in axes.items():
-                    values = _values(domain)
+                    values = (
+                        domain["choices"]
+                        if domain.get("type") == "categorical"
+                        else _values(domain)
+                    )
                     index = (0, len(values) - 1, len(values) // 2)[attempt]
+                    if (
+                        policy["version"] == TRAILING_VERSION
+                        and domain.get("type") == "categorical"
+                    ):
+                        index = (0, 1, len(values) - 1)[attempt]
                     params[name] = values[index]
             queued.append(params)
     return queued
@@ -258,7 +274,7 @@ def run(
     proposals, max_simulations = policy["proposals"], policy["max_simulations"]
     stock = (
         evidence.get("automatic_stock_market_context")
-        if version == JOINT_VERSION
+        if version in (JOINT_VERSION, TRAILING_VERSION)
         else evidence.get("automatic_stock_features")
     )
     if evidence.get("automatic_recipe") != recipe:
@@ -266,7 +282,7 @@ def run(
     if evidence["portfolio"].get("engine", "vectorbt") != "vectorbt":
         raise ValueError("Automatic stock hypotheses currently need VectorBT")
     gate_apply, gate_markers = apply, markers
-    if version == JOINT_VERSION:
+    if version in (JOINT_VERSION, TRAILING_VERSION):
         from research.joint_stock_market import apply as gate_apply
         from research.joint_stock_market import catalog as joint_catalog
         from research.joint_stock_market import markers as gate_markers
@@ -296,6 +312,16 @@ def run(
         raise ValueError("Automatic hypotheses need their exact saved stock evidence and catalog")
     binding = fingerprint({"recipe": recipe, "stock": stock})
     base, axes = _prepare(evidence["strategies"])
+    numeric_axes = deepcopy(axes)
+    trailing = None
+    if version == TRAILING_VERSION:
+        from research.automatic_trailing import axes as trailing_axes
+        from research.automatic_trailing import descriptor
+
+        trailing = descriptor(base)
+        if recipe.get("trailing_research") != trailing:
+            raise ValueError("The frozen automatic trailing states changed")
+        axes.update(trailing_axes(trailing))
     baseline = _settings(base)
     baseline_id = settings_identity(baseline)
     none = next(row for row in entries if row["id"] == "none")
@@ -401,8 +427,9 @@ def run(
             apply_fn=gate_apply,
             markers_fn=gate_markers,
             calculation_version=policy["calculation_version"]
-            if version in (EXPANDED_VERSION, BENCHMARK_VERSION, JOINT_VERSION)
+            if version in (EXPANDED_VERSION, BENCHMARK_VERSION, JOINT_VERSION, TRAILING_VERSION)
             else None,
+            trailing_activation=version == TRAILING_VERSION,
         )
         current["entry_condition_gates"] = [receipt]
         return current, receipt
@@ -500,6 +527,9 @@ def run(
         hypothesis = by_hypothesis[trial.suggest_categorical("hypothesis", list(by_hypothesis))]
         params = {"hypothesis": hypothesis["id"]}
         for name, domain in axes.items():
+            if domain.get("type") == "categorical":
+                params[name] = trial.suggest_categorical(name, domain["choices"])
+                continue
             params[name] = (
                 trial.suggest_int(
                     name, int(domain["min"]), int(domain["max"]), step=int(domain["step"])
@@ -507,7 +537,12 @@ def run(
                 if name.rsplit(".", 1)[-1] in ("hold_sessions", "hold_minutes")
                 else trial.suggest_float(name, domain["min"], domain["max"], step=domain["step"])
             )
-        settings = gate_markers(_settings(_candidate(base, params)), hypothesis, stock["id"])
+        proposed = _candidate(base, params)
+        if trailing is not None:
+            from research.automatic_trailing import apply_choices
+
+            proposed = apply_choices(proposed, params, trailing)
+        settings = gate_markers(_settings(proposed), hypothesis, stock["id"])
         config_id = settings_identity(settings)
         record = {
             "number": index,
@@ -651,7 +686,12 @@ def run(
                         "score_delta": _score(stress["summary"]) - _score(stressed_base["summary"]),
                     }
                 if not reasons:
-                    neighborhood = neighbors(settings, recipe["ranges"])
+                    if trailing is not None:
+                        from research.automatic_trailing import stability_neighbors
+
+                        neighborhood = stability_neighbors(settings, recipe["ranges"], trailing)
+                    else:
+                        neighborhood = neighbors(settings, recipe["ranges"])
                     tested_neighbors = []
                     for neighbor in neighborhood["neighbors"][:MAX_NEIGHBORS]:
                         neighbor_windows, failures = [], []
@@ -783,7 +823,12 @@ def run(
         }
 
     result = deepcopy(state["selected_report"])
-    grid = len(entries) * prod(len(_values(domain)) for domain in axes.values())
+    if trailing is not None:
+        from research.automatic_trailing import grid_size
+
+        grid = len(entries) * grid_size(numeric_axes, trailing)
+    else:
+        grid = len(entries) * prod(len(_values(domain)) for domain in axes.values())
     selection_basis = (
         "Best supported search-period score; no later period is available"
         if exploratory
@@ -824,6 +869,8 @@ def run(
         "next_action": "Inspect the saved checks before choosing a setup",
         "evaluation_basis_id": result["evaluation_basis"]["evidence_id"],
     }
+    if trailing is not None:
+        result["experiment"]["trailing_research"] = deepcopy(trailing)
     result["automatic_research"] = {
         "version": version,
         "status": status,

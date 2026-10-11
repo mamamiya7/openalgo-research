@@ -14,7 +14,7 @@ from research.portfolio import fingerprint, normalize
 from research.regimes import recipe as regime_recipe
 
 CATALOG_VERSION = "automatic-search-plan-v1"
-NEXT_RECIPE_VERSION = "automatic-hypotheses-v6"
+NEXT_RECIPE_VERSION = "automatic-hypotheses-v7"
 
 _PARAMETERS = {
     "target_pct": ("Profit target", "%"),
@@ -52,15 +52,29 @@ def _domain(axis, *, integer):
     }
 
 
-def _parameters(strategy, engine):
+def _parameters(strategy, engine, version):
     cfg, search = strategy["config"], strategy["search"]
+    trailing = version == "automatic-hypotheses-v6"
     parameters = []
     for key, (label, unit) in _PARAMETERS.items():
         if key not in cfg:
             continue
         status, reason = "fixed", "Retain the original execution assumptions."
         item = {"id": key, "label": label, "unit": unit, "current": deepcopy(cfg[key])}
-        if key in search:
+        if trailing and key in ("trailing_pct", "trailing_enabled"):
+            from research.automatic_trailing import strategy_domain
+
+            status, reason = (
+                "search",
+                "One disabled state or a positive distance; distance applies only when enabled.",
+            )
+            item["axis"] = "trailing_choice"
+            if key == "trailing_pct":
+                item["domain"] = _domain(strategy_domain(cfg), integer=False)
+                item["condition"] = {"trailing_enabled": True}
+            else:
+                item["choices"] = [False, True]
+        elif key in search:
             status, reason = "search", "Bounded values around the original setting."
             item["domain"] = _domain(search[key], integer=key.startswith("hold_"))
         elif key == "hold_sessions" and (
@@ -118,6 +132,7 @@ def _decisions(portfolio, interval, strategies, *, proposals, max_simulations):
     execution recipe, the request's version, or any numerical search domain.
     """
     intelligent = portfolio["automatic_research"]["version"].startswith("automatic-hypotheses-")
+    trailing = portfolio["automatic_research"]["version"] == "automatic-hypotheses-v6"
     return {
         "version": "automatic-decision-summary-v1",
         "automatic": [
@@ -139,7 +154,9 @@ def _decisions(portfolio, interval, strategies, *, proposals, max_simulations):
             {
                 "id": "ranges",
                 "label": "Trading settings",
-                "decision": "Bounded target, stop and active holding ranges; enabled trailing distance. Original settings remain a separate reference.",
+                "decision": "Bounded target, stop and active holding ranges; trailing off or a positive distance. Original settings remain a separate reference."
+                if trailing
+                else "Bounded target, stop and active holding ranges; enabled trailing distance. Original settings remain a separate reference.",
             },
             {
                 "id": "checks",
@@ -167,13 +184,19 @@ def _decisions(portfolio, interval, strategies, *, proposals, max_simulations):
             },
         ],
         "not_searched": [
-            {
-                "id": "trailing_activation",
-                "label": "Turning trailing stops on or off",
-                "reason": "Search trailing distance only for strategies where it is already enabled."
-                if portfolio["engine"] == "vectorbt"
-                else "The Nautilus OHLC adapter does not support trailing stops.",
-            },
+            *(
+                []
+                if trailing
+                else [
+                    {
+                        "id": "trailing_activation",
+                        "label": "Turning trailing stops on or off",
+                        "reason": "Search trailing distance only for strategies where it is already enabled."
+                        if portfolio["engine"] == "vectorbt"
+                        else "The Nautilus OHLC adapter does not support trailing stops.",
+                    }
+                ]
+            ),
             {
                 "id": "timing_search",
                 "label": "Alternative entry and exit clocks",
@@ -411,6 +434,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v3",
         "automatic-hypotheses-v4",
         "automatic-hypotheses-v5",
+        "automatic-hypotheses-v6",
     ):
         raise ValueError("Choose a supported automatic research recipe before planning")
     version, engine = auto["version"], canonical["engine"]
@@ -424,7 +448,7 @@ def build_plan(portfolio, *, interval):
     ):
         raise ValueError("Timed execution requires the resolved one-minute interval")
     strategies = [
-        {"id": row["id"], "name": row["name"], "parameters": _parameters(row, engine)}
+        {"id": row["id"], "name": row["name"], "parameters": _parameters(row, engine, version)}
         for row in canonical["strategies"]
     ]
     axes = [item for row in strategies for item in row["parameters"] if item["status"] == "search"]
@@ -433,6 +457,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v3",
         "automatic-hypotheses-v4",
         "automatic-hypotheses-v5",
+        "automatic-hypotheses-v6",
     ):
         from research.intelligent_plan import build_plan as intelligence_plan
 

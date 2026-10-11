@@ -307,6 +307,7 @@ def test_conditions_cannot_be_announced_for_an_unsupported_engine():
         (STABILITY_VERSION, 50, 118),
         ("automatic-hypotheses-v4", 96, 240),
         ("automatic-hypotheses-v5", 128, 320),
+        ("automatic-hypotheses-v6", 128, 320),
     ],
 )
 def test_decision_summary_matches_recipe_budget_and_never_certifies_pending_evidence(
@@ -363,6 +364,49 @@ def test_nautilus_decision_does_not_offer_unsupported_trailing_or_upgrade_recipe
     assert "does not support trailing stops" in omitted["trailing_activation"]["reason"]
     assert plan["execution_recipe_version"] == VERSION
     assert "liquidity" not in omitted
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        {},
+        {"trailing_enabled": False, "trailing_pct": 4},
+        {"trailing_enabled": True, "trailing_pct": 3},
+    ],
+)
+def test_conditional_trailing_plan_matches_frozen_domain_and_keeps_original_settings(config):
+    from research.automatic_trailing import recipe
+
+    raw = request(version="automatic-hypotheses-v6", config=config)
+    original = deepcopy(raw)
+    canonical = normalize(raw)
+    result = build_plan(raw, interval="D")
+    described = parameters(result)
+    frozen = recipe(canonical["strategies"])
+    assert raw == original
+    assert result["research_plan"]["trailing_research"] == frozen
+    assert described["trailing_enabled"]["choices"] == [False, True]
+    assert (
+        described["trailing_enabled"]["current"]
+        == canonical["strategies"][0]["config"]["trailing_enabled"]
+    )
+    assert (
+        described["trailing_pct"]["current"] == canonical["strategies"][0]["config"]["trailing_pct"]
+    )
+    assert described["trailing_pct"]["condition"] == {"trailing_enabled": True}
+    assert described["trailing_pct"]["domain"]["values"] == frozen["strategies"][0]["choices"][1:]
+    assert "trailing_pct" not in canonical["strategies"][0]["search"]
+    assert {described[key]["status"] for key in ("trailing_enabled", "trailing_pct")} == {"search"}
+    assert "trailing_activation" not in {row["id"] for row in result["decisions"]["not_searched"]}
+    assert families(result)["trailing_activation"]["status"] == "admitted"
+    assert result["summary"]["max_simulations"] == 320
+    assert result["research_plan"]["budget"]["screening_proposals"] == 96
+    assert (
+        "trailing off"
+        in next(row for row in result["decisions"]["automatic"] if row["id"] == "ranges")[
+            "decision"
+        ]
+    )
 
 
 def test_stability_budget_and_causal_gates_are_explicit_and_version_specific():
@@ -426,7 +470,18 @@ def test_no_ad_hoc_grid_or_proposal_budget_can_change_automatic_plan():
     assert build_plan(original, interval="D") == build_plan(modified, interval="D")
 
 
-def test_plan_needs_no_numerical_runtime_broker_service_or_database_import():
+@pytest.mark.parametrize(
+    "version",
+    [
+        VERSION,
+        STABILITY_VERSION,
+        CONDITION_VERSION,
+        "automatic-hypotheses-v4",
+        "automatic-hypotheses-v5",
+        "automatic-hypotheses-v6",
+    ],
+)
+def test_plan_needs_no_numerical_runtime_broker_service_or_database_import(version):
     script = """
 import importlib.abc, json, sys
 class BlockResources(importlib.abc.MetaPathFinder):
@@ -437,14 +492,15 @@ class BlockResources(importlib.abc.MetaPathFinder):
 sys.meta_path.insert(0, BlockResources())
 from services.research_automatic_catalog import build_plan
 raw = json.loads(sys.stdin.read())
-for engine in ("vectorbt", "nautilus"):
+engines = ("vectorbt", "nautilus") if raw["automatic_research"]["version"] in ("automatic-trade-management-v1", "automatic-trade-management-v2") else ("vectorbt",)
+for engine in engines:
     raw["engine"] = engine
     assert build_plan(raw, interval="D")["phase"] == "preflight"
 print("pure")
 """
     result = subprocess.run(
         [sys.executable, "-c", script],
-        input=json.dumps(request()),
+        input=json.dumps(request(version=version)),
         capture_output=True,
         text=True,
         timeout=30,

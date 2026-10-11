@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { axe } from 'jest-axe'
 import { describe, expect, it } from 'vitest'
 import type { AutomaticResearchFindings as Findings } from '@/api/portfolioResearch'
+import { researchDefaults } from '@/lib/researchDraft'
 import { AutomaticResearchFindings } from './AutomaticResearchFindings'
 
 function findings(): Findings {
@@ -45,9 +46,42 @@ function findings(): Findings {
 
 describe('automatic research findings', () => {
   it.each([
+    false,
+    true,
+  ])('shows the frozen selected exits directly, with trailing enabled=%s', (enabled) => {
+    const data = findings()
+    data.version = 'automatic-hypotheses-v6'
+    render(
+      <AutomaticResearchFindings
+        findings={data}
+        selectedSettings={[
+          {
+            id: 'scanner',
+            name: 'Scanner',
+            allocation_pct: 100,
+            config: {
+              ...researchDefaults,
+              target_pct: 5.25,
+              stop_pct: 2,
+              hold_sessions: 2,
+              trailing_enabled: enabled,
+              trailing_pct: 3.5,
+            },
+          },
+        ]}
+      />
+    )
+    const settings = screen.getByText(/TP 5.25% · SL 2%/)
+    expect(settings).toHaveTextContent(
+      `TP 5.25% · SL 2% · Up to 2 sessions · ${enabled ? 'Trail 3.5%' : 'Trail off'}`
+    )
+    expect(settings).toBeVisible()
+  })
+  it.each([
     ['automatic-trade-management-v1', 'Exits and holding periods'],
     ['automatic-hypotheses-v4', 'Smart research'],
     ['automatic-hypotheses-v5', 'Stock and market research'],
+    ['automatic-hypotheses-v6', 'Stock, market and trailing stops'],
     ['automatic-future-v99', 'Automatic research'],
   ])('keeps the saved %s scope in the collapsed research details', async (version, label) => {
     const data = findings()

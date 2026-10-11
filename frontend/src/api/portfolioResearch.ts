@@ -326,6 +326,7 @@ export interface PortfolioRequest {
       | 'automatic-hypotheses-v3'
       | 'automatic-hypotheses-v4'
       | 'automatic-hypotheses-v5'
+      | 'automatic-hypotheses-v6'
   }
   entry_conditions?: EntryConditions
   optimization?: {
@@ -580,6 +581,9 @@ export interface PortfolioPreview {
         reason: string
         current: unknown
         domain?: PortfolioRange
+        axis?: string
+        choices?: boolean[]
+        condition?: { trailing_enabled: true }
       }>
     }>
   }

@@ -578,7 +578,7 @@ def test_version_policies_are_isolated_and_v3_retry_reservations_stop_at_220():
     assert policy_for_version(EXPANDED_VERSION)["max_simulations"] == 220
     assert policy_for_version(VERSION) == old
     with pytest.raises(ValueError, match="supported automatic hypothesis"):
-        policy_for_version("automatic-hypotheses-v5")
+        policy_for_version("automatic-hypotheses-v7")
     value = prepared(version=EXPANDED_VERSION)
     engine = Engine(value)
     _, saved = execute(value, engine, stop=lambda state: state["simulations"] == 1)

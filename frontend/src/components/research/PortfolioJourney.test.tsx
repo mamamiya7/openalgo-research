@@ -235,7 +235,7 @@ describe('native portfolio consumer journey', () => {
     const original = draft()
     const optimized = selectPortfolioRun(original, true)
     expect(optimized.optimizing).toBe(true)
-    expect(optimized.portfolio.automatic_research).toEqual({ version: 'automatic-hypotheses-v5' })
+    expect(optimized.portfolio.automatic_research).toEqual({ version: 'automatic-hypotheses-v6' })
     expect(optimized.portfolio.strategies).toEqual(original.portfolio.strategies)
     expect(optimized.portfolio.capital).toBe(original.portfolio.capital)
     expect(original.portfolio.automatic_research).toBeUndefined()
@@ -258,19 +258,22 @@ describe('native portfolio consumer journey', () => {
     savedDraft({ ...original, optimizing: true })
     mount()
     await userEvent.click(await screen.findByRole('button', { name: 'Automatic research' }))
-    expect(screen.getByLabelText('Research scope')).toHaveValue('automatic-hypotheses-v5')
+    expect(screen.getByLabelText('Research scope')).toHaveValue('automatic-hypotheses-v6')
     await userEvent.click(screen.getByText('Advanced research options'))
     await userEvent.selectOptions(
       screen.getByLabelText('Research scope'),
-      'automatic-hypotheses-v5'
+      'automatic-hypotheses-v6'
     )
     expect(
       screen.getByText(/Tests stock signals, Nifty trend or volatility, and exits together/)
     ).toHaveTextContent('320 calculations')
+    expect(
+      screen.getByText(/Tests stock signals, Nifty trend or volatility, and exits together/)
+    ).toHaveTextContent('trailing stops on or off')
     await userEvent.click(screen.getByRole('button', { name: 'Optimize automatically' }))
     await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
     const sent = vi.mocked(portfolioResearch.submit).mock.calls[0][0]
-    expect(sent.automatic_research).toEqual({ version: 'automatic-hypotheses-v5' })
+    expect(sent.automatic_research).toEqual({ version: 'automatic-hypotheses-v6' })
     expect(sent.capital).toBe(original.portfolio.capital)
     expect(sent.strategies[0].config).toEqual(original.portfolio.strategies[0].config)
     expect(sent.strategies[0].allocation_pct).toBe(original.portfolio.strategies[0].allocation_pct)
@@ -299,6 +302,18 @@ describe('native portfolio consumer journey', () => {
     original.portfolio.automatic_research = { version: 'automatic-hypotheses-v5' }
     expect(portfolioEngineIssue(original)).toMatch(/need VectorBT/)
     expect(original.portfolio.automatic_research.version).toBe('automatic-hypotheses-v5')
+  })
+
+  it('retains the prior stock-and-market recipe when a saved study is reused', () => {
+    const original = draft()
+    original.optimizing = true
+    original.portfolio.automatic_research = { version: 'automatic-hypotheses-v5' }
+    expect(selectPortfolioRun(original, true).portfolio.automatic_research).toEqual({
+      version: 'automatic-hypotheses-v5',
+    })
+    original.portfolio.engine = 'nautilus'
+    original.portfolio.automatic_research = { version: 'automatic-hypotheses-v6' }
+    expect(portfolioEngineIssue(original)).toMatch(/need VectorBT/)
   })
 
   it('includes the saved stock entry rule alongside exits in report settings', () => {
@@ -427,12 +442,12 @@ describe('native portfolio consumer journey', () => {
     savedDraft({ ...original, optimizing: true })
     mount()
     await userEvent.click(await screen.findByRole('button', { name: 'Automatic research' }))
-    expect(screen.getByLabelText('Research scope')).toHaveValue('automatic-hypotheses-v5')
+    expect(screen.getByLabelText('Research scope')).toHaveValue('automatic-hypotheses-v6')
     expect(screen.getByText(/Tests stock signals, Nifty trend or volatility/)).not.toBeVisible()
     await userEvent.click(screen.getByRole('button', { name: 'Optimize automatically' }))
     await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
     const sent = vi.mocked(portfolioResearch.submit).mock.calls[0][0]
-    expect(sent.automatic_research).toEqual({ version: 'automatic-hypotheses-v5' })
+    expect(sent.automatic_research).toEqual({ version: 'automatic-hypotheses-v6' })
     expect(sent.capital).toBe(original.portfolio.capital)
     expect(sent.strategies[0].config).toEqual(original.portfolio.strategies[0].config)
     expect(sent.strategies[0].allocation_pct).toBe(original.portfolio.strategies[0].allocation_pct)

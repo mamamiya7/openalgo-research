@@ -1,5 +1,31 @@
 # OpenAlgo Research status
 
+## Automatic trailing selection — 11 October 2026
+
+The next increment implements `automatic-hypotheses-v6`: new unconfigured VectorBT
+optimisations jointly search trailing off or a positive distance, stock/market
+conditions, targets, stops and the active holding limit. All32 families receive
+off/low/high screening, followed by refinement within the unchanged128-proposal
+and320-calculation bound. The original account risk, clocks, costs and exact dormant
+trailing setting remain the separate reference. Saved v2–v5 scopes retain their
+identity; Nautilus does not gain unsupported trailing or stock-condition execution.
+
+The complete controlled native browser run passed:170 synthetic signals,128
+proposals,118 distinct portfolios, pause at85 committed trials and resume to
+finished findings. The selected enabled3.5% trailing state appears in report
+Settings. Findings now show selected TP/SL/holding/trailing settings directly in
+one compact line. Candidate inspection, exact-state replay, causal daily/minute
+native ledgers, independent multi-strategy states, conditional recorded charts
+and on/off selection through later/cost/stability checks pass focused regressions.
+Frontend checks and the production build pass. These controlled fixtures are not
+fresh broker-download or real-market performance acceptance.
+
+See the [implementation and acceptance contract](AUTOMATIC_TRAILING_20261011.md).
+Normal-app activation is recorded separately after idle-worker and saved-evidence
+checks. Public preview.7 remains unchanged; broader asset/timing admission,
+comparison curves, native authoring and background diagnostic execution remain
+separate planned increments. Older checkpoints below describe their dated state.
+
 **11 October development:** OpenAlgo 2.0.2.7 source is integrated at upstream `12e111465`. New, unconfigured VectorBT optimisations now choose stock-and-market research automatically; older saved recipes and custom ranges retain their identity. Research scopes are under Advanced research options. Preflight distinguishes automatic decisions, fixed financial assumptions, unsearched methods and pending checks. New CSV uploads reject explicitly unsupported exchanges/assets before native price acquisition. See [upstream notes](UPSTREAM_UPDATE_20261011.md) and the current human-flow audit checkpoint below. Public download remains preview.7; local activation is recorded separately.
 
 

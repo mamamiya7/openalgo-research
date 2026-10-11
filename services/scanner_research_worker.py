@@ -419,6 +419,7 @@ def run_one(store, token, stop_requested=None):
                             "automatic-hypotheses-v3",
                             "automatic-hypotheses-v4",
                             "automatic-hypotheses-v5",
+                            "automatic-hypotheses-v6",
                         )
                         else {}
                     ),

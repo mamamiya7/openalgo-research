@@ -1,6 +1,9 @@
 import { Check, ChevronDown, FlaskConical } from 'lucide-react'
-import type { AutomaticResearchFindings as Findings } from '@/api/portfolioResearch'
-import { researchDates } from './researchPresentation'
+import type {
+  AutomaticResearchFindings as Findings,
+  PortfolioSettings,
+} from '@/api/portfolioResearch'
+import { researchDates, strategyRuleSummary } from './researchPresentation'
 import { researchRecipeLabel } from './researchRecipeLabels'
 
 const number = (value: unknown, suffix = '') =>
@@ -14,7 +17,13 @@ const periods = [
   ['final', 'Final check'],
 ] as const
 
-export function AutomaticResearchFindings({ findings }: { findings: Findings }) {
+export function AutomaticResearchFindings({
+  findings,
+  selectedSettings,
+}: {
+  findings: Findings
+  selectedSettings?: PortfolioSettings[]
+}) {
   const final = findings.final
   const selected = findings.checks.find((check) => check.config_id === findings.selected_config_id)
   const comparisons: Array<[string, Record<string, number | string | null>]> = final
@@ -61,6 +70,13 @@ export function AutomaticResearchFindings({ findings }: { findings: Findings }) 
           {findings.selected_condition && (
             <p className="text-sm">Entry condition: {findings.selected_condition}</p>
           )}
+          {findings.version === 'automatic-hypotheses-v6' &&
+            selectedSettings?.map((strategy) => (
+              <p key={strategy.id} className="text-sm">
+                {selectedSettings.length > 1 && `${strategy.name} · `}
+                {strategyRuleSummary({ config: strategy.config, search: {} }, false, true)}
+              </p>
+            ))}
         </div>
       </div>
       {final && (

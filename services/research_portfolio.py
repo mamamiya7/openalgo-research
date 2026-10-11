@@ -118,6 +118,7 @@ def resolve_inputs(store, owner, request):
                 "automatic-hypotheses-v3",
                 "automatic-hypotheses-v4",
                 "automatic-hypotheses-v5",
+                "automatic-hypotheses-v6",
             )
             and receipt["symbol_count"] > 200
         ):
@@ -317,6 +318,7 @@ def replay_inputs(store, owner, job_id, *, trial_id=None, period="selection"):
         "automatic-hypotheses-v3",
         "automatic-hypotheses-v4",
         "automatic-hypotheses-v5",
+        "automatic-hypotheses-v6",
     ):
         marker = selected[0].get("entry_condition")
         selected_conditions = deepcopy(marker) if marker else None
@@ -648,7 +650,8 @@ def run(
 
         stock_saved = saved
         if (
-            portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v5"
+            portfolio.get("automatic_research", {}).get("version")
+            in ("automatic-hypotheses-v5", "automatic-hypotheses-v6")
             or portfolio.get("entry_conditions", {}).get("version")
             == "research-joint-entry-conditions-v1"
         ):

@@ -93,6 +93,7 @@ REQUIRED_RESEARCH_FILES = {
     "research/connectors/vectorbt_portfolio.py",
     "research/connectors/optuna_portfolio.py",
     "research/automatic_protocol.py",
+    "research/automatic_trailing.py",
     "research/joint_stock_market.py",
     "research/stock_market_context.py",
     "services/research_stock_market_context.py",

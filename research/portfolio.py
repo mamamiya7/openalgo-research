@@ -394,6 +394,7 @@ def execution_versions(portfolio, recorded=None):
         "automatic-hypotheses-v3",
         "automatic-hypotheses-v4",
         "automatic-hypotheses-v5",
+        "automatic-hypotheses-v6",
     ) or portfolio.get("entry_conditions", {}).get("version") in (
         "research-stock-entry-conditions-v1",
         "research-stock-entry-conditions-v2",
@@ -414,7 +415,8 @@ def execution_versions(portfolio, recorded=None):
         == "research-stock-entry-conditions-v3"
     )
     joint = (
-        portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v5"
+        portfolio.get("automatic_research", {}).get("version")
+        in ("automatic-hypotheses-v5", "automatic-hypotheses-v6")
         or portfolio.get("entry_conditions", {}).get("version")
         == "research-joint-entry-conditions-v1"
     )

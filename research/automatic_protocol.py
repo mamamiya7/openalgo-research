@@ -15,7 +15,14 @@ HYPOTHESIS_VERSION = "automatic-hypotheses-v2"
 EXPANDED_VERSION = "automatic-hypotheses-v3"
 BENCHMARK_VERSION = "automatic-hypotheses-v4"
 JOINT_VERSION = "automatic-hypotheses-v5"
-HYPOTHESIS_VERSIONS = (HYPOTHESIS_VERSION, EXPANDED_VERSION, BENCHMARK_VERSION, JOINT_VERSION)
+TRAILING_VERSION = "automatic-hypotheses-v6"
+HYPOTHESIS_VERSIONS = (
+    HYPOTHESIS_VERSION,
+    EXPANDED_VERSION,
+    BENCHMARK_VERSION,
+    JOINT_VERSION,
+    TRAILING_VERSION,
+)
 PERIODS = ("search", "check1", "check2", "final")
 MIN_SESSIONS = 100
 
@@ -117,13 +124,13 @@ def automatic_portfolio(portfolio):
             search["hold_minutes"] = _range(cfg["hold_minutes"], 100000, integer=True)
         elif cfg.get("trade_horizon") != "intraday":
             search["hold_sessions"] = _range(cfg["hold_sessions"], 252, integer=True)
-        if cfg["trailing_enabled"]:
+        if cfg["trailing_enabled"] and result["automatic_research"]["version"] != TRAILING_VERSION:
             search["trailing_pct"] = _range(cfg["trailing_pct"], 99)
         row["search"] = search
     result["optimization"] = {
         "sampler": "tpe",
         "trials": 128
-        if result["automatic_research"]["version"] == JOINT_VERSION
+        if result["automatic_research"]["version"] in (JOINT_VERSION, TRAILING_VERSION)
         else 96
         if result["automatic_research"]["version"] == BENCHMARK_VERSION
         else 84
@@ -271,7 +278,7 @@ def compile_recipe(evidence):
 
         if relative:
             from research.stock_relative_strength import catalog, validate_bundle
-        joint = portfolio["automatic_research"]["version"] == JOINT_VERSION
+        joint = portfolio["automatic_research"]["version"] in (JOINT_VERSION, TRAILING_VERSION)
         if joint:
             from research.joint_stock_market import catalog
             from research.stock_market_context import validate_bundle
@@ -331,6 +338,14 @@ def compile_recipe(evidence):
             payload["budget"].update(proposals=128, max_simulations=320)
             payload["policies"]["unsupported"] = (
                 "original-scanner reconstruction, arbitrary Boolean stacks, volume, unregistered indicators, live execution or statistical confidence claims"
+            )
+        if payload["version"] == TRAILING_VERSION:
+            from research.automatic_trailing import descriptor
+
+            payload["trailing_research"] = descriptor(evidence["strategies"])
+            payload["policies"]["trailing"] = (
+                "off is one canonical candidate; positive distances enable trailing; "
+                "unchanged original settings remain a separate baseline"
             )
         if validation_mode == "exploratory_only":
             payload["policies"]["final"] = (

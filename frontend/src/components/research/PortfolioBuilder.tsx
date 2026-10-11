@@ -73,7 +73,7 @@ export function selectPortfolioRun(draft: PortfolioDraft, optimizing: boolean): 
         automatic_research: {
           version:
             draft.portfolio.engine === 'vectorbt'
-              ? 'automatic-hypotheses-v5'
+              ? 'automatic-hypotheses-v6'
               : 'automatic-trade-management-v2',
         },
       },
@@ -262,6 +262,7 @@ export function portfolioEngineIssue(
           'automatic-hypotheses-v3',
           'automatic-hypotheses-v4',
           'automatic-hypotheses-v5',
+          'automatic-hypotheses-v6',
         ].includes(draft.portfolio.automatic_research?.version ?? ''))
     )
       return 'Entry conditions currently need VectorBT. Choose VectorBT to keep these rules.'
@@ -635,7 +636,7 @@ export function PortfolioBuilder({
                       automatic_research: {
                         version:
                           portfolio.engine === 'vectorbt'
-                            ? 'automatic-hypotheses-v5'
+                            ? 'automatic-hypotheses-v6'
                             : 'automatic-trade-management-v2',
                       },
                     })
@@ -679,6 +680,12 @@ export function PortfolioBuilder({
                     }
                   >
                     <option
+                      value="automatic-hypotheses-v6"
+                      disabled={portfolio.engine !== 'vectorbt'}
+                    >
+                      Stock, market and trailing stops
+                    </option>
+                    <option
                       value="automatic-hypotheses-v5"
                       disabled={portfolio.engine !== 'vectorbt'}
                     >
@@ -717,6 +724,12 @@ export function PortfolioBuilder({
                       {researchRecipeLabel('automatic-entry-conditions-v1')}
                     </option>
                   </select>
+                  {portfolio.automatic_research?.version === 'automatic-hypotheses-v6' && (
+                    <p className="text-xs text-muted-foreground">
+                      Tests stock signals, Nifty trend or volatility, and exits together, including
+                      trailing stops on or off. Up to 320 calculations.
+                    </p>
+                  )}
                   {portfolio.automatic_research?.version === 'automatic-hypotheses-v5' && (
                     <p className="text-xs text-muted-foreground">
                       Tests stock signals, Nifty trend or volatility, and exits together. Up to 320

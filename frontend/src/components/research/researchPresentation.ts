@@ -76,7 +76,11 @@ export function researchResultPeriod(job: PortfolioJob): string {
   return input ? `Signals ${input}` : ''
 }
 
-export function strategyRuleSummary(strategy: PortfolioStrategy, optimizing = false): string {
+export function strategyRuleSummary(
+  strategy: Pick<PortfolioStrategy, 'config' | 'search'>,
+  optimizing = false,
+  includeTrailingOff = false
+): string {
   const config = strategy.config
   const value = (
     key: 'target_pct' | 'stop_pct' | 'hold_sessions' | 'hold_minutes' | 'trailing_pct',
@@ -95,6 +99,10 @@ export function strategyRuleSummary(strategy: PortfolioStrategy, optimizing = fa
     `TP ${value('target_pct', '%')}`,
     `SL ${value('stop_pct', '%')}`,
     holding,
-    ...(config.trailing_enabled ? [`Trail ${value('trailing_pct', '%')}`] : []),
+    ...(config.trailing_enabled
+      ? [`Trail ${value('trailing_pct', '%')}`]
+      : includeTrailingOff
+        ? ['Trail off']
+        : []),
   ].join(' · ')
 }

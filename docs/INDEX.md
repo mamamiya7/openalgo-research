@@ -88,3 +88,4 @@ need → drill into the specific file. Don't load everything at once.
 - Repository: https://github.com/marketcalls/openalgo · Docs: https://docs.openalgo.in
 
 - [Native research refinement implementation](research/NATIVE_REFINEMENT_20261007.md): current chart and joint-search contracts and remaining delivery gates.
+- [Automatic trailing selection](research/AUTOMATIC_TRAILING_20261011.md): versioned on/off search, native evaluation, saved-state reuse and acceptance gates.

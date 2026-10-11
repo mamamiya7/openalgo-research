@@ -59,6 +59,7 @@ def _search_inputs(evidence, calculation):
             "automatic-hypotheses-v3",
             "automatic-hypotheses-v4",
             "automatic-hypotheses-v5",
+            "automatic-hypotheses-v6",
         ):
             from research.automatic_hypotheses import checkpoint_rows
 
@@ -67,7 +68,7 @@ def _search_inputs(evidence, calculation):
                     "recipe": recipe,
                     "stock": evidence[
                         "automatic_stock_market_context"
-                        if version == "automatic-hypotheses-v5"
+                        if version in ("automatic-hypotheses-v5", "automatic-hypotheses-v6")
                         else "automatic_stock_features"
                     ],
                 }
@@ -146,6 +147,7 @@ def _validated_rows(evidence, saved, completed):
         "automatic-hypotheses-v3",
         "automatic-hypotheses-v4",
         "automatic-hypotheses-v5",
+        "automatic-hypotheses-v6",
     ):
         from research.automatic_hypotheses import checkpoint_rows
 

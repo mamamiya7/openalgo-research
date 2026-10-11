@@ -53,7 +53,11 @@ def build_plan(portfolio, *, interval):
 
     if portfolio["engine"] != "vectorbt" or interval not in ("D", "1m"):
         raise ValueError("Smart research needs VectorBT with daily or minute NSE equity prices")
-    joint = portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v5"
+    trailing = portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v6"
+    joint = (
+        trailing
+        or portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v5"
+    )
     relative = (
         joint or portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v4"
     )
@@ -208,5 +212,21 @@ def build_plan(portfolio, *, interval):
                 method.update(
                     status="admitted",
                     reason="One causal Nifty trend or volatility gate AND one registered stock hypothesis, on separate recorded history roles.",
+                )
+    if trailing:
+        from research.automatic_trailing import recipe as trailing_recipe
+
+        payload["trailing_research"] = trailing_recipe(portfolio["strategies"])
+        payload["methods"].append(
+            {
+                "id": "trailing_activation",
+                "status": "admitted",
+                "reason": "One disabled state or a positive trailing distance per strategy; compare on the same native account with unchanged risk and costs.",
+            }
+        )
+        for method in payload["methods"]:
+            if method["id"] == "exit_management":
+                method["reason"] = (
+                    "Native targets, stops, active holding deadlines and conditional trailing protection."
                 )
     return {**payload, "id": fingerprint(payload)}

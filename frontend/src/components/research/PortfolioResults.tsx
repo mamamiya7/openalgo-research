@@ -479,7 +479,10 @@ function PortfolioReport({
         </div>
       </div>
       {result.automatic_research && (
-        <AutomaticResearchFindings findings={result.automatic_research} />
+        <AutomaticResearchFindings
+          findings={result.automatic_research}
+          selectedSettings={result.experiment?.selected_strategies}
+        />
       )}
       {automatic && !laterPeriod && !readOnly && (
         <p className="text-xs text-muted-foreground">

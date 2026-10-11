@@ -334,7 +334,10 @@ function StudyWorkspace({
         </div>
       </header>
       {result.automatic_research && (
-        <AutomaticResearchFindings findings={result.automatic_research} />
+        <AutomaticResearchFindings
+          findings={result.automatic_research}
+          selectedSettings={result.experiment?.selected_strategies}
+        />
       )}
       {automatic && !readOnly && (
         <p className="text-xs text-muted-foreground">
