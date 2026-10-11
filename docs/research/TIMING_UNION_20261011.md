@@ -1,5 +1,9 @@
 # Shared native timing evidence — 11 October 2026
 
+This checkpoint describes the internal foundation before automatic admission.
+The subsequent [v7 integration](AUTOMATIC_TIMING_20261011.md) uses it in new
+automatic studies; [STATUS.md](STATUS.md) records current qualification and activation.
+
 ## Purpose and implemented scope
 
 Before an optimiser compares entry or exit clocks, every admitted clock must

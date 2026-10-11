@@ -119,6 +119,7 @@ def resolve_inputs(store, owner, request):
                 "automatic-hypotheses-v4",
                 "automatic-hypotheses-v5",
                 "automatic-hypotheses-v6",
+                "automatic-hypotheses-v7",
             )
             and receipt["symbol_count"] > 200
         ):
@@ -327,6 +328,7 @@ def replay_inputs(store, owner, job_id, *, trial_id=None, period="selection"):
         "automatic-hypotheses-v4",
         "automatic-hypotheses-v5",
         "automatic-hypotheses-v6",
+        "automatic-hypotheses-v7",
     ):
         marker = selected[0].get("entry_condition")
         selected_conditions = deepcopy(marker) if marker else None
@@ -414,7 +416,7 @@ def validate_submission(evidence, kind, spec):
 
 
 def _prepare_prices(
-    store, owner, evidence, *, saved, checkpoint, progress, cancelled, activity=None
+    store, owner, evidence, *, saved, checkpoint, progress, cancelled, activity=None, calendar=None
 ):
     from services.research_acquisition import _save_receipt, acquisition_receipts
     from services.research_checkpoint import MinuteCheckpointWriter, unpack_checkpoint
@@ -431,7 +433,7 @@ def _prepare_prices(
     writer = MinuteCheckpointWriter(store, receipts_dir, saved)
     restored = unpack_checkpoint(store, saved) if saved else None
     reference_id = restored.get("reference_artifact") if restored else None
-    calendar = (
+    calendar = calendar or (
         service.read_artifact(store, reference_id)
         if reference_id
         else native_calendar_snapshot(
@@ -557,6 +559,110 @@ def _prepare_prices(
     return prepared
 
 
+def _prepare_automatic_timing(
+    store, owner, evidence, *, saved, checkpoint, progress, cancelled, activity=None
+):
+    """Resolve actual exchange hours once, then acquire the v7 clock union once."""
+    from research.automatic_protocol import compile_recipe
+    from research.timing_search import build_union, propose
+    from services.research_native_calendar import native_calendar_snapshot
+    from services.research_timing_prices import PHASE, READY_PHASE
+    from services.research_timing_prices import prepare as prepare_union
+
+    if contract.interval_for(evidence["portfolio"], evidence["strategies"]) == "D":
+        return _prepare_prices(
+            store,
+            owner,
+            evidence,
+            saved=saved,
+            checkpoint=checkpoint,
+            progress=progress,
+            cancelled=cancelled,
+            activity=activity,
+        )
+
+    def complete(sessions, hours):
+        native = {
+            "sessions": sessions,
+            "session_hours": hours,
+            "provenance": {"exchange": "NSE", "calendar_basis": "openalgo-market-calendar-v1"},
+        }
+        return propose(evidence["portfolio"], evidence["strategies"], native)["status"] in (
+            "ready",
+            "not_applicable",
+        )
+
+    reference_id = (saved or {}).get("reference_artifact")
+    calendar = (
+        service.read_artifact(store, reference_id)
+        if reference_id
+        else native_calendar_snapshot(
+            evidence["signals"],
+            warmup_sessions=0,
+            tail_sessions=contract.calendar_tail_sessions(
+                evidence["portfolio"], evidence["strategies"]
+            ),
+            completion_check=complete,
+        )
+    )
+    if reference_id:
+        from research.calendar_coverage import check_saved_calendar
+
+        check_saved_calendar(calendar)
+    descriptor = propose(evidence["portfolio"], evidence["strategies"], calendar)
+    if descriptor["status"] == "not_applicable":
+        if saved and saved.get("phase") in (PHASE, READY_PHASE):
+            raise ValueError("Saved timing union no longer matches the native clock choices")
+        prepared = _prepare_prices(
+            store,
+            owner,
+            evidence,
+            saved=saved,
+            checkpoint=checkpoint,
+            progress=progress,
+            cancelled=cancelled,
+            activity=activity,
+            calendar=calendar,
+        )
+        return {
+            **prepared,
+            "timing_descriptor": propose(
+                prepared["portfolio"], prepared["strategies"], prepared["snapshot"]
+            ),
+        }
+    if descriptor["status"] != "ready":
+        raise ValueError(descriptor.get("reason") or "Native timing history is incomplete")
+    plan = build_union(evidence["portfolio"], evidence["strategies"], calendar, descriptor)
+    # Admission is price independent; fail before broker work for invalid history.
+    compile_recipe(
+        {
+            **evidence,
+            "timing_descriptor": descriptor,
+            "timing_union": plan,
+            "snapshot": {**calendar, "provenance": {**calendar["provenance"], "interval": "1m"}},
+        }
+    )
+    return prepare_union(
+        store,
+        owner,
+        evidence,
+        calendar,
+        descriptor=descriptor,
+        saved=saved,
+        checkpoint=lambda state, counts: checkpoint(
+            state,
+            {
+                **counts,
+                "completed": 0.6 * counts["completed"],
+                "stage": "prices",
+            },
+        ),
+        progress=progress,
+        cancelled=cancelled,
+        activity=activity,
+    )
+
+
 def run(
     store,
     owner,
@@ -618,7 +724,12 @@ def run(
             {"completed": 60, "total": 100, "stage": "backtest"},
         )
     else:
-        evidence = _prepare_prices(
+        prepare_prices = (
+            _prepare_automatic_timing
+            if portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v7"
+            else _prepare_prices
+        )
+        evidence = prepare_prices(
             store,
             owner,
             evidence,
@@ -659,7 +770,7 @@ def run(
         stock_saved = saved
         if (
             portfolio.get("automatic_research", {}).get("version")
-            in ("automatic-hypotheses-v5", "automatic-hypotheses-v6")
+            in ("automatic-hypotheses-v5", "automatic-hypotheses-v6", "automatic-hypotheses-v7")
             or portfolio.get("entry_conditions", {}).get("version")
             == "research-joint-entry-conditions-v1"
         ):

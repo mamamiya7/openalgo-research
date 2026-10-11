@@ -53,6 +53,7 @@ need → drill into the specific file. Don't load everything at once.
 | Proposed one-click Optimize: automatic trading-rule/condition research, causal indicators, validation, benchmarks and findings | [research/AUTOMATED_RESEARCH_PLAN.md](research/AUTOMATED_RESEARCH_PLAN.md) |
 | Native research timing admission: actual CSV timestamps, daily/minute intent and prerequisites for future clock search | [research/TIMING_ADMISSION_20261011.md](research/TIMING_ADMISSION_20261011.md) |
 | Shared native timing evidence: bounded clock choices, one Historify union and a fixed missing-price cohort | [research/TIMING_UNION_20261011.md](research/TIMING_UNION_20261011.md) |
+| Automatic trade timing: shared evidence, joint search, native recovery and exact saved-clock replay | [research/AUTOMATIC_TIMING_20261011.md](research/AUTOMATIC_TIMING_20261011.md) |
 | Research download batching, Historify reuse and bounded evidence publication | [research/DOWNLOAD_PERFORMANCE.md](research/DOWNLOAD_PERFORMANCE.md) |
 | Optimization trial metrics, configurable table columns and settings dialogs | [research/TRIAL_RESULTS.md](research/TRIAL_RESULTS.md) |
 | Continuous report, saved preferences, month/drawdown investigation and evaluation-basis receipts; Optuna study, candidate and comparison/validation plan | [research/REPORT_EXPERIENCE_PLAN.md](research/REPORT_EXPERIENCE_PLAN.md) |

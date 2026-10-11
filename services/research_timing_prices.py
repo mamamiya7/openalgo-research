@@ -1,8 +1,8 @@
-"""Explicit timing-foundation acquisition, separate from existing saved recipes.
+"""Explicit timing-union acquisition, separate from existing v2-v6 recipes.
 
 The caller supplies a frozen native calendar. Native Historify/history services
 own all archive and network resources; this scope retains only bounded local
-planning/checkpoint metadata. No endpoint, automatic recipe, or worker is added.
+planning/checkpoint metadata. The v7 worker opts in once before calculation.
 """
 
 from copy import deepcopy
@@ -249,6 +249,7 @@ def prepare(
         "timing_union": plan,
     }
     prepared["timing_cohort"] = freeze_cohort(prepared, descriptor, plan)
+    prepared["frozen_prices"] = True
     inputs_id = service.save_artifact(store, prepared)
     checkpoint(
         {

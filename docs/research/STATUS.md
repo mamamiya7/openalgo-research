@@ -1,5 +1,34 @@
 # OpenAlgo Research status
 
+## Automatic trade timing — 11 October 2026
+
+`automatic-hypotheses-v7` integrates joint stock/market conditions, trailing and
+registered entry/exit clocks within the existing 128-proposal/320-calculation
+budget. New unconfigured VectorBT studies choose this scope; saved older recipes
+and custom searches retain their identity. Daily inputs stay daily. Timed inputs
+prepare one native Historify union and a fixed missing-price cohort, with period
+purging across all scheduled maximum deadlines and causal gates at actual entry.
+Findings, recorded Optuna analysis, trial inspection and replay retain the frozen
+clock settings. See the [implementation contract](AUTOMATIC_TIMING_20261011.md).
+
+Focused qualification passes 234 distinct backend cases, 173 frontend cases,
+TypeScript, the production build and 161 source compatibility checks. The full
+controlled native short-session study completed 128 proposals and 166
+calculations, pausing at 102 committed trials and resuming after a process restart.
+It retained the original settings when profitable clock candidates failed
+stability checks. Exact replay matches its summary, ledger, equity and settings.
+A saved 09:30 candidate reproduced its recorded summary and actual entry
+timestamps, and its named setup retained those clocks. Regular-session
+preparation/recovery also passed through the native worker. These are controlled
+fixtures, not fresh broker-download or real-market performance acceptance.
+
+Normal-app activation is recorded separately from source qualification and
+public delivery. Public preview.7 remains unchanged; draft PR6 still requires
+public-main reconciliation and complete preview.8 Windows/Linux release checks.
+Next dependencies are independent bounded diagnostics and aligned candidate
+comparison curves, followed by broader asset qualification and native authoring
+parity. Older checkpoints below retain their dated scope and activation counts.
+
 ## Shared timing price evidence — 11 October 2026
 
 The next source increment implements bounded timing choices, one shared native

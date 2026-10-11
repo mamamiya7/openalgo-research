@@ -28,7 +28,8 @@ def _trailing_axes(experiment):
     from research.connectors.optuna_portfolio import _axis, _values
 
     if (
-        experiment.get("experiment_version") != "automatic-hypotheses-v6"
+        experiment.get("experiment_version")
+        not in ("automatic-hypotheses-v6", "automatic-hypotheses-v7")
         or not isinstance(specification, dict)
         or specification.get("version") != TRAILING_VERSION
         or not isinstance(specification.get("strategies"), list)
@@ -59,6 +60,69 @@ def _trailing_axes(experiment):
     return result
 
 
+def _timing_axes(experiment):
+    """Read only finite, frozen native clock states; never infer a new clock."""
+    specification = experiment.get("timing_research")
+    if specification is None:
+        return {}
+    from research.automatic_timing import VERSION as TIMING_VERSION
+    from research.engine import validate_config
+
+    if (
+        experiment.get("experiment_version") != "automatic-hypotheses-v7"
+        or not isinstance(specification, dict)
+        or specification.get("version") != TIMING_VERSION
+        or specification.get("interval") not in ("D", "1m")
+        or not isinstance(specification.get("strategies"), list)
+        or not 1 <= len(specification["strategies"]) <= 8
+    ):
+        raise ValueError("Invalid recorded timing research contract")
+    result = {}
+    for row in specification["strategies"]:
+        if (
+            not isinstance(row, dict)
+            or not isinstance(row.get("id"), str)
+            or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", row["id"])
+            or not isinstance(row.get("original"), dict)
+            or set(row["original"]) - {"entry_time", "exit_time"}
+            or not isinstance(row.get("branches"), list)
+            or not 1 <= len(row["branches"]) <= 4
+        ):
+            raise ValueError("Invalid recorded timing strategy")
+        name = f"{row['id']}.timing_choice"
+        choices = []
+        for branch in row["branches"]:
+            if (
+                not isinstance(branch, dict)
+                or set(branch) != {"id", "label", "changes"}
+                or not isinstance(branch["id"], str)
+                or not re.fullmatch(r"original|(?:entry|exit)_[0-9]{4}", branch["id"])
+                or not isinstance(branch["label"], str)
+                or len(branch["label"]) > 80
+                or not isinstance(branch["changes"], dict)
+                or set(branch["changes"]) - {"entry_time", "exit_time"}
+                or (branch["id"] == "original" and branch["changes"])
+                or (branch["id"] != "original" and len(branch["changes"]) != 1)
+            ):
+                raise ValueError("Invalid recorded timing choice")
+            if branch["id"] != "original":
+                key = "entry_time" if branch["id"].startswith("entry_") else "exit_time"
+                clock = branch["id"].split("_", 1)[1]
+                if branch["changes"] != {key: f"{clock[:2]}:{clock[2:]}"}:
+                    raise ValueError("Recorded timing clock differs from its registered identity")
+            validate_config({**row["original"], **branch["changes"]})
+            choices.append(branch["id"])
+        if (
+            name in result
+            or choices[0] != "original"
+            or len(set(choices)) != len(choices)
+            or (specification["interval"] == "D" and choices != ["original"])
+        ):
+            raise ValueError("Invalid recorded timing choices")
+        result[name] = {"type": "categorical", "choices": choices}
+    return result
+
+
 def reconstruct_study(experiment):
     import optuna
 
@@ -71,6 +135,11 @@ def reconstruct_study(experiment):
     trailing_axes = _trailing_axes(experiment)
     if any(axes.get(name) != axis for name, axis in trailing_axes.items()):
         raise ValueError("Recorded trailing parameters differ from their frozen contract")
+    timing_axes = _timing_axes(experiment)
+    if any(axes.get(name) != axis for name, axis in timing_axes.items()):
+        raise ValueError("Recorded timing parameters differ from their frozen contract")
+    if any(name.endswith(".timing_choice") and name not in timing_axes for name in axes):
+        raise ValueError("Recorded timing parameters need their frozen contract")
     distributions = {}
     for name, axis in axes.items():
         if axis.get("type") == "categorical":

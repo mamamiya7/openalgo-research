@@ -14,7 +14,7 @@ from research.portfolio import fingerprint, normalize
 from research.regimes import recipe as regime_recipe
 
 CATALOG_VERSION = "automatic-search-plan-v1"
-NEXT_RECIPE_VERSION = "automatic-hypotheses-v7"
+NEXT_RECIPE_VERSION = "automatic-hypotheses-v8"
 
 _PARAMETERS = {
     "target_pct": ("Profit target", "%"),
@@ -54,7 +54,7 @@ def _domain(axis, *, integer):
 
 def _parameters(strategy, engine, version):
     cfg, search = strategy["config"], strategy["search"]
-    trailing = version == "automatic-hypotheses-v6"
+    trailing = version in ("automatic-hypotheses-v6", "automatic-hypotheses-v7")
     parameters = []
     for key, (label, unit) in _PARAMETERS.items():
         if key not in cfg:
@@ -100,6 +100,8 @@ def _parameters(strategy, engine, version):
             reason = "Execution assumptions are not tuned to improve the result."
         elif key in ("entry_time", "exit_time", "trade_horizon"):
             reason = "Keep the original timing and required candle interval."
+            if version == "automatic-hypotheses-v7" and key != "trade_horizon":
+                reason = "Check bounded native clock alternatives after exchange-calendar admission; daily inputs retain these clocks."
         parameters.append({**item, "status": status, "reason": reason})
     parameters.append(
         {
@@ -132,7 +134,11 @@ def _decisions(portfolio, interval, strategies, *, proposals, max_simulations):
     execution recipe, the request's version, or any numerical search domain.
     """
     intelligent = portfolio["automatic_research"]["version"].startswith("automatic-hypotheses-")
-    trailing = portfolio["automatic_research"]["version"] == "automatic-hypotheses-v6"
+    trailing = portfolio["automatic_research"]["version"] in (
+        "automatic-hypotheses-v6",
+        "automatic-hypotheses-v7",
+    )
+    timing = portfolio["automatic_research"]["version"] == "automatic-hypotheses-v7"
     return {
         "version": "automatic-decision-summary-v1",
         "automatic": [
@@ -165,6 +171,19 @@ def _decisions(portfolio, interval, strategies, *, proposals, max_simulations):
                 if intelligent
                 else "Use this recipe's recorded chronological checks; insufficient history fails admission.",
             },
+            *(
+                [
+                    {
+                        "id": "timing",
+                        "label": "Execution clocks",
+                        "decision": "Check bounded native entry and exit clocks on one shared price dataset after recorded exchange hours are verified."
+                        if interval == "1m"
+                        else "Retain original daily execution; no minute download is inferred.",
+                    }
+                ]
+                if timing
+                else []
+            ),
         ],
         "retained": [
             {
@@ -179,8 +198,10 @@ def _decisions(portfolio, interval, strategies, *, proposals, max_simulations):
             },
             {
                 "id": "timing",
-                "label": "Trading horizon and clocks",
-                "decision": "Keep the original intraday or multiday horizon and entry/exit clock rules.",
+                "label": "Trading horizon" if timing else "Trading horizon and clocks",
+                "decision": "Keep the original intraday or multiday horizon."
+                if timing
+                else "Keep the original intraday or multiday horizon and entry/exit clock rules.",
             },
         ],
         "not_searched": [
@@ -197,11 +218,17 @@ def _decisions(portfolio, interval, strategies, *, proposals, max_simulations):
                     }
                 ]
             ),
-            {
-                "id": "timing_search",
-                "label": "Alternative entry and exit clocks",
-                "reason": "This recipe retains original execution timing.",
-            },
+            *(
+                [
+                    {
+                        "id": "timing_search",
+                        "label": "Alternative entry and exit clocks",
+                        "reason": "This recipe retains original execution timing.",
+                    }
+                ]
+                if not timing
+                else []
+            ),
             {
                 "id": "portfolio_risk_search",
                 "label": "Larger bets or different allocations",
@@ -435,6 +462,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v4",
         "automatic-hypotheses-v5",
         "automatic-hypotheses-v6",
+        "automatic-hypotheses-v7",
     ):
         raise ValueError("Choose a supported automatic research recipe before planning")
     version, engine = auto["version"], canonical["engine"]
@@ -458,6 +486,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v4",
         "automatic-hypotheses-v5",
         "automatic-hypotheses-v6",
+        "automatic-hypotheses-v7",
     ):
         from research.intelligent_plan import build_plan as intelligence_plan
 

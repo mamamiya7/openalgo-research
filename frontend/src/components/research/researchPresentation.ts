@@ -104,5 +104,7 @@ export function strategyRuleSummary(
       : includeTrailingOff
         ? ['Trail off']
         : []),
+    ...(config.entry_time ? [`Enter from ${config.entry_time} IST`] : []),
+    ...(config.exit_time ? [`Exit by ${config.exit_time} IST`] : []),
   ].join(' · ')
 }

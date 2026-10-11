@@ -420,6 +420,7 @@ def run_one(store, token, stop_requested=None):
                             "automatic-hypotheses-v4",
                             "automatic-hypotheses-v5",
                             "automatic-hypotheses-v6",
+                            "automatic-hypotheses-v7",
                         )
                         else {}
                     ),

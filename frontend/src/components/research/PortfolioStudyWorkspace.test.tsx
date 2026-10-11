@@ -254,6 +254,7 @@ describe('connected study exploration', () => {
     ['automatic-hypotheses-v4', 'Smart research'],
     ['automatic-hypotheses-v5', 'Stock and market research'],
     ['automatic-hypotheses-v6', 'Stock, market and trailing stops'],
+    ['automatic-hypotheses-v7', 'Stock, market and trade timing'],
     ['automatic-future-v99', 'Automatic research'],
   ])('identifies the actual saved %s scope without relabeling the manual objective', (version, label) => {
     const data = result()

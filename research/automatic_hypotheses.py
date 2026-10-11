@@ -34,6 +34,7 @@ EXPANDED_VERSION = "automatic-hypotheses-v3"
 BENCHMARK_VERSION = "automatic-hypotheses-v4"
 JOINT_VERSION = "automatic-hypotheses-v5"
 TRAILING_VERSION = "automatic-hypotheses-v6"
+TIMING_VERSION = "automatic-hypotheses-v7"
 CONDITION_VERSION = "research-stock-entry-conditions-v1"
 MAX_SIMULATIONS = 180
 PROPOSALS = 60
@@ -99,8 +100,8 @@ def policy_for_version(version):
             "max_hypotheses": 92,
             "max_families": 32,
         }
-    if version == TRAILING_VERSION:
-        return {**policy_for_version(JOINT_VERSION), "version": TRAILING_VERSION}
+    if version in (TRAILING_VERSION, TIMING_VERSION):
+        return {**policy_for_version(JOINT_VERSION), "version": version}
     raise ValueError("Choose a supported automatic hypothesis version")
 
 
@@ -186,6 +187,7 @@ def checkpoint_rows(saved):
         BENCHMARK_VERSION,
         JOINT_VERSION,
         TRAILING_VERSION,
+        TIMING_VERSION,
     ):
         raise ValueError("Automatic hypothesis checkpoint inputs or evidence changed")
     policy = policy_for_version(saved["version"])
@@ -241,11 +243,11 @@ def _screening(entries, axes, *, policy=None):
                     )
                     index = (0, len(values) - 1, len(values) // 2)[attempt]
                     if (
-                        policy["version"] == TRAILING_VERSION
+                        policy["version"] in (TRAILING_VERSION, TIMING_VERSION)
                         and domain.get("type") == "categorical"
                     ):
                         index = (0, 1, len(values) - 1)[attempt]
-                    params[name] = values[index]
+                    params[name] = "original" if name.endswith(".timing_choice") else values[index]
             queued.append(params)
     return queued
 
@@ -274,7 +276,7 @@ def run(
     proposals, max_simulations = policy["proposals"], policy["max_simulations"]
     stock = (
         evidence.get("automatic_stock_market_context")
-        if version in (JOINT_VERSION, TRAILING_VERSION)
+        if version in (JOINT_VERSION, TRAILING_VERSION, TIMING_VERSION)
         else evidence.get("automatic_stock_features")
     )
     if evidence.get("automatic_recipe") != recipe:
@@ -282,7 +284,7 @@ def run(
     if evidence["portfolio"].get("engine", "vectorbt") != "vectorbt":
         raise ValueError("Automatic stock hypotheses currently need VectorBT")
     gate_apply, gate_markers = apply, markers
-    if version in (JOINT_VERSION, TRAILING_VERSION):
+    if version in (JOINT_VERSION, TRAILING_VERSION, TIMING_VERSION):
         from research.joint_stock_market import apply as gate_apply
         from research.joint_stock_market import catalog as joint_catalog
         from research.joint_stock_market import markers as gate_markers
@@ -314,7 +316,7 @@ def run(
     base, axes = _prepare(evidence["strategies"])
     numeric_axes = deepcopy(axes)
     trailing = None
-    if version == TRAILING_VERSION:
+    if version in (TRAILING_VERSION, TIMING_VERSION):
         from research.automatic_trailing import axes as trailing_axes
         from research.automatic_trailing import descriptor
 
@@ -322,11 +324,25 @@ def run(
         if recipe.get("trailing_research") != trailing:
             raise ValueError("The frozen automatic trailing states changed")
         axes.update(trailing_axes(trailing))
+    timing = None
+    if version == TIMING_VERSION:
+        from research.automatic_timing import axes as timing_axes
+        from research.automatic_timing import descriptor as timing_descriptor
+
+        timing = timing_descriptor(evidence, strict=True)
+        if recipe.get("timing_research") != timing:
+            raise ValueError("The frozen automatic timing states changed")
+        axes.update(timing_axes(timing))
     baseline = _settings(base)
     baseline_id = settings_identity(baseline)
     none = next(row for row in entries if row["id"] == "none")
     by_hypothesis = {row["id"]: row for row in entries}
     screening = _screening(entries, axes, policy=policy)
+    family_screen_count = len(screening)
+    if timing is not None:
+        from research.automatic_timing import probes
+
+        screening.extend(probes(axes, timing))
     optimizer = {
         "id": "optuna",
         "version": optuna.__version__,
@@ -427,9 +443,16 @@ def run(
             apply_fn=gate_apply,
             markers_fn=gate_markers,
             calculation_version=policy["calculation_version"]
-            if version in (EXPANDED_VERSION, BENCHMARK_VERSION, JOINT_VERSION, TRAILING_VERSION)
+            if version
+            in (
+                EXPANDED_VERSION,
+                BENCHMARK_VERSION,
+                JOINT_VERSION,
+                TRAILING_VERSION,
+                TIMING_VERSION,
+            )
             else None,
-            trailing_activation=version == TRAILING_VERSION,
+            trailing_activation=version in (TRAILING_VERSION, TIMING_VERSION),
         )
         current["entry_condition_gates"] = [receipt]
         return current, receipt
@@ -542,6 +565,10 @@ def run(
             from research.automatic_trailing import apply_choices
 
             proposed = apply_choices(proposed, params, trailing)
+        if timing is not None:
+            from research.automatic_timing import apply_choices as apply_timing
+
+            proposed = apply_timing(proposed, params, timing)
         settings = gate_markers(_settings(proposed), hypothesis, stock["id"])
         config_id = settings_identity(settings)
         record = {
@@ -550,7 +577,11 @@ def run(
             "config_id": config_id,
             "state": "complete",
             "reused": config_id in seen,
-            "phase": "family_screening" if index < len(screening) else "joint_refinement",
+            "phase": "family_screening"
+            if index < family_screen_count
+            else "timing_probe"
+            if timing is not None and index < len(screening)
+            else "joint_refinement",
         }
         if index < len(state["trials"]):
             old = state["trials"][index]
@@ -686,7 +717,15 @@ def run(
                         "score_delta": _score(stress["summary"]) - _score(stressed_base["summary"]),
                     }
                 if not reasons:
-                    if trailing is not None:
+                    if timing is not None:
+                        from research.automatic_timing import (
+                            stability_neighbors as timing_neighbors,
+                        )
+
+                        neighborhood = timing_neighbors(
+                            settings, recipe["ranges"], timing, trailing
+                        )
+                    elif trailing is not None:
                         from research.automatic_trailing import stability_neighbors
 
                         neighborhood = stability_neighbors(settings, recipe["ranges"], trailing)
@@ -827,6 +866,8 @@ def run(
         from research.automatic_trailing import grid_size
 
         grid = len(entries) * grid_size(numeric_axes, trailing)
+        if timing is not None:
+            grid *= prod(len(row["branches"]) for row in timing["strategies"])
     else:
         grid = len(entries) * prod(len(_values(domain)) for domain in axes.values())
     selection_basis = (
@@ -871,6 +912,8 @@ def run(
     }
     if trailing is not None:
         result["experiment"]["trailing_research"] = deepcopy(trailing)
+    if timing is not None:
+        result["experiment"]["timing_research"] = deepcopy(timing)
     result["automatic_research"] = {
         "version": version,
         "status": status,
@@ -897,7 +940,12 @@ def run(
             "joint_grid_size": grid,
             "unique_candidates": len(candidates),
             "exhaustive": len(candidates) == grid,
-            "family_screening_proposals": len(screening),
+            "family_screening_proposals": family_screen_count,
+            **(
+                {"timing_probe_proposals": len(screening) - family_screen_count}
+                if timing is not None
+                else {}
+            ),
             "families": [
                 {
                     "family": family,

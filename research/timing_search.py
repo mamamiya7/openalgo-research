@@ -1,7 +1,7 @@
-"""Bounded, opt-in native timing union and shared evidence cohort.
+"""Bounded native timing union and shared evidence cohort.
 
-This qualifies fixed clock branches, not an automatic optimiser recipe. Existing
-v2-v6 requests and saved artefacts never call this module. No resources are owned.
+Used by automatic v7 and internal fixed-branch qualification. Existing v2-v6
+requests and saved artefacts never call this module. No resources are owned.
 """
 
 from collections import Counter

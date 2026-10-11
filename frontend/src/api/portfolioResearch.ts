@@ -327,6 +327,7 @@ export interface PortfolioRequest {
       | 'automatic-hypotheses-v4'
       | 'automatic-hypotheses-v5'
       | 'automatic-hypotheses-v6'
+      | 'automatic-hypotheses-v7'
   }
   entry_conditions?: EntryConditions
   optimization?: {

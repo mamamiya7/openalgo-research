@@ -53,7 +53,10 @@ def build_plan(portfolio, *, interval):
 
     if portfolio["engine"] != "vectorbt" or interval not in ("D", "1m"):
         raise ValueError("Smart research needs VectorBT with daily or minute NSE equity prices")
-    trailing = portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v6"
+    trailing = portfolio.get("automatic_research", {}).get("version") in (
+        "automatic-hypotheses-v6",
+        "automatic-hypotheses-v7",
+    )
     joint = (
         trailing
         or portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v5"
@@ -229,4 +232,13 @@ def build_plan(portfolio, *, interval):
                 method["reason"] = (
                     "Native targets, stops, active holding deadlines and conditional trailing protection."
                 )
+    if portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v7":
+        payload["methods"].append(
+            {
+                "id": "native_timing",
+                "status": "conditional" if interval == "1m" else "not_applicable",
+                "reason": "Bounded recorded native entry/exit clocks only when minute inputs require them; daily inputs retain original execution and daily candles.",
+            }
+        )
+        payload["budget"].update(timing_probe_limit=24, min_joint_refinement_proposals=8)
     return {**payload, "id": fingerprint(payload)}

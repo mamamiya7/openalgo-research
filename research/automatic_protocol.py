@@ -16,12 +16,14 @@ EXPANDED_VERSION = "automatic-hypotheses-v3"
 BENCHMARK_VERSION = "automatic-hypotheses-v4"
 JOINT_VERSION = "automatic-hypotheses-v5"
 TRAILING_VERSION = "automatic-hypotheses-v6"
+TIMING_VERSION = "automatic-hypotheses-v7"
 HYPOTHESIS_VERSIONS = (
     HYPOTHESIS_VERSION,
     EXPANDED_VERSION,
     BENCHMARK_VERSION,
     JOINT_VERSION,
     TRAILING_VERSION,
+    TIMING_VERSION,
 )
 PERIODS = ("search", "check1", "check2", "final")
 MIN_SESSIONS = 100
@@ -124,13 +126,17 @@ def automatic_portfolio(portfolio):
             search["hold_minutes"] = _range(cfg["hold_minutes"], 100000, integer=True)
         elif cfg.get("trade_horizon") != "intraday":
             search["hold_sessions"] = _range(cfg["hold_sessions"], 252, integer=True)
-        if cfg["trailing_enabled"] and result["automatic_research"]["version"] != TRAILING_VERSION:
+        if cfg["trailing_enabled"] and result["automatic_research"]["version"] not in (
+            TRAILING_VERSION,
+            TIMING_VERSION,
+        ):
             search["trailing_pct"] = _range(cfg["trailing_pct"], 99)
         row["search"] = search
     result["optimization"] = {
         "sampler": "tpe",
         "trials": 128
-        if result["automatic_research"]["version"] in (JOINT_VERSION, TRAILING_VERSION)
+        if result["automatic_research"]["version"]
+        in (JOINT_VERSION, TRAILING_VERSION, TIMING_VERSION)
         else 96
         if result["automatic_research"]["version"] == BENCHMARK_VERSION
         else 84
@@ -278,7 +284,11 @@ def compile_recipe(evidence):
 
         if relative:
             from research.stock_relative_strength import catalog, validate_bundle
-        joint = portfolio["automatic_research"]["version"] in (JOINT_VERSION, TRAILING_VERSION)
+        joint = portfolio["automatic_research"]["version"] in (
+            JOINT_VERSION,
+            TRAILING_VERSION,
+            TIMING_VERSION,
+        )
         if joint:
             from research.joint_stock_market import catalog
             from research.stock_market_context import validate_bundle
@@ -339,7 +349,7 @@ def compile_recipe(evidence):
             payload["policies"]["unsupported"] = (
                 "original-scanner reconstruction, arbitrary Boolean stacks, volume, unregistered indicators, live execution or statistical confidence claims"
             )
-        if payload["version"] == TRAILING_VERSION:
+        if payload["version"] in (TRAILING_VERSION, TIMING_VERSION):
             from research.automatic_trailing import descriptor
 
             payload["trailing_research"] = descriptor(evidence["strategies"])
@@ -347,6 +357,11 @@ def compile_recipe(evidence):
                 "off is one canonical candidate; positive distances enable trailing; "
                 "unchanged original settings remain a separate baseline"
             )
+        if payload["version"] == TIMING_VERSION:
+            from research.automatic_timing import descriptor as timing_descriptor
+
+            payload["timing_research"] = timing_descriptor(evidence)
+            payload["policies"]["coverage"] = payload["timing_research"]["policy"]
         if validation_mode == "exploratory_only":
             payload["policies"]["final"] = (
                 "No untouched later period; exploratory ranking only, never a validated recommendation"
@@ -398,6 +413,7 @@ def slice_period(evidence, name):
         for row in requirement_strategies(evidence["portfolio"], evidence["strategies"])
     }
     strategies, purged = [], 0
+    timing_union = recipe["version"] == TIMING_VERSION and evidence.get("timing_cohort") is not None
     for row in evidence["strategies"]:
         chosen = []
         cfg = requirements[row["id"]]["config"]
@@ -425,6 +441,10 @@ def slice_period(evidence, name):
                         purged += 1
             chosen.append(signal)
         strategies.append({**row, "signals": chosen})
+    if timing_union:
+        from research.automatic_timing import period_strategies
+
+        strategies, purged = period_strategies(evidence, first, last, name)
     selected = {
         **evidence,
         "strategies": strategies,
@@ -437,7 +457,7 @@ def slice_period(evidence, name):
     if not selected["signals"]:
         raise ValueError(f"The {name} research period has no scanner signals")
     try:
-        prepared = prepare(selected)
+        prepared = selected if timing_union else prepare(selected)
     except ValueError as error:
         if str(error).startswith("No signals have complete broker prices"):
             raise ValueError(

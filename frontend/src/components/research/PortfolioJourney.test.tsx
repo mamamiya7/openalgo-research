@@ -235,14 +235,14 @@ describe('native portfolio consumer journey', () => {
     const original = draft()
     const optimized = selectPortfolioRun(original, true)
     expect(optimized.optimizing).toBe(true)
-    expect(optimized.portfolio.automatic_research).toEqual({ version: 'automatic-hypotheses-v6' })
+    expect(optimized.portfolio.automatic_research).toEqual({ version: 'automatic-hypotheses-v7' })
     expect(optimized.portfolio.strategies).toEqual(original.portfolio.strategies)
     expect(optimized.portfolio.capital).toBe(original.portfolio.capital)
     expect(original.portfolio.automatic_research).toBeUndefined()
   })
   it('preserves saved scopes, custom ranges and chosen entry conditions when switching run type', () => {
     const saved = draft()
-    saved.portfolio.automatic_research = { version: 'automatic-hypotheses-v4' }
+    saved.portfolio.automatic_research = { version: 'automatic-hypotheses-v6' }
     expect(selectPortfolioRun(saved, true).portfolio.automatic_research).toEqual(
       saved.portfolio.automatic_research
     )
@@ -253,12 +253,12 @@ describe('native portfolio consumer journey', () => {
     expect(selectPortfolioRun(conditioned, true).portfolio.automatic_research).toBeUndefined()
   })
 
-  it('defaults new automatic research to stock-and-market while retaining account inputs', async () => {
+  it('defaults to timing research and preserves an explicitly selected prior recipe', async () => {
     const original = draft()
     savedDraft({ ...original, optimizing: true })
     mount()
     await userEvent.click(await screen.findByRole('button', { name: 'Automatic research' }))
-    expect(screen.getByLabelText('Research scope')).toHaveValue('automatic-hypotheses-v6')
+    expect(screen.getByLabelText('Research scope')).toHaveValue('automatic-hypotheses-v7')
     await userEvent.click(screen.getByText('Advanced research options'))
     await userEvent.selectOptions(
       screen.getByLabelText('Research scope'),
@@ -299,9 +299,9 @@ describe('native portfolio consumer journey', () => {
     const original = draft()
     original.optimizing = true
     original.portfolio.engine = 'nautilus'
-    original.portfolio.automatic_research = { version: 'automatic-hypotheses-v5' }
+    original.portfolio.automatic_research = { version: 'automatic-hypotheses-v7' }
     expect(portfolioEngineIssue(original)).toMatch(/need VectorBT/)
-    expect(original.portfolio.automatic_research.version).toBe('automatic-hypotheses-v5')
+    expect(original.portfolio.automatic_research.version).toBe('automatic-hypotheses-v7')
   })
 
   it('retains the prior stock-and-market recipe when a saved study is reused', () => {
@@ -442,12 +442,12 @@ describe('native portfolio consumer journey', () => {
     savedDraft({ ...original, optimizing: true })
     mount()
     await userEvent.click(await screen.findByRole('button', { name: 'Automatic research' }))
-    expect(screen.getByLabelText('Research scope')).toHaveValue('automatic-hypotheses-v6')
-    expect(screen.getByText(/Tests stock signals, Nifty trend or volatility/)).not.toBeVisible()
+    expect(screen.getByLabelText('Research scope')).toHaveValue('automatic-hypotheses-v7')
+    expect(screen.getByText(/Tests stock and market conditions/)).not.toBeVisible()
     await userEvent.click(screen.getByRole('button', { name: 'Optimize automatically' }))
     await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
     const sent = vi.mocked(portfolioResearch.submit).mock.calls[0][0]
-    expect(sent.automatic_research).toEqual({ version: 'automatic-hypotheses-v6' })
+    expect(sent.automatic_research).toEqual({ version: 'automatic-hypotheses-v7' })
     expect(sent.capital).toBe(original.portfolio.capital)
     expect(sent.strategies[0].config).toEqual(original.portfolio.strategies[0].config)
     expect(sent.strategies[0].allocation_pct).toBe(original.portfolio.strategies[0].allocation_pct)

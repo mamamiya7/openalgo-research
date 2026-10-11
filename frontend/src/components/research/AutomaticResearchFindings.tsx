@@ -70,7 +70,7 @@ export function AutomaticResearchFindings({
           {findings.selected_condition && (
             <p className="text-sm">Entry condition: {findings.selected_condition}</p>
           )}
-          {findings.version === 'automatic-hypotheses-v6' &&
+          {['automatic-hypotheses-v6', 'automatic-hypotheses-v7'].includes(findings.version) &&
             selectedSettings?.map((strategy) => (
               <p key={strategy.id} className="text-sm">
                 {selectedSettings.length > 1 && `${strategy.name} · `}

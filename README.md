@@ -32,19 +32,18 @@ condition-search and unfinished-study features are not included; their
 
 The development source integrates OpenAlgo **2.0.2.7** at reviewed upstream
 `12e111465798`, with native charts 2.6.0 and OpenScript 0.8.1. Research
-**preview.8** adds bounded automatic stock/market-condition research and trailing
-stop selection, concise findings, retained entry rules and native chart Values.
+**preview.8** adds bounded automatic stock/market-condition research, trailing
+stop and trade-timing selection, concise findings and native chart Values.
 One Optimize action compares the original settings with supported candidates;
 it checks later periods, costs and stability when the available history permits.
 
 [Development source](https://github.com/mamamiya7/openalgo-research/tree/codex/native-research-refinement)
 · [Integration PR](https://github.com/mamamiya7/openalgo-research/pull/6).
 Preflight also explains the selected candle interval from actual CSV timing and
-holding rules under **Why these candles?**; automatic clock search remains a
-separate [qualification step](docs/research/TIMING_ADMISSION_20261011.md).
-Its [shared-price foundation](docs/research/TIMING_UNION_20261011.md) now stages
-bounded timing choices on one native Historify union and a fixed evidence cohort;
-automatic clock selection is not enabled in the current Optimize action.
+holding rules under **Why these candles?**. New automatic studies compare
+[meaningful trade clocks](docs/research/AUTOMATIC_TIMING_20261011.md) using one
+shared Historify price preparation and the same price-complete opportunities.
+Daily inputs remain daily, and saved older studies keep their original scope.
 
 The public ZIP above remains **preview.7**. Preview.8 is qualified in the local
 application and controlled native journeys; its complete Windows/Linux release

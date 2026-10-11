@@ -45,6 +45,32 @@ function findings(): Findings {
 }
 
 describe('automatic research findings', () => {
+  it('shows selected timing beside the saved exits without another disclosure', () => {
+    const data = findings()
+    data.version = 'automatic-hypotheses-v7'
+    render(
+      <AutomaticResearchFindings
+        findings={data}
+        selectedSettings={[
+          {
+            id: 'scanner',
+            name: 'Scanner',
+            allocation_pct: 100,
+            config: {
+              ...researchDefaults,
+              trade_horizon: 'intraday',
+              hold_minutes: 60,
+              entry_time: '09:30',
+              exit_time: '15:15',
+            },
+          },
+        ]}
+      />
+    )
+    const settings = screen.getByText(/Enter from 09:30 IST/)
+    expect(settings).toHaveTextContent('Exit by 15:15 IST')
+    expect(settings).toBeVisible()
+  })
   it.each([
     false,
     true,
@@ -82,6 +108,7 @@ describe('automatic research findings', () => {
     ['automatic-hypotheses-v4', 'Smart research'],
     ['automatic-hypotheses-v5', 'Stock and market research'],
     ['automatic-hypotheses-v6', 'Stock, market and trailing stops'],
+    ['automatic-hypotheses-v7', 'Stock, market and trade timing'],
     ['automatic-future-v99', 'Automatic research'],
   ])('keeps the saved %s scope in the collapsed research details', async (version, label) => {
     const data = findings()

@@ -83,6 +83,19 @@ def _params(value):
                 raise ValueError("Invalid study activity hypothesis")
             continue
         if (
+            isinstance(key, str)
+            and re.fullmatch(r"[A-Za-z0-9_-]{1,64}\.timing_choice", key)
+            and isinstance(item, str)
+        ):
+            # Operational capture admits only the bounded native state grammar.
+            # The scientific recipe separately verifies membership in its exact
+            # frozen choices before evaluation; observations cannot create one.
+            if item != "original" and not re.fullmatch(
+                r"(?:entry|exit)_(?:[01][0-9]|2[0-3])[0-5][0-9]", item
+            ):
+                raise ValueError("Invalid study activity timing choice")
+            continue
+        if (
             not isinstance(key, str)
             or not 1 <= len(key) <= 160
             or isinstance(item, bool)
