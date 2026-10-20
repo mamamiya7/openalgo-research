@@ -82,13 +82,17 @@ isolated measurements, not latency guarantees for arbitrary stored checkpoints.
 
 ## Next implementation dependency
 
+The first numerical slice below is now implemented by the
+[v9 method expansion](METHOD_EXPANSION_20261021.md). This dated foundation retains
+its v8 qualification and identity; the registry also describes the separate v9 domain.
+
 Expand one qualified price family with a new numerical recipe/catalogue version,
 then reserve family screening, refinement and validation work before enabling it.
 The first candidate is absolute momentum over 10 and 60 completed sessions at
 registered zero and 2% thresholds. It fits the existing stock warmup; wider EMA
 domains need their own larger warmup admission. ATR-scaled protective exits need
 native same-bar execution tests and are a later slice. None of these additional
-methods is implemented or advertised as tested by this increment.
+methods was implemented or advertised as tested by this foundation increment.
 
 Preserve v8 replay unchanged. A new programme must define its proposal allocation,
 coverage, recovery and evidence contracts before making expanded choices the

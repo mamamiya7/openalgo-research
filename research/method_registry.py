@@ -13,7 +13,9 @@ from research.report_contract import fingerprint
 
 VERSION = "research-method-registry-v1"
 RECIPE_VERSION = "automatic-hypotheses-v8"
+EXPANDED_RECIPE_VERSION = "automatic-hypotheses-v9"
 CATALOG_ID = "bd3cd74734aac954372b379f88c4fb45b74f18de797824e2e389c5831ff87c28"
+EXPANDED_CATALOG_ID = "2c8b8afcb6c378f82ba54198eb0ac4ae67769c3dda533b28a2cadfdcdfdc8c88"
 MAX_BYTES = 64 * 1024
 
 
@@ -195,19 +197,28 @@ def _policies(identifier):
     }
 
 
-def pinned_hypotheses():
-    values = hypotheses()
-    if len(values) != 92 or fingerprint(values) != CATALOG_ID:
+def pinned_hypotheses(recipe_version=RECIPE_VERSION):
+    if recipe_version == EXPANDED_RECIPE_VERSION:
+        from research.expanded_stock_market import catalog as expanded
+
+        values, count, expected = expanded(), 108, EXPANDED_CATALOG_ID
+    elif recipe_version == RECIPE_VERSION:
+        values, count, expected = hypotheses(), 92, CATALOG_ID
+    else:
+        raise ValueError("Choose a pinned method programme")
+    if len(values) != count or fingerprint(values) != expected:
         raise ValueError("The pinned method catalogue changed; register a new version")
     return values
 
 
-def catalog():
+def catalog(recipe_version=RECIPE_VERSION):
     """Return fresh JSON definitions; module state contains immutable tuples only."""
-    rows = pinned_hypotheses()
+    rows = pinned_hypotheses(recipe_version)
     methods = []
     for spec in _SPECS:
         method = asdict(spec)
+        if recipe_version == EXPANDED_RECIPE_VERSION and spec.id == "momentum":
+            method["observations"] = "N+1 prior consecutive closes; N=5,10,20 or60"
         method.update(
             requirements=list(spec.requirements),
             **_policies(spec.id),
@@ -264,10 +275,12 @@ def catalog():
     ]
     result = {
         "version": VERSION,
-        "recipe_version": RECIPE_VERSION,
-        "catalog_id": CATALOG_ID,
+        "recipe_version": recipe_version,
+        "catalog_id": EXPANDED_CATALOG_ID
+        if recipe_version == EXPANDED_RECIPE_VERSION
+        else CATALOG_ID,
         "family_count": 32,
-        "hypothesis_count": 92,
+        "hypothesis_count": len(rows),
         "methods": methods,
         "families": families,
         "blocked_families": blocked,

@@ -10,8 +10,8 @@ from copy import deepcopy
 from math import prod
 
 from research.automatic_hypotheses import MAX_GATE_CACHE, _gate, _screening, policy_for_version
+from research.automatic_protocol import METHOD_VERSION, compile_recipe, slice_period
 from research.automatic_protocol import WALK_FORWARD_VERSION as VERSION
-from research.automatic_protocol import compile_recipe, slice_period
 from research.automatic_research import _entry_dates, _score, _support
 from research.automatic_research import _settings as numerical_settings
 from research.automatic_timing import apply_choices as timing_choices
@@ -30,13 +30,19 @@ from research.connectors.optuna_portfolio import (
 )
 from research.entry_conditions import enrich
 from research.evaluation_basis import build_evaluation_basis
-from research.joint_stock_market import PreparedJointContext, catalog, markers
+from research.joint_stock_market import PreparedJointContext
 from research.report_contract import fingerprint, settings_identity
 
 FITS = ("fit1", "fit2", "fit3", "search")
 PROPOSALS_PER_FIT = 48
 MAX_SIMULATIONS = 320
 FINDINGS_VERSION = "research-walk-forward-findings-v1"
+METHOD_PROBES = (
+    "momentum_10_gt0__all",
+    "momentum_10_gt2__all",
+    "momentum_60_gt0__all",
+    "momentum_60_gt2__all",
+)
 
 
 def prepare_gate(bundle):
@@ -44,10 +50,65 @@ def prepare_gate(bundle):
     return PreparedJointContext(bundle)
 
 
-def _validate_state(saved):
+def prepare_method_gate(bundle):
+    """The expanded recipe owns a separate versioned native gate capability."""
+    from research.expanded_stock_market import PreparedJointContext as ExpandedContext
+
+    return ExpandedContext(bundle)
+
+
+def _context(version):
+    if version == VERSION:
+        from research import joint_stock_market as context
+    elif version == METHOD_VERSION:
+        from research import expanded_stock_market as context
+    else:
+        raise ValueError("Choose a supported walk-forward research version")
+    return context
+
+
+def _screening_program(version, entries, axes, timing):
+    """Preserve v8's sequence; explicitly screen every newly admitted v9 method."""
+    if version == METHOD_VERSION:
+        policy = policy_for_version(version)
+        if (
+            len(entries) != policy["max_hypotheses"]
+            or len({row["id"] for row in entries}) != len(entries)
+            or len({row["family"] for row in entries}) != policy["max_families"]
+        ):
+            raise ValueError("The expanded walk-forward catalogue exceeded its fixed bounds")
+    # Existing family representatives stay identical even when a later catalogue
+    # contains new choices in the same family. Numeric exits use one midpoint.
+    screening = _screening(
+        _context(VERSION).catalog() if version == METHOD_VERSION else entries,
+        axes,
+        policy=policy_for_version(VERSION),
+    )
+    for params in screening:
+        for name, domain in axes.items():
+            choices = domain["choices"] if domain.get("type") == "categorical" else _values(domain)
+            params[name] = (
+                "original" if name.endswith(".timing_choice") else choices[len(choices) // 2]
+            )
+    clock_limit = 8
+    if version == METHOD_VERSION:
+        registered = {row["id"] for row in entries}
+        if not set(METHOD_PROBES) <= registered:
+            raise ValueError("The expanded walk-forward catalogue lost a targeted method")
+        midpoint = screening[0]
+        screening.extend({**midpoint, "hypothesis": identifier} for identifier in METHOD_PROBES)
+        clock_limit = 4
+    screening.extend(probes(axes, timing)[:clock_limit])
+    if len(screening) > 40:
+        raise ValueError("Walk-forward screening exceeded its reserved refinement budget")
+    return screening
+
+
+def _validate_state(saved, *, version=None):
     if (
         not isinstance(saved, dict)
-        or saved.get("version") != VERSION
+        or saved.get("version") not in (VERSION, METHOD_VERSION)
+        or (version is not None and saved.get("version") != version)
         or saved.get("checkpoint_id")
         != _fingerprint(
             {key: value for key, value in saved.items() if key != "checkpoint_id"},
@@ -135,10 +196,15 @@ def run(
     cancelled()
     if boundary:
         boundary()
-    with prepare_gate(evidence.get("automatic_stock_market_context")) as prepared:
+    version = evidence.get("portfolio", {}).get("automatic_research", {}).get("version")
+    context = _context(version)
+    prepare = prepare_method_gate if version == METHOD_VERSION else prepare_gate
+    with prepare(evidence.get("automatic_stock_market_context")) as prepared:
         return _run(
             evidence,
             prepared_gate=prepared,
+            version=version,
+            context=context,
             evaluate=evaluate,
             saved=saved,
             checkpoint=checkpoint,
@@ -157,6 +223,8 @@ def _run(
     evidence,
     *,
     prepared_gate,
+    version,
+    context,
     evaluate,
     saved,
     checkpoint,
@@ -174,13 +242,13 @@ def _run(
     if optuna.__version__ != TESTED_OPTUNA_VERSION:
         raise ValueError(f"Walk-forward research requires tested Optuna {TESTED_OPTUNA_VERSION}")
     recipe = compile_recipe(evidence)
-    if recipe["version"] != VERSION or evidence.get("automatic_recipe") != recipe:
+    if recipe["version"] != version or evidence.get("automatic_recipe") != recipe:
         raise ValueError("The frozen walk-forward recipe changed")
     stock = evidence.get("automatic_stock_market_context")
     if (
         not stock
         or stock["id"] != recipe["stock_evidence_id"]
-        or recipe["hypothesis_catalog"] != catalog()
+        or recipe["hypothesis_catalog"] != context.catalog()
     ):
         raise ValueError("Walk-forward research needs its exact saved stock and market context")
     binding = fingerprint({"recipe": recipe, "stock": stock})
@@ -192,25 +260,14 @@ def _run(
     }
     baseline = _settings(base)
     baseline_id = settings_identity(baseline)
-    entries = catalog()
+    entries = context.catalog()
     by_id = {row["id"]: row for row in entries}
     none = by_id["none"]
-    screening = _screening(entries, axes, policy=policy_for_version(VERSION))
-    # Family representatives use midpoint exits rather than a vast Cartesian
-    # product. Clock probes have a separate, predeclared eight-proposal cap.
-    for params in screening:
-        for name, domain in axes.items():
-            choices = domain["choices"] if domain.get("type") == "categorical" else _values(domain)
-            params[name] = (
-                "original" if name.endswith(".timing_choice") else choices[len(choices) // 2]
-            )
-    screening.extend(probes(axes, recipe["timing_research"])[:8])
-    if len(screening) > 40:
-        raise ValueError("Walk-forward screening exceeded its reserved refinement budget")
+    screening = _screening_program(version, entries, axes, recipe["timing_research"])
     optimizer = {
         "id": "optuna",
         "version": optuna.__version__,
-        "adapter_version": VERSION,
+        "adapter_version": version,
         "sampler": "TPESampler",
         "seed": 0,
         "startup_trials": len(screening),
@@ -221,7 +278,7 @@ def _run(
         deepcopy(saved)
         if saved
         else {
-            "version": VERSION,
+            "version": version,
             "binding": binding,
             "optimizer": optimizer,
             "attempts": 0,
@@ -237,7 +294,7 @@ def _run(
         }
     )
     if saved:
-        _validate_state(state)
+        _validate_state(state, version=version)
         if state["binding"] != binding or state["optimizer"] != optimizer:
             raise ValueError("The walk-forward checkpoint belongs to different frozen inputs")
     windows, gates = OrderedDict(), OrderedDict()
@@ -313,7 +370,7 @@ def _run(
             current["portfolio"] = {
                 **current["portfolio"],
                 "entry_conditions": {
-                    "version": "research-joint-entry-conditions-v1",
+                    "version": policy_for_version(version)["condition_version"],
                     "hypothesis": hypothesis,
                 },
             }
@@ -324,8 +381,8 @@ def _run(
             gates,
             period,
             apply_fn=prepared_gate.apply,
-            markers_fn=markers,
-            calculation_version=policy_for_version(VERSION)["calculation_version"],
+            markers_fn=context.markers,
+            calculation_version=policy_for_version(version)["calculation_version"],
             trailing_activation=True,
         )
         current["entry_condition_gates"] = [receipt]
@@ -423,7 +480,7 @@ def _run(
                     len(fit["candidates"]) for fit in state["fits"].values()
                 ),
                 "search_identity": binding,
-                "search_identity_version": VERSION,
+                "search_identity_version": version,
             }
         )
 
@@ -463,7 +520,7 @@ def _run(
             proposed = _candidate(base, params)
             proposed = trailing_choices(proposed, params, recipe["trailing_research"])
             proposed = timing_choices(proposed, params, recipe["timing_research"])
-            settings = markers(_settings(proposed), hypothesis, stock["id"])
+            settings = context.markers(_settings(proposed), hypothesis, stock["id"])
             config_id = settings_identity(settings)
             record = {
                 "number": index,
@@ -696,7 +753,7 @@ def _run(
     )
     result["experiment"] = {
         "kind": "portfolio_optimize",
-        "experiment_version": VERSION,
+        "experiment_version": version,
         "optimizer": optimizer,
         "specification": {**deepcopy(evidence["portfolio"]["optimization"]), "trials": 48},
         "search_space": {
@@ -740,7 +797,7 @@ def _run(
         "entry_dates": _entry_dates(final),
     }
     result["automatic_research"] = {
-        "version": VERSION,
+        "version": version,
         "status": status,
         "headline": headline,
         "recipe": deepcopy(recipe),

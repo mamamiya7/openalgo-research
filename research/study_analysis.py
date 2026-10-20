@@ -29,7 +29,12 @@ def _trailing_axes(experiment):
 
     if (
         experiment.get("experiment_version")
-        not in ("automatic-hypotheses-v6", "automatic-hypotheses-v7", "automatic-hypotheses-v8")
+        not in (
+            "automatic-hypotheses-v6",
+            "automatic-hypotheses-v7",
+            "automatic-hypotheses-v8",
+            "automatic-hypotheses-v9",
+        )
         or not isinstance(specification, dict)
         or specification.get("version") != TRAILING_VERSION
         or not isinstance(specification.get("strategies"), list)
@@ -70,7 +75,7 @@ def _timing_axes(experiment):
 
     if (
         experiment.get("experiment_version")
-        not in ("automatic-hypotheses-v7", "automatic-hypotheses-v8")
+        not in ("automatic-hypotheses-v7", "automatic-hypotheses-v8", "automatic-hypotheses-v9")
         or not isinstance(specification, dict)
         or specification.get("version") != TIMING_VERSION
         or specification.get("interval") not in ("D", "1m")
@@ -149,8 +154,11 @@ def reconstruct_study(experiment):
             if name == "hypothesis":
                 from research.joint_stock_market import catalog
 
+                if experiment.get("experiment_version") == "automatic-hypotheses-v9":
+                    from research.expanded_stock_market import catalog
+
                 if choices == [row["id"] for row in catalog()]:
-                    limit = 92
+                    limit = len(choices)
             if (
                 not isinstance(choices, list)
                 or not 1 <= len(choices) <= limit

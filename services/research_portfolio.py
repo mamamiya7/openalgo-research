@@ -121,6 +121,7 @@ def resolve_inputs(store, owner, request):
                 "automatic-hypotheses-v6",
                 "automatic-hypotheses-v7",
                 "automatic-hypotheses-v8",
+                "automatic-hypotheses-v9",
             )
             and receipt["symbol_count"] > 200
         ):
@@ -331,6 +332,7 @@ def replay_inputs(store, owner, job_id, *, trial_id=None, period="selection"):
         "automatic-hypotheses-v6",
         "automatic-hypotheses-v7",
         "automatic-hypotheses-v8",
+        "automatic-hypotheses-v9",
     ):
         marker = selected[0].get("entry_condition")
         selected_conditions = deepcopy(marker) if marker else None
@@ -733,7 +735,7 @@ def run(
         prepare_prices = (
             _prepare_automatic_timing
             if portfolio.get("automatic_research", {}).get("version")
-            in ("automatic-hypotheses-v7", "automatic-hypotheses-v8")
+            in ("automatic-hypotheses-v7", "automatic-hypotheses-v8", "automatic-hypotheses-v9")
             else _prepare_prices
         )
         evidence = prepare_prices(
@@ -766,6 +768,7 @@ def run(
         "research-stock-entry-conditions-v2",
         "research-stock-entry-conditions-v3",
         "research-joint-entry-conditions-v1",
+        "research-joint-entry-conditions-v2",
     )
     needs_stock = (
         stock_condition
@@ -775,16 +778,15 @@ def run(
         from services.research_stock_features import prepare_context as prepare_stock
 
         stock_saved = saved
-        if (
-            portfolio.get("automatic_research", {}).get("version")
-            in (
-                "automatic-hypotheses-v5",
-                "automatic-hypotheses-v6",
-                "automatic-hypotheses-v7",
-                "automatic-hypotheses-v8",
-            )
-            or portfolio.get("entry_conditions", {}).get("version")
-            == "research-joint-entry-conditions-v1"
+        if portfolio.get("automatic_research", {}).get("version") in (
+            "automatic-hypotheses-v5",
+            "automatic-hypotheses-v6",
+            "automatic-hypotheses-v7",
+            "automatic-hypotheses-v8",
+            "automatic-hypotheses-v9",
+        ) or portfolio.get("entry_conditions", {}).get("version") in (
+            "research-joint-entry-conditions-v1",
+            "research-joint-entry-conditions-v2",
         ):
             from services.research_stock_market_context import prepare_context as prepare_stock
 
@@ -897,6 +899,7 @@ def run(
         if portfolio["automatic_research"]["version"] in HYPOTHESIS_VERSIONS:
             from research.automatic_hypotheses import (
                 JOINT_VERSION,
+                METHOD_VERSION,
                 TIMING_VERSION,
                 TRAILING_VERSION,
                 WALK_FORWARD_VERSION,
@@ -911,7 +914,7 @@ def run(
             from services.research_automatic_periods import claim
             from services.research_development_evidence import DevelopmentEvidenceWriter
 
-            if portfolio["automatic_research"]["version"] == WALK_FORWARD_VERSION:
+            if portfolio["automatic_research"]["version"] in (WALK_FORWARD_VERSION, METHOD_VERSION):
                 from research.automatic_walk_forward import run as automatic_run
 
             if not job_id:
@@ -921,7 +924,7 @@ def run(
             saved_calculation = (saved or {}).get("calculation")
             saved_development = (saved or {}).get("development_evidence")
             if (
-                portfolio["automatic_research"]["version"] == WALK_FORWARD_VERSION
+                portfolio["automatic_research"]["version"] in (WALK_FORWARD_VERSION, METHOD_VERSION)
                 and saved_calculation
                 and saved_development is None
             ):
@@ -938,7 +941,13 @@ def run(
                 stock = evidence.get(
                     "automatic_stock_market_context"
                     if version
-                    in (JOINT_VERSION, TRAILING_VERSION, TIMING_VERSION, WALK_FORWARD_VERSION)
+                    in (
+                        JOINT_VERSION,
+                        TRAILING_VERSION,
+                        TIMING_VERSION,
+                        WALK_FORWARD_VERSION,
+                        METHOD_VERSION,
+                    )
                     else "automatic_stock_features"
                 )
                 development_writer = DevelopmentEvidenceWriter(
@@ -1049,7 +1058,8 @@ def run(
 
         context = (
             evidence["automatic_stock_market_context"]
-            if portfolio["entry_conditions"]["version"] == "research-joint-entry-conditions-v1"
+            if portfolio["entry_conditions"]["version"]
+            in ("research-joint-entry-conditions-v1", "research-joint-entry-conditions-v2")
             else evidence["automatic_stock_features"]
             if stock_condition
             else evidence["entry_condition_market"]

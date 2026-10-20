@@ -95,3 +95,4 @@ need → drill into the specific file. Don't load everything at once.
 - [Automatic trailing selection](research/AUTOMATIC_TRAILING_20261011.md): versioned on/off search, native evaluation, saved-state reuse and acceptance gates.
 - [Expanding research validation](research/WALK_FORWARD_20261020.md): development v8 chronology, independent fits, native accounts, recovery and qualification scope.
 - [Method admission foundation](research/METHOD_ADMISSION_20261020.md): typed pinned method definitions, on-demand saved coverage, qualification and the next numerical expansion.
+- [Core method expansion](research/METHOD_EXPANSION_20261021.md): v9 momentum domains, mandatory probes, bounded search, native recovery and preserved legacy identities.

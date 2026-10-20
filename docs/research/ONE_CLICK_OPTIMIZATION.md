@@ -1,5 +1,14 @@
 # One-click research: product and execution contract
 
+## Core method expansion — 21 October 2026
+
+New unconfigured VectorBT setups select [v9 expanded research](METHOD_EXPANSION_20261021.md)
+in current source: 108 choices, including new 10/60-session stock momentum and
+existing market presets. Each fit explicitly probes the new stock methods, with
+192 total proposals, a 320-calculation ceiling and unchanged later/final checks.
+It uses the existing retained prices and warmup. Saved scopes retain their
+versions. Presentation changes are limited to the versioned native journey.
+
 ## Development default — 20 October 2026
 
 New unconfigured VectorBT setups now select `automatic-hypotheses-v8` in development

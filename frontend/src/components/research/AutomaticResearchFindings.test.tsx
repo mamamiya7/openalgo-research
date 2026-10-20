@@ -208,6 +208,7 @@ describe('automatic research findings', () => {
     ['automatic-hypotheses-v6', 'Stock, market and trailing stops'],
     ['automatic-hypotheses-v7', 'Stock, market and trade timing'],
     ['automatic-hypotheses-v8', 'Walk-forward research'],
+    ['automatic-hypotheses-v9', 'Expanded automatic research'],
     ['automatic-future-v99', 'Automatic research'],
   ])('keeps the saved %s scope in the collapsed research details', async (version, label) => {
     const data = findings()
@@ -454,4 +455,15 @@ it('keeps earlier fold receipts readable without inventing missing fitted tradin
   expect(screen.getByRole('table', { name: 'Walk-forward window comparison' })).toBeVisible()
   expect(screen.getByText('config-1')).toBeVisible()
   expect(screen.queryByText(/TP .*SL/)).not.toBeInTheDocument()
+})
+
+it('keeps the expanded programme later-window evidence inside research details', async () => {
+  const data = walkForwardFindings()
+  data.version = 'automatic-hypotheses-v9'
+  render(<AutomaticResearchFindings findings={data} />)
+  const table = screen.getByRole('table', { name: 'Walk-forward window comparison', hidden: true })
+  expect(table).not.toBeVisible()
+  await userEvent.click(screen.getByText('Research details'))
+  expect(table).toBeVisible()
+  expect(screen.getByText('Refit and checked on 3 later windows.')).toBeVisible()
 })

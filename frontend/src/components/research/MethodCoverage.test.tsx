@@ -4,9 +4,9 @@ import userEvent from '@testing-library/user-event'
 import { axe } from 'jest-axe'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  researchMethodCoverage,
   type ResearchMethodCoverageRow,
   type ResearchMethodCoverageView,
+  researchMethodCoverage,
 } from '@/api/researchMethodCoverage'
 import { useAuthStore } from '@/stores/authStore'
 import { MethodCoverage } from './MethodCoverage'
@@ -23,6 +23,7 @@ function family(overrides: Partial<ResearchMethodCoverageRow> = {}): ResearchMet
     retained_histories: 2,
     unavailable_histories: 0,
     untested: 1,
+    budget_deferred: 0,
     status: 'evaluated',
     data_status: 'no_unknown_entries_reported',
     unknown_entry_checks: 0,
@@ -68,6 +69,7 @@ function receipt(): ResearchMethodCoverageView {
             availability: 'Before entry',
             missing: 'Exclude unknown',
             equality: 'Strict above',
+            comparison_policy: { kind: 'strict_above' },
             support: {
               engine: 'vectorbt',
               asset_profile: 'NSE_long_cash_equities',
@@ -152,6 +154,7 @@ function receipt(): ResearchMethodCoverageView {
         registered_hypotheses: 92,
       },
       id: 'coverage',
+      limitations: [],
     },
   }
 }
@@ -458,4 +461,20 @@ it('explains combined stock and market requirements without exposing internal in
   expect(
     screen.queryByText(/stock_daily_close|NIFTY_NSE_INDEX_daily_close/)
   ).not.toBeInTheDocument()
+})
+
+it('opens the expanded method programme and refuses mismatched saved definitions', async () => {
+  const data = receipt()
+  data.coverage!.source.recipe_version = 'automatic-hypotheses-v9'
+  data.coverage!.registry.recipe_version = 'automatic-hypotheses-v9'
+  data.coverage!.registry.hypothesis_count = 108
+  vi.mocked(researchMethodCoverage.get).mockResolvedValue(data)
+  mount({ recipeVersion: 'automatic-hypotheses-v9' })
+  await open()
+  expect(await screen.findByRole('table', { name: 'Methods considered' })).toBeVisible()
+  await userEvent.click(screen.getByRole('button', { name: 'Methods considered' }))
+  data.coverage!.registry.recipe_version = 'automatic-hypotheses-v8'
+  await open()
+  expect(await screen.findByText('Method details were not recorded for this run.')).toBeVisible()
+  expect(screen.queryByRole('table')).not.toBeInTheDocument()
 })

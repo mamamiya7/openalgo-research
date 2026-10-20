@@ -3,8 +3,8 @@ import { isAxiosError } from 'axios'
 import { ChevronDown } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import {
-  researchMethodCoverage,
   type ResearchMethodCoverageRow,
+  researchMethodCoverage,
 } from '@/api/researchMethodCoverage'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/stores/authStore'
@@ -34,11 +34,30 @@ export function MethodCoverage({
   recipeVersion?: string
 }) {
   const owner = useAuthStore((state) => state.user?.username ?? 'account')
-  if (!jobId || recipeVersion !== 'automatic-hypotheses-v8') return null
-  return <MethodDisclosure key={JSON.stringify([owner, jobId])} owner={owner} jobId={jobId} />
+  if (
+    !jobId ||
+    !['automatic-hypotheses-v8', 'automatic-hypotheses-v9'].includes(recipeVersion ?? '')
+  )
+    return null
+  return (
+    <MethodDisclosure
+      key={JSON.stringify([owner, jobId, recipeVersion])}
+      owner={owner}
+      jobId={jobId}
+      recipeVersion={recipeVersion ?? ''}
+    />
+  )
 }
 
-function MethodDisclosure({ owner, jobId }: { owner: string; jobId: string }) {
+function MethodDisclosure({
+  owner,
+  jobId,
+  recipeVersion,
+}: {
+  owner: string
+  jobId: string
+  recipeVersion: string
+}) {
   const [open, setOpen] = useState(false)
   const trigger = useRef<HTMLButtonElement>(null)
   return (
@@ -62,6 +81,7 @@ function MethodDisclosure({ owner, jobId }: { owner: string; jobId: string }) {
           <RecordedMethods
             owner={owner}
             jobId={jobId}
+            recipeVersion={recipeVersion}
             onReloaded={() => {
               if (
                 trigger.current?.isConnected &&
@@ -81,16 +101,18 @@ function RecordedMethods({
   owner,
   jobId,
   onReloaded,
+  recipeVersion,
 }: {
   owner: string
   jobId: string
   onReloaded: () => void
+  recipeVersion: string
 }) {
   const [fit, setFit] = useState('all')
   const [selected, setSelected] = useState<string | null>(null)
   const retried = useRef(false)
   const query = useQuery({
-    queryKey: ['research-method-coverage', owner, jobId],
+    queryKey: ['research-method-coverage', owner, jobId, recipeVersion],
     queryFn: ({ signal }) => researchMethodCoverage.get(jobId, signal),
     retry: false,
     gcTime: 0,
@@ -142,7 +164,8 @@ function RecordedMethods({
     coverage?.version !== 'research-method-coverage-v1' ||
     coverage.status !== 'available' ||
     coverage.registry?.version !== 'research-method-registry-v1' ||
-    coverage.registry.recipe_version !== 'automatic-hypotheses-v8'
+    coverage.source?.recipe_version !== recipeVersion ||
+    coverage.registry.recipe_version !== recipeVersion
   )
     return (
       <p className="text-xs text-muted-foreground">

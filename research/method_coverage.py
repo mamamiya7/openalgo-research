@@ -19,7 +19,13 @@ from research.connectors.optuna_portfolio import (
 from research.evaluation_basis import IDENTITIES
 from research.evaluation_basis import VERSION as BASIS_VERSION
 from research.joint_stock_market import markers
-from research.method_registry import RECIPE_VERSION, bounded, catalog, pinned_hypotheses
+from research.method_registry import (
+    EXPANDED_RECIPE_VERSION,
+    RECIPE_VERSION,
+    bounded,
+    catalog,
+    pinned_hypotheses,
+)
 from research.report_contract import fingerprint, settings_identity
 
 VERSION = "research-method-coverage-v1"
@@ -65,7 +71,7 @@ def _record(family):
     }
 
 
-def _manifest(manifest, calculation, binding, periods, context_id):
+def _manifest(manifest, calculation, binding, periods, context_id, recipe_version):
     _sealed(manifest, maximum=MAX_MANIFEST_BYTES)
     if (
         manifest.get("version") != "research-development-evidence-manifest-v1"
@@ -78,7 +84,7 @@ def _manifest(manifest, calculation, binding, periods, context_id):
         raise ValueError("Saved method development index changed")
     expected = {}
     marks = size = 0
-    by_hypothesis = {row["id"]: row for row in pinned_hypotheses()}
+    by_hypothesis = {row["id"]: row for row in pinned_hypotheses(recipe_version)}
     for key, row in calculation["evaluations"].items():
         if not _hash(key) or not isinstance(row, dict):
             raise ValueError("Saved method evaluation identity changed")
@@ -186,14 +192,18 @@ def _build(mandate, calculation, development_manifest):
         }
     _sealed(mandate)
     source = mandate.get("source", {})
-    if source.get("recipe_version") != RECIPE_VERSION:
+    recipe_version = source.get("recipe_version")
+    if recipe_version not in (RECIPE_VERSION, EXPANDED_RECIPE_VERSION):
         return {
             "version": VERSION,
             "status": "unavailable",
             "reason": "Method coverage is available only for the pinned expanding-refit recipe.",
         }
-    registry = catalog()
-    hypotheses = pinned_hypotheses()
+    registry = catalog(recipe_version)
+    hypotheses = pinned_hypotheses(recipe_version)
+    materialize_markers = markers
+    if recipe_version == EXPANDED_RECIPE_VERSION:
+        from research.expanded_stock_market import markers as materialize_markers
     by_hypothesis = {row["id"]: row for row in hypotheses}
     search = mandate.get("search", {})
     if (
@@ -209,7 +219,7 @@ def _build(mandate, calculation, development_manifest):
         raise ValueError("Saved method mandate differs from the pinned programme")
     bounded(calculation, MAX_CHECKPOINT_BYTES)
     checkpoint_rows(calculation)
-    if calculation["version"] != RECIPE_VERSION or not _hash(calculation.get("binding")):
+    if calculation["version"] != recipe_version or not _hash(calculation.get("binding")):
         raise ValueError("Saved method calculation belongs to another programme")
     binding = {
         "inputs_artifact": source["inputs_artifact"],
@@ -219,7 +229,12 @@ def _build(mandate, calculation, development_manifest):
     if periods != {"fit1", "check1", "fit2", "check2", "fit3", "check3", "search", "final"}:
         raise ValueError("Saved method period roles changed")
     entries = _manifest(
-        development_manifest, calculation, binding, periods, search["stock_evidence_id"]
+        development_manifest,
+        calculation,
+        binding,
+        periods,
+        search["stock_evidence_id"],
+        recipe_version,
     )
     settings = mandate.get("economic_assumptions", {}).get("settings")
     ranges = search.get("ranges")
@@ -309,7 +324,7 @@ def _build(mandate, calculation, development_manifest):
                         {"original": original},
                         {"changes": {f"{side}_time": clock[:2] + ":" + clock[2:]}},
                     )
-            if markers(_settings(materialized), hypothesis) != candidate["strategies"]:
+            if materialize_markers(_settings(materialized), hypothesis) != candidate["strategies"]:
                 raise ValueError("Saved method proposal settings changed")
             family = hypothesis["family"]
             record = records[family]
@@ -440,7 +455,7 @@ def _build(mandate, calculation, development_manifest):
         "source": {
             "inputs_artifact": source["inputs_artifact"],
             "recipe_id": source["recipe_id"],
-            "recipe_version": RECIPE_VERSION,
+            "recipe_version": recipe_version,
             "stock_evidence_id": search["stock_evidence_id"],
             "mandate_id": mandate["id"],
             "checkpoint_id": calculation["checkpoint_id"],
@@ -451,7 +466,7 @@ def _build(mandate, calculation, development_manifest):
         "families": list(aggregate.values()),
         "totals": {
             "registered_families": 32,
-            "registered_hypotheses": 92,
+            "registered_hypotheses": len(hypotheses),
             "proposals": total_proposed,
             "evaluated": total_evaluated,
             "reused": total_reused,

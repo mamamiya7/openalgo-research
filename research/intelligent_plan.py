@@ -57,6 +57,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v6",
         "automatic-hypotheses-v7",
         "automatic-hypotheses-v8",
+        "automatic-hypotheses-v9",
     )
     joint = (
         trailing
@@ -236,6 +237,7 @@ def build_plan(portfolio, *, interval):
     if portfolio.get("automatic_research", {}).get("version") in (
         "automatic-hypotheses-v7",
         "automatic-hypotheses-v8",
+        "automatic-hypotheses-v9",
     ):
         payload["methods"].append(
             {
@@ -245,7 +247,10 @@ def build_plan(portfolio, *, interval):
             }
         )
         payload["budget"].update(timing_probe_limit=24, min_joint_refinement_proposals=8)
-    if portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v8":
+    if portfolio.get("automatic_research", {}).get("version") in (
+        "automatic-hypotheses-v8",
+        "automatic-hypotheses-v9",
+    ):
         payload["budget"].update(
             proposals=192,
             proposals_per_fit=48,
@@ -270,4 +275,23 @@ def build_plan(portfolio, *, interval):
                 "reason": "Independent seeded Optuna fits use only each earlier prefix; later scores never update its sampler. Requires sufficient recorded dates and holding support.",
             }
         )
+    if portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v9":
+        from research.expanded_stock_market import FEATURE_VERSION, catalog, recipe
+
+        payload["feature_version"] = FEATURE_VERSION
+        payload["indicator_recipe"] = recipe()
+        payload["hypotheses"] = catalog()
+        payload["budget"].update(
+            screening_proposals=144,
+            refinement_proposals=48,
+            momentum_probe_limit=16,
+            momentum_probe_limit_per_fit=4,
+            timing_probe_limit=16,
+            timing_probe_limit_per_fit=4,
+        )
+        for method in payload["methods"]:
+            if method["id"] == "stock_momentum":
+                method["reason"] = (
+                    "Completed NSE daily closes; 5/10/20/60-session change and 0/2% thresholds. Every new10/60-session condition receives a fixed original-clock probe per fit."
+                )
     return {**payload, "id": fingerprint(payload)}

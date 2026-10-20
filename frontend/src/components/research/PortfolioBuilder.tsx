@@ -73,7 +73,7 @@ export function selectPortfolioRun(draft: PortfolioDraft, optimizing: boolean): 
         automatic_research: {
           version:
             draft.portfolio.engine === 'vectorbt'
-              ? 'automatic-hypotheses-v8'
+              ? 'automatic-hypotheses-v9'
               : 'automatic-trade-management-v2',
         },
       },
@@ -265,6 +265,7 @@ export function portfolioEngineIssue(
           'automatic-hypotheses-v6',
           'automatic-hypotheses-v7',
           'automatic-hypotheses-v8',
+          'automatic-hypotheses-v9',
         ].includes(draft.portfolio.automatic_research?.version ?? ''))
     )
       return 'Entry conditions currently need VectorBT. Choose VectorBT to keep these rules.'
@@ -640,7 +641,7 @@ export function PortfolioBuilder({
                       automatic_research: {
                         version:
                           portfolio.engine === 'vectorbt'
-                            ? 'automatic-hypotheses-v8'
+                            ? 'automatic-hypotheses-v9'
                             : 'automatic-trade-management-v2',
                       },
                     })
@@ -683,6 +684,12 @@ export function PortfolioBuilder({
                       })
                     }
                   >
+                    <option
+                      value="automatic-hypotheses-v9"
+                      disabled={portfolio.engine !== 'vectorbt'}
+                    >
+                      {researchRecipeLabel('automatic-hypotheses-v9')}
+                    </option>
                     <option
                       value="automatic-hypotheses-v8"
                       disabled={portfolio.engine !== 'vectorbt'}
@@ -740,7 +747,9 @@ export function PortfolioBuilder({
                       {researchRecipeLabel('automatic-entry-conditions-v1')}
                     </option>
                   </select>
-                  {portfolio.automatic_research?.version === 'automatic-hypotheses-v8' && (
+                  {['automatic-hypotheses-v8', 'automatic-hypotheses-v9'].includes(
+                    portfolio.automatic_research?.version ?? ''
+                  ) && (
                     <p className="text-xs text-muted-foreground">
                       Refit on earlier dates and check three later windows, then refit the
                       development dates before one reserved final check. Tests stock and market

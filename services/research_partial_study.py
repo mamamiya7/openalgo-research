@@ -62,6 +62,7 @@ def _search_inputs(evidence, calculation):
             "automatic-hypotheses-v6",
             "automatic-hypotheses-v7",
             "automatic-hypotheses-v8",
+            "automatic-hypotheses-v9",
         ):
             from research.automatic_hypotheses import checkpoint_rows
 
@@ -76,6 +77,7 @@ def _search_inputs(evidence, calculation):
                             "automatic-hypotheses-v6",
                             "automatic-hypotheses-v7",
                             "automatic-hypotheses-v8",
+                            "automatic-hypotheses-v9",
                         )
                         else "automatic_stock_features"
                     ],
@@ -83,7 +85,11 @@ def _search_inputs(evidence, calculation):
             ):
                 raise ValueError("Saved stock research inputs changed")
             checkpoint_rows(calculation)
-            period = calculation["active_fit"] if version == "automatic-hypotheses-v8" else "search"
+            period = (
+                calculation["active_fit"]
+                if version in ("automatic-hypotheses-v8", "automatic-hypotheses-v9")
+                else "search"
+            )
             return slice_period(evidence, period), calculation, period, True, False
         if version == "automatic-entry-conditions-v1":
             binding = fingerprint({"recipe": recipe, "market": evidence["entry_condition_market"]})
@@ -139,7 +145,8 @@ def _search_inputs(evidence, calculation):
         selected = apply(
             selected,
             evidence["automatic_stock_market_context"]
-            if portfolio["entry_conditions"]["version"] == "research-joint-entry-conditions-v1"
+            if portfolio["entry_conditions"]["version"]
+            in ("research-joint-entry-conditions-v1", "research-joint-entry-conditions-v2")
             else evidence["automatic_stock_features"]
             if portfolio["entry_conditions"]["version"] in STOCK_VERSIONS
             else evidence["entry_condition_market"],
@@ -159,13 +166,14 @@ def _validated_rows(evidence, saved, completed):
         "automatic-hypotheses-v6",
         "automatic-hypotheses-v7",
         "automatic-hypotheses-v8",
+        "automatic-hypotheses-v9",
     ):
         from research.automatic_hypotheses import checkpoint_rows
 
         rows = checkpoint_rows(saved)
         trials = (
             saved["fits"].get(saved["active_fit"], {"trials": []})["trials"]
-            if saved["version"] == "automatic-hypotheses-v8"
+            if saved["version"] in ("automatic-hypotheses-v8", "automatic-hypotheses-v9")
             else saved["trials"]
         )
         return rows, {

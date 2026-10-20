@@ -10,7 +10,11 @@ refit, with untouched final confirmation and recovery of full development histor
 The first [package 3 registry/coverage slice](METHOD_ADMISSION_20261020.md) is now
 implemented in source: typed definitions of existing methods and metadata-only
 actual per-fit coverage. It does not expand numerical domains or replace
-executable admission. Learned transforms, continuous carry and the later packages
+executable admission. The next [v9 core slice](METHOD_EXPANSION_20261021.md) implements
+10/60-session momentum, mandatory probes and the complete native saved-evidence
+journey, using the same prices and calculation bounds. Complete the qualified
+research and portfolio features before general UI polish. Learned transforms,
+continuous carry and the later packages
 remain planned.
 This section owns the next
 implementation order. Build the substantive research features below before the
@@ -41,7 +45,7 @@ label the least bad losing trial a trading recommendation.
 ### Existing foundations to retain
 
 The installed development app is OpenAlgo 2.0.2.7. New unconfigured VectorBT
-optimisations select v8, with 92 registered stock/market choices across 32 families,
+optimisations select v9 in current source, with 108 registered stock/market choices across 32 families,
 conditional exits/trailing and admitted clock alternatives. Current bounds remain
 192 proposals across four independent fits and 320 native calculations. Older
 scopes retain their identities; the v7 limits below remain its dated contract.

@@ -79,7 +79,10 @@ def descriptor(evidence, *, strict=False):
             for row in evidence["strategies"]
         ],
         "policy": "same source opportunities; all scheduled branch deadlines purged together; missing evidence excluded across branches; rule filters remain branch-specific",
-        "screening": "Per expanding fit: 32 original-clock family screens; up to 8 independent legal-grid clock probes; at least 8 seeded joint refinement proposals within 48 total"
+        "screening": "Per expanding fit: 32 original-clock family screens; 4 targeted momentum probes; up to 4 independent legal-grid clock probes; at least 8 seeded joint refinement proposals within 48 total"
+        if evidence["portfolio"].get("automatic_research", {}).get("version")
+        == "automatic-hypotheses-v9"
+        else "Per expanding fit: 32 original-clock family screens; up to 8 independent legal-grid clock probes; at least 8 seeded joint refinement proposals within 48 total"
         if evidence["portfolio"].get("automatic_research", {}).get("version")
         == "automatic-hypotheses-v8"
         else "96 original-clock condition screens; up to 24 independent legal-grid clock probes; remaining seeded joint refinement within 128 proposals",

@@ -298,7 +298,7 @@ export interface StockEntryConditions {
   }
 }
 export interface JointEntryConditions {
-  version: 'research-joint-entry-conditions-v1'
+  version: 'research-joint-entry-conditions-v1' | 'research-joint-entry-conditions-v2'
   hypothesis: {
     id: string
     family: string
@@ -335,6 +335,7 @@ export interface PortfolioRequest {
       | 'automatic-hypotheses-v6'
       | 'automatic-hypotheses-v7'
       | 'automatic-hypotheses-v8'
+      | 'automatic-hypotheses-v9'
   }
   entry_conditions?: EntryConditions
   optimization?: {

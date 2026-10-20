@@ -18,6 +18,8 @@ JOINT_VERSION = "automatic-hypotheses-v5"
 TRAILING_VERSION = "automatic-hypotheses-v6"
 TIMING_VERSION = "automatic-hypotheses-v7"
 WALK_FORWARD_VERSION = "automatic-hypotheses-v8"
+METHOD_VERSION = "automatic-hypotheses-v9"
+WALK_FORWARD_VERSIONS = (WALK_FORWARD_VERSION, METHOD_VERSION)
 HYPOTHESIS_VERSIONS = (
     HYPOTHESIS_VERSION,
     EXPANDED_VERSION,
@@ -26,6 +28,7 @@ HYPOTHESIS_VERSIONS = (
     TRAILING_VERSION,
     TIMING_VERSION,
     WALK_FORWARD_VERSION,
+    METHOD_VERSION,
 )
 PERIODS = ("search", "check1", "check2", "final")
 MIN_SESSIONS = 100
@@ -132,6 +135,7 @@ def automatic_portfolio(portfolio):
             TRAILING_VERSION,
             TIMING_VERSION,
             WALK_FORWARD_VERSION,
+            METHOD_VERSION,
         ):
             search["trailing_pct"] = _range(cfg["trailing_pct"], 99)
         row["search"] = search
@@ -139,7 +143,7 @@ def automatic_portfolio(portfolio):
         "sampler": "tpe",
         "trials": 128
         if result["automatic_research"]["version"]
-        in (JOINT_VERSION, TRAILING_VERSION, TIMING_VERSION, WALK_FORWARD_VERSION)
+        in (JOINT_VERSION, TRAILING_VERSION, TIMING_VERSION, *WALK_FORWARD_VERSIONS)
         else 96
         if result["automatic_research"]["version"] == BENCHMARK_VERSION
         else 84
@@ -150,7 +154,7 @@ def automatic_portfolio(portfolio):
         "objective": "balanced",
         "seed": 0,
     }
-    if result["automatic_research"]["version"] == WALK_FORWARD_VERSION:
+    if result["automatic_research"]["version"] in WALK_FORWARD_VERSIONS:
         # Each expanding prefix gets its own seeded fit. No later-window score
         # is told to that fit's sampler. This is a distinct versioned programme.
         result["optimization"]["trials"] = 192
@@ -194,7 +198,7 @@ def compile_recipe(evidence):
         for i, name in enumerate(PERIODS)
     }
     walk_forward = None
-    if portfolio["automatic_research"]["version"] == WALK_FORWARD_VERSION:
+    if portfolio["automatic_research"]["version"] in WALK_FORWARD_VERSIONS:
         from research.walk_forward_protocol import build
 
         walk_forward = build(evidence)
@@ -308,10 +312,13 @@ def compile_recipe(evidence):
             TRAILING_VERSION,
             TIMING_VERSION,
             WALK_FORWARD_VERSION,
+            METHOD_VERSION,
         )
         if joint:
             from research.joint_stock_market import catalog
             from research.stock_market_context import validate_bundle
+        if portfolio["automatic_research"]["version"] == METHOD_VERSION:
+            from research.expanded_stock_market import catalog
         stock = (
             evidence.get("automatic_stock_market_context")
             if joint
@@ -361,6 +368,9 @@ def compile_recipe(evidence):
         if joint:
             from research.joint_stock_market import recipe as joint_recipe
 
+            if payload["version"] == METHOD_VERSION:
+                from research.expanded_stock_market import recipe as joint_recipe
+
             payload["scope"] = (
                 "joint stock indicators, relative strength, causal Nifty trend or volatility and exit research"
             )
@@ -369,7 +379,7 @@ def compile_recipe(evidence):
             payload["policies"]["unsupported"] = (
                 "original-scanner reconstruction, arbitrary Boolean stacks, volume, unregistered indicators, live execution or statistical confidence claims"
             )
-        if payload["version"] in (TRAILING_VERSION, TIMING_VERSION, WALK_FORWARD_VERSION):
+        if payload["version"] in (TRAILING_VERSION, TIMING_VERSION, *WALK_FORWARD_VERSIONS):
             from research.automatic_trailing import descriptor
 
             payload["trailing_research"] = descriptor(evidence["strategies"])
@@ -377,7 +387,7 @@ def compile_recipe(evidence):
                 "off is one canonical candidate; positive distances enable trailing; "
                 "unchanged original settings remain a separate baseline"
             )
-        if payload["version"] in (TIMING_VERSION, WALK_FORWARD_VERSION):
+        if payload["version"] in (TIMING_VERSION, *WALK_FORWARD_VERSIONS):
             from research.automatic_timing import descriptor as timing_descriptor
 
             payload["timing_research"] = timing_descriptor(evidence)
@@ -450,7 +460,7 @@ def slice_period(evidence, name):
     }
     strategies, purged = [], 0
     timing_union = (
-        recipe["version"] in (TIMING_VERSION, WALK_FORWARD_VERSION)
+        recipe["version"] in (TIMING_VERSION, *WALK_FORWARD_VERSIONS)
         and evidence.get("timing_cohort") is not None
     )
     for row in evidence["strategies"]:

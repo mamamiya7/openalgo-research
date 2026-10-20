@@ -210,8 +210,8 @@ class _PreparedViews:
             raise ValueError("Prepared stock gates require their exact privately owned projection")
         return bundle
 
-    def apply_stock(self, evidence, hypothesis):
-        return relative._apply_with_validator(
+    def apply_stock(self, evidence, hypothesis, *, _gate=None):
+        return (_gate or relative._apply_with_validator)(
             evidence, self.__stock, hypothesis, self.__validate_stock
         )
 

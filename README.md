@@ -56,6 +56,12 @@ inside Research details: inspect what each fit tested, reused or left untried,
 with optional formulas and input requirements. It reads saved metadata on demand;
 the existing optimisation methods and numerical results remain unchanged.
 
+The next [core development increment](docs/research/METHOD_EXPANSION_20261021.md)
+adds 10/60-session momentum to automatic research: 108 registered stock/market
+choices, explicit tests of the new methods and the same 192-proposal/
+320-calculation limit. It reuses the retained native prices and preserves older
+studies' exact versions. Public ZIPs remain unchanged.
+
 The next workflow increment previews CSV counts and dates before setup, simplifies
 experiment navigation to **Overview → Setup → Results → Saved setups**, and lets
 you prepare the selected tested report once, save it by name and reuse its exact

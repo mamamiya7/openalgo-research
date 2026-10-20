@@ -1,5 +1,26 @@
 # OpenAlgo Research status
 
+## Core method expansion — 21 October 2026 development source
+
+The [v9 numerical method expansion](METHOD_EXPANSION_20261021.md) adds 10/60-session
+momentum with zero/2% thresholds: 108 registered stock/market choices across 32
+families. Every fit explicitly probes all four added stock conditions; total work
+remains 192 proposals and at most 320 calculations. Existing Historify warmup and
+the earlier/later/final validation boundaries are reused. The saved-method view,
+trial diagnostics, fixed-condition replay and setup reuse recognise the new
+version. Complete v8 golden hashes remain unchanged. Core research features take
+priority over a presentation-polish pass; broader methods and portfolio constraints
+follow the feature delivery order. This increment is in source qualification;
+the prior locally activated milestones are recorded below.
+
+Qualification passes 522 distinct scoped backend cases and 243 frontend cases,
+TypeScript, lint and a production build. A complete isolated native gate /
+VectorBT 0.28.5 / Optuna 5.0.0 run completes 192 proposals and 204 accounts;
+completed service recovery reproduces results without new accounting calls.
+The v9 causal receipt identity is invariant to gate-cache warmup and eviction,
+with full actual account settings still bound. Broader minute-runtime and live
+broker claims retain their separately recorded qualification scopes.
+
 ## Method admission foundation — 20 October 2026 development source
 
 The first [package 3 slice](METHOD_ADMISSION_20261020.md) adds a typed explanatory

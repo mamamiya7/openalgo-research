@@ -106,6 +106,7 @@ REQUIRED_RESEARCH_FILES = {
     "research/development_evidence.py",
     "services/research_development_evidence.py",
     "research/method_registry.py",
+    "research/expanded_stock_market.py",
     "research/method_coverage.py",
     "services/research_method_coverage.py",
     "frontend/src/api/researchMethodCoverage.ts",

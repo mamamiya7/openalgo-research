@@ -11,10 +11,16 @@ STOCK_VERSION = "research-stock-entry-conditions-v1"
 INDICATOR_VERSION = "research-stock-entry-conditions-v2"
 RELATIVE_VERSION = "research-stock-entry-conditions-v3"
 JOINT_VERSION = "research-joint-entry-conditions-v1"
-STOCK_VERSIONS = (STOCK_VERSION, INDICATOR_VERSION, RELATIVE_VERSION, JOINT_VERSION)
+EXPANDED_JOINT_VERSION = "research-joint-entry-conditions-v2"
+JOINT_VERSIONS = (JOINT_VERSION, EXPANDED_JOINT_VERSION)
+STOCK_VERSIONS = (STOCK_VERSION, INDICATOR_VERSION, RELATIVE_VERSION, *JOINT_VERSIONS)
 
 
 def stock_module(version):
+    if version == EXPANDED_JOINT_VERSION:
+        from research import expanded_stock_market
+
+        return expanded_stock_market
     if version == JOINT_VERSION:
         from research import joint_stock_market
 
@@ -106,7 +112,7 @@ def apply(evidence, market):
         current["entry_condition_gates"] = [receipt]
         context_key = (
             "automatic_stock_market_context"
-            if descriptor["version"] == JOINT_VERSION
+            if descriptor["version"] in JOINT_VERSIONS
             else "automatic_stock_features"
         )
         current[context_key] = market
@@ -149,7 +155,7 @@ def enrich(report, evidence):
             "hypothesis": deepcopy(descriptor["hypothesis"]),
             "bundle_id": evidence[
                 "automatic_stock_market_context"
-                if descriptor["version"] == JOINT_VERSION
+                if descriptor["version"] in JOINT_VERSIONS
                 else "automatic_stock_features"
             ]["id"],
             "gate_id": gate["id"],

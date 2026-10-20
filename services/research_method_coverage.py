@@ -13,7 +13,7 @@ from services import scanner_research_service as artifacts
 
 VERSION = "research-method-coverage-view-v1"
 MAX_ENVELOPE_BYTES = 34 * 1024 * 1024
-SUPPORTED_RECIPE = "automatic-hypotheses-v8"
+SUPPORTED_RECIPES = ("automatic-hypotheses-v8", "automatic-hypotheses-v9")
 
 
 class CoverageChanged(ValueError):
@@ -68,7 +68,7 @@ def read(store, owner, job_id, *, expected_checkpoint=None):
         if not isinstance(configured, dict) or not isinstance(configured.get("portfolio"), dict):
             raise ValueError("Saved method specification changed")
         automatic = configured["portfolio"].get("automatic_research")
-        if not isinstance(automatic, dict) or automatic.get("version") != SUPPORTED_RECIPE:
+        if not isinstance(automatic, dict) or automatic.get("version") not in SUPPORTED_RECIPES:
             return receipt
         envelope = artifacts.read_artifact(store, checkpoint_id, max_bytes=MAX_ENVELOPE_BYTES)
         if not isinstance(envelope, dict):
@@ -83,6 +83,8 @@ def read(store, owner, job_id, *, expected_checkpoint=None):
             state.get("calculation"),
             state.get("development_evidence"),
         )
+        if isinstance(calculation, dict) and calculation.get("version") != automatic["version"]:
+            raise ValueError("Saved method programme changed")
         if (
             not isinstance(mandate, dict)
             or not isinstance(mandate.get("source"), dict)

@@ -397,11 +397,13 @@ def execution_versions(portfolio, recorded=None):
         "automatic-hypotheses-v6",
         "automatic-hypotheses-v7",
         "automatic-hypotheses-v8",
+        "automatic-hypotheses-v9",
     ) or portfolio.get("entry_conditions", {}).get("version") in (
         "research-stock-entry-conditions-v1",
         "research-stock-entry-conditions-v2",
         "research-stock-entry-conditions-v3",
         "research-joint-entry-conditions-v1",
+        "research-joint-entry-conditions-v2",
     )
     if stock:
         versions["stock_features_version"] = "research-stock-features-v1"
@@ -416,16 +418,15 @@ def execution_versions(portfolio, recorded=None):
         or portfolio.get("entry_conditions", {}).get("version")
         == "research-stock-entry-conditions-v3"
     )
-    joint = (
-        portfolio.get("automatic_research", {}).get("version")
-        in (
-            "automatic-hypotheses-v5",
-            "automatic-hypotheses-v6",
-            "automatic-hypotheses-v7",
-            "automatic-hypotheses-v8",
-        )
-        or portfolio.get("entry_conditions", {}).get("version")
-        == "research-joint-entry-conditions-v1"
+    joint = portfolio.get("automatic_research", {}).get("version") in (
+        "automatic-hypotheses-v5",
+        "automatic-hypotheses-v6",
+        "automatic-hypotheses-v7",
+        "automatic-hypotheses-v8",
+        "automatic-hypotheses-v9",
+    ) or portfolio.get("entry_conditions", {}).get("version") in (
+        "research-joint-entry-conditions-v1",
+        "research-joint-entry-conditions-v2",
     )
     if expanded or relative or joint:
         from research.stock_indicators import ENTRY_VERSION, FEATURE_VERSION, runtime_version
@@ -448,6 +449,13 @@ def execution_versions(portfolio, recorded=None):
         from research.joint_stock_market import ENTRY_VERSION, FEATURE_VERSION
         from research.regimes import VERSION as REGIME_VERSION
         from research.stock_market_context import VERSION as CONTEXT_VERSION
+
+        if (
+            portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v9"
+            or portfolio.get("entry_conditions", {}).get("version")
+            == "research-joint-entry-conditions-v2"
+        ):
+            from research.expanded_stock_market import ENTRY_VERSION, FEATURE_VERSION
 
         versions.update(
             entry_conditions_version=ENTRY_VERSION,

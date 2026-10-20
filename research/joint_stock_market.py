@@ -108,7 +108,17 @@ def apply(evidence, bundle, hypothesis):
     )
 
 
-def _combine(evidence, bundle_id, selected, feature_recipe, stock_receipt, market_receipts):
+def _combine(
+    evidence,
+    bundle_id,
+    selected,
+    feature_recipe,
+    stock_receipt,
+    market_receipts,
+    *,
+    calculation_version=FEATURE_VERSION,
+    markers_fn=markers,
+):
     """Identical joint membership and receipt construction for both input paths."""
     membership = {
         (row["strategy_id"], row["signal_index"]): row for row in stock_receipt["membership"]
@@ -171,10 +181,10 @@ def _combine(evidence, bundle_id, selected, feature_recipe, stock_receipt, marke
             )
             signals.append(retained)
         rows.append({**deepcopy(original), "signals": signals})
-    rows = markers(rows, selected)
+    rows = markers_fn(rows, selected)
     receipt = {
-        "version": FEATURE_VERSION,
-        "calculation_version": FEATURE_VERSION,
+        "version": calculation_version,
+        "calculation_version": calculation_version,
         "hypothesis": selected,
         "bundle_id": bundle_id,
         "execution_inputs_id": fingerprint(
@@ -214,13 +224,29 @@ class PreparedJointContext:
         self.__views = views
 
     def apply(self, evidence, bundle, hypothesis):
+        return self._apply_with(evidence, bundle, hypothesis)
+
+    def _apply_with(
+        self,
+        evidence,
+        bundle,
+        hypothesis,
+        *,
+        normalizer=normalize_hypothesis,
+        recipe_fn=recipe,
+        stock_gate=None,
+        combine_fn=_combine,
+    ):
+        """Private dependency seam; callers never receive the owned price views."""
         if self.__views is None:
             raise ValueError("The prepared stock-market context has been released")
         if bundle is not self.__source:
             raise ValueError("Prepared stock-market gates require the original source object")
-        selected = normalize_hypothesis(hypothesis)
-        feature_recipe = recipe()
-        _, stock_receipt = self.__views.apply_stock(evidence, selected["stock_hypothesis"])
+        selected = normalizer(hypothesis)
+        feature_recipe = recipe_fn()
+        _, stock_receipt = self.__views.apply_stock(
+            evidence, selected["stock_hypothesis"], _gate=stock_gate
+        )
         market_receipts = []
         if selected["market"] is not None:
             for strategy in evidence["strategies"]:
@@ -228,7 +254,7 @@ class PreparedJointContext:
                     evidence, {"strategy_id": strategy["id"], **selected["market"]}
                 )
                 market_receipts.append(receipt)
-        return _combine(
+        return combine_fn(
             evidence,
             self.__views.bundle_id,
             selected,

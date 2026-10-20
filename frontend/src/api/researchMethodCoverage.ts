@@ -61,7 +61,7 @@ export interface ResearchMethodCoverage {
   registry: {
     version: 'research-method-registry-v1'
     id: string
-    recipe_version: 'automatic-hypotheses-v8'
+    recipe_version: 'automatic-hypotheses-v8' | 'automatic-hypotheses-v9'
     catalog_id: string
     family_count: number
     hypothesis_count: number

@@ -25,7 +25,7 @@ const periods = [
 function recordedWalkForward(findings: Findings): WalkForwardFindings | undefined {
   const receipt = findings.walk_forward
   if (
-    findings.version !== 'automatic-hypotheses-v8' ||
+    !['automatic-hypotheses-v8', 'automatic-hypotheses-v9'].includes(findings.version) ||
     receipt?.version !== 'research-walk-forward-findings-v1' ||
     !receipt ||
     !['supported', 'not_supported'].includes(receipt.status) ||
@@ -245,6 +245,7 @@ export function AutomaticResearchFindings({
             'automatic-hypotheses-v6',
             'automatic-hypotheses-v7',
             'automatic-hypotheses-v8',
+            'automatic-hypotheses-v9',
           ].includes(findings.version) &&
             selectedSettings?.map((strategy) => (
               <p key={strategy.id} className="text-sm">

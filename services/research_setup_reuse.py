@@ -61,18 +61,23 @@ def retained_entry_conditions(store, bundle):
         "research-stock-entry-conditions-v2",
         "research-stock-entry-conditions-v3",
         "research-joint-entry-conditions-v1",
+        "research-joint-entry-conditions-v2",
     ):
         from research.entry_conditions import stock_module
         from research.stock_features import validate_bundle
 
-        if value["version"] == "research-joint-entry-conditions-v1":
+        if value["version"] in (
+            "research-joint-entry-conditions-v1",
+            "research-joint-entry-conditions-v2",
+        ):
             from research.stock_market_context import validate_bundle
         elif value["version"] == "research-stock-entry-conditions-v3":
             validate_bundle = stock_module(value["version"]).validate_bundle
 
         stock = evidence.get(
             "automatic_stock_market_context"
-            if value["version"] == "research-joint-entry-conditions-v1"
+            if value["version"]
+            in ("research-joint-entry-conditions-v1", "research-joint-entry-conditions-v2")
             else "automatic_stock_features"
         )
         validate_bundle(stock)

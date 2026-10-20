@@ -76,10 +76,13 @@ def _params(value):
         raise ValueError("Invalid study activity parameters")
     for key, item in value.items():
         if key == "hypothesis" and isinstance(item, str):
+            from research.expanded_stock_market import catalog as expanded_catalog
             from research.joint_stock_market import catalog as joint_catalog
             from research.stock_relative_strength import catalog
 
-            if item not in {row["id"] for row in [*catalog(), *joint_catalog()]}:
+            if item not in {
+                row["id"] for row in [*catalog(), *joint_catalog(), *expanded_catalog()]
+            }:
                 raise ValueError("Invalid study activity hypothesis")
             continue
         if (
@@ -348,7 +351,7 @@ class StudyObserver:
         _fence(db, self.token, self.job_id)
         trials = calculation.get("trials")
         try:
-            if calculation.get("version") == "automatic-hypotheses-v8":
+            if calculation.get("version") in ("automatic-hypotheses-v8", "automatic-hypotheses-v9"):
                 # Independent fit objectives stay separate scientifically. Only
                 # observation ordinals are flattened into the job's 192 events.
                 names = ("fit1", "fit2", "fit3", "search")

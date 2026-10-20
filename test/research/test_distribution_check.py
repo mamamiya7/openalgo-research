@@ -66,6 +66,7 @@ def test_missing_install_template_fails_source_check(monkeypatch, tmp_path):
         "research/automatic_walk_forward.py",
         "research/research_mandate.py",
         "research/method_registry.py",
+        "research/expanded_stock_market.py",
         "research/method_coverage.py",
         "services/research_method_coverage.py",
         "frontend/src/components/research/MethodCoverage.tsx",
