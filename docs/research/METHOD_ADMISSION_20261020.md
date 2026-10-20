@@ -66,6 +66,13 @@ and gate adapters, writes actual immutable development histories, then reads the
 four-fit record without additional engine calls. This qualifies metadata wiring;
 the earlier v8 contract separately records real VectorBT/Optuna qualification.
 
+Local activation from `2993c4184` passes all 182 installed source/package
+compatibility checks. Existing account setup, served UI, route authentication
+and a fresh worker heartbeat were checked. All 60 saved run identities,
+configuration and Historify bytes were preserved, with a local source/UI rollback
+snapshot. No new normal research or trading job was started. Existing legacy
+studies do not acquire fabricated v8 method details. Public ZIPs remain unchanged.
+
 The UI checks lazy loading, scope changes, unavailable states, retries, owner/run
 identity changes and cancellation. TypeScript, lint and the production build pass.
 The resource audit runs 100 successful and 100 rejected metadata reads: every

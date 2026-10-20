@@ -10,8 +10,13 @@ checks are reported without claiming unique price gaps. The read-only route
 verifies owned checkpoint metadata without reading candles/history shards or
 starting calculations. Numerical v8 domains, budgets and saved identities are
 unchanged. Broader methods remain next; this is not a new optimisation recipe.
-This new slice is source-only pending its separate activation; the installed v8
-validation update is described below.
+This slice is activated locally from `2993c4184`, on top of the v8 validation
+update described below. All 182 installed source/package compatibility checks
+pass. The served UI, authenticated-route boundary and fresh worker heartbeat
+were checked; all 60 saved run identities, configuration and Historify bytes
+remain unchanged. No new normal research or trading job was started. Qualification
+passes 150 distinct scoped backend cases and 76 frontend cases, plus TypeScript,
+lint and a production build. Public ZIPs remain unchanged.
 
 ## Expanding validation — 20 October 2026 development and local activation
 
