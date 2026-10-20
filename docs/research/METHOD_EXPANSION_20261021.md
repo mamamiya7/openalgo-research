@@ -95,6 +95,12 @@ subprocess is introduced by the numerical expansion.
 
 ## Next core work
 
+Local activation from `6f9e4d55b` passes 183 installed source/package compatibility
+checks. The existing account, new served UI, authenticated method route and fresh
+worker heartbeat were checked. All 60 saved run identities, configuration and
+Historify bytes were preserved; no new normal research or trading job was started.
+A source/UI rollback snapshot is retained locally. Public ZIPs remain unchanged.
+
 Continue package 3 with a qualified execution-aware method slice, rather than
 adding decorative screens or a broad untested indicator list. Wider EMA windows
 need larger warmup admission; ATR-scaled stops/targets need per-entry ATR sizing

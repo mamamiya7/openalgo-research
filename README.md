@@ -45,18 +45,18 @@ holding rules under **Why these candles?**. New automatic studies compare
 shared Historify price preparation and the same price-complete opportunities.
 Daily inputs remain daily, and saved older studies keep their original scope.
 
-The latest development increment adds [expanding validation](docs/research/WALK_FORWARD_20261020.md):
+The development foundation adds [expanding validation](docs/research/WALK_FORWARD_20261020.md):
 three earlier fits checked on later windows, then a final development refit and
 separate final comparison. It retains full development histories and shows each
 window's actual settings and results. This increment is activated in the local
 development installation; the public download remains preview.7.
 
-The latest locally activated increment adds [Methods considered](docs/research/METHOD_ADMISSION_20261020.md)
+An optional [Methods considered](docs/research/METHOD_ADMISSION_20261020.md) view is available
 inside Research details: inspect what each fit tested, reused or left untried,
 with optional formulas and input requirements. It reads saved metadata on demand;
 the existing optimisation methods and numerical results remain unchanged.
 
-The next [core development increment](docs/research/METHOD_EXPANSION_20261021.md)
+The latest locally activated [core increment](docs/research/METHOD_EXPANSION_20261021.md)
 adds 10/60-session momentum to automatic research: 108 registered stock/market
 choices, explicit tests of the new methods and the same 192-proposal/
 320-calculation limit. It reuses the retained native prices and preserves older

@@ -1,6 +1,6 @@
 # OpenAlgo Research status
 
-## Core method expansion — 21 October 2026 development source
+## Core method expansion — 21 October 2026 development and local activation
 
 The [v9 numerical method expansion](METHOD_EXPANSION_20261021.md) adds 10/60-session
 momentum with zero/2% thresholds: 108 registered stock/market choices across 32
@@ -10,8 +10,8 @@ the earlier/later/final validation boundaries are reused. The saved-method view,
 trial diagnostics, fixed-condition replay and setup reuse recognise the new
 version. Complete v8 golden hashes remain unchanged. Core research features take
 priority over a presentation-polish pass; broader methods and portfolio constraints
-follow the feature delivery order. This increment is in source qualification;
-the prior locally activated milestones are recorded below.
+follow the feature delivery order. This increment is activated locally from
+`6f9e4d55b`; the prior locally activated milestones are recorded below.
 
 Qualification passes 522 distinct scoped backend cases and 243 frontend cases,
 TypeScript, lint and a production build. A complete isolated native gate /
@@ -20,6 +20,12 @@ completed service recovery reproduces results without new accounting calls.
 The v9 causal receipt identity is invariant to gate-cache warmup and eviction,
 with full actual account settings still bound. Broader minute-runtime and live
 broker claims retain their separately recorded qualification scopes.
+
+All 183 installed source/package compatibility checks pass. The existing account,
+new served UI, authenticated method route and fresh worker heartbeat were checked.
+All 60 saved run identities, configuration and Historify bytes were preserved;
+no new normal research or trading job was started. A source/UI rollback snapshot
+is retained locally. Public ZIPs remain unchanged.
 
 ## Method admission foundation — 20 October 2026 development source
 
