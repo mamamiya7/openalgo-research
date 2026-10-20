@@ -11,6 +11,7 @@ from services import research_chosen_setups as chosen_setups
 from services import research_comparisons as comparisons
 from services import research_decisions as decisions
 from services import research_library as library
+from services import research_method_coverage as method_coverage
 from services import research_partial_study as partial_study
 from services import research_preferences as preferences
 from services import research_shortlist as shortlist
@@ -172,6 +173,28 @@ def portfolio_partial_study(job_id):
             expected_checkpoint=request.args.get("expected_checkpoint"),
         )
     )
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
+@scanner_research_bp.get("/portfolio/jobs/<job_id>/method-coverage")
+def portfolio_method_coverage(job_id):
+    if set(request.args) - {"expected_checkpoint"} or any(
+        len(request.args.getlist(key)) != 1 for key in request.args
+    ):
+        raise ValueError("Invalid saved method query")
+    try:
+        response = jsonify(
+            method_coverage.read(
+                store(),
+                session["user"],
+                job_id,
+                expected_checkpoint=request.args.get("expected_checkpoint"),
+            )
+        )
+    except method_coverage.CoverageChanged as error:
+        response = jsonify(message=str(error), code="method_coverage_changed")
+        response.status_code = 409
     response.headers["Cache-Control"] = "private, no-store"
     return response
 

@@ -1,5 +1,18 @@
 # OpenAlgo Research status
 
+## Method admission foundation — 20 October 2026 development source
+
+The first [package 3 slice](METHOD_ADMISSION_20261020.md) adds a typed explanatory
+registry for the pinned v8 methods and an optional **Methods considered** view
+inside Research details. Saved metadata distinguishes tested training accounts,
+reused proposals and untried conditions across the four fits. Missing feature
+checks are reported without claiming unique price gaps. The read-only route
+verifies owned checkpoint metadata without reading candles/history shards or
+starting calculations. Numerical v8 domains, budgets and saved identities are
+unchanged. Broader methods remain next; this is not a new optimisation recipe.
+This new slice is source-only pending its separate activation; the installed v8
+validation update is described below.
+
 ## Expanding validation — 20 October 2026 development and local activation
 
 The [v8 expanding-refit workflow](WALK_FORWARD_20261020.md) follows the frozen
@@ -20,8 +33,8 @@ development branch was pushed. All 60 saved run identities, configuration and
 Historify bytes were preserved. The existing account, new served UI and fresh
 research-worker heartbeat were checked; no new research or trading job was run.
 A source/UI rollback snapshot is retained locally. Public ZIPs remain unchanged.
-Method expansion remains next after
-this validation foundation, not part of this implementation.
+The explanatory method registry follows this validation foundation; numerical
+method expansion remains next.
 
 Qualification: 587 distinct current targeted backend cases and 217 frontend cases
 passed, plus TypeScript, scoped lint and a production build. A complete isolated
@@ -39,8 +52,9 @@ retain bounded immutable full development account histories. Resume verifies the
 source, settings, costs, scored evaluation and causal condition; backup/pruning
 preserve the references. Existing Research details adds a compact saved-history
 count and honest partial/unavailable states. Legacy results and checkpoints retain
-their original numerical contract. This source increment is not installed in the
-normal app or published; the active v7 numerical recipe is unchanged.
+their original numerical contract. This foundation is now installed with the
+v8 validation update above; public ZIPs remain unchanged. Its original dated
+qualification describes the v7 numerical contract.
 
 ## Remaining research features after the human audit
 

@@ -336,6 +336,7 @@ function StudyWorkspace({
       {result.automatic_research && (
         <AutomaticResearchFindings
           findings={result.automatic_research}
+          jobId={job.id}
           selectedSettings={result.experiment?.selected_strategies}
           developmentEvidence={result.development_evidence}
         />

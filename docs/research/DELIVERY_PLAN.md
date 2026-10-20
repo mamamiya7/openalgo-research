@@ -7,7 +7,11 @@
 development source, followed by the [v8 expanding-refit slice](WALK_FORWARD_20261020.md).
 It performs three later-window/higher-cost checks and a separate final development
 refit, with untouched final confirmation and recovery of full development histories.
-Learned transforms, continuous carry and the later packages remain planned.
+The first [package 3 registry/coverage slice](METHOD_ADMISSION_20261020.md) is now
+implemented in source: typed definitions of existing methods and metadata-only
+actual per-fit coverage. It does not expand numerical domains or replace
+executable admission. Learned transforms, continuous carry and the later packages
+remain planned.
 This section owns the next
 implementation order. Build the substantive research features below before the
 final workflow polish. Existing contracts and dated acceptance receipts remain
@@ -37,9 +41,10 @@ label the least bad losing trial a trading recommendation.
 ### Existing foundations to retain
 
 The installed development app is OpenAlgo 2.0.2.7. New unconfigured VectorBT
-optimisations select v7, with 92 registered stock/market choices across 32 families,
+optimisations select v8, with 92 registered stock/market choices across 32 families,
 conditional exits/trailing and admitted clock alternatives. Current bounds remain
-128 proposals and 320 native calculations. Older scopes retain their identities.
+192 proposals across four independent fits and 320 native calculations. Older
+scopes retain their identities; the v7 limits below remain its dated contract.
 
 Historify reuse and missing-only acquisition, causal feature availability,
 role-specific warmup, shared timing unions, purged chronological periods,
@@ -136,7 +141,7 @@ fills, probabilities or recommendations.
 
 ### Search policy and what the user receives
 
-Keep the current v7 limits unchanged. Compile new versions with explicit total
+Keep saved v7/v8 limits unchanged. Compile new versions with explicit total
 limits for acquisition, feature memory, proposals, native calculations, validation,
 statistical analysis, storage and wall time. Reserve final verification capacity
 before exploring. More families must share a measured budget; expansion cannot

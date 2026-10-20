@@ -6,6 +6,7 @@ import type {
   WalkForwardFindings,
 } from '@/api/portfolioResearch'
 import { AnalysisFigure } from './AnalysisCharts'
+import { MethodCoverage } from './MethodCoverage'
 import { researchDates, strategyRuleSummary } from './researchPresentation'
 import { researchRecipeLabel } from './researchRecipeLabels'
 
@@ -163,10 +164,12 @@ function WalkForwardChecks({ receipt }: { receipt: WalkForwardFindings }) {
 
 export function AutomaticResearchFindings({
   findings,
+  jobId,
   selectedSettings,
   developmentEvidence,
 }: {
   findings: Findings
+  jobId?: string
   selectedSettings?: PortfolioSettings[]
   developmentEvidence?: DevelopmentEvidenceMetadata
 }) {
@@ -303,6 +306,7 @@ export function AutomaticResearchFindings({
         <div className="mt-4 space-y-4">
           <p className="font-medium">{researchRecipeLabel(findings.version)}</p>
           <p className="text-muted-foreground">{findings.selection_basis}</p>
+          <MethodCoverage jobId={jobId} recipeVersion={findings.version} />
           {historySummary && (
             <p className="text-muted-foreground">
               {historySummary}

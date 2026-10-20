@@ -16,6 +16,12 @@ scopes remain unchanged. The normal development installation was updated from
 `f39f0a1b7`; public ZIPs remain unchanged. The dated defaults below describe their
 own prior milestones.
 
+The next development slice adds [recorded method coverage](METHOD_ADMISSION_20261020.md)
+under **Research details → Methods considered**. It explains actual tested/reused
+training accounts and untried registered conditions per fit, on demand, without
+another calculation or price read. It describes the existing v8 methods; broader
+numerical method admission is still next. This slice does not rewrite saved results.
+
 ## Current default and decision flow — 11 October 2026
 
 A new, unconfigured setup selects `automatic-hypotheses-v7` on VectorBT when the user chooses Optimize. The user confirms original financial and execution assumptions, then clicks **Optimize automatically**. The app plans candle interval, missing native history windows, supported stock/market hypotheses, bounded exit ranges, trailing on/off states, admitted clock choices, search budget and chronological checks. Older recipes are available under Advanced research options; explicit saved scopes, custom ranges and chosen rules are never silently upgraded. Nautilus uses the existing stability-checked exit recipe; it does not gain unsupported stock conditions or trailing stops.

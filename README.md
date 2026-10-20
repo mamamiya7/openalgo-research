@@ -51,6 +51,11 @@ separate final comparison. It retains full development histories and shows each
 window's actual settings and results. This increment is activated in the local
 development installation; the public download remains preview.7.
 
+The next source increment adds [Methods considered](docs/research/METHOD_ADMISSION_20261020.md)
+inside Research details: inspect what each fit tested, reused or left untried,
+with optional formulas and input requirements. It reads saved metadata on demand;
+the existing optimisation methods and numerical results remain unchanged.
+
 The next workflow increment previews CSV counts and dates before setup, simplifies
 experiment navigation to **Overview → Setup → Results → Saved setups**, and lets
 you prepare the selected tested report once, save it by name and reuse its exact

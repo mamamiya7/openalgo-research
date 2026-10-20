@@ -60,6 +60,33 @@ def test_missing_install_template_fails_source_check(monkeypatch, tmp_path):
     assert not next(item for item in result["checks"] if item["name"] == ".sample.env")["ok"]
 
 
+@pytest.mark.parametrize(
+    "name",
+    [
+        "research/automatic_walk_forward.py",
+        "research/research_mandate.py",
+        "research/method_registry.py",
+        "research/method_coverage.py",
+        "services/research_method_coverage.py",
+        "frontend/src/components/research/MethodCoverage.tsx",
+    ],
+)
+def test_missing_validation_and_method_modules_fail_before_startup(monkeypatch, tmp_path, name):
+    from tools import research_check
+
+    original = research_check.source_path
+    monkeypatch.setattr(
+        research_check,
+        "source_path",
+        lambda root, candidate: (
+            tmp_path / candidate if candidate == name else original(root, candidate)
+        ),
+    )
+    result = check(source_only=True, python="3.12")
+    assert not result["ok"]
+    assert not next(item for item in result["checks"] if item["name"] == name)["ok"]
+
+
 def test_untested_python_version_does_not_pass():
     assert not check(source_only=True, python="3.13")["ok"]
 
