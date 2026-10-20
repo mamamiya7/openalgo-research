@@ -334,6 +334,7 @@ export interface PortfolioRequest {
       | 'automatic-hypotheses-v5'
       | 'automatic-hypotheses-v6'
       | 'automatic-hypotheses-v7'
+      | 'automatic-hypotheses-v8'
   }
   entry_conditions?: EntryConditions
   optimization?: {
@@ -467,7 +468,29 @@ export interface DevelopmentEvidenceMetadata {
   marks: number
   bytes: number
 }
+export interface WalkForwardFindings {
+  version: 'research-walk-forward-findings-v1'
+  status: 'supported' | 'not_supported'
+  folds: Array<{
+    id: string
+    fit: { from: string; to: string }
+    test: { from: string; to: string }
+    selected_config_id: string
+    selected_condition?: string
+    selected_settings?: PortfolioSettings[]
+    baseline_summary: Record<string, number | string | null>
+    summary: Record<string, number | string | null>
+    stress_baseline_summary: Record<string, number | string | null>
+    stress_summary: Record<string, number | string | null>
+    eligible: boolean
+    reasons: string[]
+    training: { proposals: number; unique_candidates: number }
+  }>
+  final_fit: { from: string; to: string }
+  selection_policy: string
+}
 export interface AutomaticResearchFindings {
+  walk_forward?: WalkForwardFindings
   comparison?: {
     version: 'research-automatic-comparison-v1'
     status: 'available' | 'unavailable'
@@ -485,7 +508,16 @@ export interface AutomaticResearchFindings {
   selection_basis: string
   recipe: {
     version: string
-    periods: Record<'search' | 'check1' | 'check2' | 'final', { from: string; to: string }>
+    periods: Record<'search' | 'check1' | 'check2' | 'final', { from: string; to: string }> &
+      Partial<Record<'fit1' | 'fit2' | 'fit3' | 'check3', { from: string; to: string }>>
+    walk_forward?: {
+      version: string
+      folds: Array<{
+        id: string
+        fit: { from: string; to: string }
+        test: { from: string; to: string }
+      }>
+    }
     [key: string]: unknown
   }
   baseline: Record<string, unknown>

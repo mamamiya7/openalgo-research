@@ -120,6 +120,7 @@ def resolve_inputs(store, owner, request):
                 "automatic-hypotheses-v5",
                 "automatic-hypotheses-v6",
                 "automatic-hypotheses-v7",
+                "automatic-hypotheses-v8",
             )
             and receipt["symbol_count"] > 200
         ):
@@ -329,6 +330,7 @@ def replay_inputs(store, owner, job_id, *, trial_id=None, period="selection"):
         "automatic-hypotheses-v5",
         "automatic-hypotheses-v6",
         "automatic-hypotheses-v7",
+        "automatic-hypotheses-v8",
     ):
         marker = selected[0].get("entry_condition")
         selected_conditions = deepcopy(marker) if marker else None
@@ -730,7 +732,8 @@ def run(
     else:
         prepare_prices = (
             _prepare_automatic_timing
-            if portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v7"
+            if portfolio.get("automatic_research", {}).get("version")
+            in ("automatic-hypotheses-v7", "automatic-hypotheses-v8")
             else _prepare_prices
         )
         evidence = prepare_prices(
@@ -774,7 +777,12 @@ def run(
         stock_saved = saved
         if (
             portfolio.get("automatic_research", {}).get("version")
-            in ("automatic-hypotheses-v5", "automatic-hypotheses-v6", "automatic-hypotheses-v7")
+            in (
+                "automatic-hypotheses-v5",
+                "automatic-hypotheses-v6",
+                "automatic-hypotheses-v7",
+                "automatic-hypotheses-v8",
+            )
             or portfolio.get("entry_conditions", {}).get("version")
             == "research-joint-entry-conditions-v1"
         ):
@@ -891,6 +899,7 @@ def run(
                 JOINT_VERSION,
                 TIMING_VERSION,
                 TRAILING_VERSION,
+                WALK_FORWARD_VERSION,
                 policy_for_version,
             )
             from research.automatic_hypotheses import (
@@ -902,12 +911,23 @@ def run(
             from services.research_automatic_periods import claim
             from services.research_development_evidence import DevelopmentEvidenceWriter
 
+            if portfolio["automatic_research"]["version"] == WALK_FORWARD_VERSION:
+                from research.automatic_walk_forward import run as automatic_run
+
             if not job_id:
                 raise ValueError("Smart research needs its durable job identity")
             # Legacy checkpoints did not retain every candidate's history.
             # Do not rerun those candidates or retroactively call them complete.
             saved_calculation = (saved or {}).get("calculation")
             saved_development = (saved or {}).get("development_evidence")
+            if (
+                portfolio["automatic_research"]["version"] == WALK_FORWARD_VERSION
+                and saved_calculation
+                and saved_development is None
+            ):
+                raise ValueError(
+                    "Walk-forward recovery needs its saved development evidence manifest"
+                )
             if not saved_calculation or saved_development is not None:
                 research_mandate = (saved or {}).get("research_mandate")
                 if saved_calculation:
@@ -917,7 +937,8 @@ def run(
                 version = evidence["automatic_recipe"]["version"]
                 stock = evidence.get(
                     "automatic_stock_market_context"
-                    if version in (JOINT_VERSION, TRAILING_VERSION, TIMING_VERSION)
+                    if version
+                    in (JOINT_VERSION, TRAILING_VERSION, TIMING_VERSION, WALK_FORWARD_VERSION)
                     else "automatic_stock_features"
                 )
                 development_writer = DevelopmentEvidenceWriter(

@@ -207,6 +207,7 @@ describe('automatic research findings', () => {
     ['automatic-hypotheses-v5', 'Stock and market research'],
     ['automatic-hypotheses-v6', 'Stock, market and trailing stops'],
     ['automatic-hypotheses-v7', 'Stock, market and trade timing'],
+    ['automatic-hypotheses-v8', 'Walk-forward research'],
     ['automatic-future-v99', 'Automatic research'],
   ])('keeps the saved %s scope in the collapsed research details', async (version, label) => {
     const data = findings()
@@ -306,4 +307,151 @@ it('does not claim later validation for an exploratory-only smart result', async
   expect(screen.getByText(/No untouched later check/)).toBeVisible()
   expect(screen.queryByText('First check')).not.toBeInTheDocument()
   expect(screen.queryByText('Second check')).not.toBeInTheDocument()
+})
+
+function walkForwardFindings(): Findings {
+  const data = findings()
+  data.version = 'automatic-hypotheses-v8'
+  data.walk_forward = {
+    version: 'research-walk-forward-findings-v1',
+    status: 'supported',
+    folds: [1, 2, 3].map((window) => ({
+      id: `fold-${window}`,
+      fit: { from: '2026-01-01', to: `2026-0${window + 1}-28` },
+      test: { from: `2026-0${window + 2}-01`, to: `2026-0${window + 2}-28` },
+      selected_config_id: `config-${window}`,
+      selected_condition: `Condition ${window}`,
+      baseline_summary: { net_return_pct: 0.9, max_drawdown_pct: 1.2 },
+      summary: { net_return_pct: 2.8, max_drawdown_pct: 0.4 },
+      stress_baseline_summary: { net_return_pct: 0.3 },
+      stress_summary: { net_return_pct: 1.5 },
+      eligible: true,
+      reasons: [],
+      training: { proposals: 48, unique_candidates: 42 },
+    })),
+    final_fit: { from: '2026-01-01', to: '2026-07-31' },
+    selection_policy: 'Fit earlier dates, freeze, then check later dates.',
+  }
+  return data
+}
+
+it('keeps fold settings and fresh-cash comparisons in details, preserving the final comparison', async () => {
+  render(<AutomaticResearchFindings findings={walkForwardFindings()} />)
+  expect(screen.getByText('Refit and checked on 3 later windows.')).toBeVisible()
+  const final = screen.getByRole('table', { name: 'Final period comparison' })
+  expect(within(final).getByRole('row', { name: 'Trial 9 2.8% 0.4% 26' })).toBeVisible()
+  expect(screen.getByText('Window 1')).not.toBeVisible()
+  await userEvent.click(screen.getByText('Research details'))
+  const table = screen.getByRole('table', { name: 'Walk-forward window comparison' })
+  expect(within(table).getAllByRole('row')).toHaveLength(4)
+  expect(within(table).getByText('Condition 1')).toBeVisible()
+  expect(within(table).getByText('Condition 3')).toBeVisible()
+  expect(within(table).getAllByText('Original 0.3%')).toHaveLength(3)
+  expect(screen.getByText(/Accounts restart with the same cash/)).toBeVisible()
+  expect(screen.getByText(/Settings were frozen before the reserved final check/)).toBeVisible()
+  expect(
+    screen.getByText(/detailed report covers the final fit on development dates/)
+  ).toBeVisible()
+})
+
+it.each([
+  'absent',
+  'missing-fold',
+  'overlap',
+  'malformed',
+  'unknown-version',
+  'missing-training',
+] as const)('does not infer completed walk-forward checks for a %s receipt', (kind) => {
+  const data = walkForwardFindings()
+  if (kind === 'absent') delete data.walk_forward
+  else if (kind === 'missing-fold') data.walk_forward!.folds.pop()
+  else if (kind === 'overlap') data.walk_forward!.folds[1].fit.to = '2026-06-01'
+  else if (kind === 'unknown-version')
+    data.walk_forward!.version = 'future-v9' as 'research-walk-forward-findings-v1'
+  else if (kind === 'missing-training')
+    data.walk_forward!.folds[0].training = undefined as unknown as NonNullable<
+      Findings['walk_forward']
+    >['folds'][number]['training']
+  else data.walk_forward = { folds: [null, null, null] } as unknown as Findings['walk_forward']
+  render(<AutomaticResearchFindings findings={data} />)
+  expect(screen.queryByText(/Refit and checked on 3 later windows/)).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('table', { name: 'Walk-forward window comparison' })
+  ).not.toBeInTheDocument()
+})
+
+it('does not turn unsuccessful walk-forward checks into a claim of validation', async () => {
+  const data = walkForwardFindings()
+  data.status = 'not_supported'
+  data.headline = 'No reliable improvement over your original settings'
+  data.walk_forward!.status = 'not_supported'
+  data.walk_forward!.folds[0].eligible = false
+  data.walk_forward!.folds[0].reasons = ['Too few closed trades']
+  render(<AutomaticResearchFindings findings={data} />)
+  expect(screen.getByRole('heading', { name: data.headline })).toBeVisible()
+  await userEvent.click(screen.getByText('Research details'))
+  expect(screen.getByText('Not supported')).toBeVisible()
+  expect(screen.getByText('Too few closed trades')).toBeVisible()
+})
+
+it('keeps walk-forward details accessible', async () => {
+  const { container } = render(<AutomaticResearchFindings findings={walkForwardFindings()} />)
+  await userEvent.click(screen.getByText('Research details'))
+  expect((await axe(container)).violations).toEqual([])
+})
+
+it('shows the fitted trading rules for each recorded fold inside research details', async () => {
+  const data = walkForwardFindings()
+  data.walk_forward!.folds[0].selected_settings = [
+    {
+      id: 'scanner',
+      name: 'Scanner',
+      allocation_pct: 100,
+      config: {
+        ...researchDefaults,
+        target_pct: 4.25,
+        stop_pct: 1.5,
+        trade_horizon: 'intraday',
+        hold_minutes: 60,
+        trailing_enabled: true,
+        trailing_pct: 2.5,
+        entry_time: '09:30',
+        exit_time: '15:15',
+      },
+    },
+  ]
+  data.walk_forward!.folds[1].selected_settings = [
+    {
+      id: 'scanner',
+      name: 'Scanner',
+      allocation_pct: 100,
+      config: {
+        ...researchDefaults,
+        target_pct: 6,
+        stop_pct: 2,
+        hold_sessions: 3,
+        trailing_enabled: false,
+      },
+    },
+  ]
+  render(<AutomaticResearchFindings findings={data} />)
+  const firstRules = screen.getByText(/TP 4.25% · SL 1.5%/)
+  expect(firstRules).not.toBeVisible()
+  await userEvent.click(screen.getByText('Research details'))
+  expect(firstRules).toBeVisible()
+  expect(firstRules).toHaveTextContent(
+    'Up to 60 min · Trail 2.5% · Enter from 09:30 IST · Exit by 15:15 IST'
+  )
+  const secondRules = screen.getByText(/TP 6% · SL 2%/)
+  expect(secondRules).toHaveTextContent('Up to 3 sessions · Trail off')
+  expect(secondRules.closest('tr')).toHaveTextContent('Window 2')
+  expect(firstRules.closest('tr')).toHaveTextContent('Window 1')
+})
+
+it('keeps earlier fold receipts readable without inventing missing fitted trading rules', async () => {
+  render(<AutomaticResearchFindings findings={walkForwardFindings()} />)
+  await userEvent.click(screen.getByText('Research details'))
+  expect(screen.getByRole('table', { name: 'Walk-forward window comparison' })).toBeVisible()
+  expect(screen.getByText('config-1')).toBeVisible()
+  expect(screen.queryByText(/TP .*SL/)).not.toBeInTheDocument()
 })

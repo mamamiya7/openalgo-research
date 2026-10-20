@@ -2,7 +2,8 @@
 
 The stock projection is the existing v4 contract. Market classification sees
 the longer reference, without widening stock acquisition or changing old math.
-No acquisition, cache or runtime resources are owned by this module.
+No acquisition or global cache lives here. Prepared job-local views own one
+detached bounded history and release it when their context closes.
 """
 
 from copy import deepcopy
@@ -153,3 +154,74 @@ def market_view(bundle):
         **deepcopy(bundle["market"]),
         "context": deepcopy(bundle["market_context"]),
     }
+
+
+class _PreparedViews:
+    """One private detached owner; no raw projection is returned to callers.
+
+    Projection records share this owner's validated dictionaries, never the
+    source dictionaries. No entry decision, feature result or account is cached.
+    """
+
+    __slots__ = ("__stock", "__market", "__bundle_id")
+
+    def __init__(self, bundle):
+        # Enforce the serialized ceiling before allocating the detached copy.
+        stock._json_size(bundle, stock.MAX_BUNDLE_BYTES)
+        detached = deepcopy(bundle)
+        validate_bundle(detached)
+        self.__bundle_id = detached["id"]
+        calendar = next(iter(detached["series"].values()))["calendar"]
+        days = calendar["sessions"]
+        market = detached["market"]
+        full = market["evidence"]
+        # Reproduce slice_series' exact schema and identity without copying the
+        # privately owned stock history or market bars a second time.
+        sliced = {
+            **full,
+            "required_dates": list(days),
+            "bars": {day: full["bars"][day] for day in days if day in full["bars"]},
+            "available_at": {day: full["available_at"][day] for day in days},
+        }
+        from research.market_series import _coverage
+
+        sliced["coverage"] = _coverage(days, sliced["bars"])
+        sliced["id"] = fingerprint({key: value for key, value in sliced.items() if key != "id"})
+        payload = {
+            "version": relative.VERSION,
+            "series": detached["series"],
+            "benchmark": {
+                "calendar": calendar,
+                "evidence": sliced,
+                "acquisition_receipts": market["acquisition_receipts"],
+            },
+        }
+        projected = {**payload, "id": fingerprint(payload)}
+        relative.validate_bundle(projected)
+        self.__stock = projected
+        self.__market = {**market, "context": detached["market_context"]}
+
+    @property
+    def bundle_id(self):
+        return self.__bundle_id
+
+    def __validate_stock(self, bundle):
+        if self.__stock is None or bundle is not self.__stock:
+            raise ValueError("Prepared stock gates require their exact privately owned projection")
+        return bundle
+
+    def apply_stock(self, evidence, hypothesis):
+        return relative._apply_with_validator(
+            evidence, self.__stock, hypothesis, self.__validate_stock
+        )
+
+    def apply_market(self, evidence, condition):
+        from research.condition_replay import apply
+
+        if self.__market is None:
+            raise ValueError("The prepared stock-market context has been released")
+        return apply(evidence, self.__market, condition)
+
+    def close(self):
+        self.__stock = None
+        self.__market = None

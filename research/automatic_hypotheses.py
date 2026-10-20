@@ -35,6 +35,7 @@ BENCHMARK_VERSION = "automatic-hypotheses-v4"
 JOINT_VERSION = "automatic-hypotheses-v5"
 TRAILING_VERSION = "automatic-hypotheses-v6"
 TIMING_VERSION = "automatic-hypotheses-v7"
+WALK_FORWARD_VERSION = "automatic-hypotheses-v8"
 CONDITION_VERSION = "research-stock-entry-conditions-v1"
 MAX_SIMULATIONS = 180
 PROPOSALS = 60
@@ -56,6 +57,14 @@ def _display_history(trials):
 
 def policy_for_version(version):
     """Return a fresh bounded policy; a newer recipe never changes old replay."""
+    if version == WALK_FORWARD_VERSION:
+        return {
+            **policy_for_version(TIMING_VERSION),
+            "version": version,
+            "proposals": 192,
+            "proposals_per_fit": 48,
+            "family_screen": 1,
+        }
     if version == VERSION:
         return {
             "version": VERSION,
@@ -181,6 +190,10 @@ def _gate(
 
 def checkpoint_rows(saved):
     """Expose only completed bounded candidates from an intact checkpoint."""
+    if isinstance(saved, dict) and saved.get("version") == WALK_FORWARD_VERSION:
+        from research.automatic_walk_forward import checkpoint_rows as walk_forward_rows
+
+        return walk_forward_rows(saved)
     if not isinstance(saved, dict) or saved.get("version") not in (
         VERSION,
         EXPANDED_VERSION,

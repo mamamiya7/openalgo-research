@@ -29,7 +29,7 @@ def _trailing_axes(experiment):
 
     if (
         experiment.get("experiment_version")
-        not in ("automatic-hypotheses-v6", "automatic-hypotheses-v7")
+        not in ("automatic-hypotheses-v6", "automatic-hypotheses-v7", "automatic-hypotheses-v8")
         or not isinstance(specification, dict)
         or specification.get("version") != TRAILING_VERSION
         or not isinstance(specification.get("strategies"), list)
@@ -69,7 +69,8 @@ def _timing_axes(experiment):
     from research.engine import validate_config
 
     if (
-        experiment.get("experiment_version") != "automatic-hypotheses-v7"
+        experiment.get("experiment_version")
+        not in ("automatic-hypotheses-v7", "automatic-hypotheses-v8")
         or not isinstance(specification, dict)
         or specification.get("version") != TIMING_VERSION
         or specification.get("interval") not in ("D", "1m")

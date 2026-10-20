@@ -467,7 +467,12 @@ function StudyWorkspace({
         </TabsContent>
         <TabsContent value="activity" className="space-y-5">
           {view.section === 'activity' && (
-            <StudyActivity jobId={job.id} jobStatus={job.status} strategies={result.strategies} />
+            <StudyActivity
+              jobId={job.id}
+              jobStatus={job.status}
+              strategies={result.strategies}
+              recipeVersion={result.automatic_research?.version}
+            />
           )}
           {chart('timeline')}
         </TabsContent>

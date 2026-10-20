@@ -68,7 +68,7 @@ function receipt(overrides: Partial<StudyActivityReceipt> = {}): StudyActivityRe
   }
 }
 const clients: QueryClient[] = []
-function mount(props: { jobId?: string; jobStatus?: string } = {}) {
+function mount(props: { jobId?: string; jobStatus?: string; recipeVersion?: string } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
   clients.push(client)
   const tree = (jobId = 'study-job', jobStatus = 'completed') => (
@@ -76,6 +76,7 @@ function mount(props: { jobId?: string; jobStatus?: string } = {}) {
       <StudyActivity
         jobId={jobId}
         jobStatus={jobStatus}
+        recipeVersion={props.recipeVersion}
         strategies={[{ id: 'strategy-id', name: 'Breakout' }]}
       />
     </QueryClientProvider>
@@ -348,5 +349,71 @@ describe('durable study activity', () => {
       await vi.advanceTimersByTimeAsync(1500)
     })
     expect(researchStudyActivity.get).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('recorded walk-forward activity identity', () => {
+  it('labels all four fixed fit boundaries with both local trials and global proposals', async () => {
+    const data = receipt({
+      rows: [0, 47, 48, 95, 96, 143, 144, 191].map((number) => row({ id: number + 1, number })),
+    })
+    data.executions[0].proposal_budget = 192
+    vi.mocked(researchStudyActivity.get).mockResolvedValue(data)
+    mount({ recipeVersion: 'automatic-hypotheses-v8' })
+    const table = await screen.findByRole('table', { name: 'Proposal activity' })
+    for (const [local, global] of [
+      ['Fit 1 · Trial 1', 1],
+      ['Fit 1 · Trial 48', 48],
+      ['Fit 2 · Trial 1', 49],
+      ['Fit 2 · Trial 48', 96],
+      ['Fit 3 · Trial 1', 97],
+      ['Fit 3 · Trial 48', 144],
+      ['Final fit · Trial 1', 145],
+      ['Final fit · Trial 48', 192],
+    ]) {
+      expect(
+        within(table).getByRole('rowheader', { name: `${local} Proposal ${global}` })
+      ).toBeVisible()
+    }
+    expect(screen.getByText(/Compare scores within the same fit/)).toBeVisible()
+    expect(screen.getByText(/results table shows the final fit/)).toBeVisible()
+    const opener = within(table).getByRole('button', {
+      name: 'View settings for Final fit · Trial 1 (Proposal 145)',
+    })
+    await userEvent.click(opener)
+    const dialog = screen.getByRole('dialog', { name: 'Final fit · Trial 1 · Proposed settings' })
+    expect(within(dialog).getByText(/Proposal 145 overall/)).toBeVisible()
+    expect(dialog).toHaveTextContent('3.5%')
+    expect((await axe(document.body)).violations).toEqual([])
+    await userEvent.keyboard('{Escape}')
+    expect(opener).toHaveFocus()
+  })
+
+  it.each([
+    undefined,
+    'automatic-hypotheses-v7',
+    'automatic-hypotheses-v99',
+  ])('does not infer fit labels from a 192-proposal budget for saved recipe %s', async (version) => {
+    const data = receipt({ rows: [row({ number: 144 })] })
+    data.executions[0].proposal_budget = 192
+    vi.mocked(researchStudyActivity.get).mockResolvedValue(data)
+    mount({ recipeVersion: version })
+    expect(await screen.findByRole('rowheader', { name: 'Trial 145' })).toBeVisible()
+    expect(screen.queryByText(/Compare scores within the same fit/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Final fit · Trial 1')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'View settings for Trial 145' }))
+    expect(screen.getByRole('dialog', { name: 'Trial 145 · Proposed settings' })).toBeVisible()
+    expect(screen.queryByText(/Proposal 145 overall/)).not.toBeInTheDocument()
+  })
+
+  it('does not invent a fit outside the known v8 proposal domain', async () => {
+    vi.mocked(researchStudyActivity.get).mockResolvedValue(
+      receipt({ rows: [row({ number: 192 })] })
+    )
+    mount({ recipeVersion: 'automatic-hypotheses-v8' })
+    expect(await screen.findByRole('rowheader', { name: 'Proposal 193' })).toBeVisible()
+    expect(screen.queryByText(/Fit 5|Final fit · Trial 49/)).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'View settings for Proposal 193' }))
+    expect(screen.getByRole('dialog', { name: 'Proposal 193 · Proposed settings' })).toBeVisible()
   })
 })

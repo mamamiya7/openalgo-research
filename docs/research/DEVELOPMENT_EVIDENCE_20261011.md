@@ -88,3 +88,7 @@ roles and training-only fitting, qualify holding-overlap purges, preserve fresh
 account semantics for each fold and reserve final verification capacity before
 expanding method search. This source foundation supplies its durable inputs;
 rolling validation itself remains planned.
+
+**20 October follow-up:** the [v8 expanding-refit slice](WALK_FORWARD_20261020.md)
+now uses this foundation in development source. The acceptance above remains the
+record for this earlier storage increment; it is not a new installation or release.

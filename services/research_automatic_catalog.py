@@ -14,7 +14,7 @@ from research.portfolio import fingerprint, normalize
 from research.regimes import recipe as regime_recipe
 
 CATALOG_VERSION = "automatic-search-plan-v1"
-NEXT_RECIPE_VERSION = "automatic-hypotheses-v8"
+NEXT_RECIPE_VERSION = "automatic-hypotheses-v9"
 
 _PARAMETERS = {
     "target_pct": ("Profit target", "%"),
@@ -54,7 +54,11 @@ def _domain(axis, *, integer):
 
 def _parameters(strategy, engine, version):
     cfg, search = strategy["config"], strategy["search"]
-    trailing = version in ("automatic-hypotheses-v6", "automatic-hypotheses-v7")
+    trailing = version in (
+        "automatic-hypotheses-v6",
+        "automatic-hypotheses-v7",
+        "automatic-hypotheses-v8",
+    )
     parameters = []
     for key, (label, unit) in _PARAMETERS.items():
         if key not in cfg:
@@ -100,7 +104,10 @@ def _parameters(strategy, engine, version):
             reason = "Execution assumptions are not tuned to improve the result."
         elif key in ("entry_time", "exit_time", "trade_horizon"):
             reason = "Keep the original timing and required candle interval."
-            if version == "automatic-hypotheses-v7" and key != "trade_horizon":
+            if (
+                version in ("automatic-hypotheses-v7", "automatic-hypotheses-v8")
+                and key != "trade_horizon"
+            ):
                 reason = "Check bounded native clock alternatives after exchange-calendar admission; daily inputs retain these clocks."
         parameters.append({**item, "status": status, "reason": reason})
     parameters.append(
@@ -137,8 +144,13 @@ def _decisions(portfolio, interval, strategies, *, proposals, max_simulations):
     trailing = portfolio["automatic_research"]["version"] in (
         "automatic-hypotheses-v6",
         "automatic-hypotheses-v7",
+        "automatic-hypotheses-v8",
     )
-    timing = portfolio["automatic_research"]["version"] == "automatic-hypotheses-v7"
+    timing = portfolio["automatic_research"]["version"] in (
+        "automatic-hypotheses-v7",
+        "automatic-hypotheses-v8",
+    )
+    walk_forward = portfolio["automatic_research"]["version"] == "automatic-hypotheses-v8"
     return {
         "version": "automatic-decision-summary-v1",
         "automatic": [
@@ -167,7 +179,9 @@ def _decisions(portfolio, interval, strategies, *, proposals, max_simulations):
             {
                 "id": "checks",
                 "label": "Validation",
-                "decision": "Use recorded sessions and holding limits to test later periods when feasible; insufficient history produces an exploratory result."
+                "decision": "Fit earlier expanding prefixes, freeze each choice and test only its next window; refit development dates before a separate final check. Insufficient history stops admission."
+                if walk_forward
+                else "Use recorded sessions and holding limits to test later periods when feasible; insufficient history produces an exploratory result."
                 if intelligent
                 else "Use this recipe's recorded chronological checks; insufficient history fails admission.",
             },
@@ -463,6 +477,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v5",
         "automatic-hypotheses-v6",
         "automatic-hypotheses-v7",
+        "automatic-hypotheses-v8",
     ):
         raise ValueError("Choose a supported automatic research recipe before planning")
     version, engine = auto["version"], canonical["engine"]
@@ -487,6 +502,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v5",
         "automatic-hypotheses-v6",
         "automatic-hypotheses-v7",
+        "automatic-hypotheses-v8",
     ):
         from research.intelligent_plan import build_plan as intelligence_plan
 

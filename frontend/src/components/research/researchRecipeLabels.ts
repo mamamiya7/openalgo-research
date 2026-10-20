@@ -9,6 +9,7 @@ const recipeLabels: Record<string, string> = {
   'automatic-hypotheses-v5': 'Stock and market research',
   'automatic-hypotheses-v6': 'Stock, market and trailing stops',
   'automatic-hypotheses-v7': 'Stock, market and trade timing',
+  'automatic-hypotheses-v8': 'Walk-forward research',
 }
 
 export function researchRecipeLabel(version?: string | null): string {
@@ -21,9 +22,12 @@ export function researchRecipeLabel(version?: string | null): string {
 export function researchFeaturePreparation(version?: string | null): string {
   if (version === 'automatic-entry-conditions-v1') return 'Preparing market conditions'
   if (
-    ['automatic-hypotheses-v5', 'automatic-hypotheses-v6', 'automatic-hypotheses-v7'].includes(
-      version ?? ''
-    )
+    [
+      'automatic-hypotheses-v5',
+      'automatic-hypotheses-v6',
+      'automatic-hypotheses-v7',
+      'automatic-hypotheses-v8',
+    ].includes(version ?? '')
   )
     return 'Preparing stock and market conditions'
   if (

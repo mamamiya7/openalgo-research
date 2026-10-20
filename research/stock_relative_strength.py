@@ -266,6 +266,16 @@ def _feature(stock, benchmark, decision, hypothesis):
 
 
 def apply(evidence, bundle, hypothesis):
+    return _apply_with_validator(evidence, bundle, hypothesis, validate_bundle)
+
+
+def _apply_with_validator(evidence, bundle, hypothesis, validator):
+    """Private seam for a detached context's exact-identity validation capability.
+
+    Public callers always use ``apply`` and full validation. The prepared joint
+    workspace supplies a validator accepting only its own previously validated
+    projection; neither a caller's id nor a caller-provided trusted flag suffices.
+    """
     selected = normalize_hypothesis(hypothesis)
     feature_recipe = recipe()  # Validate the exact native dependency before gating.
     return legacy._apply(
@@ -279,5 +289,5 @@ def apply(evidence, bundle, hypothesis):
         compare_fn=indicators._compare,
         calculation_version=FEATURE_VERSION,
         feature_recipe=feature_recipe,
-        bundle_validator=validate_bundle,
+        bundle_validator=validator,
     )

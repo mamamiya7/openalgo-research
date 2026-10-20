@@ -205,6 +205,7 @@ function stageTitle(activity?: ResearchActivity, optimizing = false, recipe?: st
     case 'backtest':
       return 'Running your backtest'
     case 'validation':
+      if (recipe === 'automatic-hypotheses-v8') return 'Checking the next window'
       return recipe?.startsWith('automatic-')
         ? 'Checking shortlisted settings'
         : 'Checking the later period'

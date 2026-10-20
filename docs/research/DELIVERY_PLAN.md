@@ -2,9 +2,12 @@
 
 ## Feature development order after the human audit
 
-**Updated 11 October 2026. Status: executing.** The first
+**Updated 20 October 2026. Status: executing.** The first
 [mandate/evidence foundation](DEVELOPMENT_EVIDENCE_20261011.md) is implemented in
-development source; rolling validation and the later packages remain planned.
+development source, followed by the [v8 expanding-refit slice](WALK_FORWARD_20261020.md).
+It performs three later-window/higher-cost checks and a separate final development
+refit, with untouched final confirmation and recovery of full development histories.
+Learned transforms, continuous carry and the later packages remain planned.
 This section owns the next
 implementation order. Build the substantive research features below before the
 final workflow polish. Existing contracts and dated acceptance receipts remain

@@ -12,6 +12,7 @@ describe('saved research recipe labels', () => {
     ['automatic-hypotheses-v5', 'Stock and market research'],
     ['automatic-hypotheses-v6', 'Stock, market and trailing stops'],
     ['automatic-hypotheses-v7', 'Stock, market and trade timing'],
+    ['automatic-hypotheses-v8', 'Walk-forward research'],
   ])('describes the recorded scope of %s', (version, label) => {
     expect(researchRecipeLabel(version)).toBe(label)
   })
@@ -34,6 +35,9 @@ describe('saved research recipe labels', () => {
     )
     expect(researchFeaturePreparation('automatic-hypotheses-v4')).toBe('Preparing stock indicators')
     expect(researchFeaturePreparation('automatic-hypotheses-v5')).toBe(
+      'Preparing stock and market conditions'
+    )
+    expect(researchFeaturePreparation('automatic-hypotheses-v8')).toBe(
       'Preparing stock and market conditions'
     )
     expect(researchFeaturePreparation('automatic-hypotheses-v7')).toBe(

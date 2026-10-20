@@ -642,3 +642,43 @@ def test_joint_stock_checkpoint_marks_categorical_proposal_durably(app):
     assert len(rows) == 1 and rows[0]["checkpointed"]
     assert rows[0]["params"]["hypothesis"] == "ema_above_20"
     finalize(store, job_id, observer)
+
+
+@pytest.mark.parametrize("offset,name", enumerate(("fit1", "fit2", "fit3", "search")))
+def test_expanding_fit_checkpoint_uses_global_observation_numbers(app, offset, name):
+    store, job_id, observer = claimed(app, budget=192, replayed=offset * 48)
+    started = start(observer, offset * 48)
+    finished = complete(observer, offset * 48)
+    row = checkpoint(started, finished)["calculation"]["trials"][0]
+    row["number"] = 0  # Local Optuna trial number, intentionally reused by each fit.
+    state = {
+        "calculation": {
+            "version": "automatic-hypotheses-v8",
+            "fits": {name: {"trials": [row]}},
+        }
+    }
+    original = copy.deepcopy(state)
+    with store.sessions.begin() as db:
+        observer.checkpoint(db, state)
+    assert state == original
+    rows = activity.read(store, OWNER, job_id)["rows"]
+    assert len(rows) == 1 and rows[0]["checkpointed"]
+    assert rows[0]["number"] == offset * 48
+    finalize(store, job_id, observer)
+
+
+def test_expanding_fit_checkpoint_rejects_changed_local_trial_numbers(app):
+    store, job_id, observer = claimed(app, budget=192, replayed=48)
+    started, finished = start(observer, 48), complete(observer, 48)
+    row = checkpoint(started, finished)["calculation"]["trials"][0]
+    state = {
+        "calculation": {
+            "version": "automatic-hypotheses-v8",
+            "fits": {"fit2": {"trials": [row]}},
+        }
+    }
+    with pytest.raises(activity.ObservationFailed):
+        with store.sessions.begin() as db:
+            observer.checkpoint(db, state)
+    assert not activity.read(store, OWNER, job_id)["rows"][0]["checkpointed"]
+    finalize(store, job_id, observer)

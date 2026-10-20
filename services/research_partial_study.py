@@ -61,6 +61,7 @@ def _search_inputs(evidence, calculation):
             "automatic-hypotheses-v5",
             "automatic-hypotheses-v6",
             "automatic-hypotheses-v7",
+            "automatic-hypotheses-v8",
         ):
             from research.automatic_hypotheses import checkpoint_rows
 
@@ -74,6 +75,7 @@ def _search_inputs(evidence, calculation):
                             "automatic-hypotheses-v5",
                             "automatic-hypotheses-v6",
                             "automatic-hypotheses-v7",
+                            "automatic-hypotheses-v8",
                         )
                         else "automatic_stock_features"
                     ],
@@ -81,7 +83,8 @@ def _search_inputs(evidence, calculation):
             ):
                 raise ValueError("Saved stock research inputs changed")
             checkpoint_rows(calculation)
-            return slice_period(evidence, "search"), calculation, "search", True, False
+            period = calculation["active_fit"] if version == "automatic-hypotheses-v8" else "search"
+            return slice_period(evidence, period), calculation, period, True, False
         if version == "automatic-entry-conditions-v1":
             binding = fingerprint({"recipe": recipe, "market": evidence["entry_condition_market"]})
             maximum = 100
@@ -155,11 +158,16 @@ def _validated_rows(evidence, saved, completed):
         "automatic-hypotheses-v5",
         "automatic-hypotheses-v6",
         "automatic-hypotheses-v7",
+        "automatic-hypotheses-v8",
     ):
         from research.automatic_hypotheses import checkpoint_rows
 
         rows = checkpoint_rows(saved)
-        trials = saved["trials"]
+        trials = (
+            saved["fits"].get(saved["active_fit"], {"trials": []})["trials"]
+            if saved["version"] == "automatic-hypotheses-v8"
+            else saved["trials"]
+        )
         return rows, {
             "proposed": len(trials),
             "evaluated": sum(not row["reused"] for row in trials),

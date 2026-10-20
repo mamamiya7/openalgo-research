@@ -77,19 +77,44 @@ function duration(row: Pick<StudyActivityRow, 'started_at' | 'finished_at'>) {
   return `${number(minutes)} min ${number(Math.floor(seconds % 60))} s`
 }
 
+function proposalLabel(index: number, recipeVersion?: string) {
+  if (recipeVersion !== 'automatic-hypotheses-v8') return { label: `Trial ${index + 1}` }
+  if (!Number.isInteger(index) || index < 0 || index >= 192)
+    return { label: `Proposal ${Number.isInteger(index) && index >= 0 ? index + 1 : '—'}` }
+  const fit = Math.floor(index / 48)
+  return {
+    label: `${fit === 3 ? 'Final fit' : `Fit ${fit + 1}`} · Trial ${(index % 48) + 1}`,
+    global: `Proposal ${index + 1}`,
+  }
+}
+
 interface Props {
   jobId: string
   jobStatus: string
+  /** Recorded job/result recipe identity; never the editable setup or inferred budget. */
+  recipeVersion?: string
   strategies?: Array<Pick<PortfolioSettings, 'id' | 'name'>>
 }
 
 /** Mount only inside a visible Activity surface. Identity changes discard local views and requests. */
 export function StudyActivity(props: Props) {
   const owner = useAuthStore((state) => state.user?.username ?? 'account')
-  return <Activity key={JSON.stringify([owner, props.jobId])} {...props} owner={owner} />
+  return (
+    <Activity
+      key={JSON.stringify([owner, props.jobId, props.recipeVersion])}
+      {...props}
+      owner={owner}
+    />
+  )
 }
 
-function Activity({ jobId, jobStatus, strategies = [], owner }: Props & { owner: string }) {
+function Activity({
+  jobId,
+  jobStatus,
+  recipeVersion,
+  strategies = [],
+  owner,
+}: Props & { owner: string }) {
   const [before, setBefore] = useState<number>()
   const [execution, setExecution] = useState('')
   const [selected, setSelected] = useState<StudyActivityRow | null>(null)
@@ -111,6 +136,8 @@ function Activity({ jobId, jobStatus, strategies = [], owner }: Props & { owner:
     ? data?.executions.find((item) => item.id === execution)
     : data?.executions[0]
   const row = data?.rows.find((item) => item.id === selected?.id) ?? selected
+  const selectedLabel = row ? proposalLabel(row.number, recipeVersion) : undefined
+  const walkForward = recipeVersion === 'automatic-hypotheses-v8'
   function setting(key: string, index: number) {
     const [strategyId, parameter] = key.split('.')
     const label = parameterLabels[parameter] ?? `Setting ${index + 1}`
@@ -175,6 +202,12 @@ function Activity({ jobId, jobStatus, strategies = [], owner }: Props & { owner:
           </label>
         )}
       </header>
+      {walkForward && (
+        <p className="text-xs text-muted-foreground">
+          Each fit uses different training dates. Compare scores within the same fit; the results
+          table shows the final fit. Proposal numbers track the full run.
+        </p>
+      )}
       <dl className="flex flex-wrap gap-x-6 gap-y-2 border-y py-3 text-sm">
         {(Object.keys(stateLabels) as Array<keyof typeof stateLabels>)
           .filter((state): state is StudyProposalState => state in data.counts)
@@ -221,7 +254,14 @@ function Activity({ jobId, jobStatus, strategies = [], owner }: Props & { owner:
           <table className="w-full min-w-[660px] text-sm" aria-label="Proposal activity">
             <thead className="sticky top-0 z-10 border-b bg-muted">
               <tr>
-                {['Trial', 'Outcome', 'Started', 'Duration', 'Score', 'Settings'].map((label) => (
+                {[
+                  walkForward ? 'Fit / trial' : 'Trial',
+                  'Outcome',
+                  'Started',
+                  'Duration',
+                  'Score',
+                  'Settings',
+                ].map((label) => (
                   <th scope="col" key={label} className="px-3 py-3 text-left font-medium">
                     {label}
                   </th>
@@ -229,32 +269,43 @@ function Activity({ jobId, jobStatus, strategies = [], owner }: Props & { owner:
               </tr>
             </thead>
             <tbody className="divide-y">
-              {data.rows.map((item) => (
-                <tr key={item.id} className="hover:bg-muted/40">
-                  <th scope="row" className="px-3 py-3 text-left font-medium tabular-nums">
-                    Trial {item.number + 1}
-                  </th>
-                  <td className="px-3 py-3">{stateLabels[item.state]}</td>
-                  <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">
-                    {timestamp(item.started_at)}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-3 tabular-nums">{duration(item)}</td>
-                  <td className="px-3 py-3 tabular-nums">{number(item.value)}</td>
-                  <td className="px-3 py-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(event) => {
-                        opener.current = event.currentTarget
-                        setSelected(item)
-                      }}
-                      aria-label={`View settings for Trial ${item.number + 1}`}
-                    >
-                      View settings
-                    </Button>
-                  </td>
-                </tr>
-              ))}
+              {data.rows.map((item) => {
+                const identity = proposalLabel(item.number, recipeVersion)
+                return (
+                  <tr key={item.id} className="hover:bg-muted/40">
+                    <th scope="row" className="px-3 py-3 text-left font-medium tabular-nums">
+                      {identity.label}
+                      {identity.global && (
+                        <>
+                          {' '}
+                          <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                            {identity.global}
+                          </span>
+                        </>
+                      )}
+                    </th>
+                    <td className="px-3 py-3">{stateLabels[item.state]}</td>
+                    <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">
+                      {timestamp(item.started_at)}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-3 tabular-nums">{duration(item)}</td>
+                    <td className="px-3 py-3 tabular-nums">{number(item.value)}</td>
+                    <td className="px-3 py-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(event) => {
+                          opener.current = event.currentTarget
+                          setSelected(item)
+                        }}
+                        aria-label={`View settings for ${identity.label}${identity.global ? ` (${identity.global})` : ''}`}
+                      >
+                        View settings
+                      </Button>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -297,8 +348,11 @@ function Activity({ jobId, jobStatus, strategies = [], owner }: Props & { owner:
           {row && (
             <>
               <DialogHeader>
-                <DialogTitle>Trial {row.number + 1} · Proposed settings</DialogTitle>
-                <DialogDescription>Settings recorded when this trial started.</DialogDescription>
+                <DialogTitle>{selectedLabel?.label} · Proposed settings</DialogTitle>
+                <DialogDescription>
+                  {selectedLabel?.global && `${selectedLabel.global} overall. `}
+                  Settings recorded when this trial started.
+                </DialogDescription>
               </DialogHeader>
               <dl className="grid grid-cols-2 gap-4 border-y py-4 text-sm">
                 {[

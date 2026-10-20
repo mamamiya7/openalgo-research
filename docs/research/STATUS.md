@@ -1,5 +1,31 @@
 # OpenAlgo Research status
 
+## Expanding validation — 20 October 2026 development source
+
+The [v8 expanding-refit workflow](WALK_FORWARD_20261020.md) follows the frozen
+mandate/evidence foundation. Three independent earlier-prefix Optuna fits are
+checked on their next windows, then a fourth fit uses the full development prefix.
+All three ordinary/higher-cost checks must pass before its choice advances to the
+separate final period. Final results never rerank settings. There are 192 proposals,
+at most 320 reserved calculations, fresh equal cash per account, and no pooled
+continuous-return claim. The existing details panel shows actual per-fold choices
+and results; Optuna plots describe only the final 48-proposal fit.
+
+New unconfigured VectorBT setups select v8 in development source. Explicit v2–v7
+scopes, checkpoints and reports retain their identities. A job-local validated
+context avoids repeated full history validation without changing gate receipts;
+legacy public gates remain fully validating. Normal installation and public ZIPs
+have not been updated by this increment. Method expansion remains next after
+this validation foundation, not part of this implementation.
+
+Qualification: 587 distinct current targeted backend cases and 217 frontend cases
+passed, plus TypeScript, scoped lint and a production build. A complete isolated
+native VectorBT/Optuna run executed 192 proposals and 204 accounts, preserving
+separate final evidence and correctly retaining original settings when the
+synthetic prices supplied no supported improvement. Resource and performance
+measurements, intraday boundary scope and remaining limits are recorded in the
+[v8 contract](WALK_FORWARD_20261020.md).
+
 ## Research evidence foundation — 11 October 2026 development source
 
 The first [feature foundation](DEVELOPMENT_EVIDENCE_20261011.md) is implemented:
@@ -15,11 +41,13 @@ normal app or published; the active v7 numerical recipe is unchanged.
 
 The [updated feature implementation order](DELIVERY_PLAN.md#feature-development-order-after-the-human-audit)
 starts with the implemented frozen mandate and bounded development evidence,
-then planned rolling validation, qualified method expansion, constrained portfolio research,
+then the implemented expanding-validation slice, qualified method expansion,
+constrained portfolio research,
 robust selection and regime suitability. Native rule-source and wider asset admission
 follow; the audit's workflow refinements are the final consolidation pass. Existing
 causal preparation, period-use reservations, v7 timing and engine adapters are reused.
-The remaining packages are planned additions, not a new installed recipe or public release.
+The later packages remain planned; v8 is development source, not an installed or
+public release.
 
 The fresh normal-app audit inspected the library, setup, saved custom study and
 report, trials/settings, trade chart/replay and save dialog. Controlled evidence

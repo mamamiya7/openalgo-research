@@ -738,6 +738,7 @@ export default function PortfolioResearch({
                   jobId={job.id}
                   jobStatus={job.status}
                   strategies={job.specification?.portfolio?.strategies}
+                  recipeVersion={job.specification?.portfolio?.automatic_research?.version}
                 />
               </div>
             )}

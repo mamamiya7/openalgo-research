@@ -348,6 +348,22 @@ class StudyObserver:
         _fence(db, self.token, self.job_id)
         trials = calculation.get("trials")
         try:
+            if calculation.get("version") == "automatic-hypotheses-v8":
+                # Independent fit objectives stay separate scientifically. Only
+                # observation ordinals are flattened into the job's 192 events.
+                names = ("fit1", "fit2", "fit3", "search")
+                fits = calculation.get("fits")
+                if not isinstance(fits, dict) or set(fits) - set(names):
+                    raise ValueError("Invalid expanding-fit observation coverage")
+                trials = []
+                for offset, name in enumerate(names):
+                    rows = fits.get(name, {}).get("trials", [])
+                    if not isinstance(rows, list) or len(rows) > 48:
+                        raise ValueError("Invalid expanding-fit observation coverage")
+                    for index, item in enumerate(rows):
+                        if type(item.get("number")) is not int or item["number"] != index:
+                            raise ValueError("Invalid expanding-fit proposal ordinal")
+                        trials.append({**item, "number": offset * 48 + index})
             if not isinstance(trials, list) or len(trials) > MAX_PROPOSALS:
                 raise ValueError("Invalid study checkpoint observation coverage")
             by_number = {item["number"]: item for item in trials}

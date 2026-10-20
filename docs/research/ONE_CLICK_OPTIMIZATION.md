@@ -1,5 +1,20 @@
 # One-click research: product and execution contract
 
+## Development default — 20 October 2026
+
+New unconfigured VectorBT setups now select `automatic-hypotheses-v8` in development
+source. The [expanding validation contract](WALK_FORWARD_20261020.md) adds four
+independent 48-proposal fits, three next-window/higher-cost checks and a separately
+reserved final comparison. Earlier choices cannot see later outcomes; final outcomes
+cannot select settings. Existing Research details shows each actual fold and choice;
+the Optuna table and plots describe only the final development fit. Accounts reset
+cash per window, with no continuous-return or statistical-confidence claim.
+
+The mandate, causal Historify preparation, supported methods and original financial
+assumptions are retained. Short or sparse history stops admission. Explicit older
+scopes remain unchanged. This source increment has not changed the normal app or
+public distribution. The dated defaults below describe their own prior milestones.
+
 ## Current default and decision flow — 11 October 2026
 
 A new, unconfigured setup selects `automatic-hypotheses-v7` on VectorBT when the user chooses Optimize. The user confirms original financial and execution assumptions, then clicks **Optimize automatically**. The app plans candle interval, missing native history windows, supported stock/market hypotheses, bounded exit ranges, trailing on/off states, admitted clock choices, search budget and chronological checks. Older recipes are available under Advanced research options; explicit saved scopes, custom ranges and chosen rules are never silently upgraded. Nautilus uses the existing stability-checked exit recipe; it does not gain unsupported stock conditions or trailing stops.

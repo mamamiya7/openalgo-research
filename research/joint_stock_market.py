@@ -2,7 +2,8 @@
 
 Each component judges the original opportunities independently; unknown inputs
 dominate false inputs. The shared-cash engine then calculates the gated account.
-No downloader, process, global cache or mutable runtime evidence is owned here.
+No downloader, process or global cache is owned here. A prepared v8 context
+retains one bounded private snapshot for the lifetime of its calculation job.
 """
 
 from copy import deepcopy
@@ -94,10 +95,7 @@ def apply(evidence, bundle, hypothesis):
     feature_recipe = recipe()  # Also fences the stock SDK version.
     validate_bundle(bundle)
     _, stock_receipt = stock.apply(evidence, stock_view(bundle), selected["stock_hypothesis"])
-    membership = {
-        (row["strategy_id"], row["signal_index"]): row for row in stock_receipt["membership"]
-    }
-    market_rows, market_receipts = {}, []
+    market_receipts = []
     if selected["market"] is not None:
         market = market_view(bundle)
         for strategy in evidence["strategies"]:
@@ -105,13 +103,25 @@ def apply(evidence, bundle, hypothesis):
                 evidence, market, {"strategy_id": strategy["id"], **selected["market"]}
             )
             market_receipts.append(receipt)
-            market_rows.update(
-                {
-                    (row["strategy_id"], row["signal_index"]): row
-                    for row in receipt["membership"]
-                    if row["strategy_id"] == strategy["id"]
-                }
-            )
+    return _combine(
+        evidence, bundle["id"], selected, feature_recipe, stock_receipt, market_receipts
+    )
+
+
+def _combine(evidence, bundle_id, selected, feature_recipe, stock_receipt, market_receipts):
+    """Identical joint membership and receipt construction for both input paths."""
+    membership = {
+        (row["strategy_id"], row["signal_index"]): row for row in stock_receipt["membership"]
+    }
+    market_rows = {}
+    for receipt in market_receipts:
+        market_rows.update(
+            {
+                (row["strategy_id"], row["signal_index"]): row
+                for row in receipt["membership"]
+                if row["strategy_id"] == receipt["condition"]["strategy_id"]
+            }
+        )
     counts = dict.fromkeys(("allowed", "filtered", "unknown", "original_excluded", "pending"), 0)
     rows, combined = [], []
     for original in evidence["strategies"]:
@@ -166,7 +176,7 @@ def apply(evidence, bundle, hypothesis):
         "version": FEATURE_VERSION,
         "calculation_version": FEATURE_VERSION,
         "hypothesis": selected,
-        "bundle_id": bundle["id"],
+        "bundle_id": bundle_id,
         "execution_inputs_id": fingerprint(
             {
                 key: evidence[key]
@@ -183,3 +193,60 @@ def apply(evidence, bundle, hypothesis):
         "unknown_policy": feature_recipe["unknown"],
     }
     return rows, {**receipt, "id": fingerprint(receipt)}
+
+
+class PreparedJointContext:
+    """Bounded v8 job-local context; public legacy gates remain fully validating.
+
+    Construction detaches and validates once. The supplied bundle object is an
+    identity capability, not a hash-based cache key: later edits to that caller's
+    object cannot change the privately owned prices. No projection or source
+    dictionary is exposed, and every returned gate/receipt is a fresh value.
+    """
+
+    __slots__ = ("__source", "__views", "__weakref__")
+
+    def __init__(self, bundle):
+        from research.stock_market_context import _PreparedViews
+
+        views = _PreparedViews(bundle)
+        self.__source = bundle
+        self.__views = views
+
+    def apply(self, evidence, bundle, hypothesis):
+        if self.__views is None:
+            raise ValueError("The prepared stock-market context has been released")
+        if bundle is not self.__source:
+            raise ValueError("Prepared stock-market gates require the original source object")
+        selected = normalize_hypothesis(hypothesis)
+        feature_recipe = recipe()
+        _, stock_receipt = self.__views.apply_stock(evidence, selected["stock_hypothesis"])
+        market_receipts = []
+        if selected["market"] is not None:
+            for strategy in evidence["strategies"]:
+                _, receipt = self.__views.apply_market(
+                    evidence, {"strategy_id": strategy["id"], **selected["market"]}
+                )
+                market_receipts.append(receipt)
+        return _combine(
+            evidence,
+            self.__views.bundle_id,
+            selected,
+            feature_recipe,
+            stock_receipt,
+            market_receipts,
+        )
+
+    def close(self):
+        if self.__views is not None:
+            self.__views.close()
+            self.__views = None
+        self.__source = None
+
+    def __enter__(self):
+        if self.__views is None:
+            raise ValueError("The prepared stock-market context has been released")
+        return self
+
+    def __exit__(self, *_error):
+        self.close()

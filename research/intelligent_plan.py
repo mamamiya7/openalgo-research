@@ -56,6 +56,7 @@ def build_plan(portfolio, *, interval):
     trailing = portfolio.get("automatic_research", {}).get("version") in (
         "automatic-hypotheses-v6",
         "automatic-hypotheses-v7",
+        "automatic-hypotheses-v8",
     )
     joint = (
         trailing
@@ -232,7 +233,10 @@ def build_plan(portfolio, *, interval):
                 method["reason"] = (
                     "Native targets, stops, active holding deadlines and conditional trailing protection."
                 )
-    if portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v7":
+    if portfolio.get("automatic_research", {}).get("version") in (
+        "automatic-hypotheses-v7",
+        "automatic-hypotheses-v8",
+    ):
         payload["methods"].append(
             {
                 "id": "native_timing",
@@ -241,4 +245,29 @@ def build_plan(portfolio, *, interval):
             }
         )
         payload["budget"].update(timing_probe_limit=24, min_joint_refinement_proposals=8)
+    if portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v8":
+        payload["budget"].update(
+            proposals=192,
+            proposals_per_fit=48,
+            fits=4,
+            screening_proposals=128,
+            refinement_proposals=64,
+            max_simulations=320,
+            max_finalists=1,
+            max_neighbors=0,
+            timing_probe_limit=32,
+            timing_probe_limit_per_fit=8,
+            min_joint_refinement_proposals=32,
+            min_joint_refinement_proposals_per_fit=8,
+        )
+        payload["chronology"] = (
+            "Three expanding-prefix fits checked only on their next windows, then a final development fit and reserved final check; fresh capital per account."
+        )
+        payload["methods"].append(
+            {
+                "id": "walk_forward",
+                "status": "admitted",
+                "reason": "Independent seeded Optuna fits use only each earlier prefix; later scores never update its sampler. Requires sufficient recorded dates and holding support.",
+            }
+        )
     return {**payload, "id": fingerprint(payload)}

@@ -660,6 +660,7 @@ it.each([
   ['automatic-hypotheses-v5', 'Preparing stock and market conditions'],
   ['automatic-hypotheses-v6', 'Preparing stock and market conditions'],
   ['automatic-hypotheses-v7', 'Preparing stock and market conditions'],
+  ['automatic-hypotheses-v8', 'Preparing stock and market conditions'],
   ['automatic-entry-conditions-v1', 'Preparing market conditions'],
 ] as const)('reports %s warmup separately from completed execution-price counts', (version, title) => {
   render(
@@ -682,4 +683,19 @@ it.each([
   )
   expect(screen.queryByText('9 of 18 symbols checked')).not.toBeInTheDocument()
   expect(screen.queryByText('Already in OpenAlgo')).not.toBeInTheDocument()
+})
+
+it('reports a frozen walk-forward window check without calling it a shortlist search', () => {
+  render(
+    <ResearchRunProgress
+      job={{
+        ...job({ ...base, stage: 'validation' }),
+        specification: {
+          portfolio: { ...portfolio, automatic_research: { version: 'automatic-hypotheses-v8' } },
+        },
+      }}
+    />
+  )
+  expect(screen.getByRole('status')).toHaveTextContent('Checking the next window')
+  expect(screen.queryByText('Checking shortlisted settings')).not.toBeInTheDocument()
 })

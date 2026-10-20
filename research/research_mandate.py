@@ -123,11 +123,11 @@ def build(evidence, *, inputs_artifact):
         raise ValueError("Research mandate validation mode is unsupported")
     periods = []
     for name, bounds in recipe["periods"].items():
-        if name not in ("search", "check1", "check2", "final"):
+        if name not in ("search", "check1", "check2", "check3", "fit1", "fit2", "fit3", "final"):
             raise ValueError("Research mandate period role is unsupported")
         role = (
             "development_selection"
-            if name == "search"
+            if name in ("search", "fit1", "fit2", "fit3")
             else "reserved_final_verification"
             if name == "final"
             else "development_validation"
@@ -242,6 +242,8 @@ def build(evidence, *, inputs_artifact):
             "live_execution": False,
         },
     }
+    if "walk_forward" in recipe:
+        mandate["validation"]["walk_forward"] = deepcopy(recipe["walk_forward"])
     _bounded(mandate)
     mandate["id"] = fingerprint(mandate)
     _bounded(mandate)

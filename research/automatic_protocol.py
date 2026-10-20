@@ -17,6 +17,7 @@ BENCHMARK_VERSION = "automatic-hypotheses-v4"
 JOINT_VERSION = "automatic-hypotheses-v5"
 TRAILING_VERSION = "automatic-hypotheses-v6"
 TIMING_VERSION = "automatic-hypotheses-v7"
+WALK_FORWARD_VERSION = "automatic-hypotheses-v8"
 HYPOTHESIS_VERSIONS = (
     HYPOTHESIS_VERSION,
     EXPANDED_VERSION,
@@ -24,6 +25,7 @@ HYPOTHESIS_VERSIONS = (
     JOINT_VERSION,
     TRAILING_VERSION,
     TIMING_VERSION,
+    WALK_FORWARD_VERSION,
 )
 PERIODS = ("search", "check1", "check2", "final")
 MIN_SESSIONS = 100
@@ -129,6 +131,7 @@ def automatic_portfolio(portfolio):
         if cfg["trailing_enabled"] and result["automatic_research"]["version"] not in (
             TRAILING_VERSION,
             TIMING_VERSION,
+            WALK_FORWARD_VERSION,
         ):
             search["trailing_pct"] = _range(cfg["trailing_pct"], 99)
         row["search"] = search
@@ -136,7 +139,7 @@ def automatic_portfolio(portfolio):
         "sampler": "tpe",
         "trials": 128
         if result["automatic_research"]["version"]
-        in (JOINT_VERSION, TRAILING_VERSION, TIMING_VERSION)
+        in (JOINT_VERSION, TRAILING_VERSION, TIMING_VERSION, WALK_FORWARD_VERSION)
         else 96
         if result["automatic_research"]["version"] == BENCHMARK_VERSION
         else 84
@@ -147,6 +150,10 @@ def automatic_portfolio(portfolio):
         "objective": "balanced",
         "seed": 0,
     }
+    if result["automatic_research"]["version"] == WALK_FORWARD_VERSION:
+        # Each expanding prefix gets its own seeded fit. No later-window score
+        # is told to that fit's sampler. This is a distinct versioned programme.
+        result["optimization"]["trials"] = 192
     return result
 
 
@@ -186,6 +193,18 @@ def compile_recipe(evidence):
         }
         for i, name in enumerate(PERIODS)
     }
+    walk_forward = None
+    if portfolio["automatic_research"]["version"] == WALK_FORWARD_VERSION:
+        from research.walk_forward_protocol import build
+
+        walk_forward = build(evidence)
+        if walk_forward["status"] != "ready":
+            raise ValueError(
+                "Walk-forward research needs more signal history for separate training, "
+                "later checks and final verification: " + walk_forward["reason"]
+            )
+        periods = deepcopy(walk_forward["periods"])
+        validation_mode = "chronological"
     if intelligent and validation_mode == "exploratory_only":
         periods = {
             name: {"from": sessions[0], "to": sessions[-1], "sessions": count} for name in PERIODS
@@ -288,6 +307,7 @@ def compile_recipe(evidence):
             JOINT_VERSION,
             TRAILING_VERSION,
             TIMING_VERSION,
+            WALK_FORWARD_VERSION,
         )
         if joint:
             from research.joint_stock_market import catalog
@@ -349,7 +369,7 @@ def compile_recipe(evidence):
             payload["policies"]["unsupported"] = (
                 "original-scanner reconstruction, arbitrary Boolean stacks, volume, unregistered indicators, live execution or statistical confidence claims"
             )
-        if payload["version"] in (TRAILING_VERSION, TIMING_VERSION):
+        if payload["version"] in (TRAILING_VERSION, TIMING_VERSION, WALK_FORWARD_VERSION):
             from research.automatic_trailing import descriptor
 
             payload["trailing_research"] = descriptor(evidence["strategies"])
@@ -357,11 +377,27 @@ def compile_recipe(evidence):
                 "off is one canonical candidate; positive distances enable trailing; "
                 "unchanged original settings remain a separate baseline"
             )
-        if payload["version"] == TIMING_VERSION:
+        if payload["version"] in (TIMING_VERSION, WALK_FORWARD_VERSION):
             from research.automatic_timing import descriptor as timing_descriptor
 
             payload["timing_research"] = timing_descriptor(evidence)
             payload["policies"]["coverage"] = payload["timing_research"]["policy"]
+        if walk_forward is not None:
+            payload["walk_forward"] = walk_forward
+            payload["budget"].update(
+                proposals=192,
+                proposals_per_fit=48,
+                fits=4,
+                max_simulations=320,
+                max_final_verification_evaluations=2,
+                max_finalists=1,
+                max_neighbors=0,
+            )
+            payload["selection"]["max_finalists"] = 1
+            payload["policies"].update(
+                selection="Refit only on each earlier expanding prefix; later scores never feed its sampler. All three next-window and cost checks precede the final development refit and frozen choice.",
+                cost_stress="Each next-window account at max(2 * cost_bps, cost_bps + 5); slippage unchanged",
+            )
         if validation_mode == "exploratory_only":
             payload["policies"]["final"] = (
                 "No untouched later period; exploratory ranking only, never a validated recommendation"
@@ -397,9 +433,9 @@ def slice_period(evidence, name):
     from research.portfolio_coverage import prepare
     from research.portfolio_validation import _snapshot
 
-    if name not in PERIODS:
-        raise ValueError("Choose a recorded automatic research period")
     recipe = compile_recipe(evidence)
+    if name not in recipe["periods"]:
+        raise ValueError("Choose a recorded automatic research period")
     if evidence.get("automatic_recipe") is not None and evidence["automatic_recipe"] != recipe:
         raise ValueError("Saved automatic research recipe or frozen inputs changed")
     period = recipe["periods"][name]
@@ -413,7 +449,10 @@ def slice_period(evidence, name):
         for row in requirement_strategies(evidence["portfolio"], evidence["strategies"])
     }
     strategies, purged = [], 0
-    timing_union = recipe["version"] == TIMING_VERSION and evidence.get("timing_cohort") is not None
+    timing_union = (
+        recipe["version"] in (TIMING_VERSION, WALK_FORWARD_VERSION)
+        and evidence.get("timing_cohort") is not None
+    )
     for row in evidence["strategies"]:
         chosen = []
         cfg = requirements[row["id"]]["config"]
