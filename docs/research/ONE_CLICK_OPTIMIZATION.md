@@ -12,8 +12,9 @@ cash per window, with no continuous-return or statistical-confidence claim.
 
 The mandate, causal Historify preparation, supported methods and original financial
 assumptions are retained. Short or sparse history stops admission. Explicit older
-scopes remain unchanged. This source increment has not changed the normal app or
-public distribution. The dated defaults below describe their own prior milestones.
+scopes remain unchanged. The normal development installation was updated from
+`f39f0a1b7`; public ZIPs remain unchanged. The dated defaults below describe their
+own prior milestones.
 
 ## Current default and decision flow — 11 October 2026
 

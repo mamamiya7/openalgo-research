@@ -1,6 +1,6 @@
 # OpenAlgo Research status
 
-## Expanding validation — 20 October 2026 development source
+## Expanding validation — 20 October 2026 development and local activation
 
 The [v8 expanding-refit workflow](WALK_FORWARD_20261020.md) follows the frozen
 mandate/evidence foundation. Three independent earlier-prefix Optuna fits are
@@ -14,8 +14,13 @@ and results; Optuna plots describe only the final 48-proposal fit.
 New unconfigured VectorBT setups select v8 in development source. Explicit v2–v7
 scopes, checkpoints and reports retain their identities. A job-local validated
 context avoids repeated full history validation without changing gate receipts;
-legacy public gates remain fully validating. Normal installation and public ZIPs
-have not been updated by this increment. Method expansion remains next after
+legacy public gates remain fully validating. The normal Windows installation was
+updated from `f39f0a1b7`, including the mandate/evidence foundation, and the
+development branch was pushed. All 60 saved run identities, configuration and
+Historify bytes were preserved. The existing account, new served UI and fresh
+research-worker heartbeat were checked; no new research or trading job was run.
+A source/UI rollback snapshot is retained locally. Public ZIPs remain unchanged.
+Method expansion remains next after
 this validation foundation, not part of this implementation.
 
 Qualification: 587 distinct current targeted backend cases and 217 frontend cases
@@ -46,8 +51,8 @@ constrained portfolio research,
 robust selection and regime suitability. Native rule-source and wider asset admission
 follow; the audit's workflow refinements are the final consolidation pass. Existing
 causal preparation, period-use reservations, v7 timing and engine adapters are reused.
-The later packages remain planned; v8 is development source, not an installed or
-public release.
+The later packages remain planned; v8 is locally activated development, not a new
+public ZIP release.
 
 The fresh normal-app audit inspected the library, setup, saved custom study and
 report, trials/settings, trade chart/replay and save dialog. Controlled evidence

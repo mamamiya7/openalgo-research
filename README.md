@@ -48,8 +48,8 @@ Daily inputs remain daily, and saved older studies keep their original scope.
 The latest development increment adds [expanding validation](docs/research/WALK_FORWARD_20261020.md):
 three earlier fits checked on later windows, then a final development refit and
 separate final comparison. It retains full development histories and shows each
-window's actual settings and results. This increment is source-only; the normal
-installation and public download have not been updated with it.
+window's actual settings and results. This increment is activated in the local
+development installation; the public download remains preview.7.
 
 The next workflow increment previews CSV counts and dates before setup, simplifies
 experiment navigation to **Overview → Setup → Results → Saved setups**, and lets

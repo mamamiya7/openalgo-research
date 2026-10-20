@@ -1,6 +1,6 @@
 # Expanding research validation — 20 October 2026
 
-Development source only. This extends the [saved-evidence foundation](DEVELOPMENT_EVIDENCE_20261011.md)
+Locally activated development source; no new public ZIP release. This extends the [saved-evidence foundation](DEVELOPMENT_EVIDENCE_20261011.md)
 under a new `automatic-hypotheses-v8` recipe. It does not reinterpret v2–v7 reports,
 replace native VectorBT accounts or publish a new distribution.
 
@@ -103,4 +103,7 @@ This implements the expanding-refit slice of delivery package 2. Learned
 transform fitting, continuous carry, statistical uncertainty, richer robust
 selection, new method waves and broader asset admission remain later work.
 There is no claim of a universal optimum or that three passing windows establish
-future profitability. Normal installation and public release are separate actions.
+future profitability. Local activation from `f39f0a1b7` preserved all 60 saved
+runs, configuration and Historify, and confirmed the existing account, new UI and
+worker heartbeat. No new broker acquisition or research/trading job was launched.
+Public ZIP release remains a separate action.
