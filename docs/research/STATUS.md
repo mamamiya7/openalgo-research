@@ -1,6 +1,6 @@
 # OpenAlgo Research status
 
-## Execution-aware portfolio research — 21 October 2026 qualified development
+## Execution-aware portfolio research — 21 October 2026 local activation
 
 The [v10 core increment](EXECUTION_CORE_20261021.md) adds native ATR exits,
 distinct stop-risk sizing and hard entry limits on gross/symbol exposure,
@@ -14,7 +14,12 @@ follow-up preserves those rules through Custom search.
 495 distinct backend and 230 frontend checks passed, plus a full real
 VectorBT/Optuna programme with 268 native accounts, compatibility and production
 build checks. Resource repetitions and independent numerical review are recorded
-in the contract. Existing saved numerical identities remain unchanged. Public
+in the contract. Activated locally from `95d654bae` and pushed to
+`codex/native-research-refinement`. The existing account, served UI, authenticated
+route and worker heartbeat passed startup checks. All 63 saved run identities,
+configuration and Historify bytes were preserved. A local source/UI rollback
+snapshot is retained; no new research or trading job was started.
+Existing saved numerical identities remain unchanged. Public
 release ZIPs are unchanged; this is a bounded first execution/portfolio increment,
 not completed capacity, turnover, correlation-allocation or live resizing work.
 
