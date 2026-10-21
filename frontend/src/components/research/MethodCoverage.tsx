@@ -41,6 +41,7 @@ export function MethodCoverage({
       'automatic-hypotheses-v9',
       'automatic-hypotheses-v10',
       'automatic-hypotheses-v11',
+      'automatic-hypotheses-v12',
     ].includes(recipeVersion ?? '')
   )
     return null
@@ -318,7 +319,12 @@ function MethodRow({
 }: {
   row: ResearchMethodCoverageRow
   label: string
-  parts: Array<{ id: string; label: string; formula: string; requirements: string[] }>
+  parts: Array<{
+    id: string
+    label: string
+    formula: string
+    requirements: string[]
+  }>
   expanded: boolean
   onToggle: () => void
   unknown: React.ReactNode

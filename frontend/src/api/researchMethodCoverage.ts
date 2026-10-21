@@ -66,12 +66,18 @@ export interface ResearchMethodCoverage {
       | 'automatic-hypotheses-v9'
       | 'automatic-hypotheses-v10'
       | 'automatic-hypotheses-v11'
+      | 'automatic-hypotheses-v12'
     catalog_id: string
     family_count: number
     hypothesis_count: number
     methods: ResearchMethodDefinition[]
     families: ResearchMethodFamily[]
-    blocked_families: Array<{ id: string; label: string; status: 'unsupported'; reason: string }>
+    blocked_families: Array<{
+      id: string
+      label: string
+      status: 'unsupported'
+      reason: string
+    }>
   }
   fits: Array<{
     id: 'fit1' | 'fit2' | 'fit3' | 'search'

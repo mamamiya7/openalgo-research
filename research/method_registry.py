@@ -16,6 +16,7 @@ RECIPE_VERSION = "automatic-hypotheses-v8"
 EXPANDED_RECIPE_VERSION = "automatic-hypotheses-v9"
 EXECUTION_RECIPE_VERSION = "automatic-hypotheses-v10"
 PRIORITY_RECIPE_VERSION = "automatic-hypotheses-v11"
+TURNOVER_RECIPE_VERSION = "automatic-hypotheses-v12"
 CATALOG_ID = "bd3cd74734aac954372b379f88c4fb45b74f18de797824e2e389c5831ff87c28"
 EXPANDED_CATALOG_ID = "2c8b8afcb6c378f82ba54198eb0ac4ae67769c3dda533b28a2cadfdcdfdc8c88"
 MAX_BYTES = 64 * 1024
@@ -204,6 +205,7 @@ def pinned_hypotheses(recipe_version=RECIPE_VERSION):
         EXPANDED_RECIPE_VERSION,
         EXECUTION_RECIPE_VERSION,
         PRIORITY_RECIPE_VERSION,
+        TURNOVER_RECIPE_VERSION,
     ):
         from research.expanded_stock_market import catalog as expanded
 
@@ -225,7 +227,12 @@ def catalog(recipe_version=RECIPE_VERSION):
         method = asdict(spec)
         if (
             recipe_version
-            in (EXPANDED_RECIPE_VERSION, EXECUTION_RECIPE_VERSION, PRIORITY_RECIPE_VERSION)
+            in (
+                EXPANDED_RECIPE_VERSION,
+                EXECUTION_RECIPE_VERSION,
+                PRIORITY_RECIPE_VERSION,
+                TURNOVER_RECIPE_VERSION,
+            )
             and spec.id == "momentum"
         ):
             method["observations"] = "N+1 prior consecutive closes; N=5,10,20 or60"
@@ -288,7 +295,12 @@ def catalog(recipe_version=RECIPE_VERSION):
         "recipe_version": recipe_version,
         "catalog_id": EXPANDED_CATALOG_ID
         if recipe_version
-        in (EXPANDED_RECIPE_VERSION, EXECUTION_RECIPE_VERSION, PRIORITY_RECIPE_VERSION)
+        in (
+            EXPANDED_RECIPE_VERSION,
+            EXECUTION_RECIPE_VERSION,
+            PRIORITY_RECIPE_VERSION,
+            TURNOVER_RECIPE_VERSION,
+        )
         else CATALOG_ID,
         "family_count": 32,
         "hypothesis_count": len(rows),
@@ -302,7 +314,7 @@ def catalog(recipe_version=RECIPE_VERSION):
         result["execution_scope"] = (
             "The same108 registered entry conditions; finite percentage or ATR exits and risk-constrained sizing are materialized from a separate frozen execution-search contract and do not add indicator families"
         )
-    if recipe_version == PRIORITY_RECIPE_VERSION:
+    if recipe_version in (PRIORITY_RECIPE_VERSION, TURNOVER_RECIPE_VERSION):
         result["execution_scope"] = (
             "The same108 registered entry conditions, finite ATR/percentage exits and risk-constrained sizing; one causal global entry priority is searched separately, without adding indicator families"
         )

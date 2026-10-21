@@ -60,6 +60,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v9",
         "automatic-hypotheses-v10",
         "automatic-hypotheses-v11",
+        "automatic-hypotheses-v12",
     )
     joint = (
         trailing
@@ -242,6 +243,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v9",
         "automatic-hypotheses-v10",
         "automatic-hypotheses-v11",
+        "automatic-hypotheses-v12",
     ):
         payload["methods"].append(
             {
@@ -256,6 +258,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v9",
         "automatic-hypotheses-v10",
         "automatic-hypotheses-v11",
+        "automatic-hypotheses-v12",
     ):
         payload["budget"].update(
             proposals=192,
@@ -285,6 +288,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v9",
         "automatic-hypotheses-v10",
         "automatic-hypotheses-v11",
+        "automatic-hypotheses-v12",
     ):
         from research.expanded_stock_market import FEATURE_VERSION, catalog, recipe
 
@@ -307,6 +311,7 @@ def build_plan(portfolio, *, interval):
     if portfolio.get("automatic_research", {}).get("version") in (
         "automatic-hypotheses-v10",
         "automatic-hypotheses-v11",
+        "automatic-hypotheses-v12",
     ):
         payload["budget"].update(
             proposals=256,
@@ -338,7 +343,10 @@ def build_plan(portfolio, *, interval):
         payload["objective"] = (
             "Balanced net return minus drawdown under frozen hard risk limits; never increase declared allocation or order ceilings"
         )
-    if portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v11":
+    if portfolio.get("automatic_research", {}).get("version") in (
+        "automatic-hypotheses-v11",
+        "automatic-hypotheses-v12",
+    ):
         payload["budget"].update(
             proposals=272,
             proposals_per_fit=68,

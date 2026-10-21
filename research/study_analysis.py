@@ -38,6 +38,7 @@ def _trailing_axes(experiment):
             "automatic-hypotheses-v9",
             "automatic-hypotheses-v10",
             "automatic-hypotheses-v11",
+            "automatic-hypotheses-v12",
         )
         or not isinstance(specification, dict)
         or specification.get("version") != TRAILING_VERSION
@@ -85,6 +86,7 @@ def _timing_axes(experiment):
             "automatic-hypotheses-v9",
             "automatic-hypotheses-v10",
             "automatic-hypotheses-v11",
+            "automatic-hypotheses-v12",
         )
         or not isinstance(specification, dict)
         or specification.get("version") != TIMING_VERSION
@@ -148,10 +150,11 @@ def reconstruct_study(experiment):
         raise ValueError("Study analysis supports at most 1,000 recorded proposals")
     maximum = (
         PRIORITY_MAX_AXES
-        if experiment.get("experiment_version") == "automatic-hypotheses-v11"
+        if experiment.get("experiment_version")
+        in ("automatic-hypotheses-v11", "automatic-hypotheses-v12")
         else EXECUTION_MAX_AXES
         if experiment.get("experiment_version")
-        in ("automatic-hypotheses-v10", "automatic-hypotheses-v11")
+        in ("automatic-hypotheses-v10", "automatic-hypotheses-v11", "automatic-hypotheses-v12")
         else MAX_AXES
     )
     if not isinstance(axes, dict) or len(axes) > maximum:
@@ -168,6 +171,7 @@ def reconstruct_study(experiment):
     expected_execution = {
         "automatic-hypotheses-v10": "research-execution-search-v1",
         "automatic-hypotheses-v11": "research-execution-search-v2",
+        "automatic-hypotheses-v12": "research-execution-search-v3",
     }.get(experiment.get("experiment_version"))
     if expected_execution and (
         not isinstance(experiment.get("execution_research"), dict)
@@ -178,6 +182,7 @@ def reconstruct_study(experiment):
         if experiment.get("experiment_version") not in (
             "automatic-hypotheses-v10",
             "automatic-hypotheses-v11",
+            "automatic-hypotheses-v12",
         ):
             raise ValueError("Execution research needs its recorded programme")
         from research.execution_search import axes as execution_domains
@@ -206,6 +211,7 @@ def reconstruct_study(experiment):
                     "automatic-hypotheses-v9",
                     "automatic-hypotheses-v10",
                     "automatic-hypotheses-v11",
+                    "automatic-hypotheses-v12",
                 ):
                     from research.expanded_stock_market import catalog
 

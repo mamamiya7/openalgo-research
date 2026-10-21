@@ -96,7 +96,8 @@ def plan(evidence, max_evaluations):
     maximum = (
         EXECUTION_MAX_EVALUATIONS
         if isinstance(automatic, dict)
-        and automatic.get("version") in ("automatic-hypotheses-v10", "automatic-hypotheses-v11")
+        and automatic.get("version")
+        in ("automatic-hypotheses-v10", "automatic-hypotheses-v11", "automatic-hypotheses-v12")
         else MAX_EVALUATIONS
     )
     limits = {
@@ -384,6 +385,34 @@ def build(
         "account": account,
         "return_policy": RETURN_POLICY,
     }
+    if "research_opportunity_basis" in report:
+        opportunity = report["research_opportunity_basis"]
+        _, opportunity_account = _basis(opportunity, timeline)
+        if opportunity_account != account or any(
+            opportunity[key] != basis[key] for key in IDENTITIES if key != "cohort_id"
+        ):
+            raise ValueError("Development opportunity evidence changed its source observations")
+        if any(
+            opportunity["comparison"].get(key) != basis["comparison"].get(key)
+            for key in ("period", "currency", "capital", "risk_limits")
+        ):
+            raise ValueError("Development opportunity evidence changed its account assumptions")
+        actual_execution = basis["comparison"].get("execution", {})
+        common_execution = opportunity["comparison"].get("execution", {})
+        if {
+            key: value for key, value in actual_execution.items() if key != "entry_conditions"
+        } != common_execution:
+            raise ValueError(
+                "Development opportunity evidence changed native execution assumptions"
+            )
+        if "entry_conditions" in actual_execution and actual_execution["entry_conditions"] != {
+            "version": "research-joint-entry-conditions-v2",
+            "hypothesis": hypothesis,
+        }:
+            raise ValueError(
+                "Development opportunity condition does not match the actual hypothesis"
+            )
+        metadata["research_opportunity_basis"] = deepcopy(opportunity)
     if "automatic_stock_condition" in report:
         metadata["stock_condition"] = _stock_condition(
             report["automatic_stock_condition"], hypothesis
@@ -435,6 +464,11 @@ def verify_shard(shard, *, descriptor):
                 **(
                     {"automatic_stock_condition": shard["stock_condition"]}
                     if "stock_condition" in shard
+                    else {}
+                ),
+                **(
+                    {"research_opportunity_basis": shard["research_opportunity_basis"]}
+                    if "research_opportunity_basis" in shard
                     else {}
                 ),
             },

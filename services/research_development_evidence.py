@@ -167,6 +167,17 @@ class DevelopmentEvidenceWriter:
             self.bytes += descriptor.get("bytes", 0)
         return deepcopy(descriptor)
 
+    def read(self, evaluation_id):
+        """Read one verified, owned development shard without retaining a cache."""
+        descriptor = self.entries.get(evaluation_id)
+        if not descriptor or descriptor.get("status") != "retained":
+            return None
+        shard = read_artifact(
+            self.store, descriptor["inputs_artifact"], max_bytes=contract.MAX_SHARD_BYTES
+        )
+        contract.verify_shard(shard, descriptor=descriptor)
+        return shard
+
     def reconcile(self, evaluations):
         expected = {}
         for key, row in evaluations.items():

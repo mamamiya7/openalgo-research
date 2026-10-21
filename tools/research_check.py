@@ -103,6 +103,8 @@ REQUIRED_RESEARCH_FILES = {
     "research/automatic_walk_forward.py",
     "research/execution_policy.py",
     "research/execution_activity.py",
+    "research/recommendation_evidence.py",
+    "research/recommendation_plan.py",
     "research/execution_features.py",
     "research/execution_search.py",
     "research/walk_forward_protocol.py",

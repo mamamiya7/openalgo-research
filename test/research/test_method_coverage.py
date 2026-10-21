@@ -48,6 +48,10 @@ def prepared_metadata(
         from test_priority_research import prepared as priority_prepared
 
         value = priority_prepared()
+    elif version == "automatic-hypotheses-v12":
+        from test_turnover_integration import prepared as turnover_prepared
+
+        value = turnover_prepared()
     recipe = value["automatic_recipe"]
     source = "1" * 64
     mandate = build_mandate(value, inputs_artifact=source)
@@ -77,7 +81,10 @@ def prepared_metadata(
         "binding": binding,
         "plan": plan(
             value,
-            384 if version in ("automatic-hypotheses-v10", "automatic-hypotheses-v11") else 320,
+            384
+            if version
+            in ("automatic-hypotheses-v10", "automatic-hypotheses-v11", "automatic-hypotheses-v12")
+            else 320,
         ),
         "status": "collecting",
         "entries": {},
@@ -101,13 +108,18 @@ def prepared_metadata(
         "automatic-hypotheses-v9",
         "automatic-hypotheses-v10",
         "automatic-hypotheses-v11",
+        "automatic-hypotheses-v12",
     ):
         from research.automatic_walk_forward import _screening_program
         from research.expanded_stock_market import catalog as expanded_catalog
         from research.expanded_stock_market import markers as materialize_markers
 
         selected_catalog = expanded_catalog()
-        if version in ("automatic-hypotheses-v10", "automatic-hypotheses-v11"):
+        if version in (
+            "automatic-hypotheses-v10",
+            "automatic-hypotheses-v11",
+            "automatic-hypotheses-v12",
+        ):
             from research.execution_search import axes as execution_axes
 
             axes.update(execution_axes(recipe["execution_research"]))
@@ -131,7 +143,11 @@ def prepared_metadata(
             materialized = apply_choices(
                 _candidate(base, params), params, recipe["trailing_research"]
             )
-            if version in ("automatic-hypotheses-v10", "automatic-hypotheses-v11"):
+            if version in (
+                "automatic-hypotheses-v10",
+                "automatic-hypotheses-v11",
+                "automatic-hypotheses-v12",
+            ):
                 from research.execution_search import apply_choices as execution_choices
 
                 materialized = execution_choices(materialized, params, recipe["execution_research"])

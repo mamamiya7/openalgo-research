@@ -1,5 +1,23 @@
 # OpenAlgo Research status
 
+## Turnover and recommendation evidence — 21 October 2026 development source
+
+The [v12 core increment](TURNOVER_RECOMMENDATION_20261021.md) adds a fixed daily
+buy-notional budget based on first-opening account equity. Actual buys consume
+it; sells never replenish it and exits remain unrestricted. New automatic studies
+also challenge their development winner using paired daily-return ranges,
+higher costs and actual nearby settings before freezing a recommendation.
+Weak, sparse or incompatible evidence retains the unchanged reference.
+
+The programme remains 272 proposals and at most 384 native accounts. Original
+opportunity attestations allow intentional entry-filter differences while
+retaining strict data/account comparability. Saved recovery, old report identities,
+515 distinct scoped backend checks, 237 frontend checks, native/resource checks
+and the complete service journey are qualified in the dated contract. TypeScript,
+source compatibility and the production build pass. The normal installation remains v11; this
+increment is not yet installed or publicly released. Core capacity/allocation
+and broader recommendation calibration remain ahead of general UI polish.
+
 ## Competing-entry research — 21 October 2026 local activation
 
 The [v11 priority increment](PRIORITY_CORE_20261021.md) tests source order,

@@ -96,3 +96,4 @@ need → drill into the specific file. Don't load everything at once.
 - [Expanding research validation](research/WALK_FORWARD_20261020.md): development v8 chronology, independent fits, native accounts, recovery and qualification scope.
 - [Method admission foundation](research/METHOD_ADMISSION_20261020.md): typed pinned method definitions, on-demand saved coverage, qualification and the next numerical expansion.
 - [Core method expansion](research/METHOD_EXPANSION_20261021.md): v9 momentum domains, mandatory probes, bounded search, native recovery and preserved legacy identities.
+- [Turnover and recommendation evidence](research/TURNOVER_RECOMMENDATION_20261021.md): v12 fixed daily buy budgets, comparable opportunities, paired uncertainty and actual neighbouring-account gates.

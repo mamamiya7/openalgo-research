@@ -65,6 +65,7 @@ def _search_inputs(evidence, calculation):
             "automatic-hypotheses-v9",
             "automatic-hypotheses-v10",
             "automatic-hypotheses-v11",
+            "automatic-hypotheses-v12",
         ):
             from research.automatic_hypotheses import checkpoint_rows
 
@@ -82,6 +83,7 @@ def _search_inputs(evidence, calculation):
                             "automatic-hypotheses-v9",
                             "automatic-hypotheses-v10",
                             "automatic-hypotheses-v11",
+                            "automatic-hypotheses-v12",
                         )
                         else "automatic_stock_features"
                     ],
@@ -97,6 +99,7 @@ def _search_inputs(evidence, calculation):
                     "automatic-hypotheses-v9",
                     "automatic-hypotheses-v10",
                     "automatic-hypotheses-v11",
+                    "automatic-hypotheses-v12",
                 )
                 else "search"
             )
@@ -179,6 +182,7 @@ def _validated_rows(evidence, saved, completed):
         "automatic-hypotheses-v9",
         "automatic-hypotheses-v10",
         "automatic-hypotheses-v11",
+        "automatic-hypotheses-v12",
     ):
         from research.automatic_hypotheses import checkpoint_rows
 
@@ -191,6 +195,7 @@ def _validated_rows(evidence, saved, completed):
                 "automatic-hypotheses-v9",
                 "automatic-hypotheses-v10",
                 "automatic-hypotheses-v11",
+                "automatic-hypotheses-v12",
             )
             else saved["trials"]
         )

@@ -17,7 +17,8 @@ export type PortfolioAxis =
   | 'allocation_pct'
 export type PortfolioRange = { min: number; max: number; step: number }
 export interface PortfolioRiskLimits {
-  version: 'research-risk-limits-v1'
+  version: 'research-risk-limits-v1' | 'research-risk-limits-v2'
+  max_daily_buy_turnover_pct?: number
   max_gross_exposure_pct: number
   max_symbol_exposure_pct: number
   max_open_positions: number
@@ -25,7 +26,10 @@ export interface PortfolioRiskLimits {
   max_total_stop_risk_pct: number
 }
 export interface ExecutionPolicy {
-  version: 'research-execution-aware-v1' | 'research-execution-aware-v2'
+  version:
+    | 'research-execution-aware-v1'
+    | 'research-execution-aware-v2'
+    | 'research-execution-aware-v3'
   entry_priority?: 'source' | 'reversed_source' | 'lower_stop_risk'
   exit_mode: 'percent' | 'atr'
   sizing: 'allocation' | 'stop_risk'
@@ -44,7 +48,11 @@ export interface PortfolioCapabilities {
     reason?: string
     intervals: string[]
   }>
-  optimizers: Array<{ id: 'optuna'; available: boolean; samplers: Array<'tpe' | 'grid'> }>
+  optimizers: Array<{
+    id: 'optuna'
+    available: boolean
+    samplers: Array<'tpe' | 'grid'>
+  }>
 }
 export interface PortfolioStrategy {
   id: string
@@ -153,7 +161,12 @@ export interface BenchmarkRequest {
 export interface BenchmarkAnalysis {
   version: string
   status: 'available' | 'partial' | 'unavailable'
-  descriptor: { symbol: string; exchange: string; interval: string; role: 'benchmark' }
+  descriptor: {
+    symbol: string
+    exchange: string
+    interval: string
+    role: 'benchmark'
+  }
   dates: { from: string | null; to: string | null }
   observations: number
   omitted_sessions: number
@@ -202,7 +215,11 @@ export interface MarketConditionsAnalysis {
     net_pnl: number
     evidence: 'limited' | 'descriptive'
   }>
-  finding: { status: 'observed' | 'insufficient'; text: string; next_step: string }
+  finding: {
+    status: 'observed' | 'insufficient'
+    text: string
+    next_step: string
+  }
   basis: string[]
   recipe: Record<string, unknown>
 }
@@ -233,7 +250,10 @@ export interface ConditionReplayResult {
     pending: number
     unaffected: number
   }
-  baseline: { summary: Record<string, number | string | null>; evaluation_basis?: EvaluationBasis }
+  baseline: {
+    summary: Record<string, number | string | null>
+    evaluation_basis?: EvaluationBasis
+  }
   delta: {
     net_return_pct: number | null
     max_drawdown_pct: number | null
@@ -277,7 +297,11 @@ export type EvaluationBasis =
         currency: string
         capital: number
         execution: Record<string, unknown>
-        costs: Array<{ strategy_id: string; cost_bps: number; slippage_bps: number }>
+        costs: Array<{
+          strategy_id: string
+          cost_bps: number
+          slippage_bps: number
+        }>
       }
     }
 export interface PortfolioReportContext {
@@ -359,6 +383,7 @@ export interface PortfolioRequest {
       | 'automatic-hypotheses-v9'
       | 'automatic-hypotheses-v10'
       | 'automatic-hypotheses-v11'
+      | 'automatic-hypotheses-v12'
   }
   entry_conditions?: EntryConditions
   optimization?: {
@@ -468,6 +493,19 @@ export interface PortfolioResult {
     selection_basis: string
   }
   execution?: {
+    turnover?: {
+      version: 'research-daily-buy-turnover-v1'
+      max_daily_buy_turnover_pct: number
+      basis: string
+      daily: Array<{
+        date: string
+        opening_equity: number
+        buy_budget: number
+        buy_notional: number
+        remaining_buy_budget: number
+        buy_turnover_pct: number
+      }>
+    }
     engine: string
     engine_version?: string
     interval?: string
@@ -503,12 +541,19 @@ export interface PortfolioResult {
     recommendation_id: string
     objective_winner_id?: string
     selected_strategies: PortfolioSettings[]
-    optimizer: { sampler: string; objective_definition: string; version: string }
+    optimizer: {
+      sampler: string
+      objective_definition: string
+      version: string
+    }
     specification: NonNullable<PortfolioRequest['optimization']>
     counts: Record<string, number>
     analysis_catalog?: AnalysisMetric[]
     study_analysis?: StudyAnalysis
-    search_space?: { axes: Record<string, PortfolioRange>; proposal_budget?: number }
+    search_space?: {
+      axes: Record<string, PortfolioRange>
+      proposal_budget?: number
+    }
   }
 }
 export interface DevelopmentEvidenceMetadata {
@@ -541,8 +586,24 @@ export interface WalkForwardFindings {
   selection_policy: string
 }
 export interface AutomaticResearchFindings {
+  recommendation_checks?: {
+    version: string
+    status: 'supported' | 'not_supported' | 'insufficient' | 'unsupported'
+    reasons: string[]
+    uncertainty?: {
+      ranges?: Array<{
+        block_sessions: number
+        lower_bps: number
+        upper_bps: number
+      }>
+    }
+    limitations?: string[]
+  }
   execution_research?: {
-    version: 'research-execution-findings-v1' | 'research-execution-findings-v2'
+    version:
+      | 'research-execution-findings-v1'
+      | 'research-execution-findings-v2'
+      | 'research-execution-findings-v3'
     entry_priorities?: Array<NonNullable<ExecutionPolicy['entry_priority']>>
     selected_entry_priority?: ExecutionPolicy['entry_priority']
     risk_limits: PortfolioRiskLimits
@@ -645,7 +706,11 @@ export interface ResearchResultDescriptor {
   config_id: string | null
   calculation_id: string | null
   period: 'selection' | 'evaluation' | 'full' | null
-  dates: { from: string | null; to: string | null; status: 'recorded' | 'unknown' }
+  dates: {
+    from: string | null
+    to: string | null
+    status: 'recorded' | 'unknown'
+  }
   input_dates: { from: string | null; to: string | null }
   candidate: {
     study_job_id: string
@@ -660,7 +725,12 @@ export interface ResearchResultDescriptor {
   evaluation_basis_id: string | null
   cohort_id: string | null
   reservation: Record<string, unknown> | null
-  setup: { id: string; name: string; number: number; parent_version_id?: string } | null
+  setup: {
+    id: string
+    name: string
+    number: number
+    parent_version_id?: string
+  } | null
 }
 export interface PortfolioJob {
   failure?: ResearchFailureReceipt | null
@@ -680,7 +750,12 @@ export interface PortfolioJob {
   queue_position?: number | null
   counts?: Record<string, unknown>
   specification?: { portfolio?: PortfolioRequest }
-  source_summary?: { signal_count?: number; date_from?: string; date_to?: string; name?: string }
+  source_summary?: {
+    signal_count?: number
+    date_from?: string
+    date_to?: string
+    name?: string
+  }
   result?: PortfolioResult
 }
 export interface TimingAdmission {
@@ -698,7 +773,11 @@ export interface TimingAdmission {
     reason: string
     fixed_clocks: { entry_time: string | null; exit_time: string | null }
     searched_deadline: string | null
-    constraints: Array<{ parameter: string; value?: number | string; maximum?: number }>
+    constraints: Array<{
+      parameter: string
+      value?: number | string
+      maximum?: number
+    }>
     dormant_parameters: string[]
   }>
 }
@@ -713,8 +792,17 @@ export interface PortfolioPreview {
       automatic: Array<{ id: string; label: string; decision: string }>
       retained: Array<{ id: string; label: string; decision: string }>
       not_searched: Array<{ id: string; label: string; reason: string }>
-      prerequisites: Array<{ id: string; label: string; status: string; reason: string }>
-      scope: { exhaustive: false; recommendation_basis: string; searched_parameters: number }
+      prerequisites: Array<{
+        id: string
+        label: string
+        status: string
+        reason: string
+      }>
+      scope: {
+        exhaustive: false
+        recommendation_basis: string
+        searched_parameters: number
+      }
     }
     summary: {
       searched_parameters: number
@@ -755,7 +843,11 @@ export interface PortfolioAnalysisStatus {
 }
 export type PortfolioSource = ResearchSource & {
   created_at?: number
-  receipt: ResearchSource['receipt'] & { name?: string; filename?: string; input_type?: string }
+  receipt: ResearchSource['receipt'] & {
+    name?: string
+    filename?: string
+    input_type?: string
+  }
 }
 const base = '/scanner-research/api'
 export const portfolioResearch = {
@@ -788,7 +880,12 @@ export const portfolioResearch = {
     ).data
   },
   async capabilities(signal?: AbortSignal): Promise<PortfolioCapabilities> {
-    return (await webClient.get(`${base}/portfolio/capabilities`, { signal, timeout: 15000 })).data
+    return (
+      await webClient.get(`${base}/portfolio/capabilities`, {
+        signal,
+        timeout: 15000,
+      })
+    ).data
   },
   async upload(file: File, signal?: AbortSignal): Promise<ResearchSource> {
     const form = new FormData()
@@ -802,7 +899,10 @@ export const portfolioResearch = {
   },
   async preflight(portfolio: PortfolioRequest, signal?: AbortSignal): Promise<PortfolioPreview> {
     return (
-      await webClient.post(`${base}/portfolio/preflight`, portfolio, { signal, timeout: 30000 })
+      await webClient.post(`${base}/portfolio/preflight`, portfolio, {
+        signal,
+        timeout: 30000,
+      })
     ).data
   },
   async submit(portfolio: PortfolioRequest, request_id: string): Promise<PortfolioJob> {
@@ -812,7 +912,10 @@ export const portfolioResearch = {
   },
   async job(id: string, signal?: AbortSignal): Promise<PortfolioJob> {
     return (
-      await webClient.get(`${base}/jobs/${encodeURIComponent(id)}`, { signal, timeout: 15000 })
+      await webClient.get(`${base}/jobs/${encodeURIComponent(id)}`, {
+        signal,
+        timeout: 15000,
+      })
     ).data
   },
   async jobs(

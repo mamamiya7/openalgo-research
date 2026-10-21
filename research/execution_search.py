@@ -13,6 +13,7 @@ from research.report_contract import fingerprint
 
 VERSION = "research-execution-search-v1"
 PRIORITY_SEARCH_VERSION = "research-execution-search-v2"
+TURNOVER_SEARCH_VERSION = "research-execution-search-v3"
 ENTRY_PRIORITIES = ("source", "reversed_source", "lower_stop_risk")
 PRIORITY_AXIS = "portfolio.entry_priority"
 ENTRY_PRIORITY_POLICY = "One account-wide entry ordering, frozen across strategies: source order, reversed source order, or lower modeled stop-loss fraction of entry cash cost first. Source order breaks ties. Only information available at each entry may order competing signals; chronology and cash release are unchanged."
@@ -60,7 +61,11 @@ def descriptor(evidence):
     from research.execution_policy import normalize_limits, normalize_policy
 
     portfolio = evidence["portfolio"]
-    priority = portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v11"
+    turnover = portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v12"
+    priority = portfolio.get("automatic_research", {}).get("version") in (
+        "automatic-hypotheses-v11",
+        "automatic-hypotheses-v12",
+    )
     limits = normalize_limits(portfolio.get("risk_limits"))
     if portfolio.get("risk_limits") != limits:
         raise ValueError("Execution research needs frozen canonical account risk limits")
@@ -75,7 +80,10 @@ def descriptor(evidence):
             or (
                 priority
                 and (
-                    policy["version"] != "research-execution-aware-v2"
+                    policy["version"]
+                    != (
+                        "research-execution-aware-v3" if turnover else "research-execution-aware-v2"
+                    )
                     or policy.get("entry_priority") != "source"
                 )
             )
@@ -101,7 +109,11 @@ def descriptor(evidence):
     if not 1 <= len(originals) <= 8 or len({row["id"] for row in originals}) != len(originals):
         raise ValueError("Execution research requires one to eight distinct strategies")
     value = {
-        "version": PRIORITY_SEARCH_VERSION if priority else VERSION,
+        "version": TURNOVER_SEARCH_VERSION
+        if turnover
+        else PRIORITY_SEARCH_VERSION
+        if priority
+        else VERSION,
         "risk_limits": limits,
         "strategies": originals,
         "atr": "Wilder ATR14 from prior observed daily OHLC at each recorded native entry; missing ATR excludes the common source opportunity",
@@ -117,6 +129,10 @@ def descriptor(evidence):
             entry_priority_policy=ENTRY_PRIORITY_POLICY,
             screening="Four registered ATR probes, four portfolio probes and two global priority probes per independent fit, then joint refinement",
         )
+    if turnover:
+        value["turnover_policy"] = (
+            "Fixed user daily buy-notional ceiling on first-opening account equity; actual slipped buys exclude fees; exits never consume or replenish the budget. Never optimised."
+        )
     return {**value, "id": fingerprint(value)}
 
 
@@ -125,7 +141,8 @@ def _validate(specification):
 
     if (
         not isinstance(specification, dict)
-        or specification.get("version") not in (VERSION, PRIORITY_SEARCH_VERSION)
+        or specification.get("version")
+        not in (VERSION, PRIORITY_SEARCH_VERSION, TURNOVER_SEARCH_VERSION)
         or specification.get("id")
         != fingerprint({key: value for key, value in specification.items() if key != "id"})
         or not isinstance(specification.get("strategies"), list)
@@ -140,7 +157,8 @@ def _validate(specification):
     ):
         raise ValueError("The frozen execution choices changed")
     rows = specification["strategies"]
-    priority = specification["version"] == PRIORITY_SEARCH_VERSION
+    turnover = specification["version"] == TURNOVER_SEARCH_VERSION
+    priority = specification["version"] in (PRIORITY_SEARCH_VERSION, TURNOVER_SEARCH_VERSION)
     if priority and (
         specification.get("entry_priorities") != list(ENTRY_PRIORITIES)
         or specification.get("entry_priority_policy") != ENTRY_PRIORITY_POLICY
@@ -183,7 +201,10 @@ def _validate(specification):
             or (
                 priority
                 and (
-                    policy["version"] != "research-execution-aware-v2"
+                    policy["version"]
+                    != (
+                        "research-execution-aware-v3" if turnover else "research-execution-aware-v2"
+                    )
                     or policy.get("entry_priority") != "source"
                 )
             )
@@ -202,7 +223,7 @@ def axes(specification):
             ("portfolio_choice", "portfolio_choices"),
         )
     }
-    if specification["version"] == PRIORITY_SEARCH_VERSION:
+    if specification["version"] in (PRIORITY_SEARCH_VERSION, TURNOVER_SEARCH_VERSION):
         result[PRIORITY_AXIS] = {"type": "categorical", "choices": list(ENTRY_PRIORITIES)}
     return result
 
@@ -211,7 +232,8 @@ def apply_choices(strategies, params, specification):
     from research.execution_policy import normalize_policy
 
     _validate(specification)
-    priority = specification["version"] == PRIORITY_SEARCH_VERSION
+    turnover = specification["version"] == TURNOVER_SEARCH_VERSION
+    priority = specification["version"] in (PRIORITY_SEARCH_VERSION, TURNOVER_SEARCH_VERSION)
     chosen_priority = params.get(PRIORITY_AXIS)
     if priority and chosen_priority not in ENTRY_PRIORITIES:
         raise ValueError("Entry priority must belong to its frozen account choices")
@@ -256,7 +278,12 @@ def apply_choices(strategies, params, specification):
                 ),
                 "risk_limits": specification["risk_limits"],
                 **(
-                    {"version": "research-execution-aware-v2", "entry_priority": chosen_priority}
+                    {
+                        "version": "research-execution-aware-v3"
+                        if turnover
+                        else "research-execution-aware-v2",
+                        "entry_priority": chosen_priority,
+                    }
                     if priority
                     else {}
                 ),
@@ -296,10 +323,15 @@ def original_sizing(settings, specification):
                 "sizing": "allocation",
             }
         )
-    if specification["version"] == PRIORITY_SEARCH_VERSION and (
+    if specification["version"] in (PRIORITY_SEARCH_VERSION, TURNOVER_SEARCH_VERSION) and (
         len({row["execution_policy"].get("entry_priority") for row in result}) != 1
         or any(
-            row["execution_policy"].get("version") != "research-execution-aware-v2"
+            row["execution_policy"].get("version")
+            != (
+                "research-execution-aware-v3"
+                if specification["version"] == TURNOVER_SEARCH_VERSION
+                else "research-execution-aware-v2"
+            )
             for row in result
         )
     ):
@@ -314,7 +346,7 @@ def probes(midpoint, specification):
     for row in specification["strategies"]:
         base[f"{row['id']}.execution_choice"] = "percent"
         base[f"{row['id']}.portfolio_choice"] = "original"
-    if specification["version"] == PRIORITY_SEARCH_VERSION:
+    if specification["version"] in (PRIORITY_SEARCH_VERSION, TURNOVER_SEARCH_VERSION):
         base[PRIORITY_AXIS] = "source"
     result = [
         {**base, **{f"{row['id']}.{axis}": choice["id"] for row in specification["strategies"]}}
@@ -324,7 +356,7 @@ def probes(midpoint, specification):
         )
         for choice in choices
     ]
-    if specification["version"] == PRIORITY_SEARCH_VERSION:
+    if specification["version"] in (PRIORITY_SEARCH_VERSION, TURNOVER_SEARCH_VERSION):
         result.extend({**base, PRIORITY_AXIS: value} for value in ENTRY_PRIORITIES[1:])
     return result
 

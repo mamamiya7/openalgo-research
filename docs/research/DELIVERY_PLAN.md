@@ -17,8 +17,12 @@ journey, using the same prices and calculation bounds. The subsequent
 stop-risk sizing and hard exposure/position/risk limits. The
 [v11 priority increment](PRIORITY_CORE_20261021.md) adds causal ordering of
 competing entries and actual filled trading activity. Turnover budgets and
-admitted capacity/allocation work remain in package 4; recommendation uncertainty
-follows in package 5. Complete the qualified
+admitted capacity/allocation work remain in package 4. The
+[v12 turnover/recommendation increment](TURNOVER_RECOMMENDATION_20261021.md)
+implements the fixed daily entry budget and first package 5 evidence gates:
+paired daily-return ranges, cost sensitivity and actual neighbouring accounts,
+with baseline fallback before final confirmation. Broader recommendation
+calibration and trade-off selection remain planned. Complete the qualified
 research and portfolio features before general UI polish. Learned transforms,
 continuous carry and the later packages
 remain planned.
@@ -51,7 +55,7 @@ label the least bad losing trial a trading recommendation.
 ### Existing foundations to retain
 
 The installed development app is OpenAlgo 2.0.2.7. New unconfigured VectorBT
-optimisations select v11 in current source, with 108 registered stock/market choices across 32 families,
+optimisations select v12 in current source, with 108 registered stock/market choices across 32 families,
 conditional exits/trailing and admitted clock alternatives. Current bounds remain
 272 proposals across four independent fits and 384 native calculations. Older
 scopes retain their identities; the v7 limits below remain its dated contract.

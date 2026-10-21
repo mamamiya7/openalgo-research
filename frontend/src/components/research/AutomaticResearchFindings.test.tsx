@@ -10,8 +10,16 @@ import { researchDefaults } from '@/lib/researchDraft'
 import { AutomaticResearchFindings } from './AutomaticResearchFindings'
 
 function findings(): Findings {
-  const summary = { net_return_pct: 2.8, max_drawdown_pct: 0.4, closed_trades: 26 }
-  const baseline = { net_return_pct: 0.9, max_drawdown_pct: 1.2, closed_trades: 30 }
+  const summary = {
+    net_return_pct: 2.8,
+    max_drawdown_pct: 0.4,
+    closed_trades: 26,
+  }
+  const baseline = {
+    net_return_pct: 0.9,
+    max_drawdown_pct: 1.2,
+    closed_trades: 30,
+  }
   return {
     version: 'automatic-trade-management-v1',
     status: 'supported',
@@ -41,13 +49,41 @@ function findings(): Findings {
         selection_score: 0.8,
       },
     ],
-    final: { summary, baseline_summary: baseline, score_delta: 1.3, supports: true },
+    final: {
+      summary,
+      baseline_summary: baseline,
+      score_delta: 1.3,
+      supports: true,
+    },
     counts: { proposals: 50, simulations: 64, finalists: 3 },
     unsupported_families: ['Indicators', 'Market regimes'],
   }
 }
 
 describe('automatic research findings', () => {
+  it('keeps qualified uncertainty evidence in research details without a future-profit claim', () => {
+    const data = findings()
+    data.version = 'automatic-hypotheses-v12'
+    data.recommendation_checks = {
+      version: 'research-recommendation-evidence-v1',
+      status: 'supported',
+      reasons: [],
+      uncertainty: { ranges: [{ block_sessions: 5, lower_bps: 1, upper_bps: 3 }] },
+    }
+    render(<AutomaticResearchFindings findings={data} />)
+    expect(
+      screen.getByRole('region', {
+        name: 'Recommendation evidence',
+        hidden: true,
+      })
+    ).not.toBeVisible()
+    expect(
+      screen.getByText('Daily return, higher-cost and nearby-setting checks passed.')
+    ).toBeInTheDocument()
+    expect(screen.getByText(/not a probability of future profit/)).toBeInTheDocument()
+    expect(screen.getByText(/5-session blocks: 1 to 3 basis points per day/)).toBeInTheDocument()
+  })
+
   it('keeps matched original-sizing diagnostics inside development details', async () => {
     const data = findings()
     data.version = 'automatic-hypotheses-v10'
@@ -128,7 +164,10 @@ describe('automatic research findings', () => {
         developmentEvidence={{
           version: 'research-development-evidence-v1',
           status: 'partial',
-          entries: { kept: { status: 'retained' }, absent: { status: 'unavailable' } },
+          entries: {
+            kept: { status: 'retained' },
+            absent: { status: 'unavailable' },
+          },
           reserved_final_excluded: true,
           marks: 24,
           bytes: 1000,
@@ -285,10 +324,18 @@ describe('automatic research findings', () => {
     expect(screen.getByText('Automatic research')).toBeVisible()
     expect(screen.queryByText('Exploratory research')).not.toBeInTheDocument()
     expect(
-      screen.getByRole('heading', { name: 'The improvement held up on later dates' })
+      screen.getByRole('heading', {
+        name: 'The improvement held up on later dates',
+      })
     ).toBeVisible()
-    const table = screen.getByRole('table', { name: 'Final period comparison' })
-    expect(within(table).getByRole('row', { name: 'Original settings 0.9% 1.2% 30' })).toBeVisible()
+    const table = screen.getByRole('table', {
+      name: 'Final period comparison',
+    })
+    expect(
+      within(table).getByRole('row', {
+        name: 'Original settings 0.9% 1.2% 30',
+      })
+    ).toBeVisible()
     expect(within(table).getByRole('row', { name: 'Trial 9 2.8% 0.4% 26' })).toBeVisible()
     expect(screen.getByText(/Final check · 1 Aug/)).toHaveTextContent('10 Sept 2026')
     expect(screen.getByText(/50 proposals/)).not.toBeVisible()
@@ -304,7 +351,9 @@ describe('automatic research findings', () => {
     data.status = 'not_supported'
     data.headline = 'No reliable improvement over your original settings'
     render(<AutomaticResearchFindings findings={data} />)
-    const table = screen.getByRole('table', { name: 'Final period comparison' })
+    const table = screen.getByRole('table', {
+      name: 'Final period comparison',
+    })
     expect(within(table).getAllByRole('row')).toHaveLength(2)
     expect(within(table).queryByText('Trial 9')).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: data.headline })).toBeVisible()
@@ -314,7 +363,11 @@ describe('automatic research findings', () => {
     const data = findings()
     data.status = 'inconclusive'
     data.headline = 'More signals are needed for the final check'
-    data.final!.summary = { net_return_pct: null, max_drawdown_pct: Number.NaN, closed_trades: 0 }
+    data.final!.summary = {
+      net_return_pct: null,
+      max_drawdown_pct: Number.NaN,
+      closed_trades: 0,
+    }
     render(<AutomaticResearchFindings findings={data} />)
     const row = screen.getByRole('row', { name: 'Trial 9 — — 0' })
     expect(row).toBeVisible()
@@ -387,7 +440,9 @@ it('keeps fold settings and fresh-cash comparisons in details, preserving the fi
   expect(within(final).getByRole('row', { name: 'Trial 9 2.8% 0.4% 26' })).toBeVisible()
   expect(screen.getByText('Window 1')).not.toBeVisible()
   await userEvent.click(screen.getByText('Research details'))
-  const table = screen.getByRole('table', { name: 'Walk-forward window comparison' })
+  const table = screen.getByRole('table', {
+    name: 'Walk-forward window comparison',
+  })
   expect(within(table).getAllByRole('row')).toHaveLength(4)
   expect(within(table).getByText('Condition 1')).toBeVisible()
   expect(within(table).getByText('Condition 3')).toBeVisible()
@@ -417,7 +472,10 @@ it.each([
     data.walk_forward!.folds[0].training = undefined as unknown as NonNullable<
       Findings['walk_forward']
     >['folds'][number]['training']
-  else data.walk_forward = { folds: [null, null, null] } as unknown as Findings['walk_forward']
+  else
+    data.walk_forward = {
+      folds: [null, null, null],
+    } as unknown as Findings['walk_forward']
   render(<AutomaticResearchFindings findings={data} />)
   expect(screen.queryByText(/Refit and checked on 3 later windows/)).not.toBeInTheDocument()
   expect(
@@ -505,7 +563,10 @@ it('keeps the expanded programme later-window evidence inside research details',
   const data = walkForwardFindings()
   data.version = 'automatic-hypotheses-v9'
   render(<AutomaticResearchFindings findings={data} />)
-  const table = screen.getByRole('table', { name: 'Walk-forward window comparison', hidden: true })
+  const table = screen.getByRole('table', {
+    name: 'Walk-forward window comparison',
+    hidden: true,
+  })
   expect(table).not.toBeVisible()
   await userEvent.click(screen.getByText('Research details'))
   expect(table).toBeVisible()

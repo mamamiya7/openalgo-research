@@ -104,6 +104,12 @@ describe('continuous portfolio report', () => {
     value.execution = {
       engine: 'vectorbt',
       entry_priority: 'source',
+      turnover: {
+        version: 'research-daily-buy-turnover-v1',
+        max_daily_buy_turnover_pct: 40,
+        basis: 'First opening equity',
+        daily: [],
+      },
       activity: {
         version: 'research-execution-activity-v1',
         buy_notional: 50000,
@@ -120,6 +126,10 @@ describe('continuous portfolio report', () => {
     }
     mount(value)
     const activity = screen.getByLabelText('Filled trading activity')
+    expect(screen.getByLabelText('Daily turnover constraint')).toHaveTextContent('40%')
+    expect(screen.getByLabelText('Daily turnover constraint')).toHaveTextContent(
+      'exits remain unrestricted'
+    )
     expect(activity).toHaveTextContent('3 entry fills')
     expect(activity).toHaveTextContent('2 exit fills')
     expect(activity).toHaveTextContent('75% of starting cash traded, counting buys and sells')

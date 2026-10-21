@@ -30,6 +30,7 @@ function recordedWalkForward(findings: Findings): WalkForwardFindings | undefine
       'automatic-hypotheses-v9',
       'automatic-hypotheses-v10',
       'automatic-hypotheses-v11',
+      'automatic-hypotheses-v12',
     ].includes(findings.version) ||
     receipt?.version !== 'research-walk-forward-findings-v1' ||
     !receipt ||
@@ -257,6 +258,7 @@ export function AutomaticResearchFindings({
             'automatic-hypotheses-v9',
             'automatic-hypotheses-v10',
             'automatic-hypotheses-v11',
+            'automatic-hypotheses-v12',
           ].includes(findings.version) &&
             selectedSettings?.map((strategy) => (
               <p key={strategy.id} className="text-sm">
@@ -347,6 +349,30 @@ export function AutomaticResearchFindings({
           {findings.comparison?.status === 'unavailable' && (
             <p className="text-muted-foreground">Comparison chart: {findings.comparison.reason}</p>
           )}
+          {findings.recommendation_checks?.version === 'research-recommendation-evidence-v1' && (
+            <section aria-label="Recommendation evidence" className="space-y-2">
+              <p className="font-medium">Development robustness checks</p>
+              <p>
+                {findings.recommendation_checks.status === 'supported'
+                  ? 'Daily return, higher-cost and nearby-setting checks passed.'
+                  : 'The evidence did not qualify a stronger recommendation; unchanged settings remain the reference.'}
+              </p>
+              {findings.recommendation_checks.reasons.map((reason) => (
+                <p key={reason} className="text-muted-foreground">
+                  {reason}
+                </p>
+              ))}
+              {findings.recommendation_checks.uncertainty?.ranges?.map((range) => (
+                <p key={range.block_sessions} className="text-muted-foreground tabular-nums">
+                  {range.block_sessions}-session blocks: {number(range.lower_bps)} to{' '}
+                  {number(range.upper_bps)} basis points per day above the reference.
+                </p>
+              ))}
+              <p className="text-muted-foreground">
+                Historical sensitivity only; this is not a probability of future profit.
+              </p>
+            </section>
+          )}
           {walkForward ? (
             <WalkForwardChecks receipt={walkForward} />
           ) : findings.recipe.validation_mode === 'exploratory_only' ? (
@@ -371,11 +397,17 @@ export function AutomaticResearchFindings({
             simulations · {number(findings.counts.finalists)} finalist
             {findings.counts.finalists === 1 ? '' : 's'}
           </p>
-          {['automatic-hypotheses-v10', 'automatic-hypotheses-v11'].includes(findings.version) &&
+          {[
+            'automatic-hypotheses-v10',
+            'automatic-hypotheses-v11',
+            'automatic-hypotheses-v12',
+          ].includes(findings.version) &&
             findings.execution_research &&
-            ['research-execution-findings-v1', 'research-execution-findings-v2'].includes(
-              findings.execution_research.version
-            ) && (
+            [
+              'research-execution-findings-v1',
+              'research-execution-findings-v2',
+              'research-execution-findings-v3',
+            ].includes(findings.execution_research.version) && (
               <div className="overflow-x-auto">
                 <p className="mb-2 font-medium">Sizing comparison · development dates</p>
                 <table

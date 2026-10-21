@@ -82,23 +82,27 @@ function duration(row: Pick<StudyActivityRow, 'started_at' | 'finished_at'>) {
 }
 
 function proposalLabel(index: number, recipeVersion?: string) {
-  const perFit =
-    recipeVersion === 'automatic-hypotheses-v11'
-      ? 68
-      : recipeVersion === 'automatic-hypotheses-v10'
-        ? 64
-        : 48
+  const perFit = ['automatic-hypotheses-v11', 'automatic-hypotheses-v12'].includes(
+    recipeVersion ?? ''
+  )
+    ? 68
+    : recipeVersion === 'automatic-hypotheses-v10'
+      ? 64
+      : 48
   if (
     ![
       'automatic-hypotheses-v8',
       'automatic-hypotheses-v9',
       'automatic-hypotheses-v10',
       'automatic-hypotheses-v11',
+      'automatic-hypotheses-v12',
     ].includes(recipeVersion ?? '')
   )
     return { label: `Trial ${index + 1}` }
   if (!Number.isInteger(index) || index < 0 || index >= perFit * 4)
-    return { label: `Proposal ${Number.isInteger(index) && index >= 0 ? index + 1 : '—'}` }
+    return {
+      label: `Proposal ${Number.isInteger(index) && index >= 0 ? index + 1 : '—'}`,
+    }
   const fit = Math.floor(index / perFit)
   return {
     label: `${fit === 3 ? 'Final fit' : `Fit ${fit + 1}`} · Trial ${(index % perFit) + 1}`,
@@ -160,6 +164,7 @@ function Activity({
     'automatic-hypotheses-v9',
     'automatic-hypotheses-v10',
     'automatic-hypotheses-v11',
+    'automatic-hypotheses-v12',
   ].includes(recipeVersion ?? '')
   function setting(key: string, index: number) {
     if (key === 'portfolio.entry_priority') return 'Account entry priority'

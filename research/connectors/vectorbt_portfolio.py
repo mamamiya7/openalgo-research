@@ -17,6 +17,8 @@ EXECUTION_ADAPTER_VERSION = "vectorbt-portfolio-adapter-v2"
 EXECUTION_POLICY_VERSION = "vectorbt-joint-causal-bars-v2"
 PRIORITY_ADAPTER_VERSION = "vectorbt-portfolio-adapter-v3"
 PRIORITY_POLICY_VERSION = "vectorbt-joint-causal-bars-v3"
+TURNOVER_ADAPTER_VERSION = "vectorbt-portfolio-adapter-v4"
+TURNOVER_POLICY_VERSION = "vectorbt-joint-causal-bars-v4"
 MAX_MATRIX_CELLS = 500_000
 MAX_SIGNALS = 25_000
 MAX_STRATEGIES = 20
@@ -188,6 +190,9 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
     priority_aware = execution_aware and "entry_priority" in strategies[0]["execution_policy"]
     priority = strategies[0]["execution_policy"]["entry_priority"] if priority_aware else None
     limits = strategies[0]["execution_policy"]["risk_limits"] if execution_aware else None
+    turnover_aware = execution_aware and "max_daily_buy_turnover_pct" in limits
+    # Evaluation-local and bounded by snapshot dates; no retained account state.
+    turnover_days = [] if turnover_aware else None
     minute = snapshot["provenance"]["interval"] == "1m"
     timeline = snapshot["timeline" if minute else "sessions"]
     if progress:
@@ -359,6 +364,11 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
             ),
             "open_positions": requested if len(held) < limits["max_open_positions"] else 0,
         }
+        if turnover_aware:
+            daily = turnover_days[-1]
+            capacities["daily_buy_turnover"] = (
+                max(0.0, daily["buy_budget"] - daily["buy_notional"]) / fill
+            )
         policy = strategy["execution_policy"]
         risk_target = None
         if policy["sizing"] == "stop_risk":
@@ -392,6 +402,13 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
             "total_stop_risk_before": stop_risk,
             "accepted_cash_budget": quantity * cash_per_share,
         }
+        if turnover_aware:
+            execution_details[col].update(
+                daily_opening_equity=daily["opening_equity"],
+                daily_buy_budget=daily["buy_budget"],
+                daily_buy_notional_before=daily["buy_notional"],
+                daily_buy_capacity_shares=capacities["daily_buy_turnover"],
+            )
         if quantity < 1:
             rejected[col] = "Execution limits cannot admit one whole share: " + ", ".join(
                 constraints or ["requested_cash_budget"]
@@ -418,6 +435,26 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
         equity = float(
             nb.get_group_value_nb(0, count, c.last_cash[c.group], c.last_position, c.last_val_price)
         )
+        if turnover_aware and (
+            not turnover_days or turnover_days[-1]["date"] != timeline[c.i][:10]
+        ):
+            # Freeze at the first recorded opening of the date, before any
+            # opening exits or buys. Later minute marks/proceeds never reset it.
+            if not math.isfinite(equity):
+                raise ValueError("Daily turnover requires a finite opening account equity")
+            buy_budget = max(0.0, equity) * (limits["max_daily_buy_turnover_pct"] / 100)
+            if not math.isfinite(buy_budget):
+                raise ValueError("Daily turnover requires a finite opening buy budget")
+            turnover_days.append(
+                {
+                    "date": timeline[c.i][:10],
+                    "opening_at": timeline[c.i],
+                    "opening_equity": equity,
+                    "buy_budget": buy_budget,
+                    "buy_notional": 0.0,
+                    "buy_fills": 0,
+                }
+            )
         entry_cols = entries.get(c.i, [])
         if priority_aware:
             scores = {}
@@ -534,6 +571,13 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
                 rejected[c.col] = "VectorBT did not fill the opening order"
             return
         if c.position_before == 0:
+            if turnover_aware:
+                # Debit only confirmed native fills, using slipped fill price
+                # and excluding fees. Rejections and sales consume no budget.
+                turnover_days[-1]["buy_notional"] += float(c.order_result.size) * float(
+                    c.order_result.price
+                )
+                turnover_days[-1]["buy_fills"] += 1
             filled_at[c.col], entry_price[c.col], high_water[c.col] = (
                 c.i,
                 c.order_result.price,
@@ -589,6 +633,7 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
         vbt.__version__,
         TradeStatus,
         execution_details=execution_details,
+        turnover_days=turnover_days,
     )
 
 
@@ -662,6 +707,7 @@ def _report(
     trade_status,
     *,
     execution_details=None,
+    turnover_days=None,
 ):
     import numpy as np
 
@@ -865,5 +911,32 @@ def _report(
             )
             report["limits"][1] = (
                 "Opening exits precede entries under the recorded same-opening priority; ties use original source order. Within-bar and closing proceeds cannot retroactively fund opening entries."
+            )
+        if turnover_days is not None:
+            report["policy_version"] = TURNOVER_POLICY_VERSION
+            report["execution"].update(
+                adapter_version=TURNOVER_ADAPTER_VERSION,
+                turnover={
+                    "version": "research-daily-buy-turnover-v1",
+                    "max_daily_buy_turnover_pct": strategies[0]["execution_policy"]["risk_limits"][
+                        "max_daily_buy_turnover_pct"
+                    ],
+                    "basis": "Actual filled BUY size times slipped price, excluding fees, divided by equity frozen at the first recorded opening of each trading date. Carried positions use that opening price. Sales never consume or replenish the budget; protective exits remain unrestricted. This is a trading activity bound, not liquidity or market-impact capacity.",
+                    "daily": [
+                        {
+                            **day,
+                            "remaining_buy_budget": max(
+                                0.0, day["buy_budget"] - day["buy_notional"]
+                            ),
+                            "buy_turnover_pct": day["buy_notional"] / day["opening_equity"] * 100
+                            if day["opening_equity"] > 0
+                            else None,
+                        }
+                        for day in turnover_days
+                    ],
+                },
+            )
+            report["limits"].append(
+                "Daily buy-turnover clips new whole-share entries against a frozen first-opening equity budget; actual sales do not replenish it and protective exits are never blocked."
             )
     return report

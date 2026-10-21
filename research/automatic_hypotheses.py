@@ -14,6 +14,7 @@ from research.automatic_protocol import (
     EXECUTION_VERSION,
     METHOD_VERSION,
     PRIORITY_VERSION,
+    TURNOVER_VERSION,
     compile_recipe,
     slice_period,
 )
@@ -63,6 +64,8 @@ def _display_history(trials):
 
 def policy_for_version(version):
     """Return a fresh bounded policy; a newer recipe never changes old replay."""
+    if version == TURNOVER_VERSION:
+        return {**policy_for_version(PRIORITY_VERSION), "version": version}
     if version == PRIORITY_VERSION:
         return {
             **policy_for_version(EXECUTION_VERSION),
@@ -225,6 +228,7 @@ def checkpoint_rows(saved):
         METHOD_VERSION,
         EXECUTION_VERSION,
         PRIORITY_VERSION,
+        TURNOVER_VERSION,
     ):
         from research.automatic_walk_forward import checkpoint_rows as walk_forward_rows
 

@@ -211,6 +211,7 @@ function stageTitle(activity?: ResearchActivity, optimizing = false, recipe?: st
           'automatic-hypotheses-v9',
           'automatic-hypotheses-v10',
           'automatic-hypotheses-v11',
+          'automatic-hypotheses-v12',
         ].includes(recipe ?? '')
       )
         return 'Checking the next window'
@@ -260,7 +261,10 @@ function statusTitle(job: ProgressJob, optimizing: boolean) {
 
 export function researchRunStatus(job: ProgressJob): string {
   return statusTitle(
-    { ...job, activity: job.activity?.version === 1 ? job.activity : undefined },
+    {
+      ...job,
+      activity: job.activity?.version === 1 ? job.activity : undefined,
+    },
     job.kind === 'portfolio_optimize'
   )
 }
@@ -515,7 +519,11 @@ export function ResearchRunProgress({ job }: { job: ProgressJob }) {
           : undefined,
     },
     ...(checking ? [{ name: 'Check', Icon: ShieldCheck, summary: undefined }] : []),
-    { name: 'Results', Icon: Flag, summary: job.status === 'completed' ? 'Ready' : undefined },
+    {
+      name: 'Results',
+      Icon: Flag,
+      summary: job.status === 'completed' ? 'Ready' : undefined,
+    },
   ]
   return (
     <div

@@ -224,6 +224,11 @@ def policy_for_request(snapshot, spec):
                 == "research-execution-aware-v2"
             ):
                 from research.execution_policy import PRIORITY_POLICY_VERSION as POLICY_VERSION
+            if (
+                spec["portfolio"]["strategies"][0]["execution_policy"].get("version")
+                == "research-execution-aware-v3"
+            ):
+                from research.execution_policy import TURNOVER_POLICY_VERSION as POLICY_VERSION
 
         return POLICY_VERSION
     execution = spec.get("execution") if isinstance(spec, dict) else None

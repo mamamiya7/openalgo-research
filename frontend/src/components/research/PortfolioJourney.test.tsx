@@ -22,6 +22,7 @@ import {
   applySuggestedSearch,
   freshPortfolioDraft,
   defaultRiskLimits,
+  limitsForScope,
   portfolioDraftIssue,
   portfolioEngineIssue,
   portfolioPayload,
@@ -94,8 +95,18 @@ const strategy = account.portfolio.strategies[0]
 const capabilities: PortfolioCapabilities = {
   max_strategies: 8,
   engines: [
-    { id: 'vectorbt', name: 'VectorBT', available: true, intervals: ['D', '1m'] },
-    { id: 'nautilus', name: 'NautilusTrader', available: false, intervals: ['D', '1m'] },
+    {
+      id: 'vectorbt',
+      name: 'VectorBT',
+      available: true,
+      intervals: ['D', '1m'],
+    },
+    {
+      id: 'nautilus',
+      name: 'NautilusTrader',
+      available: false,
+      intervals: ['D', '1m'],
+    },
   ],
   optimizers: [{ id: 'optuna', available: true, samplers: ['tpe', 'grid'] }],
 }
@@ -148,7 +159,12 @@ const result: PortfolioResult = {
       summary: { closed_trades: 3 },
     },
   ],
-  source: { provider: 'OpenAlgo Historify', interval: '1m', signal_count: 4, strategy_count: 1 },
+  source: {
+    provider: 'OpenAlgo Historify',
+    interval: '1m',
+    signal_count: 4,
+    strategy_count: 1,
+  },
   execution: { engine: 'vectorbt', engine_version: '0.28.5', interval: '1m' },
 }
 const finished: PortfolioJob = {
@@ -193,13 +209,22 @@ beforeEach(() => {
   sessionStorage.clear()
   useAuthStore.setState({ user: null })
   vi.mocked(portfolioResearch.capabilities).mockResolvedValue(capabilities)
-  vi.mocked(portfolioResearch.jobs).mockResolvedValue({ items: [], next_cursor: null })
-  vi.mocked(portfolioResearch.sources).mockResolvedValue({ items: [], next_offset: null })
+  vi.mocked(portfolioResearch.jobs).mockResolvedValue({
+    items: [],
+    next_cursor: null,
+  })
+  vi.mocked(portfolioResearch.sources).mockResolvedValue({
+    items: [],
+    next_offset: null,
+  })
   vi.mocked(portfolioResearch.job).mockResolvedValue(running)
   vi.mocked(portfolioResearch.preflight).mockImplementation(async (portfolio) => ({
     portfolio,
     interval: 'D',
-    receipt: { ...source('a').receipt, strategy_count: portfolio.strategies.length },
+    receipt: {
+      ...source('a').receipt,
+      strategy_count: portfolio.strategies.length,
+    },
     versions: {},
   }))
   vi.mocked(portfolioResearch.submit).mockResolvedValue(running)
@@ -236,7 +261,9 @@ describe('native portfolio consumer journey', () => {
     const original = draft()
     const optimized = selectPortfolioRun(original, true)
     expect(optimized.optimizing).toBe(true)
-    expect(optimized.portfolio.automatic_research).toEqual({ version: 'automatic-hypotheses-v11' })
+    expect(optimized.portfolio.automatic_research).toEqual({
+      version: 'automatic-hypotheses-v12',
+    })
     expect(optimized.portfolio.strategies).toEqual(original.portfolio.strategies)
     expect(optimized.portfolio.capital).toBe(original.portfolio.capital)
     expect(original.portfolio.automatic_research).toBeUndefined()
@@ -251,16 +278,19 @@ describe('native portfolio consumer journey', () => {
       risk_limits: fixed.portfolio.risk_limits,
     }
     const next = selectPortfolioRun(fixed, true)
-    expect(next.portfolio.automatic_research?.version).toBe('automatic-hypotheses-v11')
+    expect(next.portfolio.automatic_research?.version).toBe('automatic-hypotheses-v12')
     expect(next.portfolio.strategies[0].execution_policy).toEqual({
       ...fixed.portfolio.strategies[0].execution_policy,
-      version: 'research-execution-aware-v2',
+      version: 'research-execution-aware-v3',
+      risk_limits: limitsForScope(fixed.portfolio.risk_limits, 'automatic-hypotheses-v12'),
       entry_priority: 'source',
     })
     expect(fixed.portfolio.strategies[0].execution_policy.version).toBe(
       'research-execution-aware-v1'
     )
-    fixed.portfolio.automatic_research = { version: 'automatic-hypotheses-v10' }
+    fixed.portfolio.automatic_research = {
+      version: 'automatic-hypotheses-v10',
+    }
     expect(selectPortfolioRun(fixed, true).portfolio).toEqual(fixed.portfolio)
   })
   it('adds a CSV to a chosen-policy account with fresh trade rules and shared account limits', () => {
@@ -301,6 +331,7 @@ describe('native portfolio consumer journey', () => {
     'automatic-hypotheses-v9',
     'automatic-hypotheses-v10',
     'automatic-hypotheses-v11',
+    'automatic-hypotheses-v12',
   ] as const)('keeps the saved %s recipe when optimizing again', (version) => {
     const saved = draft()
     saved.portfolio.automatic_research = { version }
@@ -315,7 +346,10 @@ describe('native portfolio consumer journey', () => {
     const custom = applySuggestedSearch(draft())
     expect(selectPortfolioRun(custom, true).portfolio.automatic_research).toBeUndefined()
     const conditioned = draft()
-    conditioned.portfolio.entry_conditions = { version: 'research-entry-conditions-v1', rules: [] }
+    conditioned.portfolio.entry_conditions = {
+      version: 'research-entry-conditions-v1',
+      rules: [],
+    }
     expect(selectPortfolioRun(conditioned, true).portfolio.automatic_research).toBeUndefined()
   })
 
@@ -324,7 +358,7 @@ describe('native portfolio consumer journey', () => {
     savedDraft({ ...original, optimizing: true })
     mount()
     await userEvent.click(await screen.findByRole('button', { name: 'Automatic research' }))
-    expect(screen.getByLabelText('Research scope')).toHaveValue('automatic-hypotheses-v11')
+    expect(screen.getByLabelText('Research scope')).toHaveValue('automatic-hypotheses-v12')
     await userEvent.click(screen.getByText('Advanced research options'))
     await userEvent.selectOptions(
       screen.getByLabelText('Research scope'),
@@ -339,7 +373,9 @@ describe('native portfolio consumer journey', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Optimize automatically' }))
     await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
     const sent = vi.mocked(portfolioResearch.submit).mock.calls[0][0]
-    expect(sent.automatic_research).toEqual({ version: 'automatic-hypotheses-v6' })
+    expect(sent.automatic_research).toEqual({
+      version: 'automatic-hypotheses-v6',
+    })
     expect(sent.capital).toBe(original.portfolio.capital)
     expect(sent.strategies[0].config).toEqual(original.portfolio.strategies[0].config)
     expect(sent.strategies[0].allocation_pct).toBe(original.portfolio.strategies[0].allocation_pct)
@@ -350,7 +386,9 @@ describe('native portfolio consumer journey', () => {
   it('does not upgrade a saved automatic recipe when its active approach is clicked', async () => {
     const original = draft()
     original.optimizing = true
-    original.portfolio.automatic_research = { version: 'automatic-hypotheses-v4' }
+    original.portfolio.automatic_research = {
+      version: 'automatic-hypotheses-v4',
+    }
     savedDraft(original)
     mount()
     await userEvent.click(await screen.findByRole('button', { name: 'Automatic research' }))
@@ -365,7 +403,9 @@ describe('native portfolio consumer journey', () => {
     const original = draft()
     original.optimizing = true
     original.portfolio.engine = 'nautilus'
-    original.portfolio.automatic_research = { version: 'automatic-hypotheses-v7' }
+    original.portfolio.automatic_research = {
+      version: 'automatic-hypotheses-v7',
+    }
     expect(portfolioEngineIssue(original)).toMatch(/need VectorBT/)
     expect(original.portfolio.automatic_research.version).toBe('automatic-hypotheses-v7')
   })
@@ -373,12 +413,16 @@ describe('native portfolio consumer journey', () => {
   it('retains the prior stock-and-market recipe when a saved study is reused', () => {
     const original = draft()
     original.optimizing = true
-    original.portfolio.automatic_research = { version: 'automatic-hypotheses-v5' }
+    original.portfolio.automatic_research = {
+      version: 'automatic-hypotheses-v5',
+    }
     expect(selectPortfolioRun(original, true).portfolio.automatic_research).toEqual({
       version: 'automatic-hypotheses-v5',
     })
     original.portfolio.engine = 'nautilus'
-    original.portfolio.automatic_research = { version: 'automatic-hypotheses-v6' }
+    original.portfolio.automatic_research = {
+      version: 'automatic-hypotheses-v6',
+    }
     expect(portfolioEngineIssue(original)).toMatch(/need VectorBT/)
   })
 
@@ -454,13 +498,17 @@ describe('native portfolio consumer journey', () => {
   it('runs automatic research without manual axes and keeps financial inputs unchanged', async () => {
     const original = draft()
     original.optimizing = true
-    original.portfolio.automatic_research = { version: 'automatic-trade-management-v1' }
+    original.portfolio.automatic_research = {
+      version: 'automatic-trade-management-v1',
+    }
     original.portfolio.validation = { train_pct: 80, mode: 'reserve' }
     original.optimization.trials = 123
     original.portfolio.strategies[0].config.cost_bps = 7
     savedDraft(original)
     mount()
-    const start = await screen.findByRole('button', { name: 'Optimize automatically' })
+    const start = await screen.findByRole('button', {
+      name: 'Optimize automatically',
+    })
     expect(screen.queryByRole('region', { name: 'Optimization ranges' })).not.toBeInTheDocument()
     expect(screen.queryByRole('spinbutton', { name: 'Trials' })).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Reserve a later period')).not.toBeInTheDocument()
@@ -468,7 +516,9 @@ describe('native portfolio consumer journey', () => {
     await userEvent.click(start)
     await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
     const sent = vi.mocked(portfolioResearch.submit).mock.calls[0][0]
-    expect(sent.automatic_research).toEqual({ version: 'automatic-trade-management-v1' })
+    expect(sent.automatic_research).toEqual({
+      version: 'automatic-trade-management-v1',
+    })
     expect(sent.optimization).toBeUndefined()
     expect(sent.validation).toBeUndefined()
     expect(sent.strategies[0].search).toEqual({})
@@ -508,12 +558,14 @@ describe('native portfolio consumer journey', () => {
     savedDraft({ ...original, optimizing: true })
     mount()
     await userEvent.click(await screen.findByRole('button', { name: 'Automatic research' }))
-    expect(screen.getByLabelText('Research scope')).toHaveValue('automatic-hypotheses-v11')
+    expect(screen.getByLabelText('Research scope')).toHaveValue('automatic-hypotheses-v12')
     expect(screen.getByText(/Tests percentage and ATR exits/)).not.toBeVisible()
     await userEvent.click(screen.getByRole('button', { name: 'Optimize automatically' }))
     await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
     const sent = vi.mocked(portfolioResearch.submit).mock.calls[0][0]
-    expect(sent.automatic_research).toEqual({ version: 'automatic-hypotheses-v11' })
+    expect(sent.automatic_research).toEqual({
+      version: 'automatic-hypotheses-v12',
+    })
     expect(sent.capital).toBe(original.portfolio.capital)
     expect(sent.strategies[0].config).toEqual(original.portfolio.strategies[0].config)
     expect(sent.strategies[0].allocation_pct).toBe(original.portfolio.strategies[0].allocation_pct)
@@ -528,17 +580,28 @@ describe('native portfolio consumer journey', () => {
     expect(screen.getByLabelText('Gross exposure %')).toHaveValue(100)
     expect(screen.getByLabelText('Per symbol %')).toHaveValue(25)
     expect(screen.getByLabelText('Risk per trade %')).toHaveValue(1)
-    fireEvent.change(screen.getByLabelText('Open positions'), { target: { value: '4' } })
+    expect(screen.getByLabelText('Daily buy budget %')).toHaveValue(100)
+    fireEvent.change(screen.getByLabelText('Daily buy budget %'), { target: { value: '40' } })
+    fireEvent.change(screen.getByLabelText('Open positions'), {
+      target: { value: '4' },
+    })
     await userEvent.click(screen.getByRole('button', { name: 'Optimize automatically' }))
     await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
     const sent = vi.mocked(portfolioResearch.submit).mock.calls[0][0]
-    expect(sent.risk_limits).toEqual({ ...defaultRiskLimits, max_open_positions: 4 })
-    expect(sent.automatic_research?.version).toBe('automatic-hypotheses-v11')
+    expect(sent.risk_limits).toEqual({
+      ...limitsForScope(defaultRiskLimits, 'automatic-hypotheses-v12'),
+      max_open_positions: 4,
+      max_daily_buy_turnover_pct: 40,
+    })
+    expect(sent.automatic_research?.version).toBe('automatic-hypotheses-v12')
   })
 
   it('rejects invalid caps and keeps selected execution rules in fixed requests', () => {
     const current = draft()
-    current.portfolio.risk_limits = { ...defaultRiskLimits, max_open_positions: 0 }
+    current.portfolio.risk_limits = {
+      ...defaultRiskLimits,
+      max_open_positions: 0,
+    }
     expect(portfolioDraftIssue(current)).toMatch(/open positions/)
     current.portfolio.risk_limits.max_open_positions = 4
     current.portfolio.strategies[0].execution_policy = {
@@ -556,7 +619,10 @@ describe('native portfolio consumer journey', () => {
     )
     expect(fixed.risk_limits).toEqual(current.portfolio.risk_limits)
     expect(
-      portfolioEngineIssue({ ...current, portfolio: { ...current.portfolio, engine: 'nautilus' } })
+      portfolioEngineIssue({
+        ...current,
+        portfolio: { ...current.portfolio, engine: 'nautilus' },
+      })
     ).toMatch(/need VectorBT/)
   })
 
@@ -590,7 +656,9 @@ describe('native portfolio consumer journey', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Optimize automatically' }))
     await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
     const sent = vi.mocked(portfolioResearch.submit).mock.calls[0][0]
-    expect(sent.automatic_research).toEqual({ version: 'automatic-trade-management-v2' })
+    expect(sent.automatic_research).toEqual({
+      version: 'automatic-trade-management-v2',
+    })
     expect(sent.validation).toBeUndefined()
     expect(sent.optimization).toBeUndefined()
   })
@@ -624,7 +692,9 @@ describe('native portfolio consumer journey', () => {
 
   it('removes the automatic recipe from a backtest while preserving the saved draft', () => {
     const original = draft()
-    original.portfolio.automatic_research = { version: 'automatic-trade-management-v1' }
+    original.portfolio.automatic_research = {
+      version: 'automatic-trade-management-v1',
+    }
     const payload = portfolioPayload(original)
     expect(payload.automatic_research).toBeUndefined()
     expect(payload.optimization).toBeUndefined()
@@ -642,7 +712,10 @@ describe('native portfolio consumer journey', () => {
     })
     vi.mocked(researchStudyActivity.get).mockImplementation(() => new Promise(() => {}))
     mount('/scanner-research?job=running-job')
-    const button = await screen.findByRole('button', { name: 'Activity', exact: true })
+    const button = await screen.findByRole('button', {
+      name: 'Activity',
+      exact: true,
+    })
     expect(button).toHaveAttribute('aria-expanded', 'false')
     expect(researchStudyActivity.get).not.toHaveBeenCalled()
     await userEvent.click(button)
@@ -675,7 +748,10 @@ describe('native portfolio consumer journey', () => {
     })
     vi.mocked(researchPartialStudy.get).mockImplementation(() => new Promise(() => {}))
     mount('/scanner-research?job=running-job')
-    const button = await screen.findByRole('button', { name: 'Saved trials', exact: true })
+    const button = await screen.findByRole('button', {
+      name: 'Saved trials',
+      exact: true,
+    })
     expect(button).toHaveAttribute('aria-expanded', 'false')
     expect(researchPartialStudy.get).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'Resume run' })).toBeVisible()
@@ -690,7 +766,10 @@ describe('native portfolio consumer journey', () => {
   })
 
   it('does not offer partial trials for a running study or backtest', async () => {
-    vi.mocked(portfolioResearch.job).mockResolvedValue({ ...running, kind: 'portfolio_optimize' })
+    vi.mocked(portfolioResearch.job).mockResolvedValue({
+      ...running,
+      kind: 'portfolio_optimize',
+    })
     mount('/scanner-research?job=running-job')
     await screen.findByRole('button', { name: 'Cancel run', exact: true })
     expect(screen.queryByRole('button', { name: 'Saved trials' })).not.toBeInTheDocument()
@@ -700,7 +779,9 @@ describe('native portfolio consumer journey', () => {
   it('limits suggestions to compatible enabled rules and keeps capital, costs and chosen axes unchanged', () => {
     const daily = draft()
     daily.optimization.trials = 70
-    daily.portfolio.strategies[0].search = { target_pct: { min: 10, max: 30, step: 10 } }
+    daily.portfolio.strategies[0].search = {
+      target_pct: { min: 10, max: 30, step: 10 },
+    }
     const automatic = applySuggestedSearch(daily, true)
     expect(automatic.portfolio.strategies[0].search).toEqual(daily.portfolio.strategies[0].search)
     const suggested = applySuggestedSearch(daily)
@@ -759,7 +840,11 @@ describe('native portfolio consumer journey', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Run optimization' }))
     await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
     const sent = vi.mocked(portfolioResearch.preflight).mock.calls[0][0]
-    expect(sent.optimization).toMatchObject({ trials: 25, sampler: 'tpe', objective: 'balanced' })
+    expect(sent.optimization).toMatchObject({
+      trials: 25,
+      sampler: 'tpe',
+      objective: 'balanced',
+    })
     expect(sent.strategies[0].search).toEqual({
       hold_sessions: { min: 3, max: 7, step: 2 },
       target_pct: { min: 5, max: 15, step: 5 },
@@ -786,7 +871,9 @@ describe('native portfolio consumer journey', () => {
     mount()
     await userEvent.click(screen.getByRole('button', { name: 'Use saved signals' }))
     const dialog = await screen.findByRole('dialog', { name: 'Saved signals' })
-    const rows = await within(dialog).findAllByRole('button', { name: /1 signal/ })
+    const rows = await within(dialog).findAllByRole('button', {
+      name: /1 signal/,
+    })
     expect(rows).toHaveLength(2)
     expect(rows[0].textContent).not.toEqual(rows[1].textContent)
     for (const row of rows) {
@@ -809,7 +896,10 @@ describe('native portfolio consumer journey', () => {
       ...source('c'.repeat(32)),
       receipt: { ...source('c').receipt, filename: 'My breakout.csv' },
     }
-    vi.mocked(portfolioResearch.sources).mockResolvedValue({ items: [named], next_offset: null })
+    vi.mocked(portfolioResearch.sources).mockResolvedValue({
+      items: [named],
+      next_offset: null,
+    })
     mount()
     await userEvent.click(screen.getByRole('button', { name: 'Use saved signals' }))
     await userEvent.click(await screen.findByRole('button', { name: /My breakout\.csv/ }))
@@ -859,7 +949,11 @@ describe('native portfolio consumer journey', () => {
     }
     const combined = {
       ...source('d'.repeat(32)),
-      receipt: { ...source('d').receipt, name: 'Combined portfolio', input_type: 'portfolio' },
+      receipt: {
+        ...source('d').receipt,
+        name: 'Combined portfolio',
+        input_type: 'portfolio',
+      },
     }
     vi.mocked(portfolioResearch.sources).mockResolvedValue({
       items: [raw, combined],
@@ -869,7 +963,9 @@ describe('native portfolio consumer journey', () => {
     expect(portfolioResearch.sources).not.toHaveBeenCalled()
     await userEvent.click(screen.getByRole('button', { name: 'Use saved signals' }))
     const dialog = await screen.findByRole('dialog', { name: 'Saved signals' })
-    const item = await within(dialog).findByRole('button', { name: /Quick signals/ })
+    const item = await within(dialog).findByRole('button', {
+      name: /Quick signals/,
+    })
     expect(item).toHaveTextContent('2026-01-05 – 2026-01-08')
     expect(item).toHaveTextContent('4 signals')
     expect(item).toHaveTextContent('2 symbols')
@@ -907,10 +1003,18 @@ describe('native portfolio consumer journey', () => {
     await userEvent.click(screen.getByRole('button', { name: 'More signals' }))
     expect(await screen.findByRole('button', { name: /Next page/ })).toBeVisible()
     expect(portfolioResearch.sources).toHaveBeenLastCalledWith(20, expect.any(AbortSignal))
-    vi.mocked(portfolioResearch.sources).mockResolvedValue({ items: [], next_offset: null })
+    vi.mocked(portfolioResearch.sources).mockResolvedValue({
+      items: [],
+      next_offset: null,
+    })
     await act(async () =>
       useAuthStore.setState({
-        user: { username: 'other', broker: null, isLoggedIn: true, loginTime: null },
+        user: {
+          username: 'other',
+          broker: null,
+          isLoggedIn: true,
+          loginTime: null,
+        },
       })
     )
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
@@ -929,7 +1033,10 @@ describe('native portfolio consumer journey', () => {
     savedDraft(initial)
     vi.mocked(portfolioResearch.sources).mockResolvedValue({
       items: [
-        { ...source('b'.repeat(32)), receipt: { ...source('b').receipt, name: 'Eighth signals' } },
+        {
+          ...source('b'.repeat(32)),
+          receipt: { ...source('b').receipt, name: 'Eighth signals' },
+        },
       ],
       next_offset: null,
     })
@@ -991,7 +1098,9 @@ describe('native portfolio consumer journey', () => {
     mount()
     await userEvent.click(screen.getByText('CSV format & examples'))
     expect(screen.getByText(/Illustrative signals only/)).toBeVisible()
-    const download = screen.getByRole('link', { name: `Download ${kind} example` })
+    const download = screen.getByRole('link', {
+      name: `Download ${kind} example`,
+    })
     expect(download).toHaveAttribute('download', `example-${kind}-signals.csv`)
     const csv = decodeURIComponent(download.getAttribute('href')!.split(',').slice(1).join(','))
     expect(csv.split('\r\n')[0]).toBe(header)
@@ -1002,7 +1111,9 @@ describe('native portfolio consumer journey', () => {
     if (kind === 'daily')
       await act(async () => expect((await axe(document.body)).violations).toEqual([]))
 
-    const file = new File([csv], download.getAttribute('download')!, { type: 'text/csv' })
+    const file = new File([csv], download.getAttribute('download')!, {
+      type: 'text/csv',
+    })
     await userEvent.upload(screen.getByLabelText('Upload strategy CSV files'), file)
     expect(await screen.findByLabelText('Strategy 1 name')).toHaveValue(`example-${kind}-signals`)
     expect(portfolioResearch.upload).toHaveBeenCalledWith(file)
@@ -1053,8 +1164,12 @@ describe('native portfolio consumer journey', () => {
       )
     mount()
     await userEvent.upload(screen.getByLabelText('Upload strategy CSV files'), [
-      new File(['Symbol,Date\nINFY,2026-01-05'], 'First.csv', { type: 'text/csv' }),
-      new File(['Symbol,Date\nTCS,2026-01-05'], 'Second.csv', { type: 'text/csv' }),
+      new File(['Symbol,Date\nINFY,2026-01-05'], 'First.csv', {
+        type: 'text/csv',
+      }),
+      new File(['Symbol,Date\nTCS,2026-01-05'], 'Second.csv', {
+        type: 'text/csv',
+      }),
     ])
     expect(screen.getByText('Reading CSV 1 of 2')).toBeVisible()
     expect(screen.getByRole('progressbar', { name: 'Reading CSV file' })).not.toHaveAttribute(
@@ -1103,7 +1218,9 @@ describe('native portfolio consumer journey', () => {
     expect(screen.getByLabelText('Stop loss (%) min')).toHaveValue(2.5)
     await userEvent.click(screen.getByLabelText('Optimize Stop loss (%)'))
     expect(screen.queryByLabelText('Stop loss (%) min')).not.toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText('Profit target (%) max'), { target: { value: '20' } })
+    fireEvent.change(screen.getByLabelText('Profit target (%) max'), {
+      target: { value: '20' },
+    })
     await userEvent.click(screen.getByRole('button', { name: 'Done' }))
     await userEvent.click(screen.getByRole('button', { name: 'Backtest', exact: true }))
     const stored = JSON.parse(sessionStorage.getItem('portfolio-draft:account')!)
@@ -1260,7 +1377,12 @@ describe('native portfolio consumer journey', () => {
     mount('/scanner-research?job=running-job')
     await userEvent.click(await screen.findByRole('button', { name: 'Pause', exact: true }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Connection interrupted')
-    const paused = { ...running, kind: 'portfolio_optimize', status: 'paused', resumable: true }
+    const paused = {
+      ...running,
+      kind: 'portfolio_optimize',
+      status: 'paused',
+      resumable: true,
+    }
     vi.mocked(portfolioResearch.pause).mockResolvedValueOnce(paused)
     vi.mocked(portfolioResearch.job).mockResolvedValue(paused)
     await userEvent.click(screen.getByRole('button', { name: 'Pause', exact: true }))
@@ -1318,7 +1440,12 @@ describe('native portfolio consumer journey', () => {
     const signal = vi.mocked(portfolioResearch.pause).mock.calls[0][1]!
     act(() => {
       useAuthStore.setState({
-        user: { username: 'different-account', broker: null, isLoggedIn: true, loginTime: null },
+        user: {
+          username: 'different-account',
+          broker: null,
+          isLoggedIn: true,
+          loginTime: null,
+        },
       })
     })
     expect(signal.aborted).toBe(true)
@@ -1338,7 +1465,9 @@ describe('native portfolio consumer journey', () => {
       kind: 'portfolio_optimize',
       pausable: true,
     })
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
     clients.push(client)
     render(
       <QueryClientProvider client={client}>
@@ -1403,16 +1532,29 @@ describe('native portfolio consumer journey', () => {
   it('reserves later data before both baseline and optimization without erasing the choice', async () => {
     const initial = draft()
     initial.optimizing = true
-    initial.portfolio.strategies[0].search.target_pct = { min: 5, max: 15, step: 5 }
+    initial.portfolio.strategies[0].search.target_pct = {
+      min: 5,
+      max: 15,
+      step: 5,
+    }
     savedDraft(initial)
     mount()
     await userEvent.click(screen.getByLabelText('Reserve a later period'))
     let stored = JSON.parse(sessionStorage.getItem('portfolio-draft:account')!)
-    expect(portfolioPayload(stored).validation).toEqual({ train_pct: 80, mode: 'reserve' })
+    expect(portfolioPayload(stored).validation).toEqual({
+      train_pct: 80,
+      mode: 'reserve',
+    })
     await userEvent.click(screen.getByRole('button', { name: 'Backtest', exact: true }))
     stored = JSON.parse(sessionStorage.getItem('portfolio-draft:account')!)
-    expect(portfolioPayload(stored).validation).toEqual({ train_pct: 80, mode: 'reserve' })
-    expect(stored.portfolio.validation).toEqual({ train_pct: 80, mode: 'reserve' })
+    expect(portfolioPayload(stored).validation).toEqual({
+      train_pct: 80,
+      mode: 'reserve',
+    })
+    expect(stored.portfolio.validation).toEqual({
+      train_pct: 80,
+      mode: 'reserve',
+    })
   })
 
   it('preserves legacy validation request semantics and unreserved full-period drafts', () => {
@@ -1469,7 +1611,11 @@ describe('portfolio engine capabilities', () => {
     const replay = vi.fn()
     render(
       <PortfolioResults
-        job={{ ...finished, kind: 'portfolio_optimize', result: automaticResult }}
+        job={{
+          ...finished,
+          kind: 'portfolio_optimize',
+          result: automaticResult,
+        }}
         result={automaticResult}
         experimentId="saved-research"
         onRerun={replay}
@@ -1480,7 +1626,9 @@ describe('portfolio engine capabilities', () => {
       />
     )
     expect(
-      screen.queryByRole('button', { name: /Save|Optimize this|Adjust & test|Keep|Compare|Choose/ })
+      screen.queryByRole('button', {
+        name: /Save|Optimize this|Adjust & test|Keep|Compare|Choose/,
+      })
     ).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Backtest these settings' }))
     expect(replay).toHaveBeenCalledWith()
@@ -1489,7 +1637,10 @@ describe('portfolio engine capabilities', () => {
   function allowNautilus() {
     vi.mocked(portfolioResearch.capabilities).mockResolvedValue({
       ...capabilities,
-      engines: capabilities.engines.map((engine) => ({ ...engine, available: true })),
+      engines: capabilities.engines.map((engine) => ({
+        ...engine,
+        available: true,
+      })),
     })
   }
 
@@ -1557,7 +1708,10 @@ describe('portfolio engine capabilities', () => {
     render(
       <PortfolioResults
         job={finished}
-        result={{ ...result, execution: { engine: 'nautilus', engine_version: '1.221.0' } }}
+        result={{
+          ...result,
+          execution: { engine: 'nautilus', engine_version: '1.221.0' },
+        }}
         onRerun={vi.fn()}
         rerunning={false}
         exportUrl="/export"
@@ -1573,7 +1727,9 @@ describe('portfolio engine capabilities', () => {
     await act(async () => {
       expect((await axe(view.container)).violations).toEqual([])
     })
-    const button = screen.getByRole('button', { name: 'Settings for Breakout' })
+    const button = screen.getByRole('button', {
+      name: 'Settings for Breakout',
+    })
     await userEvent.click(button)
     await act(async () => {
       expect((await axe(document.body)).violations).toEqual([])
@@ -1610,7 +1766,12 @@ describe('portfolio result reading', () => {
         market_conditions: {
           version: 'research-market-conditions-v1',
           status: 'available',
-          descriptor: { symbol: 'NIFTY', exchange: 'NSE_INDEX', interval: 'D', role: 'benchmark' },
+          descriptor: {
+            symbol: 'NIFTY',
+            exchange: 'NSE_INDEX',
+            interval: 'D',
+            role: 'benchmark',
+          },
           dates: { from: '2026-01-05', to: '2026-01-08' },
           coverage: {
             total_sessions: 4,
@@ -1650,7 +1811,9 @@ describe('portfolio result reading', () => {
       ...running,
       id: 'condition-job',
     })
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
     clients.push(client)
     const validation = vi
       .spyOn(researchValidation, 'context')
@@ -1698,7 +1861,12 @@ describe('portfolio result reading', () => {
       condition_replay: {
         version: 'v1',
         id: 'condition',
-        condition: { strategy_id: strategy.id, dimension: 'trend', regime: 'up', label: 'Rising' },
+        condition: {
+          strategy_id: strategy.id,
+          dimension: 'trend',
+          regime: 'up',
+          label: 'Rising',
+        },
         parent_job_id: 'parent',
         parent_result_artifact: 'result',
         analysis_artifact: 'analysis',
@@ -1711,12 +1879,24 @@ describe('portfolio result reading', () => {
           pending: 0,
           unaffected: 0,
         },
-        baseline: { summary: { net_return_pct: 2, max_drawdown_pct: 1, closed_trades: 4 } },
-        delta: { net_return_pct: -1, max_drawdown_pct: -0.5, closed_trades: -1 },
+        baseline: {
+          summary: {
+            net_return_pct: 2,
+            max_drawdown_pct: 1,
+            closed_trades: 4,
+          },
+        },
+        delta: {
+          net_return_pct: -1,
+          max_drawdown_pct: -0.5,
+          closed_trades: -1,
+        },
         basis: [],
       },
     }
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
     clients.push(queryClient)
     render(
       <QueryClientProvider client={queryClient}>
@@ -1792,7 +1972,11 @@ describe('portfolio result reading', () => {
           objective: 'balanced' as const,
           seed: 0,
         },
-        optimizer: { sampler: 'TPE', objective_definition: 'balanced', version: '5' },
+        optimizer: {
+          sampler: 'TPE',
+          objective_definition: 'balanced',
+          version: '5',
+        },
         counts: {},
       },
     }
@@ -1896,13 +2080,22 @@ describe('portfolio result reading', () => {
         })),
         recommendation_id: 'trial-0',
         selected_strategies: [strategy],
-        specification: { sampler: 'tpe', trials: 100, objective: 'balanced', seed: 0 },
+        specification: {
+          sampler: 'tpe',
+          trials: 100,
+          objective: 'balanced',
+          seed: 0,
+        },
         optimizer: {
           sampler: 'TPESampler',
           objective_definition: 'return minus drawdown',
           version: '5',
         },
-        counts: { evaluated_this_pass: 65, rejected_allocations: 0, reused_trials: 35 },
+        counts: {
+          evaluated_this_pass: 65,
+          rejected_allocations: 0,
+          reused_trials: 35,
+        },
       },
     }
     render(
@@ -1990,13 +2183,22 @@ describe('portfolio result reading', () => {
         ],
         recommendation_id: 'exact-trial',
         selected_strategies: [strategy],
-        specification: { sampler: 'tpe', trials: 50, objective: 'balanced', seed: 0 },
+        specification: {
+          sampler: 'tpe',
+          trials: 50,
+          objective: 'balanced',
+          seed: 0,
+        },
         optimizer: {
           sampler: 'TPESampler',
           objective_definition: 'return minus drawdown',
           version: '5.0.0',
         },
-        counts: { evaluated_this_pass: 1, rejected_allocations: 2, reused_trials: 0 },
+        counts: {
+          evaluated_this_pass: 1,
+          rejected_allocations: 2,
+          reused_trials: 0,
+        },
       },
     }
     const rerun = vi.fn()
@@ -2024,7 +2226,12 @@ describe('portfolio result reading', () => {
       ...result,
       summary: { ...result.summary, final_equity: 99800, net_pnl: -200 },
       equity_curve: [
-        { ...result.equity_curve[0], date: '2026-02-01', timestamp: undefined, equity: 99800 },
+        {
+          ...result.equity_curve[0],
+          date: '2026-02-01',
+          timestamp: undefined,
+          equity: 99800,
+        },
       ],
     }
     const combined: PortfolioResult = {

@@ -65,7 +65,11 @@ function ReportChart({
   onPoint?: (point: { x?: unknown; y?: unknown; z?: unknown }) => void
 }) {
   const [expanded, setExpanded] = useState(false)
-  const pointAfterClose = useRef<{ x?: unknown; y?: unknown; z?: unknown } | null>(null)
+  const pointAfterClose = useRef<{
+    x?: unknown
+    y?: unknown
+    z?: unknown
+  } | null>(null)
   const opener = useRef<HTMLButtonElement>(null)
   if (chart.status !== 'available' || !chart.figure) return null
   return (
@@ -445,7 +449,9 @@ export function PortfolioContinuousReport({
                       checked={log && canLog}
                       disabled={!canLog || controlsDisabled}
                       onChange={(event) =>
-                        void savePreferences({ log_equity: event.target.checked })
+                        void savePreferences({
+                          log_equity: event.target.checked,
+                        })
                       }
                     />
                     Log scale
@@ -607,6 +613,12 @@ export function PortfolioContinuousReport({
             View trades
           </Button>
         </div>
+        {result.execution?.turnover?.version === 'research-daily-buy-turnover-v1' && (
+          <p className="text-sm text-muted-foreground" aria-label="Daily turnover constraint">
+            Daily buy budget: {result.execution.turnover.max_daily_buy_turnover_pct}% of opening
+            account value. Filled buys consume the budget; exits remain unrestricted.
+          </p>
+        )}
         {result.execution?.activity?.version === 'research-execution-activity-v1' && (
           <div className="space-y-1 text-sm" aria-label="Filled trading activity">
             <p>

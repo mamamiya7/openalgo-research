@@ -21,7 +21,14 @@ WALK_FORWARD_VERSION = "automatic-hypotheses-v8"
 METHOD_VERSION = "automatic-hypotheses-v9"
 EXECUTION_VERSION = "automatic-hypotheses-v10"
 PRIORITY_VERSION = "automatic-hypotheses-v11"
-WALK_FORWARD_VERSIONS = (WALK_FORWARD_VERSION, METHOD_VERSION, EXECUTION_VERSION, PRIORITY_VERSION)
+TURNOVER_VERSION = "automatic-hypotheses-v12"
+WALK_FORWARD_VERSIONS = (
+    WALK_FORWARD_VERSION,
+    METHOD_VERSION,
+    EXECUTION_VERSION,
+    PRIORITY_VERSION,
+    TURNOVER_VERSION,
+)
 HYPOTHESIS_VERSIONS = (
     HYPOTHESIS_VERSION,
     EXPANDED_VERSION,
@@ -33,6 +40,7 @@ HYPOTHESIS_VERSIONS = (
     METHOD_VERSION,
     EXECUTION_VERSION,
     PRIORITY_VERSION,
+    TURNOVER_VERSION,
 )
 PERIODS = ("search", "check1", "check2", "final")
 MIN_SESSIONS = 100
@@ -50,7 +58,13 @@ def check_signal_span(portfolio, receipt, *, interval):
     span = (
         date.fromisoformat(receipt["date_to"]) - date.fromisoformat(receipt["date_from"])
     ).days + 1
-    minimum = 20 if version in HYPOTHESIS_VERSIONS else MIN_SESSIONS
+    minimum = (
+        150
+        if version == TURNOVER_VERSION
+        else 20
+        if version in HYPOTHESIS_VERSIONS
+        else MIN_SESSIONS
+    )
     if span < minimum:
         raise ValueError(
             f"Automatic research needs {minimum} trading sessions; these signals span only "
@@ -142,6 +156,7 @@ def automatic_portfolio(portfolio):
             METHOD_VERSION,
             EXECUTION_VERSION,
             PRIORITY_VERSION,
+            TURNOVER_VERSION,
         ):
             search["trailing_pct"] = _range(cfg["trailing_pct"], 99)
         row["search"] = search
@@ -166,7 +181,7 @@ def automatic_portfolio(portfolio):
         result["optimization"]["trials"] = 192
     if result["automatic_research"]["version"] == EXECUTION_VERSION:
         result["optimization"]["trials"] = 256
-    if result["automatic_research"]["version"] == PRIORITY_VERSION:
+    if result["automatic_research"]["version"] in (PRIORITY_VERSION, TURNOVER_VERSION):
         result["optimization"]["trials"] = 272
     return result
 
@@ -219,6 +234,15 @@ def compile_recipe(evidence):
             )
         periods = deepcopy(walk_forward["periods"])
         validation_mode = "chronological"
+        if portfolio["automatic_research"]["version"] == TURNOVER_VERSION and (
+            periods["search"]["sessions"] < 60
+            or sum(fold["test"]["sessions"] for fold in walk_forward["folds"]) < 60
+            or any(fold["test"]["sessions"] < 10 for fold in walk_forward["folds"])
+        ):
+            raise ValueError(
+                "Automatic recommendation needs 60 later-window trading sessions across "
+                "three checks. Use a longer signal history, or run a backtest."
+            )
     if intelligent and validation_mode == "exploratory_only":
         periods = {
             name: {"from": sessions[0], "to": sessions[-1], "sessions": count} for name in PERIODS
@@ -234,7 +258,11 @@ def compile_recipe(evidence):
                 "history or a shorter baseline holding period."
             )
     baseline_keys = ("id", "name", "allocation_pct", "config")
-    if portfolio["automatic_research"]["version"] in (EXECUTION_VERSION, PRIORITY_VERSION):
+    if portfolio["automatic_research"]["version"] in (
+        EXECUTION_VERSION,
+        PRIORITY_VERSION,
+        TURNOVER_VERSION,
+    ):
         baseline_keys += ("execution_policy",)
     payload = {
         "version": portfolio["automatic_research"]["version"],
@@ -327,6 +355,7 @@ def compile_recipe(evidence):
             METHOD_VERSION,
             EXECUTION_VERSION,
             PRIORITY_VERSION,
+            TURNOVER_VERSION,
         )
         if joint:
             from research.joint_stock_market import catalog
@@ -335,6 +364,7 @@ def compile_recipe(evidence):
             METHOD_VERSION,
             EXECUTION_VERSION,
             PRIORITY_VERSION,
+            TURNOVER_VERSION,
         ):
             from research.expanded_stock_market import catalog
         stock = (
@@ -386,7 +416,12 @@ def compile_recipe(evidence):
         if joint:
             from research.joint_stock_market import recipe as joint_recipe
 
-            if payload["version"] in (METHOD_VERSION, EXECUTION_VERSION, PRIORITY_VERSION):
+            if payload["version"] in (
+                METHOD_VERSION,
+                EXECUTION_VERSION,
+                PRIORITY_VERSION,
+                TURNOVER_VERSION,
+            ):
                 from research.expanded_stock_market import recipe as joint_recipe
 
             payload["scope"] = (
@@ -426,7 +461,7 @@ def compile_recipe(evidence):
                 selection="Refit only on each earlier expanding prefix; later scores never feed its sampler. All three next-window and cost checks precede the final development refit and frozen choice.",
                 cost_stress="Each next-window account at max(2 * cost_bps, cost_bps + 5); slippage unchanged",
             )
-        if payload["version"] in (EXECUTION_VERSION, PRIORITY_VERSION):
+        if payload["version"] in (EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION):
             from research.execution_search import descriptor as execution_descriptor
 
             payload["execution_research"] = execution_descriptor(evidence)
@@ -442,11 +477,17 @@ def compile_recipe(evidence):
             )
             payload["policies"]["risk"] = payload["execution_research"]["ceilings"]
             payload["policies"]["sizing_control"] = payload["execution_research"]["sizing_control"]
-            if payload["version"] == PRIORITY_VERSION:
+            if payload["version"] in (PRIORITY_VERSION, TURNOVER_VERSION):
                 payload["budget"].update(proposals=272, proposals_per_fit=68)
                 payload["policies"]["entry_priority"] = payload["execution_research"][
                     "entry_priority_policy"
                 ]
+        if payload["version"] == TURNOVER_VERSION:
+            from research.recommendation_plan import policy as recommendation_policy
+
+            payload["recommendation_checks"] = recommendation_policy()
+            payload["budget"].update(max_neighbors=4, max_recommendation_accounts=6)
+            payload["policies"]["turnover"] = payload["execution_research"]["turnover_policy"]
         if validation_mode == "exploratory_only":
             payload["policies"]["final"] = (
                 "No untouched later period; exploratory ranking only, never a validated recommendation"

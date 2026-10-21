@@ -140,6 +140,9 @@ export function StrategySettings({ strategy }: { strategy: PortfolioSettings }) 
           ['Open position limit', number(policy.risk_limits.max_open_positions)],
           ['Risk per trade', number(policy.risk_limits.max_trade_risk_pct, '%')],
           ['Total stop risk limit', number(policy.risk_limits.max_total_stop_risk_pct, '%')],
+          ...(policy.risk_limits.version === 'research-risk-limits-v2'
+            ? [['Daily buy budget', number(policy.risk_limits.max_daily_buy_turnover_pct, '%')]]
+            : []),
         ]
       : []),
     [
@@ -201,7 +204,10 @@ export function PortfolioResults(props: ResultProps) {
   )
   const showReport = props.studyReport ?? localReport
   function setShowReport(open: boolean) {
-    writeStudyView(identity, { ...readStudyView(identity), surface: open ? 'report' : 'study' })
+    writeStudyView(identity, {
+      ...readStudyView(identity),
+      surface: open ? 'report' : 'study',
+    })
     updateShowReport(open)
     props.onStudyReportChange?.(open)
   }

@@ -30,7 +30,8 @@ def _bounded(value):
     maximum = (
         EXECUTION_MAX_METADATA_BYTES
         if isinstance(source, dict)
-        and source.get("recipe_version") in ("automatic-hypotheses-v10", "automatic-hypotheses-v11")
+        and source.get("recipe_version")
+        in ("automatic-hypotheses-v10", "automatic-hypotheses-v11", "automatic-hypotheses-v12")
         else MAX_METADATA_BYTES
     )
     try:
