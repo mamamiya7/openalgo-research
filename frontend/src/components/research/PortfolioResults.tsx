@@ -140,8 +140,26 @@ export function StrategySettings({ strategy }: { strategy: PortfolioSettings }) 
           ['Open position limit', number(policy.risk_limits.max_open_positions)],
           ['Risk per trade', number(policy.risk_limits.max_trade_risk_pct, '%')],
           ['Total stop risk limit', number(policy.risk_limits.max_total_stop_risk_pct, '%')],
-          ...(policy.risk_limits.version === 'research-risk-limits-v2'
+          ...(['research-risk-limits-v2', 'research-risk-limits-v3'].includes(
+            policy.risk_limits.version
+          )
             ? [['Daily buy budget', number(policy.risk_limits.max_daily_buy_turnover_pct, '%')]]
+            : []),
+          ...(policy.capacity_mode === 'prior20_broker_reported'
+            ? [
+                [
+                  'Daily volume participation',
+                  number(policy.risk_limits.max_daily_volume_participation_pct, '%'),
+                ],
+              ]
+            : []),
+          ...(policy.correlation_mode === 'prior60_positive_080'
+            ? [
+                [
+                  'Correlated exposure limit',
+                  number(policy.risk_limits.max_correlated_exposure_pct, '%'),
+                ],
+              ]
             : []),
         ]
       : []),

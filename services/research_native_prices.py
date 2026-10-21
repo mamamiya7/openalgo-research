@@ -104,11 +104,14 @@ def acquire_native_prices(
     activity=None,
     cancelled=None,
     history=None,
+    volume_capture=None,
+    volume_lookup=None,
+    require_volume_provenance=False,
     max_requests=500,
     max_seconds=1800,
     clock=time.monotonic,
 ):
-    """Original NSE equity acquisition; its evidence and checkpoint identities are unchanged."""
+    """Native NSE acquisition; legacy evidence stays unchanged unless opted in."""
     return _acquire_prices(
         signals,
         plan,
@@ -124,6 +127,9 @@ def acquire_native_prices(
         activity=activity,
         cancelled=cancelled,
         history=history,
+        volume_capture=volume_capture,
+        volume_lookup=volume_lookup,
+        require_volume_provenance=require_volume_provenance,
         max_requests=max_requests,
         max_seconds=max_seconds,
         clock=clock,
@@ -157,6 +163,9 @@ def _acquire_prices(
     activity=None,
     cancelled=None,
     history=None,
+    volume_capture=None,
+    volume_lookup=None,
+    require_volume_provenance=False,
     max_requests=500,
     max_seconds=1800,
     clock=time.monotonic,
@@ -175,6 +184,10 @@ def _acquire_prices(
     a broker response already received is persisted and verified before yielding.
     """
     interval = plan.get("interval")
+    if require_volume_provenance and (
+        interval != "D" or not callable(volume_capture) or not callable(volume_lookup)
+    ):
+        raise ValueError("Required daily volume provenance needs native capture and lookup")
     if (
         interval not in {"D", "1m"}
         or (_series is None and (not signals or len(signals) > 25000))
@@ -239,6 +252,10 @@ def _acquire_prices(
             "raw_bars": {symbol: {} for symbol in required},
         }
     )
+    if volume_capture or volume_lookup:
+        from research.volume_provenance import VERSION as VOLUME_VERSION
+
+        state.setdefault("volume_provenance", {"version": VOLUME_VERSION, "sources": {}})
     root = Path(archive_dir)
     if not root.is_absolute():
         raise ValueError("Native receipts require an absolute directory")
@@ -593,6 +610,24 @@ def _acquire_prices(
                 if reader_many:
                     check(boundary=False)
                 accepted, rejected, observations = qualify(symbol, rows, first, last)
+                if volume_lookup:
+                    retained_volume = volume_lookup(
+                        symbol, first, last, rows, interval=interval, exchange=exchange
+                    )
+                    # A new capacity study can upgrade legacy OHLC-only cache
+                    # once through the same downloader. Unknown unit/presence
+                    # observations remain explicit evidence, not retry loops.
+                    if require_volume_provenance:
+                        accepted = {
+                            slot: row for slot, row in accepted.items() if slot in retained_volume
+                        }
+                    state["volume_provenance"]["sources"].setdefault(symbol, {}).update(
+                        {
+                            slot: record
+                            for slot, record in retained_volume.items()
+                            if slot in accepted
+                        }
+                    )
                 admit(symbol, accepted, source="cached")
                 if len(state["findings"]) + len(rejected) > MAX_FINDINGS:
                     raise ValueError("Native price findings exceed their bound")
@@ -714,6 +749,18 @@ def _acquire_prices(
                     for slot, row in accepted.items()
                 ):
                     raise ValueError("Stored OpenAlgo prices differ from the downloaded candles.")
+                if volume_capture:
+                    retained_volume = volume_capture(
+                        symbol,
+                        rows,
+                        accepted,
+                        broker=login["broker"],
+                        interval=interval,
+                        exchange=exchange,
+                    )
+                    state["volume_provenance"]["sources"].setdefault(symbol, {}).update(
+                        retained_volume
+                    )
                 admit(symbol, {slot: stored[slot] for slot in accepted}, source="downloaded")
             if len(state["findings"]) + len(rejected) + int(not success) > MAX_FINDINGS:
                 raise ValueError("Native price findings exceed their bound")
@@ -813,6 +860,8 @@ def _acquire_prices(
         "data_requirements": copy.deepcopy(plan),
         "acquisition_checkpoint": state,
     }
+    if "volume_provenance" in state:
+        snapshot["volume_provenance"] = copy.deepcopy(state["volume_provenance"])
     if "calendar_admission" in calendar_snapshot.get("provenance", {}):
         provenance["calendar_admission"] = calendar_snapshot["provenance"]["calendar_admission"]
     # Daily OHLC still belongs to specific exchange sessions. Keep the frozen

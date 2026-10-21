@@ -31,7 +31,12 @@ def _bounded(value):
         EXECUTION_MAX_METADATA_BYTES
         if isinstance(source, dict)
         and source.get("recipe_version")
-        in ("automatic-hypotheses-v10", "automatic-hypotheses-v11", "automatic-hypotheses-v12")
+        in (
+            "automatic-hypotheses-v10",
+            "automatic-hypotheses-v11",
+            "automatic-hypotheses-v12",
+            "automatic-hypotheses-v13",
+        )
         else MAX_METADATA_BYTES
     )
     try:
@@ -264,6 +269,10 @@ def build(evidence, *, inputs_artifact):
         mandate["search"]["execution_research"] = deepcopy(recipe["execution_research"])
         mandate["search"]["execution_features_id"] = recipe.get("execution_features_id")
         mandate["economic_assumptions"]["risk_limits"] = deepcopy(portfolio["risk_limits"])
+    if "portfolio_execution_features_id" in recipe:
+        mandate["search"]["portfolio_execution_features_id"] = recipe[
+            "portfolio_execution_features_id"
+        ]
     _bounded(mandate)
     mandate["id"] = fingerprint(mandate)
     _bounded(mandate)

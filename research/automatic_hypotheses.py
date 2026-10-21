@@ -11,6 +11,7 @@ from copy import deepcopy
 from math import prod
 
 from research.automatic_protocol import (
+    CAPACITY_VERSION,
     EXECUTION_VERSION,
     METHOD_VERSION,
     PRIORITY_VERSION,
@@ -64,7 +65,7 @@ def _display_history(trials):
 
 def policy_for_version(version):
     """Return a fresh bounded policy; a newer recipe never changes old replay."""
-    if version == TURNOVER_VERSION:
+    if version in (TURNOVER_VERSION, CAPACITY_VERSION):
         return {**policy_for_version(PRIORITY_VERSION), "version": version}
     if version == PRIORITY_VERSION:
         return {
@@ -229,6 +230,7 @@ def checkpoint_rows(saved):
         EXECUTION_VERSION,
         PRIORITY_VERSION,
         TURNOVER_VERSION,
+        CAPACITY_VERSION,
     ):
         from research.automatic_walk_forward import checkpoint_rows as walk_forward_rows
 

@@ -125,7 +125,15 @@ def prepare_context(
         raise ValueError("Saved stock-feature acquisition belongs to another symbol")
     if state["market_checkpoint"] is not None and state["current_symbol"] is None:
         raise ValueError("Saved stock-feature acquisition has no active symbol")
-    with StockFeaturePreparationScope(remaining, sessions) as scope:
+    volume_required = any(
+        row.get("execution_policy", {}).get("capacity_mode") == "prior20_broker_reported"
+        for row in evidence["strategies"]
+    )
+    with StockFeaturePreparationScope(
+        remaining,
+        sessions,
+        **({"volume_root": store.root / "volume-provenance"} if volume_required else {}),
+    ) as scope:
         # Verify retained leaves before starting any new broker work on resume.
         feature_bars = 0
         for symbol, reference in completed.items():

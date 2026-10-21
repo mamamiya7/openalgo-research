@@ -1,5 +1,36 @@
 # OpenAlgo Research status
 
+## Volume provenance and constrained allocation — 21 October 2026 source qualification
+
+The [v13 core increment](PORTFOLIO_CAPACITY_20261021.md) retains native broker-volume
+provenance, adds a shared symbol/session participation budget and clips new
+allocation to directly correlated held exposure. It composes with existing cash,
+exposure, stop-risk, priority and turnover limits. New automatic studies use v13;
+saved older studies keep their versions. The programme remains 272 proposals and
+at most 384 native accounts.
+
+The participation model initially qualifies reviewed Fyers daily NSE equity
+volume under explicitly declared historical coordinates, not executable
+liquidity or point-in-time corporate-action parity. Other brokers can retain
+correlation controls with participation off. Native cached windows without
+provenance receive a once-only ordinary History upgrade; matching evidence is
+reused. The strict earlier volume-admission contract remains unchanged.
+
+All 16 development comparison roles require supported constraint audits before
+changed settings can be recommended. Saved recovery verifies the canonical audit;
+final results cannot select settings. Exact replay, named setup persistence and
+reuse retain both controller modes, limits and frozen source evidence.
+
+884 distinct scoped backend checks and 263 frontend checks pass, including full
+native VectorBT/Optuna service recovery, a deliberately adverse final result,
+constraint reconciliation, acquisition reuse and exact replay without broker or
+archive access. Legacy native report identities remain unchanged. Resource
+repetitions show stable handles and bounded retained memory. TypeScript, lint,
+source compatibility and the production build pass. Controlled fixtures are not
+represented as fresh broker downloads. Local activation and source push follow;
+public release ZIPs remain unchanged. Broader producer profiles, covariance/sector
+allocation and search-seed/false-discovery calibration remain planned.
+
 ## Saved alternatives and volume admission — 21 October 2026 local activation
 
 The [next core increment](TRADEOFFS_VOLUME_20261021.md) adds **Compare alternatives**

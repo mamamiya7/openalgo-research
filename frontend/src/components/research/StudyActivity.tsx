@@ -8,7 +8,6 @@ import {
   type StudyProposalState,
 } from '@/api/researchStudyActivity'
 import { Button } from '@/components/ui/button'
-import { entryPriorityLabel } from './researchPresentation'
 import {
   Dialog,
   DialogContent,
@@ -17,6 +16,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { useAuthStore } from '@/stores/authStore'
+import { entryPriorityLabel } from './researchPresentation'
 
 const active = (status: string) =>
   ['queued', 'running', 'pausing', 'cancelling', 'cancel_requested'].includes(status)
@@ -82,9 +82,11 @@ function duration(row: Pick<StudyActivityRow, 'started_at' | 'finished_at'>) {
 }
 
 function proposalLabel(index: number, recipeVersion?: string) {
-  const perFit = ['automatic-hypotheses-v11', 'automatic-hypotheses-v12'].includes(
-    recipeVersion ?? ''
-  )
+  const perFit = [
+    'automatic-hypotheses-v11',
+    'automatic-hypotheses-v12',
+    'automatic-hypotheses-v13',
+  ].includes(recipeVersion ?? '')
     ? 68
     : recipeVersion === 'automatic-hypotheses-v10'
       ? 64
@@ -96,6 +98,7 @@ function proposalLabel(index: number, recipeVersion?: string) {
       'automatic-hypotheses-v10',
       'automatic-hypotheses-v11',
       'automatic-hypotheses-v12',
+      'automatic-hypotheses-v13',
     ].includes(recipeVersion ?? '')
   )
     return { label: `Trial ${index + 1}` }
@@ -165,6 +168,7 @@ function Activity({
     'automatic-hypotheses-v10',
     'automatic-hypotheses-v11',
     'automatic-hypotheses-v12',
+    'automatic-hypotheses-v13',
   ].includes(recipeVersion ?? '')
   function setting(key: string, index: number) {
     if (key === 'portfolio.entry_priority') return 'Account entry priority'

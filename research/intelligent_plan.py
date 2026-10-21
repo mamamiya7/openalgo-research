@@ -61,6 +61,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v10",
         "automatic-hypotheses-v11",
         "automatic-hypotheses-v12",
+        "automatic-hypotheses-v13",
     )
     joint = (
         trailing
@@ -244,6 +245,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v10",
         "automatic-hypotheses-v11",
         "automatic-hypotheses-v12",
+        "automatic-hypotheses-v13",
     ):
         payload["methods"].append(
             {
@@ -259,6 +261,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v10",
         "automatic-hypotheses-v11",
         "automatic-hypotheses-v12",
+        "automatic-hypotheses-v13",
     ):
         payload["budget"].update(
             proposals=192,
@@ -289,6 +292,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v10",
         "automatic-hypotheses-v11",
         "automatic-hypotheses-v12",
+        "automatic-hypotheses-v13",
     ):
         from research.expanded_stock_market import FEATURE_VERSION, catalog, recipe
 
@@ -312,6 +316,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v10",
         "automatic-hypotheses-v11",
         "automatic-hypotheses-v12",
+        "automatic-hypotheses-v13",
     ):
         payload["budget"].update(
             proposals=256,
@@ -346,6 +351,7 @@ def build_plan(portfolio, *, interval):
     if portfolio.get("automatic_research", {}).get("version") in (
         "automatic-hypotheses-v11",
         "automatic-hypotheses-v12",
+        "automatic-hypotheses-v13",
     ):
         payload["budget"].update(
             proposals=272,
@@ -363,5 +369,27 @@ def build_plan(portfolio, *, interval):
                 "status": "admitted",
                 "reason": "One frozen account-wide ordering: source, reversed source, or lower modeled stop-loss fraction of entry cash cost first. Two explicit priority probes per fit; no future prices or per-strategy priority advantage.",
             }
+        )
+    if portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v13":
+        capacity = portfolio["strategies"][0]["execution_policy"]["capacity_mode"] != "disabled"
+        correlation = (
+            portfolio["strategies"][0]["execution_policy"]["correlation_mode"] != "disabled"
+        )
+        for method in payload["methods"]:
+            if method["id"] == "liquidity":
+                method.update(
+                    status="conditional" if capacity else "not_applicable",
+                    reason="Fixed participation limit uses 20 prior completed broker-volume sessions under a reviewed historical-coordinate model; unavailable provenance cannot pass. This does not prove executable liquidity.",
+                )
+        payload["methods"].append(
+            {
+                "id": "correlated_exposure",
+                "status": "conditional" if correlation else "not_applicable",
+                "reason": "Fixed entry cap counts held symbols with positive Pearson correlation of at least 0.8 over 60 aligned prior daily returns; unknown held pairs skip entry.",
+            }
+        )
+        payload["data"].update(
+            volume_prior_sessions=20 if capacity else 0,
+            correlation_prior_closes=61 if correlation else 0,
         )
     return {**payload, "id": fingerprint(payload)}

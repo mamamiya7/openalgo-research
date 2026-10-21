@@ -166,6 +166,15 @@ def build_evaluation_basis(evidence, *, period):
     }
     if "risk_limits" in portfolio:
         comparison["risk_limits"] = portfolio["risk_limits"]
+    if evidence.get("portfolio_execution_features") is not None:
+        comparison["execution"]["portfolio_features"] = {
+            "version": evidence["portfolio_execution_features"]["version"],
+            "id": evidence["portfolio_execution_features"]["id"],
+            "modes": [
+                {key: row["execution_policy"][key] for key in ("capacity_mode", "correlation_mode")}
+                for row in evidence["strategies"]
+            ],
+        }
     return {
         "version": VERSION,
         "status": "verified",

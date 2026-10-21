@@ -20,6 +20,7 @@ from research.evaluation_basis import IDENTITIES
 from research.evaluation_basis import VERSION as BASIS_VERSION
 from research.joint_stock_market import markers
 from research.method_registry import (
+    CAPACITY_RECIPE_VERSION,
     EXECUTION_RECIPE_VERSION,
     EXPANDED_RECIPE_VERSION,
     PRIORITY_RECIPE_VERSION,
@@ -86,7 +87,12 @@ def _manifest(manifest, calculation, binding, periods, context_id, recipe_versio
         > (
             384
             if recipe_version
-            in (EXECUTION_RECIPE_VERSION, PRIORITY_RECIPE_VERSION, TURNOVER_RECIPE_VERSION)
+            in (
+                EXECUTION_RECIPE_VERSION,
+                PRIORITY_RECIPE_VERSION,
+                TURNOVER_RECIPE_VERSION,
+                CAPACITY_RECIPE_VERSION,
+            )
             else 320
         )
     ):
@@ -206,7 +212,12 @@ def _build(mandate, calculation, development_manifest):
         mandate,
         maximum=EXECUTION_MAX_METADATA_BYTES
         if source_version
-        in (EXECUTION_RECIPE_VERSION, PRIORITY_RECIPE_VERSION, TURNOVER_RECIPE_VERSION)
+        in (
+            EXECUTION_RECIPE_VERSION,
+            PRIORITY_RECIPE_VERSION,
+            TURNOVER_RECIPE_VERSION,
+            CAPACITY_RECIPE_VERSION,
+        )
         else MAX_METADATA_BYTES,
     )
     source = mandate.get("source", {})
@@ -217,6 +228,7 @@ def _build(mandate, calculation, development_manifest):
         EXECUTION_RECIPE_VERSION,
         PRIORITY_RECIPE_VERSION,
         TURNOVER_RECIPE_VERSION,
+        CAPACITY_RECIPE_VERSION,
     ):
         return {
             "version": VERSION,
@@ -231,13 +243,15 @@ def _build(mandate, calculation, development_manifest):
         EXECUTION_RECIPE_VERSION,
         PRIORITY_RECIPE_VERSION,
         TURNOVER_RECIPE_VERSION,
+        CAPACITY_RECIPE_VERSION,
     ):
         from research.expanded_stock_market import markers as materialize_markers
     by_hypothesis = {row["id"]: row for row in hypotheses}
     search = mandate.get("search", {})
     proposals_per_fit = (
         68
-        if recipe_version in (PRIORITY_RECIPE_VERSION, TURNOVER_RECIPE_VERSION)
+        if recipe_version
+        in (PRIORITY_RECIPE_VERSION, TURNOVER_RECIPE_VERSION, CAPACITY_RECIPE_VERSION)
         else 64
         if recipe_version == EXECUTION_RECIPE_VERSION
         else 48
@@ -245,7 +259,12 @@ def _build(mandate, calculation, development_manifest):
     max_simulations = (
         384
         if recipe_version
-        in (EXECUTION_RECIPE_VERSION, PRIORITY_RECIPE_VERSION, TURNOVER_RECIPE_VERSION)
+        in (
+            EXECUTION_RECIPE_VERSION,
+            PRIORITY_RECIPE_VERSION,
+            TURNOVER_RECIPE_VERSION,
+            CAPACITY_RECIPE_VERSION,
+        )
         else 320
     )
     if (
@@ -295,6 +314,7 @@ def _build(mandate, calculation, development_manifest):
         EXECUTION_RECIPE_VERSION,
         PRIORITY_RECIPE_VERSION,
         TURNOVER_RECIPE_VERSION,
+        CAPACITY_RECIPE_VERSION,
     ):
         from research.execution_search import axes as policy_axes
         from research.execution_search import descriptor as execution_descriptor
@@ -561,11 +581,16 @@ def _build(mandate, calculation, development_manifest):
         EXECUTION_RECIPE_VERSION,
         PRIORITY_RECIPE_VERSION,
         TURNOVER_RECIPE_VERSION,
+        CAPACITY_RECIPE_VERSION,
     ):
         result["limitations"].append(
             "Condition-family counts include execution and sizing variants; exit choices, sizing controls and hard limits are not additional indicator families"
         )
-    if recipe_version in (PRIORITY_RECIPE_VERSION, TURNOVER_RECIPE_VERSION):
+    if recipe_version in (
+        PRIORITY_RECIPE_VERSION,
+        TURNOVER_RECIPE_VERSION,
+        CAPACITY_RECIPE_VERSION,
+    ):
         from research.execution_search import ENTRY_PRIORITIES, priority_counts
 
         result["entry_priority"] = {

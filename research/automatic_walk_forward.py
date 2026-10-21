@@ -11,6 +11,7 @@ from math import prod
 
 from research.automatic_hypotheses import MAX_GATE_CACHE, _gate, _screening, policy_for_version
 from research.automatic_protocol import (
+    CAPACITY_VERSION,
     EXECUTION_VERSION,
     METHOD_VERSION,
     PRIORITY_VERSION,
@@ -67,7 +68,13 @@ def prepare_method_gate(bundle):
 def _context(version):
     if version == VERSION:
         from research import joint_stock_market as context
-    elif version in (METHOD_VERSION, EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION):
+    elif version in (
+        METHOD_VERSION,
+        EXECUTION_VERSION,
+        PRIORITY_VERSION,
+        TURNOVER_VERSION,
+        CAPACITY_VERSION,
+    ):
         from research import expanded_stock_market as context
     else:
         raise ValueError("Choose a supported walk-forward research version")
@@ -76,7 +83,13 @@ def _context(version):
 
 def _screening_program(version, entries, axes, timing, execution=None):
     """Preserve v8's sequence; explicitly screen every newly admitted v9 method."""
-    if version in (METHOD_VERSION, EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION):
+    if version in (
+        METHOD_VERSION,
+        EXECUTION_VERSION,
+        PRIORITY_VERSION,
+        TURNOVER_VERSION,
+        CAPACITY_VERSION,
+    ):
         policy = policy_for_version(version)
         if (
             len(entries) != policy["max_hypotheses"]
@@ -88,7 +101,8 @@ def _screening_program(version, entries, axes, timing, execution=None):
     # contains new choices in the same family. Numeric exits use one midpoint.
     screening = _screening(
         _context(VERSION).catalog()
-        if version in (METHOD_VERSION, EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION)
+        if version
+        in (METHOD_VERSION, EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION)
         else entries,
         axes,
         policy=policy_for_version(VERSION),
@@ -100,7 +114,13 @@ def _screening_program(version, entries, axes, timing, execution=None):
                 "original" if name.endswith(".timing_choice") else choices[len(choices) // 2]
             )
     clock_limit = 8
-    if version in (METHOD_VERSION, EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION):
+    if version in (
+        METHOD_VERSION,
+        EXECUTION_VERSION,
+        PRIORITY_VERSION,
+        TURNOVER_VERSION,
+        CAPACITY_VERSION,
+    ):
         registered = {row["id"] for row in entries}
         if not set(METHOD_PROBES) <= registered:
             raise ValueError("The expanded walk-forward catalogue lost a targeted method")
@@ -108,7 +128,7 @@ def _screening_program(version, entries, axes, timing, execution=None):
         screening.extend({**midpoint, "hypothesis": identifier} for identifier in METHOD_PROBES)
         clock_limit = 4
     screening.extend(probes(axes, timing)[:clock_limit])
-    if version in (EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION):
+    if version in (EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION):
         from research.execution_search import probes as execution_probes
 
         for params in screening:
@@ -117,13 +137,13 @@ def _screening_program(version, entries, axes, timing, execution=None):
                     params[name] = "percent"
                 elif name.endswith(".portfolio_choice"):
                     params[name] = "original"
-        if version in (PRIORITY_VERSION, TURNOVER_VERSION):
+        if version in (PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION):
             for params in screening:
                 params["portfolio.entry_priority"] = "source"
         screening.extend(execution_probes(screening[0], execution))
     if len(screening) > (
         50
-        if version in (PRIORITY_VERSION, TURNOVER_VERSION)
+        if version in (PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION)
         else 48
         if version == EXECUTION_VERSION
         else 40
@@ -136,12 +156,13 @@ def _validate_state(saved, *, version=None):
     saved_version = saved.get("version") if isinstance(saved, dict) else None
     max_simulations = (
         384
-        if saved_version in (EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION)
+        if saved_version
+        in (EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION)
         else MAX_SIMULATIONS
     )
     proposals_per_fit = (
         68
-        if saved_version in (PRIORITY_VERSION, TURNOVER_VERSION)
+        if saved_version in (PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION)
         else 64
         if saved_version == EXECUTION_VERSION
         else PROPOSALS_PER_FIT
@@ -149,7 +170,14 @@ def _validate_state(saved, *, version=None):
     if (
         not isinstance(saved, dict)
         or saved.get("version")
-        not in (VERSION, METHOD_VERSION, EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION)
+        not in (
+            VERSION,
+            METHOD_VERSION,
+            EXECUTION_VERSION,
+            PRIORITY_VERSION,
+            TURNOVER_VERSION,
+            CAPACITY_VERSION,
+        )
         or (version is not None and saved.get("version") != version)
         or saved.get("checkpoint_id")
         != _fingerprint(
@@ -243,7 +271,8 @@ def run(
     context = _context(version)
     prepare = (
         prepare_method_gate
-        if version in (METHOD_VERSION, EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION)
+        if version
+        in (METHOD_VERSION, EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION)
         else prepare_gate
     )
     with prepare(evidence.get("automatic_stock_market_context")) as prepared:
@@ -305,12 +334,12 @@ def _run(
     proposals_per_fit = policy["proposals_per_fit"]
     max_simulations = policy["max_simulations"]
     proposal_budget = policy["proposals"]
-    if version in (PRIORITY_VERSION, TURNOVER_VERSION):
+    if version in (PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION):
         # Worst case: baseline + every unique proposal + one control per fit,
         # four later-window accounts per fold, one selected-report rebuild,
         # final pair, and 64 lost attempts.
         upper = 4 * (proposals_per_fit + 2) + 3 * 4 + 1 + 2 + 64
-        if version == TURNOVER_VERSION:
+        if version in (TURNOVER_VERSION, CAPACITY_VERSION):
             upper += 6
         if upper > max_simulations or proposals_per_fit - 50 < 16:
             raise ValueError("Priority research exceeded its accounting or refinement reserve")
@@ -320,7 +349,7 @@ def _run(
         **trailing_axes(recipe["trailing_research"]),
         **timing_axes(recipe["timing_research"]),
     }
-    if version in (EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION):
+    if version in (EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION):
         from research.execution_search import axes as execution_axes
 
         axes.update(execution_axes(recipe["execution_research"]))
@@ -434,10 +463,14 @@ def _run(
             for row in current["strategies"]:
                 cost = row["config"]["cost_bps"]
                 row["config"]["cost_bps"] = max(2 * cost, cost + 5)
-        if version in (EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION):
+        if version in (EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION):
             from research.execution_features import attach
 
             current = attach(current)
+        if version == CAPACITY_VERSION:
+            from research.portfolio_execution_features import attach as attach_portfolio_features
+
+            current = attach_portfolio_features(current)
         if hypothesis["id"] != "none":
             current["portfolio"] = {
                 **current["portfolio"],
@@ -485,7 +518,7 @@ def _run(
         report["evaluation_basis"] = build_evaluation_basis(
             current, period="evaluation" if period == "final" else "selection"
         )
-        if version == TURNOVER_VERSION and period != "final":
+        if version in (TURNOVER_VERSION, CAPACITY_VERSION) and period != "final":
             report["research_opportunity_basis"] = build_evaluation_basis(
                 window(period), period="selection"
             )
@@ -498,6 +531,17 @@ def _run(
         report["automatic_recipe"] = deepcopy(recipe)
         if hypothesis["id"] != "none":
             enrich(report, current)
+        if version == CAPACITY_VERSION:
+            from research.portfolio_constraint_evidence import assess as assess_constraints
+
+            report["portfolio_constraint_evidence"] = assess_constraints(
+                report, current["portfolio_execution_features"]
+            )
+            if report["portfolio_constraint_evidence"]["status"] == "invalid":
+                raise ValueError(
+                    "Native portfolio limits did not reconcile with frozen evidence: "
+                    + "; ".join(report["portfolio_constraint_evidence"]["reasons"])
+                )
         state["simulations"] += 1
         return report
 
@@ -529,6 +573,15 @@ def _run(
                 "automatic_stock_condition": deepcopy(report["automatic_stock_condition"]),
                 "evaluation_basis": deepcopy(report["evaluation_basis"]),
                 **({"development_evidence": descriptor} if descriptor is not None else {}),
+                **(
+                    {
+                        "portfolio_constraint_evidence": deepcopy(
+                            report["portfolio_constraint_evidence"]
+                        )
+                    }
+                    if version == CAPACITY_VERSION
+                    else {}
+                ),
             }
             if key in state["evaluations"] and state["evaluations"][key] != row:
                 raise ValueError(
@@ -596,7 +649,7 @@ def _run(
             proposed = _candidate(base, params)
             proposed = trailing_choices(proposed, params, recipe["trailing_research"])
             proposed = timing_choices(proposed, params, recipe["timing_research"])
-            if version in (EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION):
+            if version in (EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION):
                 from research.execution_search import apply_choices
 
                 proposed = apply_choices(proposed, params, recipe["execution_research"])
@@ -716,7 +769,7 @@ def _run(
         current["selection"] = deepcopy(winner)
         # Persist the choice before even requesting the next-window account.
         persist()
-        if version in (EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION):
+        if version in (EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION):
             from research.execution_search import original_sizing
 
             control_settings = original_sizing(winner["strategies"], recipe["execution_research"])
@@ -772,7 +825,7 @@ def _run(
     winner, rows = fit("search")
     process_supported = all(row["eligible"] for row in state["folds"])
     folds_supported = process_supported
-    if version == TURNOVER_VERSION:
+    if version in (TURNOVER_VERSION, CAPACITY_VERSION):
         from research.recommendation_evidence import assess
         from research.recommendation_plan import challenges
 
@@ -827,6 +880,46 @@ def _run(
                     for row in plan["neighbors"]
                 ],
             }
+        if version == CAPACITY_VERSION:
+            audits = []
+            for settings, hypothesis, period, stress in (
+                (baseline, none, "search", False),
+                (winner["strategies"], winner["hypothesis"], "search", False),
+                (baseline, none, "search", True),
+                (winner["strategies"], winner["hypothesis"], "search", True),
+            ):
+                audits.append(
+                    measured(settings, hypothesis, period, stress).get(
+                        "portfolio_constraint_evidence"
+                    )
+                )
+            for fold in recipe["walk_forward"]["folds"]:
+                choice = state["fits"][fold["fit_period"]]["selection"]
+                for settings, hypothesis in (
+                    (baseline, none),
+                    (choice["strategies"], choice["hypothesis"]),
+                ):
+                    for stress in (False, True):
+                        audits.append(
+                            measured(settings, hypothesis, fold["test_period"], stress).get(
+                                "portfolio_constraint_evidence"
+                            )
+                        )
+            complete = all(audit and audit.get("status") == "supported" for audit in audits)
+            diagnostic["portfolio_constraints"] = {
+                "version": "research-portfolio-recommendation-constraints-v1",
+                "status": "supported" if complete else "incomplete",
+                "development_accounts": len(audits),
+                "evidence_ids": [audit.get("id") if audit else None for audit in audits],
+                "policy": "Every development reference, chosen account and higher-cost comparison must reconcile its frozen volume and correlation limits. Missing inputs never support a recommendation; final outcomes are excluded.",
+            }
+            if not complete:
+                diagnostic["status"] = "not_supported"
+                diagnostic["qualified"] = False
+                diagnostic["reasons"] = [
+                    *diagnostic.get("reasons", []),
+                    "Portfolio constraint evidence is incomplete in a development comparison",
+                ]
         if (
             state.get("recommendation_checks") is not None
             and state["recommendation_checks"] != diagnostic
@@ -871,6 +964,14 @@ def _run(
             raise ValueError(
                 "A saved walk-forward report differs from its recorded account evidence"
             )
+        if version == CAPACITY_VERSION:
+            from research.portfolio_constraint_evidence import assess as assess_constraints
+
+            actual = assess_constraints(report, evidence["portfolio_execution_features"])
+            if actual != row.get("portfolio_constraint_evidence") or actual != report.get(
+                "portfolio_constraint_evidence"
+            ):
+                raise ValueError("Saved portfolio constraint evidence changed on recovery")
         return report
 
     if state["selected_report"] is None:
@@ -903,7 +1004,7 @@ def _run(
         else "inconclusive"
         if any("Fewer than" in reason for reason in final_reasons)
         or (
-            version == TURNOVER_VERSION
+            version in (TURNOVER_VERSION, CAPACITY_VERSION)
             and state["recommendation_checks"]["status"] == "insufficient"
         )
         else "not_supported"
@@ -912,7 +1013,7 @@ def _run(
         "An improvement held up across refits and the final check"
         if supported
         else "More comparable development history is needed"
-        if version == TURNOVER_VERSION and status == "inconclusive"
+        if version in (TURNOVER_VERSION, CAPACITY_VERSION) and status == "inconclusive"
         else "More completed trades across different dates are needed"
         if status == "inconclusive"
         else "No reliable improvement over unchanged settings"
@@ -963,7 +1064,7 @@ def _run(
         "trailing_research": deepcopy(recipe["trailing_research"]),
         "timing_research": deepcopy(recipe["timing_research"]),
     }
-    if version in (EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION):
+    if version in (EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION):
         result["experiment"]["execution_research"] = deepcopy(recipe["execution_research"])
     final_info = {
         "summary": final["summary"],
@@ -1011,7 +1112,7 @@ def _run(
             "selection_policy": "Each choice is frozen using only its training prefix. All folds use fresh equal cash and unchanged cost assumptions; returns are not pooled into a carried account.",
         },
     }
-    if version in (EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION):
+    if version in (EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION):
         result["automatic_research"]["execution_research"] = {
             "version": "research-execution-findings-v1",
             "risk_limits": deepcopy(recipe["execution_research"]["risk_limits"]),
@@ -1021,7 +1122,7 @@ def _run(
             ],
             "policy": "All candidates stay within original allocation and order ceilings and fixed hard risk limits. Original-sizing controls describe development outcomes only; no final-period sizing comparison or larger-exposure improvement claim.",
         }
-    if version in (PRIORITY_VERSION, TURNOVER_VERSION):
+    if version in (PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION):
         from research.execution_search import priority_counts
 
         result["automatic_research"]["execution_research"].update(
@@ -1034,7 +1135,7 @@ def _run(
                 for period in FITS
             ],
         )
-    if version == TURNOVER_VERSION:
+    if version in (TURNOVER_VERSION, CAPACITY_VERSION):
         result["automatic_research"]["recommendation_checks"] = deepcopy(
             state["recommendation_checks"]
         )
@@ -1046,6 +1147,13 @@ def _run(
         result["automatic_research"]["execution_research"].update(
             version="research-execution-findings-v3",
             turnover_policy=recipe["execution_research"]["turnover_policy"],
+        )
+    if version == CAPACITY_VERSION:
+        result["automatic_research"]["execution_research"].update(
+            version="research-execution-findings-v4",
+            portfolio_features_id=recipe["portfolio_execution_features_id"],
+            portfolio_constraints=deepcopy(recipe["policies"]["portfolio_constraints"]),
+            feature_coverage=deepcopy(evidence["portfolio_execution_features"]["counts"]),
         )
     from research.automatic_comparison import build as comparison_curves
 

@@ -67,9 +67,16 @@ Current automatic research considers 108 registered stock/market choices within
 The locally activated [comparison increment](docs/research/TRADEOFFS_VOLUME_20261021.md) adds
 **Compare alternatives** to completed automatic studies: inspect saved
 return/drawdown/activity trade-offs without another optimisation or download.
-Alternatives remain exploratory and do not replace the recommendation. It also
-adds volume-admission checks as a prerequisite for future capacity limits;
-volume-based execution limits are not enabled yet. Public ZIPs remain unchanged.
+Alternatives remain exploratory and do not replace the recommendation.
+
+The [v13 portfolio increment](docs/research/PORTFOLIO_CAPACITY_20261021.md) adds
+retained broker-volume provenance, a shared daily participation budget and
+correlation-aware entry limits. The first volume model supports reviewed Fyers
+daily NSE equities; other brokers can retain correlation controls with volume
+participation turned off. These are explicit historical simulation assumptions,
+not executable-liquidity estimates. Saved recommendation checks reconcile the
+limits against native fills before preferring changed settings. Old studies keep
+their original versions. Public ZIPs remain unchanged.
 
 The next workflow increment previews CSV counts and dates before setup, simplifies
 experiment navigation to **Overview → Setup → Results → Saved setups**, and lets

@@ -181,7 +181,11 @@ def normalize_draft(store, owner, raw):
 
         if portfolio["engine"] != "vectorbt":
             raise ValueError("Portfolio risk limits currently need VectorBT")
-        defaults = normalize_limits()
+        if not isinstance(portfolio["risk_limits"], dict):
+            raise ValueError("Draft portfolio risk limits must be an object")
+        defaults = normalize_limits(
+            {"version": portfolio["risk_limits"].get("version", "research-risk-limits-v1")}
+        )
         _object(portfolio["risk_limits"], set(defaults), "draft portfolio risk limits")
         if portfolio["risk_limits"].get("version", defaults["version"]) != defaults["version"]:
             raise ValueError("Choose supported versioned execution risk limits")

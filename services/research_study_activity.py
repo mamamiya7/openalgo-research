@@ -376,6 +376,7 @@ class StudyObserver:
                 "automatic-hypotheses-v10",
                 "automatic-hypotheses-v11",
                 "automatic-hypotheses-v12",
+                "automatic-hypotheses-v13",
             ):
                 # Independent fit objectives stay separate scientifically. Only
                 # observation ordinals are flattened into the job's 192 events.
@@ -383,13 +384,18 @@ class StudyObserver:
                 per_fit = (
                     68
                     if calculation.get("version")
-                    in ("automatic-hypotheses-v11", "automatic-hypotheses-v12")
+                    in (
+                        "automatic-hypotheses-v11",
+                        "automatic-hypotheses-v12",
+                        "automatic-hypotheses-v13",
+                    )
                     else 64
                     if calculation.get("version")
                     in (
                         "automatic-hypotheses-v10",
                         "automatic-hypotheses-v11",
                         "automatic-hypotheses-v12",
+                        "automatic-hypotheses-v13",
                     )
                     else 48
                 )

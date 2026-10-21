@@ -97,7 +97,12 @@ def plan(evidence, max_evaluations):
         EXECUTION_MAX_EVALUATIONS
         if isinstance(automatic, dict)
         and automatic.get("version")
-        in ("automatic-hypotheses-v10", "automatic-hypotheses-v11", "automatic-hypotheses-v12")
+        in (
+            "automatic-hypotheses-v10",
+            "automatic-hypotheses-v11",
+            "automatic-hypotheses-v12",
+            "automatic-hypotheses-v13",
+        )
         else MAX_EVALUATIONS
     )
     limits = {

@@ -22,12 +22,14 @@ METHOD_VERSION = "automatic-hypotheses-v9"
 EXECUTION_VERSION = "automatic-hypotheses-v10"
 PRIORITY_VERSION = "automatic-hypotheses-v11"
 TURNOVER_VERSION = "automatic-hypotheses-v12"
+CAPACITY_VERSION = "automatic-hypotheses-v13"
 WALK_FORWARD_VERSIONS = (
     WALK_FORWARD_VERSION,
     METHOD_VERSION,
     EXECUTION_VERSION,
     PRIORITY_VERSION,
     TURNOVER_VERSION,
+    CAPACITY_VERSION,
 )
 HYPOTHESIS_VERSIONS = (
     HYPOTHESIS_VERSION,
@@ -41,6 +43,7 @@ HYPOTHESIS_VERSIONS = (
     EXECUTION_VERSION,
     PRIORITY_VERSION,
     TURNOVER_VERSION,
+    CAPACITY_VERSION,
 )
 PERIODS = ("search", "check1", "check2", "final")
 MIN_SESSIONS = 100
@@ -60,7 +63,7 @@ def check_signal_span(portfolio, receipt, *, interval):
     ).days + 1
     minimum = (
         150
-        if version == TURNOVER_VERSION
+        if version in (TURNOVER_VERSION, CAPACITY_VERSION)
         else 20
         if version in HYPOTHESIS_VERSIONS
         else MIN_SESSIONS
@@ -157,6 +160,7 @@ def automatic_portfolio(portfolio):
             EXECUTION_VERSION,
             PRIORITY_VERSION,
             TURNOVER_VERSION,
+            CAPACITY_VERSION,
         ):
             search["trailing_pct"] = _range(cfg["trailing_pct"], 99)
         row["search"] = search
@@ -181,7 +185,11 @@ def automatic_portfolio(portfolio):
         result["optimization"]["trials"] = 192
     if result["automatic_research"]["version"] == EXECUTION_VERSION:
         result["optimization"]["trials"] = 256
-    if result["automatic_research"]["version"] in (PRIORITY_VERSION, TURNOVER_VERSION):
+    if result["automatic_research"]["version"] in (
+        PRIORITY_VERSION,
+        TURNOVER_VERSION,
+        CAPACITY_VERSION,
+    ):
         result["optimization"]["trials"] = 272
     return result
 
@@ -234,7 +242,7 @@ def compile_recipe(evidence):
             )
         periods = deepcopy(walk_forward["periods"])
         validation_mode = "chronological"
-        if portfolio["automatic_research"]["version"] == TURNOVER_VERSION and (
+        if portfolio["automatic_research"]["version"] in (TURNOVER_VERSION, CAPACITY_VERSION) and (
             periods["search"]["sessions"] < 60
             or sum(fold["test"]["sessions"] for fold in walk_forward["folds"]) < 60
             or any(fold["test"]["sessions"] < 10 for fold in walk_forward["folds"])
@@ -262,6 +270,7 @@ def compile_recipe(evidence):
         EXECUTION_VERSION,
         PRIORITY_VERSION,
         TURNOVER_VERSION,
+        CAPACITY_VERSION,
     ):
         baseline_keys += ("execution_policy",)
     payload = {
@@ -356,6 +365,7 @@ def compile_recipe(evidence):
             EXECUTION_VERSION,
             PRIORITY_VERSION,
             TURNOVER_VERSION,
+            CAPACITY_VERSION,
         )
         if joint:
             from research.joint_stock_market import catalog
@@ -365,6 +375,7 @@ def compile_recipe(evidence):
             EXECUTION_VERSION,
             PRIORITY_VERSION,
             TURNOVER_VERSION,
+            CAPACITY_VERSION,
         ):
             from research.expanded_stock_market import catalog
         stock = (
@@ -421,6 +432,7 @@ def compile_recipe(evidence):
                 EXECUTION_VERSION,
                 PRIORITY_VERSION,
                 TURNOVER_VERSION,
+                CAPACITY_VERSION,
             ):
                 from research.expanded_stock_market import recipe as joint_recipe
 
@@ -461,7 +473,12 @@ def compile_recipe(evidence):
                 selection="Refit only on each earlier expanding prefix; later scores never feed its sampler. All three next-window and cost checks precede the final development refit and frozen choice.",
                 cost_stress="Each next-window account at max(2 * cost_bps, cost_bps + 5); slippage unchanged",
             )
-        if payload["version"] in (EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION):
+        if payload["version"] in (
+            EXECUTION_VERSION,
+            PRIORITY_VERSION,
+            TURNOVER_VERSION,
+            CAPACITY_VERSION,
+        ):
             from research.execution_search import descriptor as execution_descriptor
 
             payload["execution_research"] = execution_descriptor(evidence)
@@ -477,17 +494,26 @@ def compile_recipe(evidence):
             )
             payload["policies"]["risk"] = payload["execution_research"]["ceilings"]
             payload["policies"]["sizing_control"] = payload["execution_research"]["sizing_control"]
-            if payload["version"] in (PRIORITY_VERSION, TURNOVER_VERSION):
+            if payload["version"] in (PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION):
                 payload["budget"].update(proposals=272, proposals_per_fit=68)
                 payload["policies"]["entry_priority"] = payload["execution_research"][
                     "entry_priority_policy"
                 ]
-        if payload["version"] == TURNOVER_VERSION:
+        if payload["version"] in (TURNOVER_VERSION, CAPACITY_VERSION):
             from research.recommendation_plan import policy as recommendation_policy
 
             payload["recommendation_checks"] = recommendation_policy()
             payload["budget"].update(max_neighbors=4, max_recommendation_accounts=6)
             payload["policies"]["turnover"] = payload["execution_research"]["turnover_policy"]
+        if payload["version"] == CAPACITY_VERSION:
+            payload["portfolio_execution_features_id"] = evidence.get(
+                "portfolio_execution_features", {}
+            ).get("id")
+            payload["policies"]["portfolio_constraints"] = {
+                "volume": "Fixed prior20 broker-reported daily-share participation MODEL; no entry-day volume, actual filled buys share one symbol/session budget; corporate-action and executable-liquidity parity are not established",
+                "correlation": "Fixed positive Pearson>=0.8 on exactly60 prior completed aligned daily returns; new-entry clipping only, no negative-correlation credit or held-position rebalancing",
+                "reference": "Original trade settings under the same newly declared portfolio constraints and common data mask; older v12 accounts are separate evidence",
+            }
         if validation_mode == "exploratory_only":
             payload["policies"]["final"] = (
                 "No untouched later period; exploratory ranking only, never a validated recommendation"

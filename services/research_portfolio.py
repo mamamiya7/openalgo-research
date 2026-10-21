@@ -125,6 +125,7 @@ def resolve_inputs(store, owner, request):
                 "automatic-hypotheses-v10",
                 "automatic-hypotheses-v11",
                 "automatic-hypotheses-v12",
+                "automatic-hypotheses-v13",
             )
             and receipt["symbol_count"] > 200
         ):
@@ -339,6 +340,7 @@ def replay_inputs(store, owner, job_id, *, trial_id=None, period="selection"):
         "automatic-hypotheses-v10",
         "automatic-hypotheses-v11",
         "automatic-hypotheses-v12",
+        "automatic-hypotheses-v13",
     ):
         marker = selected[0].get("entry_condition")
         selected_conditions = deepcopy(marker) if marker else None
@@ -704,12 +706,21 @@ def run(
         activity({"stage": "planning"})
     execution_features_required = (
         portfolio.get("automatic_research", {}).get("version")
-        in ("automatic-hypotheses-v10", "automatic-hypotheses-v11", "automatic-hypotheses-v12")
+        in (
+            "automatic-hypotheses-v10",
+            "automatic-hypotheses-v11",
+            "automatic-hypotheses-v12",
+            "automatic-hypotheses-v13",
+        )
         or bool(evidence.get("execution_features"))
         or any(
             row.get("execution_policy", {}).get("exit_mode") == "atr"
             for row in portfolio["strategies"]
         )
+    )
+    portfolio_features_required = any(
+        row.get("execution_policy", {}).get("version") == "research-execution-aware-v4"
+        for row in portfolio["strategies"]
     )
     if saved and saved.get("phase") in (
         "calculation",
@@ -759,6 +770,7 @@ def run(
                 "automatic-hypotheses-v10",
                 "automatic-hypotheses-v11",
                 "automatic-hypotheses-v12",
+                "automatic-hypotheses-v13",
             )
             else _prepare_prices
         )
@@ -797,6 +809,7 @@ def run(
     needs_stock = (
         stock_condition
         or execution_features_required
+        or portfolio_features_required
         or portfolio.get("automatic_research", {}).get("version") in HYPOTHESIS_VERSIONS
     )
     if needs_stock:
@@ -814,8 +827,10 @@ def run(
                 "automatic-hypotheses-v10",
                 "automatic-hypotheses-v11",
                 "automatic-hypotheses-v12",
+                "automatic-hypotheses-v13",
             )
             or execution_features_required
+            or portfolio_features_required
             or portfolio.get("entry_conditions", {}).get("version")
             in (
                 "research-joint-entry-conditions-v1",
@@ -858,6 +873,10 @@ def run(
             from research.execution_features import prepare as prepare_execution
 
             evidence = prepare_execution(evidence, evidence["automatic_stock_market_context"])
+        if portfolio_features_required:
+            from services.research_portfolio_features import prepare as prepare_portfolio_features
+
+            evidence = prepare_portfolio_features(store, evidence, cancelled=cancelled)
         if portfolio.get("automatic_research"):
             from research.automatic_protocol import compile_recipe
 
@@ -936,6 +955,7 @@ def run(
         research_mandate = None
         if portfolio["automatic_research"]["version"] in HYPOTHESIS_VERSIONS:
             from research.automatic_hypotheses import (
+                CAPACITY_VERSION,
                 EXECUTION_VERSION,
                 JOINT_VERSION,
                 METHOD_VERSION,
@@ -961,6 +981,7 @@ def run(
                 EXECUTION_VERSION,
                 PRIORITY_VERSION,
                 TURNOVER_VERSION,
+                CAPACITY_VERSION,
             ):
                 from research.automatic_walk_forward import run as automatic_run
 
@@ -978,6 +999,7 @@ def run(
                     EXECUTION_VERSION,
                     PRIORITY_VERSION,
                     TURNOVER_VERSION,
+                    CAPACITY_VERSION,
                 )
                 and saved_calculation
                 and saved_development is None
@@ -1004,6 +1026,7 @@ def run(
                         EXECUTION_VERSION,
                         PRIORITY_VERSION,
                         TURNOVER_VERSION,
+                        CAPACITY_VERSION,
                     )
                     else "automatic_stock_features"
                 )
@@ -1078,7 +1101,7 @@ def run(
                     **(
                         {"read_evaluation": development_writer.read}
                         if portfolio.get("automatic_research", {}).get("version")
-                        == "automatic-hypotheses-v12"
+                        in ("automatic-hypotheses-v12", "automatic-hypotheses-v13")
                         else {}
                     ),
                 }
@@ -1124,6 +1147,13 @@ def run(
         calculation_evidence = attach(calculation_evidence)
         if validation_evidence is not None:
             validation_evidence = attach(validation_evidence)
+
+    if portfolio_features_required:
+        from research.portfolio_execution_features import attach as attach_portfolio_features
+
+        calculation_evidence = attach_portfolio_features(calculation_evidence)
+        if validation_evidence is not None:
+            validation_evidence = attach_portfolio_features(validation_evidence)
 
     if portfolio.get("entry_conditions"):
         from research.entry_conditions import apply

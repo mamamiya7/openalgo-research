@@ -13,6 +13,10 @@ TURNOVER_VERSION = "research-execution-aware-v3"
 TURNOVER_RISK_VERSION = "research-risk-limits-v2"
 TURNOVER_ADAPTER_VERSION = "vectorbt-portfolio-adapter-v4"
 TURNOVER_POLICY_VERSION = "vectorbt-joint-causal-bars-v4"
+CAPACITY_VERSION = "research-execution-aware-v4"
+CAPACITY_RISK_VERSION = "research-risk-limits-v3"
+CAPACITY_ADAPTER_VERSION = "vectorbt-portfolio-adapter-v5"
+CAPACITY_POLICY_VERSION = "vectorbt-joint-causal-bars-v5"
 ENTRY_PRIORITIES = ("source", "reversed_source", "lower_stop_risk")
 
 
@@ -41,8 +45,15 @@ def normalize_limits(raw=None):
     }
     if raw is None:
         return defaults
-    if isinstance(raw, dict) and raw.get("version") == TURNOVER_RISK_VERSION:
-        defaults.update(version=TURNOVER_RISK_VERSION, max_daily_buy_turnover_pct=100.0)
+    if isinstance(raw, dict) and raw.get("version") in (
+        TURNOVER_RISK_VERSION,
+        CAPACITY_RISK_VERSION,
+    ):
+        defaults.update(version=raw["version"], max_daily_buy_turnover_pct=100.0)
+        if raw["version"] == CAPACITY_RISK_VERSION:
+            defaults.update(
+                max_daily_volume_participation_pct=1.0, max_correlated_exposure_pct=25.0
+            )
     if (
         not isinstance(raw, dict)
         or set(raw) - set(defaults)
@@ -50,7 +61,12 @@ def normalize_limits(raw=None):
     ):
         raise ValueError("Choose supported versioned execution risk limits")
     result = {**defaults, **raw}
-    for name in result.keys() - {"version", "max_open_positions", "max_daily_buy_turnover_pct"}:
+    for name in result.keys() - {
+        "version",
+        "max_open_positions",
+        "max_daily_buy_turnover_pct",
+        "max_daily_volume_participation_pct",
+    }:
         result[name] = _number(result[name], name, 0, 100, exclusive_min=True)
     if "max_daily_buy_turnover_pct" in result:
         result["max_daily_buy_turnover_pct"] = _number(
@@ -58,6 +74,14 @@ def normalize_limits(raw=None):
             "max_daily_buy_turnover_pct",
             0,
             1000,
+            exclusive_min=True,
+        )
+    if "max_daily_volume_participation_pct" in result:
+        result["max_daily_volume_participation_pct"] = _number(
+            result["max_daily_volume_participation_pct"],
+            "max_daily_volume_participation_pct",
+            0,
+            10,
             exclusive_min=True,
         )
     result["max_open_positions"] = _number(
@@ -82,18 +106,32 @@ def normalize_policy(raw=None):
         "atr_target_multiple",
         "risk_budget_fraction",
     }
-    if version in (PRIORITY_VERSION, TURNOVER_VERSION):
+    if version in (PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION):
         allowed.add("entry_priority")
-    if set(raw) - allowed or version not in (VERSION, PRIORITY_VERSION, TURNOVER_VERSION):
+    if version == CAPACITY_VERSION:
+        allowed.update(("capacity_mode", "correlation_mode"))
+    if set(raw) - allowed or version not in (
+        VERSION,
+        PRIORITY_VERSION,
+        TURNOVER_VERSION,
+        CAPACITY_VERSION,
+    ):
         raise ValueError("Choose a supported execution policy")
     exit_mode, sizing = raw.get("exit_mode", "percent"), raw.get("sizing", "allocation")
     if exit_mode not in ("percent", "atr") or sizing not in ("allocation", "stop_risk"):
         raise ValueError("Choose percentage or ATR exits and allocation or stop-risk sizing")
     raw_limits = raw.get("risk_limits")
-    if version == TURNOVER_VERSION and raw_limits is None:
-        raw_limits = {"version": TURNOVER_RISK_VERSION}
+    if version in (TURNOVER_VERSION, CAPACITY_VERSION) and raw_limits is None:
+        raw_limits = {
+            "version": CAPACITY_RISK_VERSION
+            if version == CAPACITY_VERSION
+            else TURNOVER_RISK_VERSION
+        }
     limits = normalize_limits(raw_limits)
-    expected_limits = TURNOVER_RISK_VERSION if version == TURNOVER_VERSION else RISK_VERSION
+    expected_limits = {
+        TURNOVER_VERSION: TURNOVER_RISK_VERSION,
+        CAPACITY_VERSION: CAPACITY_RISK_VERSION,
+    }.get(version, RISK_VERSION)
     if limits["version"] != expected_limits:
         raise ValueError("Execution policy and risk-limit versions must match")
     result = {
@@ -102,7 +140,22 @@ def normalize_policy(raw=None):
         "sizing": sizing,
         "risk_limits": limits,
     }
-    if version in (PRIORITY_VERSION, TURNOVER_VERSION):
+    if version == CAPACITY_VERSION:
+        capacity = raw.get("capacity_mode")
+        correlation = raw.get("correlation_mode")
+        if capacity not in ("prior20_broker_reported", "disabled") or correlation not in (
+            "prior60_positive_080",
+            "disabled",
+        ):
+            raise ValueError(
+                "Capacity-aware execution requires explicit supported capacity and correlation modes"
+            )
+        if capacity == correlation == "disabled":
+            raise ValueError(
+                "Capacity-aware execution must enable capacity or correlation controls"
+            )
+        result.update(capacity_mode=capacity, correlation_mode=correlation)
+    if version in (PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION):
         priority = raw.get("entry_priority", "source")
         if priority not in ENTRY_PRIORITIES:
             raise ValueError("Choose a supported same-opening entry priority")

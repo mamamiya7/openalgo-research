@@ -46,7 +46,7 @@ Displaying the already saved fields needs no broker request, price download, new
 
 ## Unfinished studies: saved trials
 
-Completed automatic v8–v12 studies additionally offer **Compare alternatives**
+Completed automatic v8–v13 studies additionally offer **Compare alternatives**
 on demand. The compact table compares eligible saved development accounts by
 return, drawdown and closed-trade count, keeps the unchanged reference visible
 when its metrics qualify, and opens exact settings in the existing dialog.

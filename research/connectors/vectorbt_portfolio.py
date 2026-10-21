@@ -19,6 +19,8 @@ PRIORITY_ADAPTER_VERSION = "vectorbt-portfolio-adapter-v3"
 PRIORITY_POLICY_VERSION = "vectorbt-joint-causal-bars-v3"
 TURNOVER_ADAPTER_VERSION = "vectorbt-portfolio-adapter-v4"
 TURNOVER_POLICY_VERSION = "vectorbt-joint-causal-bars-v4"
+CAPACITY_ADAPTER_VERSION = "vectorbt-portfolio-adapter-v5"
+CAPACITY_POLICY_VERSION = "vectorbt-joint-causal-bars-v5"
 MAX_MATRIX_CELLS = 500_000
 MAX_SIGNALS = 25_000
 MAX_STRATEGIES = 20
@@ -130,6 +132,8 @@ def validate(strategies, snapshot, capital):
             priority = (
                 current["execution_policy"]["version"],
                 current["execution_policy"].get("entry_priority"),
+                current["execution_policy"].get("capacity_mode"),
+                current["execution_policy"].get("correlation_mode"),
             )
             if shared_priority is not None and shared_priority != priority:
                 raise ValueError(
@@ -191,6 +195,11 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
     priority = strategies[0]["execution_policy"]["entry_priority"] if priority_aware else None
     limits = strategies[0]["execution_policy"]["risk_limits"] if execution_aware else None
     turnover_aware = execution_aware and "max_daily_buy_turnover_pct" in limits
+    account_policy = strategies[0].get("execution_policy", {})
+    capacity_aware = account_policy.get("capacity_mode") == "prior20_broker_reported"
+    correlation_aware = account_policy.get("correlation_mode") == "prior60_positive_080"
+    # At most one entry per signal: local fill accounting is bounded by MAX_SIGNALS.
+    participation = {} if capacity_aware else None
     # Evaluation-local and bounded by snapshot dates; no retained account state.
     turnover_days = [] if turnover_aware else None
     minute = snapshot["provenance"]["interval"] == "1m"
@@ -369,6 +378,55 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
             capacities["daily_buy_turnover"] = (
                 max(0.0, daily["buy_budget"] - daily["buy_notional"]) / fill
             )
+        if capacity_aware or correlation_aware:
+            entry_day = timeline[c.i][:10]
+            decision_at = timeline[c.i] if minute else bounds(snapshot, entry_day)[0].isoformat()
+        capacity_feature, correlation_feature, capacity_receipt, correlated = None, None, None, None
+        if capacity_aware:
+            from research.portfolio_execution_features import validate_capacity_entry
+
+            capacity_feature = validate_capacity_entry(
+                signal.get("entry_capacity"),
+                symbol=signal["symbol"],
+                entry_session=entry_day,
+                decision_at=decision_at,
+            )
+            key = (entry_day, signal["symbol"])
+            daily_shares = (
+                capacity_feature["mean_daily_shares"]
+                * limits["max_daily_volume_participation_pct"]
+                / 100
+            )
+            capacity_receipt = participation.get(key)
+            if capacity_receipt is not None and (
+                capacity_receipt["mean_daily_shares"] != capacity_feature["mean_daily_shares"]
+                or capacity_receipt["source_id"] != capacity_feature["source_id"]
+            ):
+                raise ValueError(
+                    "Capacity observations disagree for the same symbol and entry session"
+                )
+            bought = capacity_receipt["bought_shares"] if capacity_receipt else 0
+            capacities["daily_volume_participation"] = max(0.0, daily_shares - bought)
+        if correlation_aware:
+            from research.portfolio_execution_features import validate_correlation_entry
+
+            correlation_feature = validate_correlation_entry(
+                signal.get("entry_correlation"),
+                symbol=signal["symbol"],
+                entry_session=entry_day,
+                decision_at=decision_at,
+                required_symbols=sorted({lots[j][1]["symbol"] for j in held}),
+            )
+            related = correlation_feature["correlations"]
+            correlated = sum(
+                c.last_position[j] * float(bar_at(j, c.i)["open"])
+                for j in held
+                if lots[j][1]["symbol"] == signal["symbol"] or related[lots[j][1]["symbol"]] >= 0.8
+            )
+            capacities["correlated_exposure"] = exposure_capacity(
+                limits["max_correlated_exposure_pct"] / 100,
+                correlated,
+            )
         policy = strategy["execution_policy"]
         risk_target = None
         if policy["sizing"] == "stop_risk":
@@ -408,6 +466,20 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
                 daily_buy_budget=daily["buy_budget"],
                 daily_buy_notional_before=daily["buy_notional"],
                 daily_buy_capacity_shares=capacities["daily_buy_turnover"],
+            )
+        if capacity_aware:
+            execution_details[col].update(
+                capacity_feature_id=capacity_feature["id"],
+                capacity_mean_daily_shares=capacity_feature["mean_daily_shares"],
+                daily_participation_share_budget=daily_shares,
+                daily_bought_shares_before=bought,
+                remaining_participation_shares=capacities["daily_volume_participation"],
+            )
+        if correlation_aware:
+            execution_details[col].update(
+                correlation_feature_id=correlation_feature["id"],
+                correlated_exposure_before=correlated,
+                correlated_capacity_shares=capacities["correlated_exposure"],
             )
         if quantity < 1:
             rejected[col] = "Execution limits cannot admit one whole share: " + ", ".join(
@@ -571,6 +643,27 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
                 rejected[c.col] = "VectorBT did not fill the opening order"
             return
         if c.position_before == 0:
+            if capacity_aware:
+                # Debit confirmed native buys only; exits never replenish capacity.
+                signal = lots[c.col][1]
+                key = (timeline[c.i][:10], signal["symbol"])
+                feature = signal["entry_capacity"]
+                receipt = participation.setdefault(
+                    key,
+                    {
+                        "date": key[0],
+                        "symbol": key[1],
+                        "mean_daily_shares": feature["mean_daily_shares"],
+                        "source_id": feature["source_id"],
+                        "share_budget": feature["mean_daily_shares"]
+                        * limits["max_daily_volume_participation_pct"]
+                        / 100,
+                        "bought_shares": 0,
+                        "buy_fills": 0,
+                    },
+                )
+                receipt["bought_shares"] += int(c.order_result.size)
+                receipt["buy_fills"] += 1
             if turnover_aware:
                 # Debit only confirmed native fills, using slipped fill price
                 # and excluding fees. Rejections and sales consume no budget.
@@ -634,6 +727,7 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
         TradeStatus,
         execution_details=execution_details,
         turnover_days=turnover_days,
+        participation=participation,
     )
 
 
@@ -708,6 +802,7 @@ def _report(
     *,
     execution_details=None,
     turnover_days=None,
+    participation=None,
 ):
     import numpy as np
 
@@ -939,4 +1034,45 @@ def _report(
             report["limits"].append(
                 "Daily buy-turnover clips new whole-share entries against a frozen first-opening equity budget; actual sales do not replenish it and protective exits are never blocked."
             )
+        if strategies[0]["execution_policy"].get("version") == "research-execution-aware-v4":
+            policy = strategies[0]["execution_policy"]
+            report["policy_version"] = CAPACITY_POLICY_VERSION
+            report["execution"].update(
+                adapter_version=CAPACITY_ADAPTER_VERSION,
+                capacity_mode=policy["capacity_mode"],
+                correlation_mode=policy["correlation_mode"],
+            )
+            if participation is not None:
+                report["execution"]["capacity"] = {
+                    "version": "research-daily-share-capacity-v1",
+                    "max_daily_volume_participation_pct": policy["risk_limits"][
+                        "max_daily_volume_participation_pct"
+                    ],
+                    "basis": "Prior20 completed broker-reported daily quantities in historical coordinates; actual filled buys consume one symbol/session budget across strategies. Sales never replenish it; exits are unrestricted. This modeled cap does not establish corporate-action comparable quantities, executable liquidity or market impact.",
+                    "daily_symbols": [
+                        {
+                            **row,
+                            "remaining_shares": max(
+                                0.0, row["share_budget"] - row["bought_shares"]
+                            ),
+                        }
+                        for _, row in sorted(participation.items())
+                    ],
+                }
+                report["limits"].append(
+                    "Daily participation clips new whole-share buys using observed prior20 broker-reported daily quantities. Historical quantity units lack a corporate-action comparability attestation; this is an explicit historical-coordinate model, not qualified present-share liquidity or an execution guarantee. Exits remain unrestricted."
+                )
+            if policy["correlation_mode"] != "disabled":
+                report["execution"]["correlation"] = {
+                    "version": "research-positive-correlation-cap-v1",
+                    "observations": 60,
+                    "threshold": 0.8,
+                    "max_correlated_exposure_pct": policy["risk_limits"][
+                        "max_correlated_exposure_pct"
+                    ],
+                    "basis": "Prior60 completed aligned daily returns, fixed positive Pearson correlation >=0.8; existing same-symbol and directly related positions marked at the observed entry opening, including entry friction in prospective equity. No transitive grouping or negative-correlation credit.",
+                }
+                report["limits"].append(
+                    "Correlation controls clip new entries against directly correlated existing exposure. They do not rebalance held positions or perform covariance optimization; relationships can change after entry."
+                )
     return report

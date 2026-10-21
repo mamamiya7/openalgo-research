@@ -16,8 +16,7 @@ journey, using the same prices and calculation bounds. The subsequent
 [v10 execution core](EXECUTION_CORE_20261021.md) adds ATR protection, distinct
 stop-risk sizing and hard exposure/position/risk limits. The
 [v11 priority increment](PRIORITY_CORE_20261021.md) adds causal ordering of
-competing entries and actual filled trading activity. Turnover budgets and
-admitted capacity/allocation work remain in package 4. The
+competing entries and actual filled trading activity. The
 [v12 turnover/recommendation increment](TURNOVER_RECOMMENDATION_20261021.md)
 implements the fixed daily entry budget and first package 5 evidence gates:
 paired daily-return ranges, cost sensitivity and actual neighbouring accounts,
@@ -25,11 +24,17 @@ with baseline fallback before final confirmation. Broader recommendation
 calibration remains planned. The next [saved alternatives and volume admission
 increment](TRADEOFFS_VOLUME_20261021.md) implements an on-demand exploratory
 return/drawdown/activity comparison without changing the selected recommendation.
-It also adds a pure volume-admission contract: current native evidence lacks the
-lineage needed to enable a capacity cap. Retain qualified provider, supplied-field,
-unit and quantity-basis evidence through acquisition/freezing before implementing
-participation-limited execution. Neither a library's volume field nor a sealed
-declaration alone proves executable capacity. Complete the qualified
+Its pure strict volume-admission contract remains unchanged. The subsequent
+[v13 portfolio increment](PORTFOLIO_CAPACITY_20261021.md) retains observed broker
+volume through acquisition/freezing and adds a separately named historical-coordinate
+participation model, initially reviewed for Fyers daily NSE equities. Shared
+symbol/session buy budgets and prior-return correlated-exposure caps compose with
+the existing hard limits. All 16 development comparison roles require supported
+constraint receipts before changed settings can be recommended. Missing producer
+semantics remain unavailable; neither a library field nor a sealed declaration
+proves executable capacity or point-in-time corporate-action parity. Broader
+producer profiles, covariance/sector allocation and search-seed/false-discovery
+calibration remain future work. Complete the qualified
 research and portfolio features before general UI polish. Learned transforms,
 continuous carry and the later packages
 remain planned.
@@ -264,9 +269,12 @@ feature; live resizing and kill-switch trading are not activated by research sav
 adds causal native ATR exits, bounded allocation/stop-risk sizing and hard entry
 limits without replacing VectorBT accounting or Optuna. Development sizing controls,
 durable recovery and exact selected replay are implemented. This is the first
-bounded slice of package 4; capacity/turnover, overlap-priority search and broader
-allocation methods remain pending. The next feature work should build on these
-frozen execution and risk contracts before UI polish or wider asset admission.
+bounded slice of package 4. Subsequent v11/v12/v13 slices implement overlap-priority
+search, turnover budgets, reviewed historical participation and direct correlated
+exposure, plus the first package 5 recommendation safeguards. Broader allocation,
+producer and calibration coverage remain pending. The next feature work should
+build on these frozen execution and risk contracts before UI polish or wider
+asset admission.
 
 The dated material below explains prior implementation and retained acceptance.
 The feature order above supersedes older descriptions of what to build next;

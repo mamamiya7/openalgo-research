@@ -349,6 +349,7 @@ function StudyWorkspace({
           'automatic-hypotheses-v10',
           'automatic-hypotheses-v11',
           'automatic-hypotheses-v12',
+          'automatic-hypotheses-v13',
         ].includes(result.automatic_research?.version ?? '') &&
         job.status === 'completed' && (
           <ResearchTradeoffs

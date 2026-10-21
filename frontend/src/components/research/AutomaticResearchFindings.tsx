@@ -31,6 +31,7 @@ function recordedWalkForward(findings: Findings): WalkForwardFindings | undefine
       'automatic-hypotheses-v10',
       'automatic-hypotheses-v11',
       'automatic-hypotheses-v12',
+      'automatic-hypotheses-v13',
     ].includes(findings.version) ||
     receipt?.version !== 'research-walk-forward-findings-v1' ||
     !receipt ||
@@ -259,6 +260,7 @@ export function AutomaticResearchFindings({
             'automatic-hypotheses-v10',
             'automatic-hypotheses-v11',
             'automatic-hypotheses-v12',
+            'automatic-hypotheses-v13',
           ].includes(findings.version) &&
             selectedSettings?.map((strategy) => (
               <p key={strategy.id} className="text-sm">
@@ -401,6 +403,7 @@ export function AutomaticResearchFindings({
             'automatic-hypotheses-v10',
             'automatic-hypotheses-v11',
             'automatic-hypotheses-v12',
+            'automatic-hypotheses-v13',
           ].includes(findings.version) &&
             findings.execution_research &&
             [
@@ -483,6 +486,13 @@ export function AutomaticResearchFindings({
           {findings.unsupported_families.length > 0 && (
             <p className="text-muted-foreground">
               Not included in this run: {findings.unsupported_families.join(', ')}.
+            </p>
+          )}
+          {findings.version === 'automatic-hypotheses-v13' && (
+            <p className="text-muted-foreground">
+              Both settings use the same portfolio limits. Volume participation uses prior
+              broker-reported history; it is a backtest assumption. Correlation limits new entries
+              using prior returns.
             </p>
           )}
         </div>

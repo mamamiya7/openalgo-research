@@ -21,7 +21,7 @@ class StockFeaturePreparationScope:
     rows and reads the durable native archive again.
     """
 
-    def __init__(self, symbols, sessions, *, calendar=None):
+    def __init__(self, symbols, sessions, *, calendar=None, volume_root=None):
         from research.stock_features import MAX_SYMBOLS, WARMUP_SESSIONS
 
         if len(symbols) > MAX_SYMBOLS or len(set(symbols)) != len(symbols):
@@ -34,6 +34,7 @@ class StockFeaturePreparationScope:
         self._archive_path = None
         self._rows = {}
         self._closed = False
+        self.volume_root = volume_root
         if calendar is not None:
             self._retain_calendar(calendar)
 
@@ -190,6 +191,26 @@ def acquire_series(
     def read_many(requests, *, check=None):
         return scope.read_many(archive, descriptor, calendar, requests, check=check)
 
+    volume_options = {}
+    if (
+        scope is not None
+        and getattr(scope, "volume_root", None) is not None
+        and descriptor["exchange"] == "NSE"
+        and descriptor["interval"] == "D"
+    ):
+        from pathlib import Path
+
+        from research.portfolio import fingerprint
+        from services.research_volume_provenance import NativeVolumeProvenance
+
+        volume = NativeVolumeProvenance(
+            scope.volume_root, archive_id=fingerprint(str(Path(archive_path).resolve()))
+        )
+        volume_options = {
+            "volume_capture": volume.capture,
+            "volume_lookup": volume.lookup,
+            "require_volume_provenance": True,
+        }
     snapshot = acquire_market_series_prices(
         plan,
         calendar,
@@ -207,6 +228,7 @@ def acquire_series(
         max_requests=max_requests,
         max_seconds=max_seconds,
         clock=clock,
+        **volume_options,
     )
     evidence = freeze_series(
         descriptor, required_dates, calendar, snapshot["bars"][descriptor["symbol"]]

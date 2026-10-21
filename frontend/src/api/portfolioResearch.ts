@@ -17,8 +17,10 @@ export type PortfolioAxis =
   | 'allocation_pct'
 export type PortfolioRange = { min: number; max: number; step: number }
 export interface PortfolioRiskLimits {
-  version: 'research-risk-limits-v1' | 'research-risk-limits-v2'
+  version: 'research-risk-limits-v1' | 'research-risk-limits-v2' | 'research-risk-limits-v3'
   max_daily_buy_turnover_pct?: number
+  max_daily_volume_participation_pct?: number
+  max_correlated_exposure_pct?: number
   max_gross_exposure_pct: number
   max_symbol_exposure_pct: number
   max_open_positions: number
@@ -30,6 +32,9 @@ export interface ExecutionPolicy {
     | 'research-execution-aware-v1'
     | 'research-execution-aware-v2'
     | 'research-execution-aware-v3'
+    | 'research-execution-aware-v4'
+  capacity_mode?: 'disabled' | 'prior20_broker_reported'
+  correlation_mode?: 'disabled' | 'prior60_positive_080'
   entry_priority?: 'source' | 'reversed_source' | 'lower_stop_risk'
   exit_mode: 'percent' | 'atr'
   sizing: 'allocation' | 'stop_risk'
@@ -384,6 +389,7 @@ export interface PortfolioRequest {
       | 'automatic-hypotheses-v10'
       | 'automatic-hypotheses-v11'
       | 'automatic-hypotheses-v12'
+      | 'automatic-hypotheses-v13'
   }
   entry_conditions?: EntryConditions
   optimization?: {
