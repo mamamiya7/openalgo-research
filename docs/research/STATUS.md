@@ -30,8 +30,14 @@ events. This is native engineering qualification, not general false discovery
 control or live strategy confidence. The initial controlled-model receipt remains
 separate. Scoped resource repetitions release every cache on success/error;
 handles do not grow and later memory samples plateau. No new production default,
-UI, dependency or database schema is introduced. Local activation and Git
-publication follow this completed qualification.
+UI, dependency or database schema is introduced.
+
+Locally activated from qualified build `1273be244` (native implementation
+`d43bc4d1f`). Existing account, served UI, authenticated route, installed
+compatibility and fresh worker heartbeat pass. All 63 saved run identities,
+configuration and Historify bytes remain unchanged. Source rollback files remain
+local; no normal research/trading job or order was started. The source branch is
+`codex/native-research-refinement`; public release ZIPs remain unchanged.
 
 ## Search-seed stability and controlled calibration — 21 October 2026
 

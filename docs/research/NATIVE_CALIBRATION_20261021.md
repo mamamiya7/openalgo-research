@@ -163,5 +163,9 @@ caches; 100 attempts at cross-dataset reuse are rejected. Handles fall from 944 
 Retained traced allocations plateau around 0.2 MB with a 22.2 MB temporary peak.
 This is a measured fixed-window lifecycle check, not a hard whole-programme RAM cap.
 
-Native implementation commit: `d43bc4d1f`. Local activation follows this completed
-qualification; installed source and saved-data checks are recorded separately.
+Native implementation commit: `d43bc4d1f`. Locally activated from qualified build
+`1273be244`: existing account, served UI, protected route, fresh research worker
+heartbeat and installed compatibility pass. All 63 saved run identities,
+configuration and Historify bytes remain unchanged. Source rollback files are
+retained locally. No normal research/trading job or order was started. The branch
+is `codex/native-research-refinement`; public release ZIPs remain unchanged.

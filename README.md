@@ -94,7 +94,7 @@ New automatic studies use v15. The separate [controlled calibration protocol](do
 measures false recommendations under declared test models, not the probability
 that a user's strategy will profit. Public release ZIPs remain unchanged.
 
-The [native qualification extension](docs/research/NATIVE_CALIBRATION_20261021.md)
+The locally activated [native qualification extension](docs/research/NATIVE_CALIBRATION_20261021.md)
 tests the complete procedure with genuine VectorBT calculations on synthetic
 markets and alternate sampler streams across every fit. This is offline developer
 qualification; ordinary optimisation keeps its existing settings and workload.

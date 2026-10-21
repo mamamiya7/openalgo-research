@@ -7,9 +7,8 @@ continues.** This section owns the current implementation order. The dated
 checkpoints below are historical evidence, not competing instructions about
 what to build next. [STATUS.md](STATUS.md) owns activation and publication facts.
 
-The installed development build includes code `9399cf2e9`; its qualification
-notes and README were pushed with `84a885d76` on
-`codex/native-research-refinement`. The reviewed native host is OpenAlgo 2.0.2.7
+The installed native qualification build is `1273be244`, with implementation
+`d43bc4d1f`, on `codex/native-research-refinement`. The reviewed native host is OpenAlgo 2.0.2.7
 and the development distribution is preview.8. Public preview.7 ZIPs still use
 OpenAlgo 2.0.2.5 and do not contain this development work. Pushed source,
 local installation and a new public release are separate milestones.
@@ -48,7 +47,7 @@ allocation**, with representative runtime profiling before expanding its search.
 
 ### What v15 closes, and what it does not
 
-The latest increment passes 466 distinct scoped backend and 270 frontend checks.
+Before the native extension, the v15 increment passed 466 distinct scoped backend and 270 frontend checks.
 Its frozen 20-programme controlled suite retains original settings in all 16
 null cases and selects changed settings in all four persistent-edge controls.
 Separate genuine native execution checks and full service recovery tests cover
