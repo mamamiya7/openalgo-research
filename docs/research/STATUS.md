@@ -1,5 +1,26 @@
 # OpenAlgo Research status
 
+## Saved alternatives and volume admission — 21 October 2026
+
+The [next core increment](TRADEOFFS_VOLUME_20261021.md) adds **Compare alternatives**
+to supported completed automatic studies. It reads saved final-development
+accounts on demand, shows return/drawdown/closed-trade trade-offs and opens exact
+settings in the existing dialog. The recommendation and final-period evidence
+remain separate; inspection does not calculate or acquire data.
+
+A pure, strict volume-admission contract is implemented as a prerequisite for
+capacity work. Current frozen native prices lack supplied-field, provider/unit
+and quantity-basis evidence, so old snapshots remain unavailable and **no
+volume-based capacity limit is enabled**. The next package 4 step is retaining
+qualified provenance through acquisition and freezing, then testing causal
+participation-limited execution. Wider recommendation calibration remains planned.
+
+319 distinct scoped backend checks and 33 frontend checks pass, including the
+connected v12 programme/recovery, exact settings inspection, owner/result races,
+volume admission and resource repetitions. TypeScript, source compatibility and
+the production build pass. Source is qualified; local activation is recorded
+after the existing-account and fresh-worker verification below.
+
 ## Turnover and recommendation evidence — 21 October 2026 local activation
 
 The [v12 core increment](TURNOVER_RECOMMENDATION_20261021.md) adds a fixed daily

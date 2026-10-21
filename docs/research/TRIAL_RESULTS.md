@@ -46,6 +46,14 @@ Displaying the already saved fields needs no broker request, price download, new
 
 ## Unfinished studies: saved trials
 
+Completed automatic v8–v12 studies additionally offer **Compare alternatives**
+on demand. The compact table compares eligible saved development accounts by
+return, drawdown and closed-trade count, keeps the unchanged reference visible
+when its metrics qualify, and opens exact settings in the existing dialog.
+It does not run another calculation or change the saved recommendation.
+Alternatives remain exploratory; the selected setup's later validation does not
+transfer to them. See [the comparison contract](TRADEOFFS_VOLUME_20261021.md).
+
 Paused, cancelled, interrupted and failed portfolio optimizations offer **Saved
 trials** beside Resume and Activity. Opening it reads committed scientific
 checkpoints only. The compact table shows return, drawdown and closed trades;

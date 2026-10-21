@@ -12,6 +12,7 @@ import {
 import { type CandidateReportsReceipt, researchCandidates } from '@/api/researchCandidates'
 import { researchShortlist, type ShortlistCandidate } from '@/api/researchShortlist'
 import { researchStudyActivity } from '@/api/researchStudyActivity'
+import { researchTradeoffs } from '@/api/researchTradeoffs'
 import { researchDefaults } from '@/lib/researchDraft'
 import { useAuthStore } from '@/stores/authStore'
 import { PortfolioStudyWorkspace } from './PortfolioStudyWorkspace'
@@ -22,6 +23,7 @@ vi.mock('@/api/researchCandidates', () => ({
 vi.mock('@/api/researchStudyActivity', () => ({
   researchStudyActivity: { get: vi.fn() },
 }))
+vi.mock('@/api/researchTradeoffs', () => ({ researchTradeoffs: { get: vi.fn() } }))
 vi.mock('@/api/researchShortlist', async (original) => ({
   ...(await original<typeof import('@/api/researchShortlist')>()),
   researchShortlist: { list: vi.fn(), save: vi.fn() },
@@ -245,6 +247,83 @@ afterEach(() => {
 })
 
 describe('connected study exploration', () => {
+  it('inspects an alternative in the existing settings dialog without preparing or rerunning', async () => {
+    const data = result()
+    const pointer = 'a'.repeat(64)
+    data.automatic_research = {
+      version: 'automatic-hypotheses-v12',
+      status: 'inconclusive',
+      headline: 'More signals are needed',
+      selected_config_id: 'config-0',
+      selected_is_baseline: false,
+      selection_basis: 'An exploratory run.',
+      recipe: {
+        version: 'automatic-hypotheses-v12',
+        periods: {
+          search: { from: '2026-01-01', to: '2026-04-30' },
+          check1: { from: '2026-05-01', to: '2026-05-31' },
+          check2: { from: '2026-06-01', to: '2026-06-30' },
+          final: { from: '2026-07-01', to: '2026-08-31' },
+        },
+      },
+      baseline: {},
+      checks: [],
+      final: null,
+      counts: { proposals: 5, simulations: 5, finalists: 0 },
+      unsupported_families: [],
+    }
+    data.report_context = {
+      version: 'research-report-context-v1',
+      report_id: 'report',
+      job_id: studyId,
+      result_artifact: pointer,
+      inputs_artifact: null,
+      config_id: 'config-0',
+      period: 'selection',
+      period_label: 'Development',
+      dates: { from: null, to: null },
+      analysis_version: null,
+      analysis_artifact: null,
+    }
+    vi.mocked(researchTradeoffs.get).mockResolvedValue({
+      version: 'research-tradeoffs-view-v1',
+      job_id: studyId,
+      result_artifact: pointer,
+      available: true,
+      reason: null,
+      analysis: {
+        version: 'research-development-tradeoffs-v1',
+        status: 'available',
+        counts: { recorded: 3, eligible: 2, frontier: 1, excluded: 1 },
+        baseline: null,
+        choices: [
+          {
+            config_id: 'config-1',
+            roles: ['best_return'],
+            metrics: { net_return_pct: 4, max_drawdown_pct: 2, closed_trades: 10 },
+            selected_existing: false,
+            validation: 'exploratory_development_only',
+          },
+        ],
+        limitations: [],
+      },
+    })
+    const view = mount({ data })
+    expect(researchTradeoffs.get).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: 'Compare alternatives' }))
+    const opener = await screen.findByRole('button', { name: 'Inspect Higher return settings' })
+    await userEvent.click(opener)
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByRole('heading', { name: 'Trial 2' })).toBeVisible()
+    expect(within(dialog).getByText('Target 2%')).toBeVisible()
+    expect(await within(dialog).findByRole('button', { name: 'Prepare report' })).toBeEnabled()
+    expect(researchCandidates.prepare).not.toHaveBeenCalled()
+    expect(view.onRerun).not.toHaveBeenCalled()
+    expect(data.experiment!.recommendation_id).toBe('config-0')
+    await userEvent.keyboard('{Escape}')
+    expect(opener).toHaveFocus()
+  })
+
   it.each([
     ['automatic-trade-management-v1', 'Exits and holding periods'],
     ['automatic-trade-management-v2', 'Stability-checked exits'],

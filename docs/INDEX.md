@@ -97,3 +97,4 @@ need → drill into the specific file. Don't load everything at once.
 - [Method admission foundation](research/METHOD_ADMISSION_20261020.md): typed pinned method definitions, on-demand saved coverage, qualification and the next numerical expansion.
 - [Core method expansion](research/METHOD_EXPANSION_20261021.md): v9 momentum domains, mandatory probes, bounded search, native recovery and preserved legacy identities.
 - [Turnover and recommendation evidence](research/TURNOVER_RECOMMENDATION_20261021.md): v12 fixed daily buy budgets, comparable opportunities, paired uncertainty and actual neighbouring-account gates.
+- [Saved alternatives and volume admission](research/TRADEOFFS_VOLUME_20261021.md): read-only development trade-offs, exact settings inspection and the qualified-data boundary required before capacity limits.

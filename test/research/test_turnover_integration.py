@@ -181,6 +181,23 @@ def test_full_service_retains_robustness_before_final_and_recovers_exactly(
     )
     assert repeated == result and len(engine.calls) == before
     assert settings_identity(repeated["strategies"]) == findings["selected_config_id"]
+    from research.research_tradeoffs import analyze
+
+    retained = deepcopy(result)
+    alternatives = analyze(result)
+    assert alternatives["status"] == "available", alternatives
+    assert alternatives["counts"]["recorded"] == len(result["experiment"]["rows"])
+    for excluded in alternatives["unavailable"]:
+        assert all(
+            reason
+            in {
+                "Return after recorded costs is not positive",
+                "Drawdown exceeds the recorded research display limit of 25%",
+                "Fewer than five closed trades or five recorded distinct entry dates",
+            }
+            for reason in excluded["reasons"]
+        ), excluded
+    assert result == retained and len(engine.calls) == before
 
 
 def test_v12_saved_coverage_and_preflight_are_metadata_only():

@@ -27,6 +27,7 @@ import { AnalysisBasis, AnalysisPreparation } from './PortfolioAnalysis'
 import { PortfolioTrials } from './PortfolioTrials'
 import { PrepareTestedReport } from './PrepareTestedReport'
 import { availableTrialMetrics, trialMetricText, trialMetricValue } from './portfolioTrialMetrics'
+import { ResearchTradeoffs } from './ResearchTradeoffs'
 import { researchRecipeLabel } from './researchRecipeLabels'
 import { SaveToShortlist } from './SaveToShortlist'
 import { StudyActivity } from './StudyActivity'
@@ -341,6 +342,21 @@ function StudyWorkspace({
           developmentEvidence={result.development_evidence}
         />
       )}
+      {automatic &&
+        [
+          'automatic-hypotheses-v8',
+          'automatic-hypotheses-v9',
+          'automatic-hypotheses-v10',
+          'automatic-hypotheses-v11',
+          'automatic-hypotheses-v12',
+        ].includes(result.automatic_research?.version ?? '') &&
+        job.status === 'completed' && (
+          <ResearchTradeoffs
+            jobId={job.id}
+            resultArtifact={result.report_context?.result_artifact}
+            onInspect={inspect}
+          />
+        )}
       <details className="border-y py-3 text-xs text-muted-foreground">
         <summary className="cursor-pointer">Search details</summary>
         <dl className="grid grid-cols-2 gap-5 py-4 sm:grid-cols-4">

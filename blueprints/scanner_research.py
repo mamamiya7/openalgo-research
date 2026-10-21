@@ -16,6 +16,7 @@ from services import research_partial_study as partial_study
 from services import research_preferences as preferences
 from services import research_shortlist as shortlist
 from services import research_study_activity as study_activity
+from services import research_tradeoffs as tradeoffs
 from services import research_validation as validation
 from services import scanner_research_service as service
 from utils.logging import get_logger
@@ -194,6 +195,25 @@ def portfolio_method_coverage(job_id):
         )
     except method_coverage.CoverageChanged as error:
         response = jsonify(message=str(error), code="method_coverage_changed")
+        response.status_code = 409
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
+@scanner_research_bp.get("/portfolio/jobs/<job_id>/tradeoffs")
+def portfolio_tradeoffs(job_id):
+    if set(request.args) - {"expected_result"} or any(
+        len(request.args.getlist(key)) != 1 for key in request.args
+    ):
+        raise ValueError("Invalid saved alternatives query")
+    try:
+        response = jsonify(
+            tradeoffs.read(
+                store(), session["user"], job_id, expected_result=request.args.get("expected_result")
+            )
+        )
+    except tradeoffs.TradeoffsChanged as error:
+        response = jsonify(message=str(error), code="tradeoffs_changed")
         response.status_code = 409
     response.headers["Cache-Control"] = "private, no-store"
     return response

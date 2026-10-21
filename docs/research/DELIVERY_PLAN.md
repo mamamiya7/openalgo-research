@@ -22,7 +22,14 @@ admitted capacity/allocation work remain in package 4. The
 implements the fixed daily entry budget and first package 5 evidence gates:
 paired daily-return ranges, cost sensitivity and actual neighbouring accounts,
 with baseline fallback before final confirmation. Broader recommendation
-calibration and trade-off selection remain planned. Complete the qualified
+calibration remains planned. The next [saved alternatives and volume admission
+increment](TRADEOFFS_VOLUME_20261021.md) implements an on-demand exploratory
+return/drawdown/activity comparison without changing the selected recommendation.
+It also adds a pure volume-admission contract: current native evidence lacks the
+lineage needed to enable a capacity cap. Retain qualified provider, supplied-field,
+unit and quantity-basis evidence through acquisition/freezing before implementing
+participation-limited execution. Neither a library's volume field nor a sealed
+declaration alone proves executable capacity. Complete the qualified
 research and portfolio features before general UI polish. Learned transforms,
 continuous carry and the later packages
 remain planned.

@@ -56,11 +56,20 @@ inside Research details: inspect what each fit tested, reused or left untried,
 with optional formulas and input requirements. It reads saved metadata on demand;
 the existing optimisation methods and numerical results remain unchanged.
 
-The latest locally activated [core increment](docs/research/METHOD_EXPANSION_20261021.md)
-adds 10/60-session momentum to automatic research: 108 registered stock/market
-choices, explicit tests of the new methods and the same 192-proposal/
-320-calculation limit. It reuses the retained native prices and preserves older
-studies' exact versions. Public ZIPs remain unchanged.
+The locally activated [execution core](docs/research/EXECUTION_CORE_20261021.md)
+adds ATR exits, stop-risk sizing and hard portfolio limits. The
+[turnover and recommendation increment](docs/research/TURNOVER_RECOMMENDATION_20261021.md)
+adds daily buy budgets, paired development-return ranges, higher-cost and
+neighbour checks, with unchanged settings retained when evidence is weak.
+Current automatic research considers 108 registered stock/market choices within
+272 proposals and at most 384 calculations, preserving older studies' versions.
+
+The [next core increment](docs/research/TRADEOFFS_VOLUME_20261021.md) adds
+**Compare alternatives** to completed automatic studies: inspect saved
+return/drawdown/activity trade-offs without another optimisation or download.
+Alternatives remain exploratory and do not replace the recommendation. It also
+adds volume-admission checks as a prerequisite for future capacity limits;
+volume-based execution limits are not enabled yet. Public ZIPs remain unchanged.
 
 The next workflow increment previews CSV counts and dates before setup, simplifies
 experiment navigation to **Overview → Setup → Results → Saved setups**, and lets
