@@ -21,6 +21,7 @@ import {
   addPortfolioSource,
   applySuggestedSearch,
   freshPortfolioDraft,
+  defaultRiskLimits,
   portfolioDraftIssue,
   portfolioEngineIssue,
   portfolioPayload,
@@ -235,7 +236,7 @@ describe('native portfolio consumer journey', () => {
     const original = draft()
     const optimized = selectPortfolioRun(original, true)
     expect(optimized.optimizing).toBe(true)
-    expect(optimized.portfolio.automatic_research).toEqual({ version: 'automatic-hypotheses-v9' })
+    expect(optimized.portfolio.automatic_research).toEqual({ version: 'automatic-hypotheses-v10' })
     expect(optimized.portfolio.strategies).toEqual(original.portfolio.strategies)
     expect(optimized.portfolio.capital).toBe(original.portfolio.capital)
     expect(original.portfolio.automatic_research).toBeUndefined()
@@ -249,6 +250,7 @@ describe('native portfolio consumer journey', () => {
     'automatic-hypotheses-v7',
     'automatic-hypotheses-v8',
     'automatic-hypotheses-v9',
+    'automatic-hypotheses-v10',
   ] as const)('keeps the saved %s recipe when optimizing again', (version) => {
     const saved = draft()
     saved.portfolio.automatic_research = { version }
@@ -267,12 +269,12 @@ describe('native portfolio consumer journey', () => {
     expect(selectPortfolioRun(conditioned, true).portfolio.automatic_research).toBeUndefined()
   })
 
-  it('defaults to expanded research and preserves an explicitly selected prior recipe', async () => {
+  it('defaults to execution-aware research and preserves an explicitly selected prior recipe', async () => {
     const original = draft()
     savedDraft({ ...original, optimizing: true })
     mount()
     await userEvent.click(await screen.findByRole('button', { name: 'Automatic research' }))
-    expect(screen.getByLabelText('Research scope')).toHaveValue('automatic-hypotheses-v9')
+    expect(screen.getByLabelText('Research scope')).toHaveValue('automatic-hypotheses-v10')
     await userEvent.click(screen.getByText('Advanced research options'))
     await userEvent.selectOptions(
       screen.getByLabelText('Research scope'),
@@ -456,17 +458,56 @@ describe('native portfolio consumer journey', () => {
     savedDraft({ ...original, optimizing: true })
     mount()
     await userEvent.click(await screen.findByRole('button', { name: 'Automatic research' }))
-    expect(screen.getByLabelText('Research scope')).toHaveValue('automatic-hypotheses-v9')
-    expect(screen.getByText(/Tests stock and market conditions/)).not.toBeVisible()
+    expect(screen.getByLabelText('Research scope')).toHaveValue('automatic-hypotheses-v10')
+    expect(screen.getByText(/Tests percentage and ATR exits/)).not.toBeVisible()
     await userEvent.click(screen.getByRole('button', { name: 'Optimize automatically' }))
     await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
     const sent = vi.mocked(portfolioResearch.submit).mock.calls[0][0]
-    expect(sent.automatic_research).toEqual({ version: 'automatic-hypotheses-v9' })
+    expect(sent.automatic_research).toEqual({ version: 'automatic-hypotheses-v10' })
     expect(sent.capital).toBe(original.portfolio.capital)
     expect(sent.strategies[0].config).toEqual(original.portfolio.strategies[0].config)
     expect(sent.strategies[0].allocation_pct).toBe(original.portfolio.strategies[0].allocation_pct)
     expect(sent.optimization).toBeUndefined()
     expect(sent.validation).toBeUndefined()
+  })
+
+  it('shows editable hard limits before optimisation and sends exactly those limits', async () => {
+    savedDraft({ ...draft(), optimizing: true })
+    mount()
+    await userEvent.click(await screen.findByRole('button', { name: 'Automatic research' }))
+    expect(screen.getByLabelText('Gross exposure %')).toHaveValue(100)
+    expect(screen.getByLabelText('Per symbol %')).toHaveValue(25)
+    expect(screen.getByLabelText('Risk per trade %')).toHaveValue(1)
+    fireEvent.change(screen.getByLabelText('Open positions'), { target: { value: '4' } })
+    await userEvent.click(screen.getByRole('button', { name: 'Optimize automatically' }))
+    await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
+    const sent = vi.mocked(portfolioResearch.submit).mock.calls[0][0]
+    expect(sent.risk_limits).toEqual({ ...defaultRiskLimits, max_open_positions: 4 })
+    expect(sent.automatic_research?.version).toBe('automatic-hypotheses-v10')
+  })
+
+  it('rejects invalid caps and keeps selected execution rules in fixed requests', () => {
+    const current = draft()
+    current.portfolio.risk_limits = { ...defaultRiskLimits, max_open_positions: 0 }
+    expect(portfolioDraftIssue(current)).toMatch(/open positions/)
+    current.portfolio.risk_limits.max_open_positions = 4
+    current.portfolio.strategies[0].execution_policy = {
+      version: 'research-execution-aware-v1',
+      exit_mode: 'atr',
+      sizing: 'stop_risk',
+      atr_period: 14,
+      atr_stop_multiple: 2,
+      atr_target_multiple: 3,
+      risk_limits: current.portfolio.risk_limits,
+    }
+    const fixed = portfolioPayload({ ...current, optimizing: false })
+    expect(fixed.strategies[0].execution_policy).toEqual(
+      current.portfolio.strategies[0].execution_policy
+    )
+    expect(fixed.risk_limits).toEqual(current.portfolio.risk_limits)
+    expect(
+      portfolioEngineIssue({ ...current, portfolio: { ...current.portfolio, engine: 'nautilus' } })
+    ).toMatch(/need VectorBT/)
   })
 
   it('submits the bounded market-condition recipe only when explicitly selected', async () => {

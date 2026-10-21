@@ -13,6 +13,8 @@ from research.intraday import bounds, entry_open, stamp
 
 ADAPTER_VERSION = "vectorbt-portfolio-adapter-v1"
 POLICY_VERSION = "vectorbt-joint-causal-bars-v1"
+EXECUTION_ADAPTER_VERSION = "vectorbt-portfolio-adapter-v2"
+EXECUTION_POLICY_VERSION = "vectorbt-joint-causal-bars-v2"
 MAX_MATRIX_CELLS = 500_000
 MAX_SIGNALS = 25_000
 MAX_STRATEGIES = 20
@@ -82,6 +84,8 @@ def validate(strategies, snapshot, capital):
     if not isinstance(strategies, list) or not 1 <= len(strategies) <= MAX_STRATEGIES:
         raise ValueError(f"Supply 1-{MAX_STRATEGIES} strategies")
     normalized, ids, lots = [], set(), []
+    execution_aware = any("execution_policy" in row for row in strategies)
+    shared_limits = None
     for strategy in strategies:
         identity = strategy.get("id")
         if not isinstance(identity, str) or not identity or len(identity) > 100 or identity in ids:
@@ -106,7 +110,20 @@ def validate(strategies, snapshot, capital):
         cfg = validate_config(strategy.get("config"))
         # Account capital lives only at portfolio level, never in private accounts.
         cfg["initial_capital"] = float(capital)
-        normalized.append({**strategy, "config": cfg})
+        current = {**strategy, "config": cfg}
+        if execution_aware:
+            from research.execution_policy import normalize_policy
+
+            if "execution_policy" not in strategy:
+                raise ValueError(
+                    "Execution-aware accounts require an explicit policy on every strategy"
+                )
+            current["execution_policy"] = normalize_policy(strategy["execution_policy"])
+            limits = current["execution_policy"]["risk_limits"]
+            if shared_limits is not None and shared_limits != limits:
+                raise ValueError("All execution-aware strategies must share the same risk limits")
+            shared_limits = limits
+        normalized.append(current)
         for signal in signals:
             if not isinstance(signal, dict) or not signal.get("symbol") or not signal.get("date"):
                 raise ValueError("Each signal needs a symbol and date")
@@ -156,6 +173,8 @@ def validate(strategies, snapshot, capital):
 
 def evaluate(strategies, snapshot, capital, *, progress=None):
     strategies, lots, scheduled, coverage = validate(strategies, snapshot, capital)
+    execution_aware = "execution_policy" in strategies[0]
+    limits = strategies[0]["execution_policy"]["risk_limits"] if execution_aware else None
     minute = snapshot["provenance"]["interval"] == "1m"
     timeline = snapshot["timeline" if minute else "sessions"]
     if progress:
@@ -177,6 +196,9 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
     filled_at = np.full(count, -1, dtype=np.int64)
     entry_price = np.full(count, np.nan)
     high_water = np.full(count, np.nan)
+    initial_stops = np.full(count, np.nan) if execution_aware else None
+    initial_targets = np.full(count, np.nan) if execution_aware else None
+    execution_details = [None] * count if execution_aware else None
     rejected, budgets, entry_raw, exit_raw, outcomes, timings = ([None] * count for _ in range(6))
     native_status = [None] * count
     entries = {}
@@ -194,6 +216,10 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
         bar = bar_at(col, i)
         op, lo, hi = (float(bar[k]) for k in ("open", "low", "high"))
         anchor, stop_pct, reason = entry_price[col], cfg["stop_pct"] / 100, "stop"
+        target_pct = cfg["target_pct"] / 100
+        if execution_aware:
+            stop_pct = (entry_price[col] - initial_stops[col]) / entry_price[col]
+            target_pct = (initial_targets[col] - entry_price[col]) / entry_price[col]
         if cfg["trailing_enabled"] and high_water[col] * (
             1 - cfg["trailing_pct"] / 100
         ) > anchor * (1 - stop_pct):
@@ -201,9 +227,7 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
         if opening_only:
             lo = hi = op
         stop = nb.get_stop_price_nb(position, anchor, stop_pct, op, lo, hi, True)
-        target = nb.get_stop_price_nb(
-            position, entry_price[col], cfg["target_pct"] / 100, op, lo, hi, False
-        )
+        target = nb.get_stop_price_nb(position, entry_price[col], target_pct, op, lo, hi, False)
         timing = "open" if opening_only else "intraday"
         if not np.isnan(stop):
             return float(stop), reason, timing
@@ -229,6 +253,136 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
             if due:
                 return float(bar["close"]), "hold", "close"
         return None
+
+    def protection(col, fill):
+        strategy_i, signal = lots[col]
+        strategy = strategies[strategy_i]
+        cfg, policy = strategy["config"], strategy["execution_policy"]
+        if policy["exit_mode"] == "atr":
+            from research.execution_features import validate_entry_feature
+
+            entry = scheduled[col][0]
+            day = timeline[entry][:10]
+            decision_at = timeline[entry] if minute else bounds(snapshot, day)[0].isoformat()
+            feature = validate_entry_feature(
+                signal.get("execution_atr"),
+                symbol=signal["symbol"],
+                entry_session=day,
+                decision_at=decision_at,
+            )
+            stop = fill - feature["value"] * policy["atr_stop_multiple"]
+            target = fill + feature["value"] * policy["atr_target_multiple"]
+        else:
+            feature = None
+            stop, target = fill * (1 - cfg["stop_pct"] / 100), fill * (1 + cfg["target_pct"] / 100)
+        if (
+            not all(math.isfinite(value) for value in (stop, target))
+            or not 0 < stop < fill < target
+        ):
+            raise ValueError(
+                "Execution protection requires a positive stop below the fill and target above it"
+            )
+        return float(stop), float(target), feature
+
+    def remaining_stop_risk(c, col, i):
+        cfg = strategies[lots[col][0]]["config"]
+        mark = float(bar_at(col, i)["open"])
+        stop = initial_stops[col]
+        if cfg["trailing_enabled"]:
+            stop = max(stop, high_water[col] * (1 - cfg["trailing_pct"] / 100))
+        proceeds = stop * (1 - cfg["slippage_bps"] / 10000) * (1 - cfg["cost_bps"] / 10000)
+        return c.last_position[col] * max(0.0, mark - proceeds)
+
+    def constrained_entry(c, state, col, strategy_i, cfg, raw, budget, fee, slip):
+        strategy, signal = strategies[strategy_i], lots[col][1]
+        fill, cash_per_share = raw * (1 + slip), raw * (1 + slip) * (1 + fee)
+        requested = math.floor((budget + 1e-9) / cash_per_share)
+        stop, target, feature = protection(col, fill)
+        loss = cash_per_share - stop * (1 - slip) * (1 - fee)
+        if not math.isfinite(loss) or loss <= 0:
+            raise ValueError("Execution loss to stop must be positive and finite")
+        held = [j for j in range(count) if c.last_position[j] > 0]
+        gross = sum(c.last_position[j] * float(bar_at(j, c.i)["open"]) for j in held)
+        # An earlier same-opening fill can replace its native valuation with
+        # the slipped fill price. Mark every existing lot at the same observed
+        # opening as gross/symbol risk: friction cannot become fictitious equity
+        # available to the next order.
+        equity = float(c.last_cash[c.group] + gross)
+        symbol = sum(
+            c.last_position[j] * float(bar_at(j, c.i)["open"])
+            for j in held
+            if lots[j][1]["symbol"] == signal["symbol"]
+        )
+        deployed = sum(
+            c.last_position[j] * float(bar_at(j, c.i)["open"])
+            for j in held
+            if lots[j][0] == strategy_i
+        )
+        stop_risk = sum(remaining_stop_risk(c, j, c.i) for j in held)
+        friction = cash_per_share - raw
+
+        # Include entry friction in the prospective equity denominator. Limits
+        # apply after the contemplated fill, not to a pre-fee inflated account.
+        def exposure_capacity(fraction, existing):
+            return max(0.0, (equity * fraction - existing) / (raw + fraction * friction))
+
+        capacities = {
+            "requested_cash_budget": requested,
+            "shared_cash": max(0.0, c.last_cash[c.group] / cash_per_share),
+            "strategy_allocation": exposure_capacity(strategy["allocation_pct"] / 100, deployed),
+            "gross_exposure": exposure_capacity(limits["max_gross_exposure_pct"] / 100, gross),
+            "symbol_exposure": exposure_capacity(limits["max_symbol_exposure_pct"] / 100, symbol),
+            "trade_stop_risk": max(
+                0.0,
+                equity
+                * limits["max_trade_risk_pct"]
+                / 100
+                / (loss + limits["max_trade_risk_pct"] / 100 * friction),
+            ),
+            "total_stop_risk": max(
+                0.0,
+                (equity * limits["max_total_stop_risk_pct"] / 100 - stop_risk)
+                / (loss + limits["max_total_stop_risk_pct"] / 100 * friction),
+            ),
+            "open_positions": requested if len(held) < limits["max_open_positions"] else 0,
+        }
+        policy = strategy["execution_policy"]
+        risk_target = None
+        if policy["sizing"] == "stop_risk":
+            risk_target = limits["max_trade_risk_pct"] / 100 * policy["risk_budget_fraction"]
+            capacities["risk_sizing_target"] = max(
+                0.0, equity * risk_target / (loss + risk_target * friction)
+            )
+        quantity = max(0, math.floor(min(capacities.values()) + 1e-9)) if equity > 0 else 0
+        constraints = [
+            name for name, capacity in capacities.items() if math.floor(capacity + 1e-9) < requested
+        ]
+        execution_details[col] = {
+            "exit_mode": strategy["execution_policy"]["exit_mode"],
+            "sizing": strategy["execution_policy"]["sizing"],
+            "risk_budget_fraction": policy.get("risk_budget_fraction"),
+            "target_stop_risk_pct": risk_target * 100 if risk_target is not None else None,
+            "atr": dict(feature) if feature else None,
+            "initial_stop": stop,
+            "initial_target": target,
+            "initial_risk_per_share": loss,
+            "initial_stop_risk": quantity * loss,
+            "requested_quantity": requested,
+            "filled_quantity": 0,
+            "clipped": quantity < requested,
+            "constraints": constraints,
+            "opening_equity": equity,
+            "gross_before": gross,
+            "symbol_before": symbol,
+            "open_positions_before": len(held),
+            "total_stop_risk_before": stop_risk,
+            "accepted_cash_budget": quantity * cash_per_share,
+        }
+        if quantity < 1:
+            rejected[col] = "Execution limits cannot admit one whole share: " + ", ".join(
+                constraints or ["requested_cash_budget"]
+            )
+        return quantity
 
     def before_bar(c):
         if progress:
@@ -274,6 +428,27 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
                 if lots[j][0] == strategy_i and c.last_position[j] > 0
             )
             raw = float(bar_at(col, c.i)["open"])
+            if execution_aware:
+                try:
+                    quantity = constrained_entry(
+                        c, state, col, strategy_i, cfg, raw, budget, fee, slip
+                    )
+                except ValueError as error:
+                    rejected[col] = str(error)
+                    return col, NoOrder
+                if rejected[col]:
+                    return col, NoOrder
+                entry_raw[col] = raw
+                return col, nb.order_nb(
+                    size=quantity,
+                    price=raw,
+                    direction=Direction.LongOnly,
+                    fees=fee,
+                    slippage=slip,
+                    size_granularity=1,
+                    allow_partial=False,
+                    log=True,
+                )
             quantity = math.floor((budget + 1e-9) / (raw * (1 + slip) * (1 + fee)))
             if deployed + budget > cap + 1e-8:
                 rejected[col] = "Strategy allocation is already in use"
@@ -317,6 +492,12 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
                 c.order_result.price,
                 c.order_result.price,
             )
+            if execution_aware:
+                stop, target, _ = protection(c.col, c.order_result.price)
+                initial_stops[c.col], initial_targets[c.col] = stop, target
+                execution_details[c.col]["initial_stop"] = stop
+                execution_details[c.col]["initial_target"] = target
+                execution_details[c.col]["filled_quantity"] = int(c.order_result.size)
 
     def after_bar(c):
         for col in range(count):
@@ -360,6 +541,7 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
         timings,
         vbt.__version__,
         TradeStatus,
+        execution_details=execution_details,
     )
 
 
@@ -431,6 +613,8 @@ def _report(
     timings,
     engine_version,
     trade_status,
+    *,
+    execution_details=None,
 ):
     import numpy as np
 
@@ -510,6 +694,8 @@ def _report(
                         else timings[col]
                     )
         ledger.append(row)
+        if execution_details is not None:
+            row["execution_details"] = execution_details[col]
     values = pf.value().to_numpy().reshape(-1)
     cash = pf.cash().to_numpy().reshape(-1)
     assets = pf.assets().to_numpy()
@@ -602,4 +788,23 @@ def _report(
     from research.analytics import build_analysis
 
     report["analysis"] = build_analysis(report, portfolio=pf)
+    if execution_details is not None:
+        from copy import deepcopy
+
+        report["policy_version"] = EXECUTION_POLICY_VERSION
+        for row, strategy in zip(report["strategies"], strategies, strict=True):
+            row["execution_policy"] = deepcopy(strategy["execution_policy"])
+        report["execution"].update(
+            adapter_version=EXECUTION_ADAPTER_VERSION,
+            risk_limits=deepcopy(strategies[0]["execution_policy"]["risk_limits"]),
+            risk_basis="Entry-time marked account after entry friction; current protective-stop loss includes projected exit fees/slippage; new-trade loss includes both sides",
+            sizing_policy="Allocation starts with the original cash request; stop-risk targets its explicit fraction of the user trade-risk cap. Both clip to original cash budget and every hard cap",
+        )
+        report["limits"].extend(
+            [
+                "Risk controls clip new whole-share entries; appreciation can move existing exposure above a cap without forcing sales.",
+                "Stop-risk is planned loss at the protective stop including costs; price gaps can exceed it and no outcome is guaranteed.",
+                "ATR exits use100 completed prior daily OHLC observations, even when the account executes on minute bars.",
+            ]
+        )
     return report

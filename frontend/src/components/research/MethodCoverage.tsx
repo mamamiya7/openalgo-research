@@ -36,7 +36,9 @@ export function MethodCoverage({
   const owner = useAuthStore((state) => state.user?.username ?? 'account')
   if (
     !jobId ||
-    !['automatic-hypotheses-v8', 'automatic-hypotheses-v9'].includes(recipeVersion ?? '')
+    !['automatic-hypotheses-v8', 'automatic-hypotheses-v9', 'automatic-hypotheses-v10'].includes(
+      recipeVersion ?? ''
+    )
   )
     return null
   return (

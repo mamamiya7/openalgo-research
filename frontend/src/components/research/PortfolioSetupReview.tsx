@@ -134,7 +134,9 @@ export function PortfolioSetupReview({ draft }: { draft: PortfolioDraft }) {
                   </>
                 ) : (
                   <p>
-                    Starting cash, allocation and trade size stay fixed. Prices are prepared once.
+                    {current?.portfolio.automatic_research?.version === 'automatic-hypotheses-v10'
+                      ? 'Starting cash and risk limits stay fixed; allocation and order ceilings can only decrease. Prices are prepared once.'
+                      : 'Starting cash, allocation and trade size stay fixed. Prices are prepared once.'}
                   </p>
                 )}
               </div>

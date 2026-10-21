@@ -77,11 +77,12 @@ export function researchResultPeriod(job: PortfolioJob): string {
 }
 
 export function strategyRuleSummary(
-  strategy: Pick<PortfolioStrategy, 'config' | 'search'>,
+  strategy: Pick<PortfolioStrategy, 'config' | 'search' | 'execution_policy'>,
   optimizing = false,
   includeTrailingOff = false
 ): string {
   const config = strategy.config
+  const policy = strategy.execution_policy
   const value = (
     key: 'target_pct' | 'stop_pct' | 'hold_sessions' | 'hold_minutes' | 'trailing_pct',
     unit = ''
@@ -96,8 +97,12 @@ export function strategyRuleSummary(
         ? 'Close within day'
         : `Up to ${value('hold_sessions')} sessions`
   return [
-    `TP ${value('target_pct', '%')}`,
-    `SL ${value('stop_pct', '%')}`,
+    policy?.exit_mode === 'atr'
+      ? `TP ${policy.atr_target_multiple}× ATR(${policy.atr_period})`
+      : `TP ${value('target_pct', '%')}`,
+    policy?.exit_mode === 'atr'
+      ? `SL ${policy.atr_stop_multiple}× ATR(${policy.atr_period})`
+      : `SL ${value('stop_pct', '%')}`,
     holding,
     ...(config.trailing_enabled
       ? [`Trail ${value('trailing_pct', '%')}`]
@@ -106,5 +111,10 @@ export function strategyRuleSummary(
         : []),
     ...(config.entry_time ? [`Enter from ${config.entry_time} IST`] : []),
     ...(config.exit_time ? [`Exit by ${config.exit_time} IST`] : []),
+    ...(policy?.sizing === 'stop_risk'
+      ? [
+          `Size by stop risk ${policy.risk_limits.max_trade_risk_pct * (policy.risk_budget_fraction ?? 0.5)}%`,
+        ]
+      : []),
   ].join(' · ')
 }

@@ -140,6 +140,7 @@ def normalize_draft(store, owner, raw):
             "validation",
             "automatic_research",
             "entry_conditions",
+            "risk_limits",
             "date_from",
             "date_to",
         },
@@ -175,6 +176,19 @@ def normalize_draft(store, owner, raw):
         portfolio["automatic_research"] = normalize_auto(
             portfolio["automatic_research"], engine=portfolio.get("engine", "vectorbt")
         )
+    if "risk_limits" in portfolio:
+        from research.execution_policy import normalize_limits
+
+        if portfolio["engine"] != "vectorbt":
+            raise ValueError("Portfolio risk limits currently need VectorBT")
+        defaults = normalize_limits()
+        _object(portfolio["risk_limits"], set(defaults), "draft portfolio risk limits")
+        if portfolio["risk_limits"].get("version", defaults["version"]) != defaults["version"]:
+            raise ValueError("Choose supported versioned execution risk limits")
+        portfolio["risk_limits"] = {**defaults, **portfolio["risk_limits"]}
+        for key, value in portfolio["risk_limits"].items():
+            if key != "version":
+                _number_shape(value, "Draft portfolio risk limit")
     rows = portfolio.get("strategies")
     if not isinstance(rows, list) or len(rows) > 8:
         raise ValueError("A draft can contain at most eight strategies")
@@ -191,10 +205,19 @@ def normalize_draft(store, owner, raw):
                 "search",
                 "type",
                 "entry_condition",
+                "execution_policy",
             },
             "draft strategy",
         )
         identifier = row.get("id")
+        if "execution_policy" in row:
+            from research.execution_policy import normalize_policy
+
+            row["execution_policy"] = normalize_policy(row["execution_policy"])
+            if row["execution_policy"]["risk_limits"] != portfolio.get("risk_limits"):
+                raise ValueError(
+                    "Retain the chosen portfolio risk limits with these execution rules"
+                )
         if (
             not isinstance(identifier, str)
             or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", identifier)
@@ -1038,6 +1061,33 @@ def replay_experiment(store, owner, identifier, data):
     )
 
 
+def _selected_execution_followup(portfolio, *, optimizing):
+    """Keep a selected policy as the reference rather than restarting discovery."""
+    if not optimizing:
+        return
+    specialized = any(
+        row.get("execution_policy", {}).get("exit_mode") == "atr"
+        or row.get("execution_policy", {}).get("sizing") == "stop_risk"
+        for row in portfolio["strategies"]
+    )
+    if not specialized and not portfolio.get("entry_conditions"):
+        return
+    portfolio.pop("automatic_research", None)
+    for row in portfolio["strategies"]:
+        if row.get("execution_policy", {}).get("exit_mode") == "atr":
+            row["search"].pop("target_pct", None)
+            row["search"].pop("stop_pct", None)
+        if not row["search"]:
+            ceiling = row["config"]["order_size_pct"]
+            lower = max(0.01, ceiling / 2)
+            if lower < ceiling:
+                row["search"]["order_size_pct"] = {
+                    "min": lower,
+                    "max": ceiling,
+                    "step": ceiling - lower,
+                }
+
+
 def from_job(store, owner, data):
     _object(
         data,
@@ -1089,9 +1139,21 @@ def from_job(store, owner, data):
         strategy.update(
             config=deepcopy(selected["config"]), allocation_pct=selected["allocation_pct"]
         )
+        if "execution_policy" in selected:
+            strategy["execution_policy"] = deepcopy(selected["execution_policy"])
         if "entry_condition" in selected:
             strategy["entry_condition"] = deepcopy(selected["entry_condition"])
         strategy.setdefault("search", {})
+    marker = chosen[0].get("entry_condition") if chosen else None
+    if marker and marker.get("version") in (
+        "research-stock-entry-conditions-v1",
+        "research-stock-entry-conditions-v2",
+        "research-stock-entry-conditions-v3",
+        "research-joint-entry-conditions-v1",
+        "research-joint-entry-conditions-v2",
+    ):
+        portfolio["entry_conditions"] = deepcopy(marker)
+    _selected_execution_followup(portfolio, optimizing=data["mode"] == "optimize")
     draft = fresh_draft()
     draft.update(
         portfolio=portfolio,

@@ -89,6 +89,10 @@ def _condition_fence(store, snapshot):
     actual = retained_entry_conditions(store, original)
     if actual != snapshot.get("entry_conditions"):
         raise ValueError("The chosen entry conditions differ from their original saved evidence")
+    if "risk_limits" in snapshot:
+        inputs = service.read_artifact(store, original["inputs_artifact"])
+        if inputs.get("portfolio", {}).get("risk_limits") != snapshot["risk_limits"]:
+            raise ValueError("The chosen risk limits differ from their original saved evidence")
 
 
 def _snapshot(member, portfolio):
@@ -135,6 +139,8 @@ def _snapshot(member, portfolio):
     }
     if portfolio.get("entry_conditions") is not None:
         snapshot["entry_conditions"] = copy.deepcopy(portfolio["entry_conditions"])
+    if "risk_limits" in portfolio:
+        snapshot["risk_limits"] = copy.deepcopy(portfolio["risk_limits"])
     return snapshot
 
 
@@ -170,6 +176,8 @@ def _prepared_rules(store, owner, member):
             allocation_pct=chosen["allocation_pct"],
             search={},
         )
+        if "execution_policy" in chosen:
+            row["execution_policy"] = copy.deepcopy(chosen["execution_policy"])
         if "entry_condition" in chosen:
             row["entry_condition"] = copy.deepcopy(chosen["entry_condition"])
     draft = library.fresh_draft()
@@ -231,6 +239,7 @@ def _summary(db, experiment, choice, *, current_id=None):
         "dates": snapshot["dates"],
         "candidate_name": snapshot["candidate_name"],
         "trial_number": snapshot["trial_number"],
+        **({"risk_limits": snapshot["risk_limits"]} if "risk_limits" in snapshot else {}),
         **(
             {"entry_conditions": snapshot["entry_conditions"]}
             if "entry_conditions" in snapshot
@@ -761,7 +770,7 @@ def validate_snapshot(value):
     }
     if (
         not isinstance(value, dict)
-        or set(value) not in (fields, fields | {"entry_conditions"})
+        or set(value) - {"entry_conditions", "risk_limits"} != fields
         or len(service.encoded(value)) > MAX_SNAPSHOT_BYTES
     ):
         raise ValueError("Invalid chosen setup identity")
@@ -814,6 +823,11 @@ def validate_snapshot(value):
         # JSON object keys have no strategy ordering. The frozen portfolio
         # below binds the canonical rule order; validate membership here only.
         normalize_conditions(value["entry_conditions"], [{"id": key} for key in value["sources"]])
+    if "risk_limits" in value:
+        from research.execution_policy import normalize_limits
+
+        if value["risk_limits"] != normalize_limits(value["risk_limits"]):
+            raise ValueError("The chosen risk limits changed")
 
 
 def validate_version(choice, version):
@@ -831,6 +845,7 @@ def validate_version(choice, version):
         or portfolio.get("capital") != snapshot["capital"]
         or draft.get("portfolio") != portfolio
         or portfolio.get("entry_conditions") != snapshot.get("entry_conditions")
+        or portfolio.get("risk_limits") != snapshot.get("risk_limits")
         or any(row.get("search") for row in portfolio["strategies"])
         or {row["id"]: row["source_id"] for row in portfolio["strategies"]} != snapshot["sources"]
         or version.parent_job_id != snapshot["source_job_id"]

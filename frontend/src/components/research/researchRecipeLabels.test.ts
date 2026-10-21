@@ -14,6 +14,7 @@ describe('saved research recipe labels', () => {
     ['automatic-hypotheses-v7', 'Stock, market and trade timing'],
     ['automatic-hypotheses-v8', 'Walk-forward research'],
     ['automatic-hypotheses-v9', 'Expanded automatic research'],
+    ['automatic-hypotheses-v10', 'Execution-aware research'],
   ])('describes the recorded scope of %s', (version, label) => {
     expect(researchRecipeLabel(version)).toBe(label)
   })

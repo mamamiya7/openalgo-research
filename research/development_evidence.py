@@ -21,6 +21,7 @@ from research.report_contract import fingerprint, settings_identity
 
 VERSION = "research-development-evidence-v1"
 MAX_EVALUATIONS = 320
+EXECUTION_MAX_EVALUATIONS = 384
 MAX_MARKS_PER_EVALUATION = 100_000
 MAX_TOTAL_MARKS = 4_000_000
 MAX_SHARD_BYTES = 24 * 1024 * 1024
@@ -90,8 +91,15 @@ def plan(evidence, max_evaluations):
     The recipe is already compiled by the numerical caller; this helper does not
     compile or alter a recipe and never examines the final-period outcomes.
     """
+    portfolio = evidence.get("portfolio") if isinstance(evidence, dict) else None
+    automatic = portfolio.get("automatic_research") if isinstance(portfolio, dict) else None
+    maximum = (
+        EXECUTION_MAX_EVALUATIONS
+        if isinstance(automatic, dict) and automatic.get("version") == "automatic-hypotheses-v10"
+        else MAX_EVALUATIONS
+    )
     limits = {
-        "max_evaluations": MAX_EVALUATIONS,
+        "max_evaluations": maximum,
         "max_marks_per_evaluation": MAX_MARKS_PER_EVALUATION,
         "max_total_marks": MAX_TOTAL_MARKS,
         "max_shard_bytes": MAX_SHARD_BYTES,
@@ -101,7 +109,7 @@ def plan(evidence, max_evaluations):
     if (
         isinstance(max_evaluations, bool)
         or not isinstance(max_evaluations, int)
-        or not 1 <= max_evaluations <= MAX_EVALUATIONS
+        or not 1 <= max_evaluations <= maximum
     ):
         return {**result, "reason": "evaluation_limit"}
     try:

@@ -216,6 +216,9 @@ def policy_for_request(snapshot, spec):
             return POLICY_VERSION
         from .vectorbt_portfolio import POLICY_VERSION
 
+        if any("execution_policy" in row for row in spec["portfolio"].get("strategies", [])):
+            from .vectorbt_portfolio import EXECUTION_POLICY_VERSION as POLICY_VERSION
+
         return POLICY_VERSION
     execution = spec.get("execution") if isinstance(spec, dict) else None
     if execution and execution.get("engine") == "vectorbt":

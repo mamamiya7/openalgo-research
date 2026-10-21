@@ -19,7 +19,8 @@ TRAILING_VERSION = "automatic-hypotheses-v6"
 TIMING_VERSION = "automatic-hypotheses-v7"
 WALK_FORWARD_VERSION = "automatic-hypotheses-v8"
 METHOD_VERSION = "automatic-hypotheses-v9"
-WALK_FORWARD_VERSIONS = (WALK_FORWARD_VERSION, METHOD_VERSION)
+EXECUTION_VERSION = "automatic-hypotheses-v10"
+WALK_FORWARD_VERSIONS = (WALK_FORWARD_VERSION, METHOD_VERSION, EXECUTION_VERSION)
 HYPOTHESIS_VERSIONS = (
     HYPOTHESIS_VERSION,
     EXPANDED_VERSION,
@@ -29,6 +30,7 @@ HYPOTHESIS_VERSIONS = (
     TIMING_VERSION,
     WALK_FORWARD_VERSION,
     METHOD_VERSION,
+    EXECUTION_VERSION,
 )
 PERIODS = ("search", "check1", "check2", "final")
 MIN_SESSIONS = 100
@@ -136,6 +138,7 @@ def automatic_portfolio(portfolio):
             TIMING_VERSION,
             WALK_FORWARD_VERSION,
             METHOD_VERSION,
+            EXECUTION_VERSION,
         ):
             search["trailing_pct"] = _range(cfg["trailing_pct"], 99)
         row["search"] = search
@@ -158,6 +161,8 @@ def automatic_portfolio(portfolio):
         # Each expanding prefix gets its own seeded fit. No later-window score
         # is told to that fit's sampler. This is a distinct versioned programme.
         result["optimization"]["trials"] = 192
+    if result["automatic_research"]["version"] == EXECUTION_VERSION:
+        result["optimization"]["trials"] = 256
     return result
 
 
@@ -223,6 +228,9 @@ def compile_recipe(evidence):
                 f"allows a {longest}-session hold plus next-session entry. Use a longer signal "
                 "history or a shorter baseline holding period."
             )
+    baseline_keys = ("id", "name", "allocation_pct", "config")
+    if portfolio["automatic_research"]["version"] == EXECUTION_VERSION:
+        baseline_keys += ("execution_policy",)
     payload = {
         "version": portfolio["automatic_research"]["version"],
         "scope": "execution management of supplied scanner signals",
@@ -246,8 +254,7 @@ def compile_recipe(evidence):
             {"id": row["id"], "search": deepcopy(row["search"])} for row in portfolio["strategies"]
         ],
         "baseline": [
-            {key: deepcopy(row[key]) for key in ("id", "name", "allocation_pct", "config")}
-            for row in portfolio["strategies"]
+            {key: deepcopy(row[key]) for key in baseline_keys} for row in portfolio["strategies"]
         ],
         "selection": {
             "max_finalists": 3,
@@ -313,11 +320,12 @@ def compile_recipe(evidence):
             TIMING_VERSION,
             WALK_FORWARD_VERSION,
             METHOD_VERSION,
+            EXECUTION_VERSION,
         )
         if joint:
             from research.joint_stock_market import catalog
             from research.stock_market_context import validate_bundle
-        if portfolio["automatic_research"]["version"] == METHOD_VERSION:
+        if portfolio["automatic_research"]["version"] in (METHOD_VERSION, EXECUTION_VERSION):
             from research.expanded_stock_market import catalog
         stock = (
             evidence.get("automatic_stock_market_context")
@@ -368,7 +376,7 @@ def compile_recipe(evidence):
         if joint:
             from research.joint_stock_market import recipe as joint_recipe
 
-            if payload["version"] == METHOD_VERSION:
+            if payload["version"] in (METHOD_VERSION, EXECUTION_VERSION):
                 from research.expanded_stock_market import recipe as joint_recipe
 
             payload["scope"] = (
@@ -408,6 +416,22 @@ def compile_recipe(evidence):
                 selection="Refit only on each earlier expanding prefix; later scores never feed its sampler. All three next-window and cost checks precede the final development refit and frozen choice.",
                 cost_stress="Each next-window account at max(2 * cost_bps, cost_bps + 5); slippage unchanged",
             )
+        if payload["version"] == EXECUTION_VERSION:
+            from research.execution_search import descriptor as execution_descriptor
+
+            payload["execution_research"] = execution_descriptor(evidence)
+            payload["execution_features_id"] = evidence.get("execution_features", {}).get("id")
+            payload["budget"].update(
+                proposals=256,
+                proposals_per_fit=64,
+                max_simulations=384,
+                max_sizing_control_evaluations=4,
+            )
+            payload["scope"] = (
+                "Bounded native stock, market, timing, ATR exits and risk-constrained sizing research on supplied scanner opportunities"
+            )
+            payload["policies"]["risk"] = payload["execution_research"]["ceilings"]
+            payload["policies"]["sizing_control"] = payload["execution_research"]["sizing_control"]
         if validation_mode == "exploratory_only":
             payload["policies"]["final"] = (
                 "No untouched later period; exploratory ranking only, never a validated recommendation"

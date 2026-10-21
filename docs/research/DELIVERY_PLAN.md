@@ -243,6 +243,14 @@ feature; live resizing and kill-switch trading are not activated by research sav
 
 ## Recorded implementation checkpoints
 
+**21 October execution checkpoint:** the qualified [execution-aware core](EXECUTION_CORE_20261021.md)
+adds causal native ATR exits, bounded allocation/stop-risk sizing and hard entry
+limits without replacing VectorBT accounting or Optuna. Development sizing controls,
+durable recovery and exact selected replay are implemented. This is the first
+bounded slice of package 4; capacity/turnover, overlap-priority search and broader
+allocation methods remain pending. The next feature work should build on these
+frozen execution and risk contracts before UI polish or wider asset admission.
+
 The dated material below explains prior implementation and retained acceptance.
 The feature order above supersedes older descriptions of what to build next;
 [STATUS.md](STATUS.md) owns actual completion and publication state.

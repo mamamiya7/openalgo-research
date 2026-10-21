@@ -20,6 +20,7 @@ from research.evaluation_basis import IDENTITIES
 from research.evaluation_basis import VERSION as BASIS_VERSION
 from research.joint_stock_market import markers
 from research.method_registry import (
+    EXECUTION_RECIPE_VERSION,
     EXPANDED_RECIPE_VERSION,
     RECIPE_VERSION,
     bounded,
@@ -79,7 +80,7 @@ def _manifest(manifest, calculation, binding, periods, context_id, recipe_versio
         or manifest.get("reserved_final_excluded") is not True
         or manifest.get("status") not in ("collecting", "complete", "partial", "unavailable")
         or not isinstance(manifest.get("entries"), dict)
-        or len(manifest["entries"]) > 320
+        or len(manifest["entries"]) > (384 if recipe_version == EXECUTION_RECIPE_VERSION else 320)
     ):
         raise ValueError("Saved method development index changed")
     expected = {}
@@ -190,10 +191,18 @@ def _build(mandate, calculation, development_manifest):
             "status": "unavailable",
             "reason": "This run has no complete saved method metadata.",
         }
-    _sealed(mandate)
+    from research.research_mandate import EXECUTION_MAX_METADATA_BYTES, MAX_METADATA_BYTES
+
+    source_version = (mandate.get("source") or {}).get("recipe_version")
+    _sealed(
+        mandate,
+        maximum=EXECUTION_MAX_METADATA_BYTES
+        if source_version == EXECUTION_RECIPE_VERSION
+        else MAX_METADATA_BYTES,
+    )
     source = mandate.get("source", {})
     recipe_version = source.get("recipe_version")
-    if recipe_version not in (RECIPE_VERSION, EXPANDED_RECIPE_VERSION):
+    if recipe_version not in (RECIPE_VERSION, EXPANDED_RECIPE_VERSION, EXECUTION_RECIPE_VERSION):
         return {
             "version": VERSION,
             "status": "unavailable",
@@ -202,17 +211,19 @@ def _build(mandate, calculation, development_manifest):
     registry = catalog(recipe_version)
     hypotheses = pinned_hypotheses(recipe_version)
     materialize_markers = markers
-    if recipe_version == EXPANDED_RECIPE_VERSION:
+    if recipe_version in (EXPANDED_RECIPE_VERSION, EXECUTION_RECIPE_VERSION):
         from research.expanded_stock_market import markers as materialize_markers
     by_hypothesis = {row["id"]: row for row in hypotheses}
     search = mandate.get("search", {})
+    proposals_per_fit = 64 if recipe_version == EXECUTION_RECIPE_VERSION else 48
+    max_simulations = 384 if recipe_version == EXECUTION_RECIPE_VERSION else 320
     if (
         mandate.get("version") != "research-mandate-v1"
         or search.get("hypothesis_catalog") != hypotheses
         or not all(_hash(source.get(key)) for key in ("inputs_artifact", "recipe_id"))
         or not _hash(search.get("stock_evidence_id"))
-        or mandate.get("budget", {}).get("proposals") != 192
-        or mandate.get("budget", {}).get("max_simulations") != 320
+        or mandate.get("budget", {}).get("proposals") != proposals_per_fit * 4
+        or mandate.get("budget", {}).get("max_simulations") != max_simulations
         or mandate.get("economic_assumptions", {}).get("engine") != "vectorbt"
         or mandate.get("subject", {}).get("asset_profile") != "NSE_long_cash_equities"
     ):
@@ -247,6 +258,28 @@ def _build(mandate, calculation, development_manifest):
         raise ValueError("Saved method strategy settings changed")
     domains = {row["id"]: row["search"] for row in ranges}
     base, axes = _prepare([{**row, "search": domains[row["id"]]} for row in settings])
+    execution = None
+    execution_axes = {}
+    if recipe_version == EXECUTION_RECIPE_VERSION:
+        from research.execution_search import axes as policy_axes
+        from research.execution_search import descriptor as execution_descriptor
+
+        execution = search.get("execution_research")
+        execution_axes = policy_axes(execution)
+        if (
+            execution_descriptor(
+                {
+                    "portfolio": {
+                        "risk_limits": mandate.get("economic_assumptions", {}).get("risk_limits")
+                    },
+                    "strategies": settings,
+                }
+            )
+            != execution
+            or not _hash(search.get("execution_features_id"))
+            or mandate["budget"].get("proposals_per_fit") != proposals_per_fit
+        ):
+            raise ValueError("Saved execution method domains or hard limits changed")
     # Do not change the existing mandate contract. Its baseline determines the
     # exact v8 trailing domain; native clock-grid membership cannot be certified
     # without the larger source descriptor and is explicitly outside this view.
@@ -267,7 +300,7 @@ def _build(mandate, calculation, development_manifest):
                     "id": fit_name,
                     "status": "pending",
                     "proposals": 0,
-                    "proposal_limit": 48,
+                    "proposal_limit": proposals_per_fit,
                     "families": list(records.values()),
                 }
             )
@@ -298,6 +331,7 @@ def _build(mandate, calculation, development_manifest):
                 *axes,
                 *(f"{row['id']}.trailing_choice" for row in base),
                 *(f"{row['id']}.timing_choice" for row in base),
+                *execution_axes,
             }
             if set(params) != expected_params:
                 raise ValueError("Saved method proposal domains changed")
@@ -324,6 +358,10 @@ def _build(mandate, calculation, development_manifest):
                         {"original": original},
                         {"changes": {f"{side}_time": clock[:2] + ":" + clock[2:]}},
                     )
+            if execution is not None:
+                from research.execution_search import apply_choices as execution_choices
+
+                materialized = execution_choices(materialized, params, execution)
             if materialize_markers(_settings(materialized), hypothesis) != candidate["strategies"]:
                 raise ValueError("Saved method proposal settings changed")
             family = hypothesis["family"]
@@ -379,7 +417,7 @@ def _build(mandate, calculation, development_manifest):
             seen.add(config_id)
         if set(fit["candidates"]) != seen:
             raise ValueError("Saved method candidates have no recorded proposals")
-        complete = len(fit["trials"]) == 48
+        complete = len(fit["trials"]) == proposals_per_fit
         for key, record in records.items():
             record["untested"] -= len(proposed_ids[key])
             record["budget_deferred"] = record["untested"] if complete else 0
@@ -418,7 +456,7 @@ def _build(mandate, calculation, development_manifest):
                 "id": fit_name,
                 "status": "complete" if complete else "running",
                 "proposals": len(fit["trials"]),
-                "proposal_limit": 48,
+                "proposal_limit": proposals_per_fit,
                 "families": list(records.values()),
             }
         )
@@ -483,5 +521,9 @@ def _build(mandate, calculation, development_manifest):
             "Native clock-grid membership is not re-certified from this compact metadata",
         ],
     }
+    if recipe_version == EXECUTION_RECIPE_VERSION:
+        result["limitations"].append(
+            "Condition-family counts include execution and sizing variants; exit choices, sizing controls and hard limits are not additional indicator families"
+        )
     bounded(result, MAX_OUTPUT_BYTES)
     return {**result, "id": fingerprint(result)}

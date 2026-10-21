@@ -75,6 +75,17 @@ def _params(value):
     if not isinstance(value, dict) or len(value) > MAX_PARAMS:
         raise ValueError("Invalid study activity parameters")
     for key, item in value.items():
+        if isinstance(key, str) and re.fullmatch(
+            r"[A-Za-z0-9_-]{1,64}\.(?:execution_choice|portfolio_choice)", key
+        ):
+            domain = (
+                {"percent", "atr_1_2", "atr_1_3", "atr_2_3", "atr_2_4"}
+                if key.endswith(".execution_choice")
+                else {"original", "allocation_75", "allocation_50", "stop_risk", "stop_risk_50"}
+            )
+            if not isinstance(item, str) or item not in domain:
+                raise ValueError("Invalid study activity execution choice")
+            continue
         if key == "hypothesis" and isinstance(item, str):
             from research.expanded_stock_market import catalog as expanded_catalog
             from research.joint_stock_market import catalog as joint_catalog
@@ -351,22 +362,27 @@ class StudyObserver:
         _fence(db, self.token, self.job_id)
         trials = calculation.get("trials")
         try:
-            if calculation.get("version") in ("automatic-hypotheses-v8", "automatic-hypotheses-v9"):
+            if calculation.get("version") in (
+                "automatic-hypotheses-v8",
+                "automatic-hypotheses-v9",
+                "automatic-hypotheses-v10",
+            ):
                 # Independent fit objectives stay separate scientifically. Only
                 # observation ordinals are flattened into the job's 192 events.
                 names = ("fit1", "fit2", "fit3", "search")
+                per_fit = 64 if calculation.get("version") == "automatic-hypotheses-v10" else 48
                 fits = calculation.get("fits")
                 if not isinstance(fits, dict) or set(fits) - set(names):
                     raise ValueError("Invalid expanding-fit observation coverage")
                 trials = []
                 for offset, name in enumerate(names):
                     rows = fits.get(name, {}).get("trials", [])
-                    if not isinstance(rows, list) or len(rows) > 48:
+                    if not isinstance(rows, list) or len(rows) > per_fit:
                         raise ValueError("Invalid expanding-fit observation coverage")
                     for index, item in enumerate(rows):
                         if type(item.get("number")) is not int or item["number"] != index:
                             raise ValueError("Invalid expanding-fit proposal ordinal")
-                        trials.append({**item, "number": offset * 48 + index})
+                        trials.append({**item, "number": offset * per_fit + index})
             if not isinstance(trials, list) or len(trials) > MAX_PROPOSALS:
                 raise ValueError("Invalid study checkpoint observation coverage")
             by_number = {item["number"]: item for item in trials}

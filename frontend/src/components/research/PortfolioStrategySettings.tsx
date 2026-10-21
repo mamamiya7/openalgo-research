@@ -74,6 +74,34 @@ export function PortfolioStrategySettings({
     })
   }
   function parameter(field: PortfolioAxis) {
+    if (
+      current.execution_policy?.exit_mode === 'atr' &&
+      (field === 'target_pct' || field === 'stop_pct')
+    ) {
+      const policy = current.execution_policy
+      const key = field === 'target_pct' ? 'atr_target_multiple' : 'atr_stop_multiple'
+      return (
+        <div key={field} className="space-y-2 py-3">
+          <Label htmlFor={`portfolio-${field}`}>
+            {field === 'target_pct' ? 'Profit target (× ATR14)' : 'Stop loss (× ATR14)'}
+          </Label>
+          <Input
+            id={`portfolio-${field}`}
+            type="number"
+            min={1}
+            max={field === 'target_pct' ? 6 : 3}
+            step={0.1}
+            value={policy[key]}
+            onChange={(event) =>
+              onChange({
+                ...current,
+                execution_policy: { ...policy, [key]: Number(event.target.value) },
+              })
+            }
+          />
+        </div>
+      )
+    }
     const range = optimizing ? current.search[field] : undefined
     const value = field === 'allocation_pct' ? current.allocation_pct : Number(config[field])
     const setValue = (next: number) =>

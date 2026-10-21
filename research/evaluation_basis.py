@@ -164,6 +164,8 @@ def build_evaluation_basis(evidence, *, period):
             for row in evidence["strategies"]
         ],
     }
+    if "risk_limits" in portfolio:
+        comparison["risk_limits"] = portfolio["risk_limits"]
     return {
         "version": VERSION,
         "status": "verified",
@@ -188,7 +190,7 @@ def comparison_status(left, right):
     ):
         return {"compatible": False, "differences": ["unverified"]}
     differences = [key.removesuffix("_id") for key in IDENTITIES if left[key] != right[key]]
-    for key in ("period", "currency", "capital", "execution", "costs"):
+    for key in ("period", "currency", "capital", "execution", "costs", "risk_limits"):
         if left["comparison"].get(key) != right["comparison"].get(key):
             differences.append(key)
     # IDs must agree as well: an unfamiliar future context cannot pass merely

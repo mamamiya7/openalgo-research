@@ -44,6 +44,7 @@ def normalize(raw):
         "validation",
         "automatic_research",
         "entry_conditions",
+        "risk_limits",
     }:
         raise ValueError("Invalid portfolio settings")
     if raw.get("version", VERSION) != VERSION:
@@ -73,6 +74,7 @@ def normalize(raw):
             "search",
             "type",
             "entry_condition",
+            "execution_policy",
         }:
             raise ValueError("Invalid strategy settings")
         identifier = row.get("id")
@@ -132,6 +134,10 @@ def normalize(raw):
                 "search": deepcopy(search),
             }
         )
+        if "execution_policy" in row:
+            from research.execution_policy import normalize_policy
+
+            strategies[-1]["execution_policy"] = normalize_policy(row["execution_policy"])
     if not 0 < sum(row["allocation_pct"] for row in strategies) <= 100 + 1e-8:
         raise ValueError("Strategy allocations must total more than 0% and at most 100%")
     name = raw.get("name", "My portfolio")
@@ -144,6 +150,51 @@ def normalize(raw):
         "engine": engine,
         "strategies": strategies,
     }
+    if raw.get("automatic_research") is not None and not isinstance(
+        raw["automatic_research"], dict
+    ):
+        raise ValueError("Choose a supported automatic research recipe")
+    execution_aware = (
+        (raw.get("automatic_research") or {}).get("version") == "automatic-hypotheses-v10"
+        or "risk_limits" in raw
+        or any("execution_policy" in row for row in strategies)
+    )
+    if execution_aware:
+        policies = ["execution_policy" in row for row in result["strategies"]]
+        if any(policies) and not all(policies):
+            raise ValueError(
+                "Every strategy must declare its execution policy when any strategy uses one"
+            )
+        from research.execution_policy import VERSION as EXECUTION_POLICY_VERSION
+        from research.execution_policy import normalize_limits, normalize_policy
+
+        if engine != "vectorbt":
+            raise ValueError("Execution-aware exits and portfolio limits currently need VectorBT")
+        if (
+            raw.get("automatic_research")
+            and raw["automatic_research"]["version"] != "automatic-hypotheses-v10"
+        ):
+            raise ValueError("Choose execution-aware automatic research to use portfolio limits")
+        limits = normalize_limits(raw.get("risk_limits"))
+        result["risk_limits"] = limits
+        for row in strategies:
+            policy = row.get("execution_policy") or {
+                "version": EXECUTION_POLICY_VERSION,
+                "exit_mode": "percent",
+                "sizing": "allocation",
+                "risk_limits": limits,
+            }
+            row["execution_policy"] = normalize_policy(policy)
+            if row["execution_policy"]["risk_limits"] != limits:
+                raise ValueError("Every strategy must use the same portfolio risk limits")
+        if raw.get("automatic_research") and any(
+            row["execution_policy"]["exit_mode"] != "percent"
+            or row["execution_policy"]["sizing"] != "allocation"
+            for row in strategies
+        ):
+            raise ValueError(
+                "Use a fixed backtest or Custom search to preserve these selected ATR or stop-risk rules"
+            )
     if raw.get("entry_conditions") is not None:
         from research.entry_conditions import normalize as normalize_conditions
 
@@ -351,6 +402,15 @@ def execution_versions(portfolio, recorded=None):
     from research.connectors.vectorbt_portfolio import ADAPTER_VERSION, POLICY_VERSION
 
     engine = portfolio["engine"]
+    if any("execution_policy" in row for row in portfolio["strategies"]):
+        from research.connectors.vectorbt_portfolio import (
+            EXECUTION_ADAPTER_VERSION,
+            EXECUTION_POLICY_VERSION,
+        )
+
+        if engine != "vectorbt":
+            raise ValueError("Execution-aware portfolio policies currently need VectorBT")
+        ADAPTER_VERSION, POLICY_VERSION = EXECUTION_ADAPTER_VERSION, EXECUTION_POLICY_VERSION
     if engine == "nautilus":
         from research.connectors.nautilus_portfolio import ADAPTER_VERSION, POLICY_VERSION
         from research.connectors.nautilus_runtime import status as runtime_status
@@ -364,6 +424,12 @@ def execution_versions(portfolio, recorded=None):
         "policy_version": POLICY_VERSION,
         "portfolio_version": VERSION,
     }
+    if any("execution_policy" in row for row in portfolio["strategies"]):
+        from research.execution_features import VERSION as EXECUTION_FEATURE_VERSION
+        from research.stock_indicators import runtime_version
+
+        versions["execution_features_version"] = EXECUTION_FEATURE_VERSION
+        versions["indicator_runtime_version"] = runtime_version()
     if portfolio.get("automatic_research"):
         versions["automatic_research_version"] = portfolio["automatic_research"]["version"]
     if (
@@ -398,6 +464,7 @@ def execution_versions(portfolio, recorded=None):
         "automatic-hypotheses-v7",
         "automatic-hypotheses-v8",
         "automatic-hypotheses-v9",
+        "automatic-hypotheses-v10",
     ) or portfolio.get("entry_conditions", {}).get("version") in (
         "research-stock-entry-conditions-v1",
         "research-stock-entry-conditions-v2",
@@ -424,6 +491,7 @@ def execution_versions(portfolio, recorded=None):
         "automatic-hypotheses-v7",
         "automatic-hypotheses-v8",
         "automatic-hypotheses-v9",
+        "automatic-hypotheses-v10",
     ) or portfolio.get("entry_conditions", {}).get("version") in (
         "research-joint-entry-conditions-v1",
         "research-joint-entry-conditions-v2",
@@ -451,7 +519,8 @@ def execution_versions(portfolio, recorded=None):
         from research.stock_market_context import VERSION as CONTEXT_VERSION
 
         if (
-            portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v9"
+            portfolio.get("automatic_research", {}).get("version")
+            in ("automatic-hypotheses-v9", "automatic-hypotheses-v10")
             or portfolio.get("entry_conditions", {}).get("version")
             == "research-joint-entry-conditions-v2"
         ):

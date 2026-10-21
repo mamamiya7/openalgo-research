@@ -10,7 +10,12 @@ from collections import OrderedDict
 from copy import deepcopy
 from math import prod
 
-from research.automatic_protocol import METHOD_VERSION, compile_recipe, slice_period
+from research.automatic_protocol import (
+    EXECUTION_VERSION,
+    METHOD_VERSION,
+    compile_recipe,
+    slice_period,
+)
 from research.automatic_research import _entry_dates, _score, _support
 from research.automatic_research import _settings as _numerical_settings
 from research.automatic_stability import neighbors
@@ -57,6 +62,14 @@ def _display_history(trials):
 
 def policy_for_version(version):
     """Return a fresh bounded policy; a newer recipe never changes old replay."""
+    if version == EXECUTION_VERSION:
+        return {
+            **policy_for_version(METHOD_VERSION),
+            "version": version,
+            "proposals": 256,
+            "proposals_per_fit": 64,
+            "max_simulations": 384,
+        }
     if version == METHOD_VERSION:
         return {
             **policy_for_version(WALK_FORWARD_VERSION),
@@ -199,7 +212,11 @@ def _gate(
 
 def checkpoint_rows(saved):
     """Expose only completed bounded candidates from an intact checkpoint."""
-    if isinstance(saved, dict) and saved.get("version") in (WALK_FORWARD_VERSION, METHOD_VERSION):
+    if isinstance(saved, dict) and saved.get("version") in (
+        WALK_FORWARD_VERSION,
+        METHOD_VERSION,
+        EXECUTION_VERSION,
+    ):
         from research.automatic_walk_forward import checkpoint_rows as walk_forward_rows
 
         return walk_forward_rows(saved)

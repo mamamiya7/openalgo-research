@@ -43,6 +43,8 @@ const parameterLabels: Record<string, string> = {
   trailing_pct: 'Trailing stop',
   order_size_pct: 'Per-trade size',
   allocation_pct: 'Allocation',
+  execution_choice: 'Exit method',
+  portfolio_choice: 'Position sizing',
 }
 const reasons: Record<string, string> = {
   calculation_failed: 'The calculation failed during this attempt.',
@@ -78,13 +80,18 @@ function duration(row: Pick<StudyActivityRow, 'started_at' | 'finished_at'>) {
 }
 
 function proposalLabel(index: number, recipeVersion?: string) {
-  if (!['automatic-hypotheses-v8', 'automatic-hypotheses-v9'].includes(recipeVersion ?? ''))
+  const perFit = recipeVersion === 'automatic-hypotheses-v10' ? 64 : 48
+  if (
+    !['automatic-hypotheses-v8', 'automatic-hypotheses-v9', 'automatic-hypotheses-v10'].includes(
+      recipeVersion ?? ''
+    )
+  )
     return { label: `Trial ${index + 1}` }
-  if (!Number.isInteger(index) || index < 0 || index >= 192)
+  if (!Number.isInteger(index) || index < 0 || index >= perFit * 4)
     return { label: `Proposal ${Number.isInteger(index) && index >= 0 ? index + 1 : '—'}` }
-  const fit = Math.floor(index / 48)
+  const fit = Math.floor(index / perFit)
   return {
-    label: `${fit === 3 ? 'Final fit' : `Fit ${fit + 1}`} · Trial ${(index % 48) + 1}`,
+    label: `${fit === 3 ? 'Final fit' : `Fit ${fit + 1}`} · Trial ${(index % perFit) + 1}`,
     global: `Proposal ${index + 1}`,
   }
 }
@@ -138,9 +145,11 @@ function Activity({
     : data?.executions[0]
   const row = data?.rows.find((item) => item.id === selected?.id) ?? selected
   const selectedLabel = row ? proposalLabel(row.number, recipeVersion) : undefined
-  const walkForward = ['automatic-hypotheses-v8', 'automatic-hypotheses-v9'].includes(
-    recipeVersion ?? ''
-  )
+  const walkForward = [
+    'automatic-hypotheses-v8',
+    'automatic-hypotheses-v9',
+    'automatic-hypotheses-v10',
+  ].includes(recipeVersion ?? '')
   function setting(key: string, index: number) {
     const [strategyId, parameter] = key.split('.')
     const label = parameterLabels[parameter] ?? `Setting ${index + 1}`

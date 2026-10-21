@@ -26,7 +26,9 @@ def seal(value, key="id"):
     return value
 
 
-def prepared_metadata(*, fits=("fit1",), proposals=1, retained=False, unknown=0):
+def prepared_metadata(
+    *, fits=("fit1",), proposals=1, retained=False, unknown=0, version=WALK_FORWARD_VERSION
+):
     """Return a small, internally consistent synthetic mandate/state/index triple.
 
     Account metadata and content identifiers are synthetic; no shard existence or
@@ -34,6 +36,14 @@ def prepared_metadata(*, fits=("fit1",), proposals=1, retained=False, unknown=0)
     an owned paused job without running192 proposal accounts.
     """
     value = prepared()
+    if version == "automatic-hypotheses-v9":
+        from test_expanded_walk_forward import prepared as expanded_prepared
+
+        value = expanded_prepared()
+    elif version == "automatic-hypotheses-v10":
+        from test_execution_aware_research import prepared as execution_prepared
+
+        value = execution_prepared()
     recipe = value["automatic_recipe"]
     source = "1" * 64
     mandate = build_mandate(value, inputs_artifact=source)
@@ -44,9 +54,9 @@ def prepared_metadata(*, fits=("fit1",), proposals=1, retained=False, unknown=0)
         ),
     }
     state = {
-        "version": WALK_FORWARD_VERSION,
+        "version": version,
         "binding": binding["search_identity"],
-        "optimizer": {"adapter_version": WALK_FORWARD_VERSION},
+        "optimizer": {"adapter_version": version},
         "attempts": 0,
         "simulations": 0,
         "evaluations": {},
@@ -61,7 +71,7 @@ def prepared_metadata(*, fits=("fit1",), proposals=1, retained=False, unknown=0)
     manifest = {
         "version": "research-development-evidence-manifest-v1",
         "binding": binding,
-        "plan": plan(value, 320),
+        "plan": plan(value, 384 if version == "automatic-hypotheses-v10" else 320),
         "status": "collecting",
         "entries": {},
         "marks": 0,
@@ -78,7 +88,26 @@ def prepared_metadata(*, fits=("fit1",), proposals=1, retained=False, unknown=0)
             params[name] = (
                 "original" if name.endswith(".timing_choice") else choices[len(choices) // 2]
             )
-    by_hypothesis = {row["id"]: row for row in catalog()}
+    selected_catalog = catalog()
+    materialize_markers = markers
+    if version in ("automatic-hypotheses-v9", "automatic-hypotheses-v10"):
+        from research.automatic_walk_forward import _screening_program
+        from research.expanded_stock_market import catalog as expanded_catalog
+        from research.expanded_stock_market import markers as materialize_markers
+
+        selected_catalog = expanded_catalog()
+        if version == "automatic-hypotheses-v10":
+            from research.execution_search import axes as execution_axes
+
+            axes.update(execution_axes(recipe["execution_research"]))
+        screens = _screening_program(
+            version,
+            selected_catalog,
+            axes,
+            recipe["timing_research"],
+            recipe.get("execution_research"),
+        )
+    by_hypothesis = {row["id"]: row for row in selected_catalog}
     account = AccountEngine(value)
     for fit_name in fits:
         fit = {"trials": [], "candidates": {}, "selection": None}
@@ -91,7 +120,11 @@ def prepared_metadata(*, fits=("fit1",), proposals=1, retained=False, unknown=0)
             materialized = apply_choices(
                 _candidate(base, params), params, recipe["trailing_research"]
             )
-            settings = markers(_settings(materialized), hypothesis)
+            if version == "automatic-hypotheses-v10":
+                from research.execution_search import apply_choices as execution_choices
+
+                materialized = execution_choices(materialized, params, recipe["execution_research"])
+            settings = materialize_markers(_settings(materialized), hypothesis)
             config_id = settings_identity(settings)
             if config_id not in seen:
                 rows = [
@@ -328,5 +361,112 @@ def test_malformed_or_rehashed_receipt_fields_are_not_reported_as_work(damage):
 def test_oversized_metadata_is_rejected_before_traversing_history_objects():
     mandate, state, manifest = prepared_metadata()
     state["padding"] = "x" * (32 * 1024 * 1024 + 1)
+    with pytest.raises(ValueError, match="size limit"):
+        build(mandate, state, manifest)
+
+
+@pytest.mark.parametrize(
+    "version,expected",
+    [
+        (
+            "automatic-hypotheses-v8",
+            "ac74fc887ef42621a77114668fe120b5c2bc36452a4c3bab96f161f0275d4518",
+        ),
+        (
+            "automatic-hypotheses-v9",
+            "cfe21f895be0682cc125953b5a54f285585379a516c9dc4292997a41cd90a2c5",
+        ),
+    ],
+)
+def test_execution_extension_preserves_legacy_coverage_bytes(version, expected):
+    assert fingerprint(build(*prepared_metadata(version=version))) == expected
+
+
+def test_execution_variants_are_materialized_under_one_unchanged_condition_registry():
+    values = prepared_metadata(
+        version="automatic-hypotheses-v10",
+        fits=("fit1", "fit2", "fit3", "search"),
+        proposals=64,
+        retained=True,
+    )
+    original = deepcopy(values)
+    result = build(*values)
+    assert values == original
+    assert result["status"] == "available"
+    assert result["totals"]["proposals"] == 256
+    assert result["totals"]["registered_hypotheses"] == 108
+    assert result["totals"]["registered_families"] == 32
+    assert all(
+        row["status"] == "complete" and row["proposal_limit"] == row["proposals"] == 64
+        for row in result["fits"]
+    )
+    assert result["totals"]["evaluated"] + result["totals"]["reused"] == 256
+    assert result["totals"]["retained_histories"] == result["totals"]["evaluated"]
+    assert "not additional indicator families" in result["limitations"][-1]
+
+
+@pytest.mark.parametrize("damage", ["proposal", "execution_domain", "risk_limits"])
+def test_rehashed_execution_domain_or_policy_drift_is_not_reported_as_work(damage):
+    mandate, state, manifest = prepared_metadata(version="automatic-hypotheses-v10", proposals=40)
+    identifier = mandate["economic_assumptions"]["settings"][0]["id"]
+    if damage == "proposal":
+        state["fits"]["fit1"]["trials"][36]["params"][f"{identifier}.execution_choice"] = "atr_9_9"
+        seal(state, "checkpoint_id")
+    elif damage == "execution_domain":
+        specification = mandate["search"]["execution_research"]
+        specification["strategies"][0]["portfolio_choices"][1]["fraction"] = 2
+        seal(specification)
+        seal(mandate)
+    else:
+        mandate["economic_assumptions"]["risk_limits"]["max_open_positions"] += 1
+        seal(mandate)
+    with pytest.raises(ValueError):
+        build(mandate, state, manifest)
+
+
+def test_eight_strategy_execution_mandate_has_a_version_specific_bounded_view():
+    from test_execution_aware_research import prepared as execution_prepared
+
+    from research.automatic_protocol import compile_recipe
+    from research.execution_features import prepare as prepare_execution
+    from research.research_mandate import EXECUTION_MAX_METADATA_BYTES, MAX_METADATA_BYTES
+
+    evidence = execution_prepared()
+    source = evidence["strategies"][0]
+    evidence["strategies"] = [
+        {**deepcopy(source), "id": f"row{index}", "allocation_pct": 12.5} for index in range(8)
+    ]
+    evidence["portfolio"]["strategies"] = [
+        {key: deepcopy(item) for key, item in row.items() if key != "signals"}
+        for row in evidence["strategies"]
+    ]
+    evidence["signals"] = [signal for row in evidence["strategies"] for signal in row["signals"]]
+    for key in (
+        "automatic_recipe",
+        "execution_features",
+        "timing_descriptor",
+        "timing_union",
+        "timing_cohort",
+    ):
+        evidence.pop(key, None)
+    evidence = prepare_execution(evidence, evidence["automatic_stock_market_context"])
+    evidence["automatic_recipe"] = compile_recipe(evidence)
+    mandate = build_mandate(evidence, inputs_artifact="1" * 64)
+    size = len(json.dumps(mandate, separators=(",", ":")).encode())
+    assert MAX_METADATA_BYTES < size <= EXECUTION_MAX_METADATA_BYTES
+    _, state, manifest = prepared_metadata(version="automatic-hypotheses-v10", proposals=0)
+    state["binding"] = fingerprint(
+        {
+            "recipe": evidence["automatic_recipe"],
+            "stock": evidence["automatic_stock_market_context"],
+        }
+    )
+    seal(state, "checkpoint_id")
+    manifest["binding"]["search_identity"] = state["binding"]
+    manifest["plan"] = plan(evidence, 384)
+    seal(manifest)
+    assert build(mandate, state, manifest)["status"] == "available"
+    mandate["padding"] = "x" * EXECUTION_MAX_METADATA_BYTES
+    seal(mandate)
     with pytest.raises(ValueError, match="size limit"):
         build(mandate, state, manifest)

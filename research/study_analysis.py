@@ -12,6 +12,7 @@ from datetime import datetime
 VERSION = "research-analysis-v1"
 MAX_TRIALS = 1000
 MAX_AXES = 57
+EXECUTION_MAX_AXES = 73
 MAX_FIGURE_BYTES = 8 * 1024 * 1024
 # fANOVA integrates all one-hot dimensions of a categorical parameter jointly.
 # Its tree midpoint Cartesian product can grow exponentially with the category
@@ -34,6 +35,7 @@ def _trailing_axes(experiment):
             "automatic-hypotheses-v7",
             "automatic-hypotheses-v8",
             "automatic-hypotheses-v9",
+            "automatic-hypotheses-v10",
         )
         or not isinstance(specification, dict)
         or specification.get("version") != TRAILING_VERSION
@@ -75,7 +77,12 @@ def _timing_axes(experiment):
 
     if (
         experiment.get("experiment_version")
-        not in ("automatic-hypotheses-v7", "automatic-hypotheses-v8", "automatic-hypotheses-v9")
+        not in (
+            "automatic-hypotheses-v7",
+            "automatic-hypotheses-v8",
+            "automatic-hypotheses-v9",
+            "automatic-hypotheses-v10",
+        )
         or not isinstance(specification, dict)
         or specification.get("version") != TIMING_VERSION
         or specification.get("interval") not in ("D", "1m")
@@ -136,7 +143,12 @@ def reconstruct_study(experiment):
     axes = experiment.get("search_space", {}).get("axes", {})
     if not isinstance(trials, list) or len(trials) > MAX_TRIALS:
         raise ValueError("Study analysis supports at most 1,000 recorded proposals")
-    if not isinstance(axes, dict) or len(axes) > MAX_AXES:
+    maximum = (
+        EXECUTION_MAX_AXES
+        if experiment.get("experiment_version") == "automatic-hypotheses-v10"
+        else MAX_AXES
+    )
+    if not isinstance(axes, dict) or len(axes) > maximum:
         raise ValueError("Invalid recorded study parameter space")
     trailing_axes = _trailing_axes(experiment)
     if any(axes.get(name) != axis for name, axis in trailing_axes.items()):
@@ -146,6 +158,20 @@ def reconstruct_study(experiment):
         raise ValueError("Recorded timing parameters differ from their frozen contract")
     if any(name.endswith(".timing_choice") and name not in timing_axes for name in axes):
         raise ValueError("Recorded timing parameters need their frozen contract")
+    execution_axes = {}
+    if experiment.get("execution_research") is not None:
+        if experiment.get("experiment_version") != "automatic-hypotheses-v10":
+            raise ValueError("Execution research needs its recorded programme")
+        from research.execution_search import axes as execution_domains
+
+        execution_axes = execution_domains(experiment["execution_research"])
+        if any(axes.get(name) != axis for name, axis in execution_axes.items()):
+            raise ValueError("Recorded execution parameters differ from their frozen contract")
+    if any(
+        name.endswith((".execution_choice", ".portfolio_choice")) and name not in execution_axes
+        for name in axes
+    ):
+        raise ValueError("Recorded execution parameters need their frozen contract")
     distributions = {}
     for name, axis in axes.items():
         if axis.get("type") == "categorical":
@@ -154,7 +180,10 @@ def reconstruct_study(experiment):
             if name == "hypothesis":
                 from research.joint_stock_market import catalog
 
-                if experiment.get("experiment_version") == "automatic-hypotheses-v9":
+                if experiment.get("experiment_version") in (
+                    "automatic-hypotheses-v9",
+                    "automatic-hypotheses-v10",
+                ):
                     from research.expanded_stock_market import catalog
 
                 if choices == [row["id"] for row in catalog()]:

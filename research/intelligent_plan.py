@@ -58,6 +58,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v7",
         "automatic-hypotheses-v8",
         "automatic-hypotheses-v9",
+        "automatic-hypotheses-v10",
     )
     joint = (
         trailing
@@ -238,6 +239,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v7",
         "automatic-hypotheses-v8",
         "automatic-hypotheses-v9",
+        "automatic-hypotheses-v10",
     ):
         payload["methods"].append(
             {
@@ -250,6 +252,7 @@ def build_plan(portfolio, *, interval):
     if portfolio.get("automatic_research", {}).get("version") in (
         "automatic-hypotheses-v8",
         "automatic-hypotheses-v9",
+        "automatic-hypotheses-v10",
     ):
         payload["budget"].update(
             proposals=192,
@@ -275,7 +278,10 @@ def build_plan(portfolio, *, interval):
                 "reason": "Independent seeded Optuna fits use only each earlier prefix; later scores never update its sampler. Requires sufficient recorded dates and holding support.",
             }
         )
-    if portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v9":
+    if portfolio.get("automatic_research", {}).get("version") in (
+        "automatic-hypotheses-v9",
+        "automatic-hypotheses-v10",
+    ):
         from research.expanded_stock_market import FEATURE_VERSION, catalog, recipe
 
         payload["feature_version"] = FEATURE_VERSION
@@ -294,4 +300,35 @@ def build_plan(portfolio, *, interval):
                 method["reason"] = (
                     "Completed NSE daily closes; 5/10/20/60-session change and 0/2% thresholds. Every new10/60-session condition receives a fixed original-clock probe per fit."
                 )
+    if portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v10":
+        payload["budget"].update(
+            proposals=256,
+            proposals_per_fit=64,
+            max_simulations=384,
+            screening_proposals=192,
+            refinement_proposals=64,
+            execution_probe_limit=16,
+            execution_probe_limit_per_fit=4,
+            portfolio_probe_limit=16,
+            portfolio_probe_limit_per_fit=4,
+            min_joint_refinement_proposals=64,
+            min_joint_refinement_proposals_per_fit=16,
+            max_sizing_control_evaluations=4,
+        )
+        for method in payload["methods"]:
+            if method["id"] == "portfolio_risk":
+                method.update(
+                    status="admitted",
+                    reason="Original or reduced allocation and order ceilings; allocation or stop-risk sizing targeting half the fixed trade-risk ceiling under all user hard limits. Each fit retains a matched original-sizing development control.",
+                )
+        payload["methods"].append(
+            {
+                "id": "atr_exits",
+                "status": "admitted",
+                "reason": "Four registered ATR14 stop/target pairs use prior observed daily OHLC at actual native entries; missing ATR is excluded across all candidates and baseline.",
+            }
+        )
+        payload["objective"] = (
+            "Balanced net return minus drawdown under frozen hard risk limits; never increase declared allocation or order ceilings"
+        )
     return {**payload, "id": fingerprint(payload)}

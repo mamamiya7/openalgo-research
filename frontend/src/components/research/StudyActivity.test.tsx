@@ -353,6 +353,24 @@ describe('durable study activity', () => {
 })
 
 describe('recorded walk-forward activity identity', () => {
+  it('uses the recorded execution-aware 64-proposal fit boundaries', async () => {
+    const data = receipt({
+      rows: [0, 63, 64, 191, 192, 255].map((number) => row({ id: number + 1, number })),
+    })
+    data.executions[0].proposal_budget = 256
+    vi.mocked(researchStudyActivity.get).mockResolvedValue(data)
+    mount({ recipeVersion: 'automatic-hypotheses-v10' })
+    const table = await screen.findByRole('table', { name: 'Proposal activity' })
+    expect(
+      within(table).getByRole('rowheader', { name: 'Fit 1 · Trial 64 Proposal 64' })
+    ).toBeVisible()
+    expect(
+      within(table).getByRole('rowheader', { name: 'Fit 2 · Trial 1 Proposal 65' })
+    ).toBeVisible()
+    expect(
+      within(table).getByRole('rowheader', { name: 'Final fit · Trial 64 Proposal 256' })
+    ).toBeVisible()
+  })
   it('labels all four fixed fit boundaries with both local trials and global proposals', async () => {
     const data = receipt({
       rows: [0, 47, 48, 95, 96, 143, 144, 191].map((number) => row({ id: number + 1, number })),

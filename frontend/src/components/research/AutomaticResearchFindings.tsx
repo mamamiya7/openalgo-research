@@ -25,7 +25,9 @@ const periods = [
 function recordedWalkForward(findings: Findings): WalkForwardFindings | undefined {
   const receipt = findings.walk_forward
   if (
-    !['automatic-hypotheses-v8', 'automatic-hypotheses-v9'].includes(findings.version) ||
+    !['automatic-hypotheses-v8', 'automatic-hypotheses-v9', 'automatic-hypotheses-v10'].includes(
+      findings.version
+    ) ||
     receipt?.version !== 'research-walk-forward-findings-v1' ||
     !receipt ||
     !['supported', 'not_supported'].includes(receipt.status) ||
@@ -114,7 +116,11 @@ function WalkForwardChecks({ receipt }: { receipt: WalkForwardFindings }) {
                         >
                           {fold.selected_settings!.length > 1 && `${strategy.name} · `}
                           {strategyRuleSummary(
-                            { config: strategy.config, search: {} },
+                            {
+                              config: strategy.config,
+                              execution_policy: strategy.execution_policy,
+                              search: {},
+                            },
                             false,
                             true
                           )}
@@ -246,11 +252,20 @@ export function AutomaticResearchFindings({
             'automatic-hypotheses-v7',
             'automatic-hypotheses-v8',
             'automatic-hypotheses-v9',
+            'automatic-hypotheses-v10',
           ].includes(findings.version) &&
             selectedSettings?.map((strategy) => (
               <p key={strategy.id} className="text-sm">
                 {selectedSettings.length > 1 && `${strategy.name} · `}
-                {strategyRuleSummary({ config: strategy.config, search: {} }, false, true)}
+                {strategyRuleSummary(
+                  {
+                    config: strategy.config,
+                    execution_policy: strategy.execution_policy,
+                    search: {},
+                  },
+                  false,
+                  true
+                )}
               </p>
             ))}
         </div>
@@ -352,6 +367,43 @@ export function AutomaticResearchFindings({
             simulations · {number(findings.counts.finalists)} finalist
             {findings.counts.finalists === 1 ? '' : 's'}
           </p>
+          {findings.version === 'automatic-hypotheses-v10' &&
+            findings.execution_research?.version === 'research-execution-findings-v1' && (
+              <div className="overflow-x-auto">
+                <p className="mb-2 font-medium">Sizing comparison · development dates</p>
+                <table
+                  className="w-full text-left tabular-nums"
+                  aria-label="Original-sizing development comparison"
+                >
+                  <thead>
+                    <tr>
+                      <th className="p-2 font-medium">Fit</th>
+                      <th className="p-2 font-medium">Selected sizing return</th>
+                      <th className="p-2 font-medium">Original sizing return</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {findings.execution_research.sizing_controls.map((control, index) => (
+                      <tr key={control.period} className="border-t border-border/60">
+                        <th className="p-2 font-normal" scope="row">
+                          {control.period === 'search'
+                            ? 'Final development fit'
+                            : `Fit ${index + 1}`}
+                        </th>
+                        <td className="p-2">
+                          {number(control.selected_summary.net_return_pct, '%')}
+                        </td>
+                        <td className="p-2">{number(control.summary.net_return_pct, '%')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="mt-2 text-muted-foreground">
+                  Same filters, exits and risk limits; original allocation and order sizing
+                  restored. Development comparison only.
+                </p>
+              </div>
+            )}
           {findings.checks.length > 0 && (
             <div className="divide-y">
               {findings.checks.map((check) => (

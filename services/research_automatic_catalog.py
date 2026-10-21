@@ -14,7 +14,7 @@ from research.portfolio import fingerprint, normalize
 from research.regimes import recipe as regime_recipe
 
 CATALOG_VERSION = "automatic-search-plan-v1"
-NEXT_RECIPE_VERSION = "automatic-hypotheses-v10"
+NEXT_RECIPE_VERSION = "automatic-hypotheses-v11"
 
 _PARAMETERS = {
     "target_pct": ("Profit target", "%"),
@@ -54,11 +54,13 @@ def _domain(axis, *, integer):
 
 def _parameters(strategy, engine, version):
     cfg, search = strategy["config"], strategy["search"]
+    execution = version == "automatic-hypotheses-v10"
     trailing = version in (
         "automatic-hypotheses-v6",
         "automatic-hypotheses-v7",
         "automatic-hypotheses-v8",
         "automatic-hypotheses-v9",
+        "automatic-hypotheses-v10",
     )
     parameters = []
     for key, (label, unit) in _PARAMETERS.items():
@@ -66,7 +68,15 @@ def _parameters(strategy, engine, version):
             continue
         status, reason = "fixed", "Retain the original execution assumptions."
         item = {"id": key, "label": label, "unit": unit, "current": deepcopy(cfg[key])}
-        if trailing and key in ("trailing_pct", "trailing_enabled"):
+        if execution and key == "order_size_pct":
+            status, reason = (
+                "search",
+                "Original or reduced order ceiling; paired with allocation and stop-risk sizing under unchanged hard limits.",
+            )
+            item.update(
+                axis="portfolio_choice", choices=[cfg[key], cfg[key] * 0.75, cfg[key] * 0.5]
+            )
+        elif trailing and key in ("trailing_pct", "trailing_enabled"):
             from research.automatic_trailing import strategy_domain
 
             status, reason = (
@@ -107,7 +117,12 @@ def _parameters(strategy, engine, version):
             reason = "Keep the original timing and required candle interval."
             if (
                 version
-                in ("automatic-hypotheses-v7", "automatic-hypotheses-v8", "automatic-hypotheses-v9")
+                in (
+                    "automatic-hypotheses-v7",
+                    "automatic-hypotheses-v8",
+                    "automatic-hypotheses-v9",
+                    "automatic-hypotheses-v10",
+                )
                 and key != "trade_horizon"
             ):
                 reason = "Check bounded native clock alternatives after exchange-calendar admission; daily inputs retain these clocks."
@@ -118,10 +133,51 @@ def _parameters(strategy, engine, version):
             "label": "Strategy allocation",
             "unit": "%",
             "current": strategy["allocation_pct"],
-            "status": "fixed",
-            "reason": "Keep allocation and shared-account cash constraints unchanged.",
+            "status": "search" if execution else "fixed",
+            "reason": "Original or reduced allocation and order ceilings under unchanged shared-account hard limits."
+            if execution
+            else "Keep allocation and shared-account cash constraints unchanged.",
+            **(
+                {
+                    "axis": "portfolio_choice",
+                    "choices": [
+                        strategy["allocation_pct"] * fraction for fraction in (1, 0.75, 0.5)
+                    ],
+                }
+                if execution
+                else {}
+            ),
         }
     )
+    if execution:
+        parameters.extend(
+            [
+                {
+                    "id": "execution_choice",
+                    "label": "Percentage or ATR exits",
+                    "unit": "policy",
+                    "current": "percent",
+                    "status": "search",
+                    "choices": ["percent", "atr_1_2", "atr_1_3", "atr_2_3", "atr_2_4"],
+                    "reason": "Native ATR14 from completed prior daily bars; anchor protection to the actual fill.",
+                },
+                {
+                    "id": "portfolio_choice",
+                    "label": "Allocation or stop-risk sizing",
+                    "unit": "policy",
+                    "current": "original",
+                    "status": "search",
+                    "choices": [
+                        "original",
+                        "allocation_75",
+                        "allocation_50",
+                        "stop_risk",
+                        "stop_risk_50",
+                    ],
+                    "reason": "Stop-risk choices target half the declared per-trade risk cap; allocations and order ceilings can only decrease.",
+                },
+            ]
+        )
     return parameters
 
 
@@ -143,20 +199,24 @@ def _decisions(portfolio, interval, strategies, *, proposals, max_simulations):
     execution recipe, the request's version, or any numerical search domain.
     """
     intelligent = portfolio["automatic_research"]["version"].startswith("automatic-hypotheses-")
+    execution = portfolio["automatic_research"]["version"] == "automatic-hypotheses-v10"
     trailing = portfolio["automatic_research"]["version"] in (
         "automatic-hypotheses-v6",
         "automatic-hypotheses-v7",
         "automatic-hypotheses-v8",
         "automatic-hypotheses-v9",
+        "automatic-hypotheses-v10",
     )
     timing = portfolio["automatic_research"]["version"] in (
         "automatic-hypotheses-v7",
         "automatic-hypotheses-v8",
         "automatic-hypotheses-v9",
+        "automatic-hypotheses-v10",
     )
     walk_forward = portfolio["automatic_research"]["version"] in (
         "automatic-hypotheses-v8",
         "automatic-hypotheses-v9",
+        "automatic-hypotheses-v10",
     )
     return {
         "version": "automatic-decision-summary-v1",
@@ -210,7 +270,9 @@ def _decisions(portfolio, interval, strategies, *, proposals, max_simulations):
             {
                 "id": "risk",
                 "label": "Account risk",
-                "decision": "Keep capital, allocations, order size and exposure unchanged for a fair comparison.",
+                "decision": "Keep capital and hard risk limits fixed; compare original and reduced sizing with a matched original-sizing development account."
+                if execution
+                else "Keep capital, allocations, order size and exposure unchanged for a fair comparison.",
             },
             {
                 "id": "costs",
@@ -252,8 +314,12 @@ def _decisions(portfolio, interval, strategies, *, proposals, max_simulations):
             ),
             {
                 "id": "portfolio_risk_search",
-                "label": "Larger bets or different allocations",
-                "reason": "Changing account risk would invalidate comparison with the original setup.",
+                "label": "Larger bets or relaxed risk limits"
+                if execution
+                else "Larger bets or different allocations",
+                "reason": "Sizing stays within the original allocation and order ceilings and declared risk limits."
+                if execution
+                else "Changing account risk would invalidate comparison with the original setup.",
             },
             {
                 "id": "original_scanner",
@@ -486,6 +552,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v7",
         "automatic-hypotheses-v8",
         "automatic-hypotheses-v9",
+        "automatic-hypotheses-v10",
     ):
         raise ValueError("Choose a supported automatic research recipe before planning")
     version, engine = auto["version"], canonical["engine"]
@@ -512,6 +579,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v7",
         "automatic-hypotheses-v8",
         "automatic-hypotheses-v9",
+        "automatic-hypotheses-v10",
     ):
         from research.intelligent_plan import build_plan as intelligence_plan
 
@@ -536,7 +604,9 @@ def build_plan(portfolio, *, interval):
             "research_plan": plan,
             "families": plan["methods"],
             "data": plan["data"],
-            "fixed_assumptions": "Cash, allocation, sizing, exposure and costs stay fixed.",
+            "fixed_assumptions": "Cash, costs, hard risk limits and original allocation/order ceilings stay fixed."
+            if version == "automatic-hypotheses-v10"
+            else "Cash, allocation, sizing, exposure and costs stay fixed.",
             "decisions": _decisions(
                 canonical,
                 interval,

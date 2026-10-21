@@ -103,6 +103,42 @@ def test_actual_metadata_builder_through_owned_http_view(app, client, metadata, 
     assert set((store.root / "artifacts").iterdir()) == files_before
 
 
+def test_execution_method_metadata_uses_sixty_four_trial_fits_without_price_reads(
+    app, client, monkeypatch
+):
+    from test_method_coverage import prepared_metadata
+
+    metadata = prepared_metadata(version="automatic-hypotheses-v10", proposals=40)
+    store, _, digest = seed(app, metadata, recipe="automatic-hypotheses-v10")
+    original_read = artifacts.read_artifact
+
+    def bounded_read(actual_store, actual_digest, **kwargs):
+        assert actual_store is store and actual_digest == digest
+        return original_read(actual_store, actual_digest, **kwargs)
+
+    monkeypatch.setattr(artifacts, "read_artifact", bounded_read)
+    response = client.get(path())
+    assert response.status_code == 200 and response.json["available"], response.json
+    coverage = response.json["coverage"]
+    assert coverage["totals"]["proposals"] == 40
+    assert coverage["source"]["recipe_version"] == "automatic-hypotheses-v10"
+    assert all(fit["proposal_limit"] == 64 for fit in coverage["fits"])
+    assert coverage["registry"]["hypothesis_count"] == 108
+
+
+def test_completed_execution_metadata_requires_sixty_four_trials_in_every_fit():
+    calculation = {
+        "version": "automatic-hypotheses-v10",
+        "fits": {name: {"trials": [None] * 64} for name in ("fit1", "fit2", "fit3", "search")},
+        "folds": [None] * 3,
+        "selection": {"saved": True},
+        "final_report": {"saved": True},
+    }
+    assert view._complete(calculation)
+    calculation["fits"]["search"]["trials"] = [None] * 48
+    assert not view._complete(calculation)
+
+
 def test_auth_and_owner_checked_before_any_metadata_read(app, client, metadata, monkeypatch):
     seed(app, metadata)
     monkeypatch.setattr(

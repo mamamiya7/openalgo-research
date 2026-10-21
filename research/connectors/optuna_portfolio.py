@@ -354,6 +354,11 @@ def _settings(strategies):
                 if "entry_condition" in strategy
                 else {}
             ),
+            **(
+                {"execution_policy": copy.deepcopy(strategy["execution_policy"])}
+                if "execution_policy" in strategy
+                else {}
+            ),
         }
         for strategy in strategies
     ]

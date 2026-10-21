@@ -21,16 +21,23 @@ from research.report_contract import fingerprint, settings_identity
 
 VERSION = "research-mandate-v1"
 MAX_METADATA_BYTES = 64 * 1024
+EXECUTION_MAX_METADATA_BYTES = 128 * 1024
 
 
 def _bounded(value):
     size = 0
+    source = value.get("source") if isinstance(value, dict) else None
+    maximum = (
+        EXECUTION_MAX_METADATA_BYTES
+        if isinstance(source, dict) and source.get("recipe_version") == "automatic-hypotheses-v10"
+        else MAX_METADATA_BYTES
+    )
     try:
         for chunk in json.JSONEncoder(
             sort_keys=True, separators=(",", ":"), allow_nan=False
         ).iterencode(value):
             size += len(chunk.encode())
-            if size > MAX_METADATA_BYTES:
+            if size > maximum:
                 raise ValueError("Research mandate metadata limit reached")
     except (TypeError, OverflowError) as error:
         raise ValueError("Research mandate metadata is not canonical JSON") from error
@@ -91,7 +98,14 @@ def build(evidence, *, inputs_artifact):
     portfolio, snapshot = evidence["portfolio"], evidence["snapshot"]
     interval = snapshot["provenance"]["interval"]
     settings = [
-        {key: deepcopy(row[key]) for key in ("id", "name", "allocation_pct", "config")}
+        {
+            **{key: deepcopy(row[key]) for key in ("id", "name", "allocation_pct", "config")},
+            **(
+                {"execution_policy": deepcopy(row["execution_policy"])}
+                if "execution_policy" in row
+                else {}
+            ),
+        }
         for row in evidence["strategies"]
     ]
     plan = recipe.get("research_plan", {})
@@ -244,6 +258,10 @@ def build(evidence, *, inputs_artifact):
     }
     if "walk_forward" in recipe:
         mandate["validation"]["walk_forward"] = deepcopy(recipe["walk_forward"])
+    if "execution_research" in recipe:
+        mandate["search"]["execution_research"] = deepcopy(recipe["execution_research"])
+        mandate["search"]["execution_features_id"] = recipe.get("execution_features_id")
+        mandate["economic_assumptions"]["risk_limits"] = deepcopy(portfolio["risk_limits"])
     _bounded(mandate)
     mandate["id"] = fingerprint(mandate)
     _bounded(mandate)

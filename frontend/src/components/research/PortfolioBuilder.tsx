@@ -4,6 +4,7 @@ import type {
   PortfolioAxis,
   PortfolioCapabilities,
   PortfolioRequest,
+  PortfolioRiskLimits,
   PortfolioStrategy,
 } from '@/api/portfolioResearch'
 import type { ResearchSource } from '@/api/scannerResearch'
@@ -27,6 +28,14 @@ export interface PortfolioDraft {
   equalWeights: boolean
   sources: Record<string, ResearchSource & { filename?: string }>
   optimization: NonNullable<PortfolioRequest['optimization']>
+}
+export const defaultRiskLimits: PortfolioRiskLimits = {
+  version: 'research-risk-limits-v1',
+  max_gross_exposure_pct: 100,
+  max_symbol_exposure_pct: 25,
+  max_open_positions: 10,
+  max_trade_risk_pct: 1,
+  max_total_stop_risk_pct: 5,
 }
 export function freshPortfolioDraft(): PortfolioDraft {
   return {
@@ -56,6 +65,18 @@ export function equalSplit(strategies: PortfolioStrategy[]): PortfolioStrategy[]
 // recipes, custom ranges and chosen entry conditions retain their identity.
 export function selectPortfolioRun(draft: PortfolioDraft, optimizing: boolean): PortfolioDraft {
   if (!optimizing) return { ...draft, optimizing }
+  if (
+    draft.portfolio.strategies.some(
+      (row) =>
+        row.execution_policy &&
+        (row.execution_policy.exit_mode === 'atr' || row.execution_policy.sizing === 'stop_risk')
+    )
+  ) {
+    return applySuggestedSearch(
+      { ...draft, optimizing, portfolio: { ...draft.portfolio, automatic_research: undefined } },
+      true
+    )
+  }
   const hasCustomRanges = draft.portfolio.strategies.some(
     (strategy) => Object.keys(strategy.search).length > 0
   )
@@ -73,9 +94,12 @@ export function selectPortfolioRun(draft: PortfolioDraft, optimizing: boolean): 
         automatic_research: {
           version:
             draft.portfolio.engine === 'vectorbt'
-              ? 'automatic-hypotheses-v9'
+              ? 'automatic-hypotheses-v10'
               : 'automatic-trade-management-v2',
         },
+        ...(draft.portfolio.engine === 'vectorbt'
+          ? { risk_limits: draft.portfolio.risk_limits ?? { ...defaultRiskLimits } }
+          : {}),
       },
     }
   }
@@ -86,6 +110,10 @@ export function selectPortfolioRun(draft: PortfolioDraft, optimizing: boolean): 
 
 function activeSearch(strategy: PortfolioStrategy): PortfolioStrategy['search'] {
   const search = { ...strategy.search }
+  if (strategy.execution_policy?.exit_mode === 'atr') {
+    delete search.target_pct
+    delete search.stop_pct
+  }
   if (strategy.config.hold_minutes != null || strategy.config.trade_horizon === 'intraday')
     delete search.hold_sessions
   if (strategy.config.hold_minutes == null) delete search.hold_minutes
@@ -105,7 +133,8 @@ export function suggestedStrategySearch(
   strategy: PortfolioStrategy,
   engine: PortfolioRequest['engine']
 ): PortfolioStrategy['search'] {
-  const fields: Array<Exclude<PortfolioAxis, 'allocation_pct'>> = ['target_pct', 'stop_pct']
+  const fields: Array<Exclude<PortfolioAxis, 'allocation_pct'>> =
+    strategy.execution_policy?.exit_mode === 'atr' ? [] : ['target_pct', 'stop_pct']
   if (strategy.config.hold_minutes != null) fields.unshift('hold_minutes')
   else if (strategy.config.trade_horizon !== 'intraday') fields.unshift('hold_sessions')
   if (strategy.config.trailing_enabled && engine === 'vectorbt') fields.push('trailing_pct')
@@ -203,8 +232,13 @@ export function addPortfolioSource(
 export function portfolioPayload(draft: PortfolioDraft): PortfolioRequest {
   const { optimization: _discarded, validation, automatic_research, ...portfolio } = draft.portfolio
   const automatic = draft.optimizing && Boolean(automatic_research)
+  const riskLimits =
+    automatic_research?.version === 'automatic-hypotheses-v10'
+      ? (portfolio.risk_limits ?? defaultRiskLimits)
+      : portfolio.risk_limits
   return {
     ...portfolio,
+    ...(riskLimits ? { risk_limits: riskLimits } : {}),
     strategies: portfolio.strategies.map((strategy) => ({
       ...strategy,
       config: { ...strategy.config, initial_capital: portfolio.capital },
@@ -231,6 +265,20 @@ export function portfolioDraftIssue(draft: PortfolioDraft): string | null {
     return 'Strategy allocations must total more than 0% and at most 100%.'
   if (portfolio.strategies.some((strategy) => !strategy.name.trim()))
     return 'Give each strategy a name.'
+  const limits = portfolio.risk_limits
+  if (
+    limits &&
+    (!Number.isInteger(limits.max_open_positions) ||
+      limits.max_open_positions < 1 ||
+      limits.max_open_positions > 200 ||
+      [
+        limits.max_gross_exposure_pct,
+        limits.max_symbol_exposure_pct,
+        limits.max_trade_risk_pct,
+        limits.max_total_stop_risk_pct,
+      ].some((value) => !Number.isFinite(value) || value <= 0 || value > 100))
+  )
+    return 'Use exposure and risk limits above 0% and up to 100%, and 1–200 open positions.'
   if (
     draft.optimizing &&
     !portfolio.automatic_research &&
@@ -254,6 +302,11 @@ export function portfolioEngineIssue(
     return 'Optuna is unavailable in this installation.'
   if (draft.portfolio.engine === 'nautilus') {
     if (
+      draft.portfolio.risk_limits ||
+      draft.portfolio.strategies.some((row) => row.execution_policy)
+    )
+      return 'These saved execution and portfolio limits need VectorBT.'
+    if (
       draft.portfolio.entry_conditions ||
       (draft.optimizing &&
         [
@@ -266,6 +319,7 @@ export function portfolioEngineIssue(
           'automatic-hypotheses-v7',
           'automatic-hypotheses-v8',
           'automatic-hypotheses-v9',
+          'automatic-hypotheses-v10',
         ].includes(draft.portfolio.automatic_research?.version ?? ''))
     )
       return 'Entry conditions currently need VectorBT. Choose VectorBT to keep these rules.'
@@ -617,10 +671,26 @@ export function PortfolioBuilder({
                   size="sm"
                   variant={automatic === enabled ? 'secondary' : 'ghost'}
                   aria-pressed={automatic === enabled}
-                  disabled={enabled && Boolean(portfolio.entry_conditions)}
+                  disabled={
+                    enabled &&
+                    (Boolean(portfolio.entry_conditions) ||
+                      portfolio.strategies.some(
+                        (row) =>
+                          row.execution_policy &&
+                          (row.execution_policy.exit_mode === 'atr' ||
+                            row.execution_policy.sizing === 'stop_risk')
+                      ))
+                  }
                   title={
-                    enabled && portfolio.entry_conditions
-                      ? 'Use Custom search to preserve this setup’s saved entry conditions.'
+                    enabled &&
+                    (portfolio.entry_conditions ||
+                      portfolio.strategies.some(
+                        (row) =>
+                          row.execution_policy &&
+                          (row.execution_policy.exit_mode === 'atr' ||
+                            row.execution_policy.sizing === 'stop_risk')
+                      ))
+                      ? 'Use Custom search to preserve this setup’s selected entry and execution rules.'
                       : undefined
                   }
                   onClick={() => {
@@ -641,9 +711,14 @@ export function PortfolioBuilder({
                       automatic_research: {
                         version:
                           portfolio.engine === 'vectorbt'
-                            ? 'automatic-hypotheses-v9'
+                            ? 'automatic-hypotheses-v10'
                             : 'automatic-trade-management-v2',
                       },
+                      ...(portfolio.engine === 'vectorbt'
+                        ? {
+                            risk_limits: portfolio.risk_limits ?? { ...defaultRiskLimits },
+                          }
+                        : {}),
                     })
                   }}
                 >
@@ -651,6 +726,56 @@ export function PortfolioBuilder({
                   {enabled ? 'Automatic research' : 'Custom search'}
                 </Button>
               ))}
+            </fieldset>
+          )}
+          {(portfolio.risk_limits ||
+            portfolio.automatic_research?.version === 'automatic-hypotheses-v10') && (
+            <fieldset disabled={disabled} className="mt-4 grid gap-3 sm:grid-cols-3">
+              <legend className="mb-2 text-sm font-medium">Portfolio limits</legend>
+              {(
+                [
+                  ['max_gross_exposure_pct', 'Gross exposure %'],
+                  ['max_symbol_exposure_pct', 'Per symbol %'],
+                  ['max_open_positions', 'Open positions'],
+                  ['max_trade_risk_pct', 'Risk per trade %'],
+                  ['max_total_stop_risk_pct', 'Total stop risk %'],
+                ] as const
+              ).map(([key, label]) => (
+                <div className="space-y-1" key={key}>
+                  <Label htmlFor={`risk-${key}`}>{label}</Label>
+                  <Input
+                    id={`risk-${key}`}
+                    type="number"
+                    min={key === 'max_open_positions' ? 1 : 0.01}
+                    max={key === 'max_open_positions' ? 200 : 100}
+                    step={key === 'max_open_positions' ? 1 : 0.01}
+                    value={(portfolio.risk_limits ?? defaultRiskLimits)[key]}
+                    onChange={(event) => {
+                      const limits = {
+                        ...(portfolio.risk_limits ?? defaultRiskLimits),
+                        [key]: Number(event.target.value),
+                      }
+                      update({
+                        risk_limits: limits,
+                        strategies: portfolio.strategies.map((row) =>
+                          row.execution_policy
+                            ? {
+                                ...row,
+                                execution_policy: {
+                                  ...row.execution_policy,
+                                  risk_limits: limits,
+                                },
+                              }
+                            : row
+                        ),
+                      })
+                    }}
+                  />
+                </div>
+              ))}
+              <p className="text-xs text-muted-foreground sm:col-span-3">
+                Limits apply when entering trades. Gaps can exceed a stop.
+              </p>
             </fieldset>
           )}
           {automatic && (
@@ -681,9 +806,21 @@ export function PortfolioBuilder({
                             PortfolioRequest['automatic_research']
                           >['version'],
                         },
+                        risk_limits:
+                          event.target.value === 'automatic-hypotheses-v10'
+                            ? (portfolio.risk_limits ?? { ...defaultRiskLimits })
+                            : portfolio.strategies.some((row) => row.execution_policy)
+                              ? portfolio.risk_limits
+                              : undefined,
                       })
                     }
                   >
+                    <option
+                      value="automatic-hypotheses-v10"
+                      disabled={portfolio.engine !== 'vectorbt'}
+                    >
+                      {researchRecipeLabel('automatic-hypotheses-v10')}
+                    </option>
                     <option
                       value="automatic-hypotheses-v9"
                       disabled={portfolio.engine !== 'vectorbt'}
@@ -747,6 +884,12 @@ export function PortfolioBuilder({
                       {researchRecipeLabel('automatic-entry-conditions-v1')}
                     </option>
                   </select>
+                  {portfolio.automatic_research?.version === 'automatic-hypotheses-v10' && (
+                    <p className="text-xs text-muted-foreground">
+                      Tests percentage and ATR exits, risk-based sizing and portfolio limits, with
+                      three later validation windows. Up to 384 calculations.
+                    </p>
+                  )}
                   {['automatic-hypotheses-v8', 'automatic-hypotheses-v9'].includes(
                     portfolio.automatic_research?.version ?? ''
                   ) && (

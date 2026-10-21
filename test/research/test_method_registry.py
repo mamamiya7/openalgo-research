@@ -119,3 +119,33 @@ def test_none_and_conjunction_do_not_claim_an_independent_strict_comparison():
         "unknown_dominates_false": True,
     }
     assert "each registered component" in methods["conjunction"]["equality"]
+
+
+@pytest.mark.parametrize(
+    "version,expected",
+    [
+        (
+            "automatic-hypotheses-v8",
+            "65c3a8c2eaaa9ae0dc24504e725d28aef2c4b96589cf805ad994d63faefac6a1",
+        ),
+        (
+            "automatic-hypotheses-v9",
+            "f30fa47c93e6eb893a0551f7cd764a591a762961571e9f8cb6cbd57f2278dce8",
+        ),
+    ],
+)
+def test_execution_admission_keeps_prior_registry_bytes_exact(version, expected):
+    assert fingerprint(catalog(version)) == expected
+
+
+def test_execution_registry_reuses_the_exact_expanded_indicator_catalog():
+    previous = catalog("automatic-hypotheses-v9")
+    execution = catalog("automatic-hypotheses-v10")
+    assert execution["family_count"] == 32
+    assert execution["hypothesis_count"] == 108
+    for key in ("methods", "families", "catalog_id", "blocked_families"):
+        assert execution[key] == previous[key]
+    assert pinned_hypotheses("automatic-hypotheses-v10") == pinned_hypotheses(
+        "automatic-hypotheses-v9"
+    )
+    assert "do not add indicator families" in execution["execution_scope"]

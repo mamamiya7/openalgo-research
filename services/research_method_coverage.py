@@ -13,7 +13,11 @@ from services import scanner_research_service as artifacts
 
 VERSION = "research-method-coverage-view-v1"
 MAX_ENVELOPE_BYTES = 34 * 1024 * 1024
-SUPPORTED_RECIPES = ("automatic-hypotheses-v8", "automatic-hypotheses-v9")
+SUPPORTED_RECIPES = (
+    "automatic-hypotheses-v8",
+    "automatic-hypotheses-v9",
+    "automatic-hypotheses-v10",
+)
 
 
 class CoverageChanged(ValueError):
@@ -23,11 +27,12 @@ class CoverageChanged(ValueError):
 def _complete(calculation):
     if not isinstance(calculation, dict) or not isinstance(calculation.get("fits"), dict):
         return False
+    proposal_limit = 64 if calculation.get("version") == "automatic-hypotheses-v10" else 48
     return (
         all(
             isinstance(calculation["fits"].get(name), dict)
             and isinstance(calculation["fits"][name].get("trials"), list)
-            and len(calculation["fits"][name]["trials"]) == 48
+            and len(calculation["fits"][name]["trials"]) == proposal_limit
             for name in ("fit1", "fit2", "fit3", "search")
         )
         and isinstance(calculation.get("folds"), list)

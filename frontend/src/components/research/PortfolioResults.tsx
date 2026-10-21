@@ -84,6 +84,7 @@ function Pager({
 }
 export function StrategySettings({ strategy }: { strategy: PortfolioSettings }) {
   const config = strategy.config
+  const policy = strategy.execution_policy
   const condition = strategy.entry_condition
   const settings = [
     ...(condition
@@ -98,8 +99,42 @@ export function StrategySettings({ strategy }: { strategy: PortfolioSettings }) 
       : []),
     ['Allocation', number(strategy.allocation_pct, '%')],
     ['Per-trade size', number(config.order_size_pct, '% of allocation')],
-    ['Profit target', number(config.target_pct, '%')],
-    ['Stop loss', number(config.stop_pct, '%')],
+    [
+      'Profit target',
+      policy?.exit_mode === 'atr'
+        ? `${policy.atr_target_multiple}× ATR(${policy.atr_period})`
+        : number(config.target_pct, '%'),
+    ],
+    [
+      'Stop loss',
+      policy?.exit_mode === 'atr'
+        ? `${policy.atr_stop_multiple}× ATR(${policy.atr_period})`
+        : number(config.stop_pct, '%'),
+    ],
+    ...(policy
+      ? [
+          [
+            'Sizing',
+            policy.sizing === 'stop_risk' ? 'Stop risk within trade budget' : 'Allocation',
+          ],
+          ...(policy.sizing === 'stop_risk'
+            ? [
+                [
+                  'Target risk per trade',
+                  number(
+                    policy.risk_limits.max_trade_risk_pct * (policy.risk_budget_fraction ?? 0.5),
+                    '%'
+                  ),
+                ],
+              ]
+            : []),
+          ['Gross exposure limit', number(policy.risk_limits.max_gross_exposure_pct, '%')],
+          ['Per-symbol limit', number(policy.risk_limits.max_symbol_exposure_pct, '%')],
+          ['Open position limit', number(policy.risk_limits.max_open_positions)],
+          ['Risk per trade', number(policy.risk_limits.max_trade_risk_pct, '%')],
+          ['Total stop risk limit', number(policy.risk_limits.max_total_stop_risk_pct, '%')],
+        ]
+      : []),
     [
       'Holding limit',
       config.hold_minutes != null

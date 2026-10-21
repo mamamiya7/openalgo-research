@@ -87,4 +87,37 @@ describe('recognizable research evidence', () => {
     expect(strategyRuleSummary(strategy, true)).toBe('TP 5–15% · SL 5% · Up to 60 min · Trail 2%')
     expect(strategyRuleSummary(strategy)).toContain('TP 10%')
   })
+  it('shows the active ATR exits rather than unused percentage fields', () => {
+    const policy = {
+      version: 'research-execution-aware-v1' as const,
+      exit_mode: 'atr' as const,
+      sizing: 'stop_risk' as const,
+      atr_period: 14 as const,
+      atr_stop_multiple: 2,
+      atr_target_multiple: 3,
+      risk_limits: {
+        version: 'research-risk-limits-v1' as const,
+        max_gross_exposure_pct: 100,
+        max_symbol_exposure_pct: 25,
+        max_open_positions: 10,
+        max_trade_risk_pct: 1,
+        max_total_stop_risk_pct: 5,
+      },
+    }
+    const summary = strategyRuleSummary({
+      config: {
+        ...freshPortfolioDraft().portfolio.strategies[0]?.config,
+        target_pct: 99,
+        stop_pct: 88,
+        hold_sessions: 5,
+      } as Parameters<typeof strategyRuleSummary>[0]['config'],
+      search: {},
+      execution_policy: policy,
+    })
+    expect(summary).toContain('TP 3× ATR(14)')
+    expect(summary).toContain('SL 2× ATR(14)')
+    expect(summary).toContain('Size by stop risk')
+    expect(summary).not.toContain('99%')
+    expect(summary).not.toContain('88%')
+  })
 })

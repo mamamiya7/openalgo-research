@@ -48,6 +48,48 @@ function findings(): Findings {
 }
 
 describe('automatic research findings', () => {
+  it('keeps matched original-sizing diagnostics inside development details', async () => {
+    const data = findings()
+    data.version = 'automatic-hypotheses-v10'
+    data.execution_research = {
+      version: 'research-execution-findings-v1',
+      feature_id: 'sealed-feature',
+      policy: 'Development only',
+      risk_limits: {
+        version: 'research-risk-limits-v1',
+        max_gross_exposure_pct: 100,
+        max_symbol_exposure_pct: 25,
+        max_open_positions: 10,
+        max_trade_risk_pct: 1,
+        max_total_stop_risk_pct: 5,
+      },
+      sizing_controls: (['fit1', 'fit2', 'fit3', 'search'] as const).map((period) => ({
+        version: 'research-sizing-control-v1',
+        role: 'matched_original_sizing_development',
+        period,
+        selected_config_id: 'selected',
+        control_config_id: 'control',
+        strategies: [],
+        sizing_changed: true,
+        selected_summary: { net_return_pct: 4.2 },
+        summary: { net_return_pct: 3.1 },
+        score_delta: 1.1,
+        policy: 'Same filters and exits',
+      })),
+    }
+    render(<AutomaticResearchFindings findings={data} />)
+    const table = screen.getByRole('table', {
+      name: 'Original-sizing development comparison',
+      hidden: true,
+    })
+    expect(table).not.toBeVisible()
+    await userEvent.click(screen.getByText('Research details'))
+    expect(table).toBeVisible()
+    expect(within(table).getAllByText('4.2%')).toHaveLength(4)
+    expect(within(table).getAllByText('3.1%')).toHaveLength(4)
+    expect(within(table).getByText('Final development fit')).toBeVisible()
+    expect(within(table).queryByText('Final check')).not.toBeInTheDocument()
+  })
   it('leaves legacy findings unchanged when account histories were not recorded', async () => {
     render(<AutomaticResearchFindings findings={findings()} />)
     await userEvent.click(screen.getByText('Research details'))
@@ -209,6 +251,7 @@ describe('automatic research findings', () => {
     ['automatic-hypotheses-v7', 'Stock, market and trade timing'],
     ['automatic-hypotheses-v8', 'Walk-forward research'],
     ['automatic-hypotheses-v9', 'Expanded automatic research'],
+    ['automatic-hypotheses-v10', 'Execution-aware research'],
     ['automatic-future-v99', 'Automatic research'],
   ])('keeps the saved %s scope in the collapsed research details', async (version, label) => {
     const data = findings()

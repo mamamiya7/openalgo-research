@@ -18,7 +18,14 @@ MAX_SIMULATIONS = 70
 
 def _settings(rows):
     return [
-        {key: deepcopy(row[key]) for key in ("id", "name", "allocation_pct", "config")}
+        {
+            **{key: deepcopy(row[key]) for key in ("id", "name", "allocation_pct", "config")},
+            **(
+                {"execution_policy": deepcopy(row["execution_policy"])}
+                if "execution_policy" in row
+                else {}
+            ),
+        }
         for row in rows
     ]
 

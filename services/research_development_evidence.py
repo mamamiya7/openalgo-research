@@ -34,7 +34,8 @@ class DevelopmentEvidenceWriter:
             raise ValueError("The saved development evidence manifest changed")
         entries = saved.get("entries")
         if not isinstance(entries, dict) or len(entries) > self.plan.get(
-            "max_evaluations", contract.MAX_EVALUATIONS
+            "max_evaluations",
+            self.plan.get("limits", {}).get("max_evaluations", contract.MAX_EVALUATIONS),
         ):
             raise ValueError("The saved development evidence index exceeds its bound")
         declared_marks = declared_bytes = 0
@@ -110,7 +111,8 @@ class DevelopmentEvidenceWriter:
             raise ValueError("Development evidence belongs to a different search")
         key = context["evaluation_id"]
         if key not in self.entries and len(self.entries) >= self.plan.get(
-            "max_evaluations", contract.MAX_EVALUATIONS
+            "max_evaluations",
+            self.plan.get("limits", {}).get("max_evaluations", contract.MAX_EVALUATIONS),
         ):
             raise ValueError("Development evidence exceeded its evaluation bound")
         descriptor = {

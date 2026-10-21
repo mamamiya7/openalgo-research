@@ -16,6 +16,24 @@ export type PortfolioAxis =
   | 'order_size_pct'
   | 'allocation_pct'
 export type PortfolioRange = { min: number; max: number; step: number }
+export interface PortfolioRiskLimits {
+  version: 'research-risk-limits-v1'
+  max_gross_exposure_pct: number
+  max_symbol_exposure_pct: number
+  max_open_positions: number
+  max_trade_risk_pct: number
+  max_total_stop_risk_pct: number
+}
+export interface ExecutionPolicy {
+  version: 'research-execution-aware-v1'
+  exit_mode: 'percent' | 'atr'
+  sizing: 'allocation' | 'stop_risk'
+  risk_budget_fraction?: number
+  risk_limits: PortfolioRiskLimits
+  atr_period?: 14
+  atr_stop_multiple?: number
+  atr_target_multiple?: number
+}
 export interface PortfolioCapabilities {
   max_strategies: number
   engines: Array<{
@@ -35,6 +53,7 @@ export interface PortfolioStrategy {
   allocation_pct: number
   config: ResearchConfig
   search: Partial<Record<PortfolioAxis, PortfolioRange>>
+  execution_policy?: ExecutionPolicy
   entry_condition?:
     | { dimension: 'trend' | 'volatility'; regime: string; recipe_id: string }
     | StockEntryConditions
@@ -42,7 +61,7 @@ export interface PortfolioStrategy {
 }
 export type PortfolioSettings = Pick<
   PortfolioStrategy,
-  'id' | 'name' | 'allocation_pct' | 'config' | 'entry_condition'
+  'id' | 'name' | 'allocation_pct' | 'config' | 'entry_condition' | 'execution_policy'
 >
 export interface AnalysisMetric {
   key: string
@@ -323,6 +342,7 @@ export interface PortfolioRequest {
   capital: number
   engine: 'vectorbt' | 'nautilus'
   strategies: PortfolioStrategy[]
+  risk_limits?: PortfolioRiskLimits
   automatic_research?: {
     version:
       | 'automatic-trade-management-v1'
@@ -336,6 +356,7 @@ export interface PortfolioRequest {
       | 'automatic-hypotheses-v7'
       | 'automatic-hypotheses-v8'
       | 'automatic-hypotheses-v9'
+      | 'automatic-hypotheses-v10'
   }
   entry_conditions?: EntryConditions
   optimization?: {
@@ -491,6 +512,25 @@ export interface WalkForwardFindings {
   selection_policy: string
 }
 export interface AutomaticResearchFindings {
+  execution_research?: {
+    version: 'research-execution-findings-v1'
+    risk_limits: PortfolioRiskLimits
+    feature_id: string
+    policy: string
+    sizing_controls: Array<{
+      version: 'research-sizing-control-v1'
+      role: 'matched_original_sizing_development'
+      period: 'fit1' | 'fit2' | 'fit3' | 'search'
+      selected_config_id: string
+      control_config_id: string
+      strategies: PortfolioSettings[]
+      selected_summary: Record<string, number | string | null>
+      summary: Record<string, number | string | null>
+      score_delta: number
+      sizing_changed: boolean
+      policy: string
+    }>
+  }
   walk_forward?: WalkForwardFindings
   comparison?: {
     version: 'research-automatic-comparison-v1'
@@ -661,7 +701,7 @@ export interface PortfolioPreview {
         current: unknown
         domain?: PortfolioRange
         axis?: string
-        choices?: boolean[]
+        choices?: Array<boolean | number | string>
         condition?: { trailing_enabled: true }
       }>
     }>

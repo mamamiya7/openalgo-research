@@ -63,6 +63,7 @@ def _search_inputs(evidence, calculation):
             "automatic-hypotheses-v7",
             "automatic-hypotheses-v8",
             "automatic-hypotheses-v9",
+            "automatic-hypotheses-v10",
         ):
             from research.automatic_hypotheses import checkpoint_rows
 
@@ -78,6 +79,7 @@ def _search_inputs(evidence, calculation):
                             "automatic-hypotheses-v7",
                             "automatic-hypotheses-v8",
                             "automatic-hypotheses-v9",
+                            "automatic-hypotheses-v10",
                         )
                         else "automatic_stock_features"
                     ],
@@ -87,7 +89,12 @@ def _search_inputs(evidence, calculation):
             checkpoint_rows(calculation)
             period = (
                 calculation["active_fit"]
-                if version in ("automatic-hypotheses-v8", "automatic-hypotheses-v9")
+                if version
+                in (
+                    "automatic-hypotheses-v8",
+                    "automatic-hypotheses-v9",
+                    "automatic-hypotheses-v10",
+                )
                 else "search"
             )
             return slice_period(evidence, period), calculation, period, True, False
@@ -167,13 +174,15 @@ def _validated_rows(evidence, saved, completed):
         "automatic-hypotheses-v7",
         "automatic-hypotheses-v8",
         "automatic-hypotheses-v9",
+        "automatic-hypotheses-v10",
     ):
         from research.automatic_hypotheses import checkpoint_rows
 
         rows = checkpoint_rows(saved)
         trials = (
             saved["fits"].get(saved["active_fit"], {"trials": []})["trials"]
-            if saved["version"] in ("automatic-hypotheses-v8", "automatic-hypotheses-v9")
+            if saved["version"]
+            in ("automatic-hypotheses-v8", "automatic-hypotheses-v9", "automatic-hypotheses-v10")
             else saved["trials"]
         )
         return rows, {

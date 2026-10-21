@@ -24,6 +24,11 @@ def settings_identity(strategies):
             {
                 **{key: row[key] for key in keys},
                 **({"entry_condition": row["entry_condition"]} if "entry_condition" in row else {}),
+                **(
+                    {"execution_policy": row["execution_policy"]}
+                    if "execution_policy" in row
+                    else {}
+                ),
             }
             for row in strategies
         ]
@@ -77,7 +82,10 @@ def report_context(result, *, job_id, result_artifact, inputs_artifact, period=N
             "study_job_id": job_id,
             "trial_number": match["trial_number"],
             "config_id": config_id,
-            "is_objective_winner": experiment.get("objective_winner_id", experiment.get("recommendation_id")) == config_id,
+            "is_objective_winner": experiment.get(
+                "objective_winner_id", experiment.get("recommendation_id")
+            )
+            == config_id,
         }
     elif origin.get("config_id") == config_id and origin.get("study_job_id"):
         context["candidate"] = {

@@ -10,7 +10,12 @@ from copy import deepcopy
 from math import prod
 
 from research.automatic_hypotheses import MAX_GATE_CACHE, _gate, _screening, policy_for_version
-from research.automatic_protocol import METHOD_VERSION, compile_recipe, slice_period
+from research.automatic_protocol import (
+    EXECUTION_VERSION,
+    METHOD_VERSION,
+    compile_recipe,
+    slice_period,
+)
 from research.automatic_protocol import WALK_FORWARD_VERSION as VERSION
 from research.automatic_research import _entry_dates, _score, _support
 from research.automatic_research import _settings as numerical_settings
@@ -60,16 +65,16 @@ def prepare_method_gate(bundle):
 def _context(version):
     if version == VERSION:
         from research import joint_stock_market as context
-    elif version == METHOD_VERSION:
+    elif version in (METHOD_VERSION, EXECUTION_VERSION):
         from research import expanded_stock_market as context
     else:
         raise ValueError("Choose a supported walk-forward research version")
     return context
 
 
-def _screening_program(version, entries, axes, timing):
+def _screening_program(version, entries, axes, timing, execution=None):
     """Preserve v8's sequence; explicitly screen every newly admitted v9 method."""
-    if version == METHOD_VERSION:
+    if version in (METHOD_VERSION, EXECUTION_VERSION):
         policy = policy_for_version(version)
         if (
             len(entries) != policy["max_hypotheses"]
@@ -80,7 +85,7 @@ def _screening_program(version, entries, axes, timing):
     # Existing family representatives stay identical even when a later catalogue
     # contains new choices in the same family. Numeric exits use one midpoint.
     screening = _screening(
-        _context(VERSION).catalog() if version == METHOD_VERSION else entries,
+        _context(VERSION).catalog() if version in (METHOD_VERSION, EXECUTION_VERSION) else entries,
         axes,
         policy=policy_for_version(VERSION),
     )
@@ -91,7 +96,7 @@ def _screening_program(version, entries, axes, timing):
                 "original" if name.endswith(".timing_choice") else choices[len(choices) // 2]
             )
     clock_limit = 8
-    if version == METHOD_VERSION:
+    if version in (METHOD_VERSION, EXECUTION_VERSION):
         registered = {row["id"] for row in entries}
         if not set(METHOD_PROBES) <= registered:
             raise ValueError("The expanded walk-forward catalogue lost a targeted method")
@@ -99,15 +104,28 @@ def _screening_program(version, entries, axes, timing):
         screening.extend({**midpoint, "hypothesis": identifier} for identifier in METHOD_PROBES)
         clock_limit = 4
     screening.extend(probes(axes, timing)[:clock_limit])
-    if len(screening) > 40:
+    if version == EXECUTION_VERSION:
+        from research.execution_search import probes as execution_probes
+
+        for params in screening:
+            for name in axes:
+                if name.endswith(".execution_choice"):
+                    params[name] = "percent"
+                elif name.endswith(".portfolio_choice"):
+                    params[name] = "original"
+        screening.extend(execution_probes(screening[0], execution))
+    if len(screening) > (48 if version == EXECUTION_VERSION else 40):
         raise ValueError("Walk-forward screening exceeded its reserved refinement budget")
     return screening
 
 
 def _validate_state(saved, *, version=None):
+    saved_version = saved.get("version") if isinstance(saved, dict) else None
+    max_simulations = 384 if saved_version == EXECUTION_VERSION else MAX_SIMULATIONS
+    proposals_per_fit = 64 if saved_version == EXECUTION_VERSION else PROPOSALS_PER_FIT
     if (
         not isinstance(saved, dict)
-        or saved.get("version") not in (VERSION, METHOD_VERSION)
+        or saved.get("version") not in (VERSION, METHOD_VERSION, EXECUTION_VERSION)
         or (version is not None and saved.get("version") != version)
         or saved.get("checkpoint_id")
         != _fingerprint(
@@ -116,7 +134,7 @@ def _validate_state(saved, *, version=None):
         )
         or type(saved.get("attempts")) is not int
         or type(saved.get("simulations")) is not int
-        or not 0 <= saved["simulations"] <= saved["attempts"] <= MAX_SIMULATIONS
+        or not 0 <= saved["simulations"] <= saved["attempts"] <= max_simulations
         or not isinstance(saved.get("evaluations"), dict)
         or len(saved["evaluations"]) > saved["simulations"]
         or not isinstance(saved.get("fits"), dict)
@@ -130,9 +148,9 @@ def _validate_state(saved, *, version=None):
         if (
             not isinstance(fit, dict)
             or not isinstance(fit.get("trials"), list)
-            or len(fit["trials"]) > PROPOSALS_PER_FIT
+            or len(fit["trials"]) > proposals_per_fit
             or not isinstance(fit.get("candidates"), dict)
-            or len(fit["candidates"]) > PROPOSALS_PER_FIT
+            or len(fit["candidates"]) > proposals_per_fit
         ):
             raise ValueError("The walk-forward fit history changed")
         for config_id, row in fit["candidates"].items():
@@ -198,7 +216,9 @@ def run(
         boundary()
     version = evidence.get("portfolio", {}).get("automatic_research", {}).get("version")
     context = _context(version)
-    prepare = prepare_method_gate if version == METHOD_VERSION else prepare_gate
+    prepare = (
+        prepare_method_gate if version in (METHOD_VERSION, EXECUTION_VERSION) else prepare_gate
+    )
     with prepare(evidence.get("automatic_stock_market_context")) as prepared:
         return _run(
             evidence,
@@ -252,18 +272,28 @@ def _run(
     ):
         raise ValueError("Walk-forward research needs its exact saved stock and market context")
     binding = fingerprint({"recipe": recipe, "stock": stock})
+    policy = policy_for_version(version)
+    proposals_per_fit = policy["proposals_per_fit"]
+    max_simulations = policy["max_simulations"]
+    proposal_budget = policy["proposals"]
     base, numeric_axes = _prepare(evidence["strategies"])
     axes = {
         **numeric_axes,
         **trailing_axes(recipe["trailing_research"]),
         **timing_axes(recipe["timing_research"]),
     }
+    if version == EXECUTION_VERSION:
+        from research.execution_search import axes as execution_axes
+
+        axes.update(execution_axes(recipe["execution_research"]))
     baseline = _settings(base)
     baseline_id = settings_identity(baseline)
     entries = context.catalog()
     by_id = {row["id"]: row for row in entries}
     none = by_id["none"]
-    screening = _screening_program(version, entries, axes, recipe["timing_research"])
+    screening = _screening_program(
+        version, entries, axes, recipe["timing_research"], recipe.get("execution_research")
+    )
     optimizer = {
         "id": "optuna",
         "version": optuna.__version__,
@@ -310,7 +340,7 @@ def _run(
         state["checkpoint_id"] = _fingerprint(state, max_bytes=MAX_CHECKPOINT_BYTES)
         checkpoint(
             deepcopy(state),
-            {"completed": state["simulations"], "total": MAX_SIMULATIONS, "stage": "optimization"},
+            {"completed": state["simulations"], "total": max_simulations, "stage": "optimization"},
         )
 
     def window(period):
@@ -351,7 +381,7 @@ def _run(
         control()
         reserve = 2 if period != "final" else 0
         if (
-            state["attempts"] >= MAX_SIMULATIONS - reserve
+            state["attempts"] >= max_simulations - reserve
             or state["attempts"] - state["simulations"] >= 64
         ):
             raise ValueError(
@@ -366,6 +396,10 @@ def _run(
             for row in current["strategies"]:
                 cost = row["config"]["cost_bps"]
                 row["config"]["cost_bps"] = max(2 * cost, cost + 5)
+        if version == EXECUTION_VERSION:
+            from research.execution_features import attach
+
+            current = attach(current)
         if hypothesis["id"] != "none":
             current["portfolio"] = {
                 **current["portfolio"],
@@ -394,7 +428,7 @@ def _run(
             capital,
             progress=lambda done, total: (
                 control(),
-                progress(state["simulations"] + min(1, done / max(1, total)), MAX_SIMULATIONS),
+                progress(state["simulations"] + min(1, done / max(1, total)), max_simulations),
             ),
         )
         returned = report.get("strategies")
@@ -474,7 +508,7 @@ def _run(
         observe(
             {
                 "kind": "search_started",
-                "proposal_budget": 192,
+                "proposal_budget": proposal_budget,
                 "replayed": sum(len(fit["trials"]) for fit in state["fits"].values()),
                 "restored_evaluations": sum(
                     len(fit["candidates"]) for fit in state["fits"].values()
@@ -500,7 +534,7 @@ def _run(
         for params in screening:
             study.enqueue_trial(params)
         seen = set()
-        for index in range(PROPOSALS_PER_FIT):
+        for index in range(proposals_per_fit):
             control()
             trial = study.ask()
             hypothesis = by_id[trial.suggest_categorical("hypothesis", list(by_id))]
@@ -520,6 +554,10 @@ def _run(
             proposed = _candidate(base, params)
             proposed = trailing_choices(proposed, params, recipe["trailing_research"])
             proposed = timing_choices(proposed, params, recipe["timing_research"])
+            if version == EXECUTION_VERSION:
+                from research.execution_search import apply_choices
+
+                proposed = apply_choices(proposed, params, recipe["execution_research"])
             settings = context.markers(_settings(proposed), hypothesis, stock["id"])
             config_id = settings_identity(settings)
             record = {
@@ -551,10 +589,10 @@ def _run(
                             "stage": "optimizing",
                             "calculations": {
                                 "completed": state["simulations"],
-                                "limit": MAX_SIMULATIONS,
+                                "limit": max_simulations,
                             },
                             "trials": {
-                                "total": 192,
+                                "total": proposal_budget,
                                 "completed": completed,
                                 "active_trial": completed + 1,
                                 "evaluated": sum(
@@ -576,7 +614,7 @@ def _run(
                         {
                             "kind": "proposal_started",
                             **record,
-                            "number": FITS.index(period) * 48 + index,
+                            "number": FITS.index(period) * proposals_per_fit + index,
                             "fit_period": period,
                         }
                     )
@@ -601,7 +639,7 @@ def _run(
                     observe(
                         {
                             "kind": "proposal_finished",
-                            "number": FITS.index(period) * 48 + index,
+                            "number": FITS.index(period) * proposals_per_fit + index,
                             "state": "complete",
                             "value": score,
                             "reused": record["reused"],
@@ -636,6 +674,28 @@ def _run(
         current["selection"] = deepcopy(winner)
         # Persist the choice before even requesting the next-window account.
         persist()
+        if version == EXECUTION_VERSION:
+            from research.execution_search import original_sizing
+
+            control_settings = original_sizing(winner["strategies"], recipe["execution_research"])
+            control_account = measured(control_settings, winner["hypothesis"], period)
+            receipt = {
+                "version": "research-sizing-control-v1",
+                "role": "matched_original_sizing_development",
+                "period": period,
+                "selected_config_id": winner["config_id"],
+                "control_config_id": settings_identity(control_settings),
+                "strategies": control_settings,
+                "selected_summary": deepcopy(winner["summary"]),
+                "summary": deepcopy(control_account["summary"]),
+                "score_delta": _score(winner["summary"]) - _score(control_account["summary"]),
+                "sizing_changed": control_settings != winner["strategies"],
+                "policy": "Same selected filters, exits and hard caps; restore original allocation, order size and allocation sizing. Development diagnostic only; does not use final outcomes or establish sizing alpha.",
+            }
+            if current.get("sizing_control") is not None and current["sizing_control"] != receipt:
+                raise ValueError("The matched original-sizing development control changed")
+            current["sizing_control"] = receipt
+            persist()
         return winner, rows
 
     for fold in recipe["walk_forward"]["folds"]:
@@ -646,7 +706,7 @@ def _run(
             activity(
                 {
                     "stage": "validation",
-                    "calculations": {"completed": state["simulations"], "limit": MAX_SIMULATIONS},
+                    "calculations": {"completed": state["simulations"], "limit": max_simulations},
                 }
             )
         period = fold["test_period"]
@@ -755,16 +815,19 @@ def _run(
         "kind": "portfolio_optimize",
         "experiment_version": version,
         "optimizer": optimizer,
-        "specification": {**deepcopy(evidence["portfolio"]["optimization"]), "trials": 48},
+        "specification": {
+            **deepcopy(evidence["portfolio"]["optimization"]),
+            "trials": proposals_per_fit,
+        },
         "search_space": {
             "axes": {"hypothesis": {"type": "categorical", "choices": list(by_id)}, **axes},
             "grid_size": grid,
-            "proposal_budget": 48,
+            "proposal_budget": proposals_per_fit,
             "objective_definition": optimizer["objective_definition"],
         },
         "counts": {
             "grid": grid,
-            "proposed": 48,
+            "proposed": proposals_per_fit,
             "evaluated_this_pass": len(rows),
             "evaluated_all_passes": len(rows),
             "rejected_allocations": 0,
@@ -788,6 +851,8 @@ def _run(
         "trailing_research": deepcopy(recipe["trailing_research"]),
         "timing_research": deepcopy(recipe["timing_research"]),
     }
+    if version == EXECUTION_VERSION:
+        result["experiment"]["execution_research"] = deepcopy(recipe["execution_research"])
     final_info = {
         "summary": final["summary"],
         "baseline_summary": final_base["summary"],
@@ -834,6 +899,16 @@ def _run(
             "selection_policy": "Each choice is frozen using only its training prefix. All folds use fresh equal cash and unchanged cost assumptions; returns are not pooled into a carried account.",
         },
     }
+    if version == EXECUTION_VERSION:
+        result["automatic_research"]["execution_research"] = {
+            "version": "research-execution-findings-v1",
+            "risk_limits": deepcopy(recipe["execution_research"]["risk_limits"]),
+            "feature_id": recipe["execution_features_id"],
+            "sizing_controls": [
+                deepcopy(state["fits"][period]["sizing_control"]) for period in FITS
+            ],
+            "policy": "All candidates stay within original allocation and order ceilings and fixed hard risk limits. Original-sizing controls describe development outcomes only; no final-period sizing comparison or larger-exposure improvement claim.",
+        }
     from research.automatic_comparison import build as comparison_curves
 
     result["automatic_research"]["comparison"] = comparison_curves(
