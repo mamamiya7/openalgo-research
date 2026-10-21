@@ -102,6 +102,7 @@ def plan(evidence, max_evaluations):
             "automatic-hypotheses-v11",
             "automatic-hypotheses-v12",
             "automatic-hypotheses-v13",
+            "automatic-hypotheses-v14",
         )
         else MAX_EVALUATIONS
     )
@@ -324,6 +325,48 @@ def _stock_condition(value, hypothesis):
     return deepcopy(value)
 
 
+def _sensitivity_evidence(value, basis, period):
+    """Retain caller-checked native facts, bound to this immutable account shard."""
+    if (
+        not isinstance(value, dict)
+        or set(value)
+        != {
+            "version",
+            "plan_id",
+            "scenario_id",
+            "period",
+            "basis_id",
+            "support",
+            "constraints",
+            "id",
+        }
+        or value.get("version") != "research-sensitivity-account-evidence-v1"
+        or value.get("period") != period
+        or period not in ("sens_symbols_a", "sens_symbols_b", "sens_dates_early", "sens_dates_late")
+        or value.get("id") != fingerprint({key: item for key, item in value.items() if key != "id"})
+        or value.get("basis_id") != fingerprint(basis)
+        or any(
+            not isinstance(value.get(key), str) or not re.fullmatch(r"[a-f0-9]{64}", value[key])
+            for key in ("plan_id", "scenario_id")
+        )
+    ):
+        raise ValueError("Development sensitivity account identity changed")
+    support, constraints = value.get("support"), value.get("constraints")
+    if (
+        not isinstance(support, dict)
+        or set(support) != {"closed_trades", "entry_dates"}
+        or any(type(number) is not int or not 0 <= number <= 25_000 for number in support.values())
+        or support["entry_dates"] > support["closed_trades"]
+        or not isinstance(constraints, dict)
+        or constraints.get("id")
+        != fingerprint({key: item for key, item in constraints.items() if key != "id"})
+        or constraints.get("feature_id")
+        != basis["comparison"]["execution"].get("portfolio_features", {}).get("id")
+    ):
+        raise ValueError("Development sensitivity native facts changed")
+    return deepcopy(value)
+
+
 def build(
     report, *, evaluation_id, binding, settings, hypothesis, period, stress, expected_timeline
 ):
@@ -422,6 +465,10 @@ def build(
         metadata["stock_condition"] = _stock_condition(
             report["automatic_stock_condition"], hypothesis
         )
+    if "sensitivity_evidence" in report:
+        metadata["sensitivity_evidence"] = _sensitivity_evidence(
+            report["sensitivity_evidence"], basis, period
+        )
     try:
         if _raw_size(metadata) > MAX_METADATA_BYTES:
             raise ValueError("Development evidence metadata limit reached")
@@ -474,6 +521,11 @@ def verify_shard(shard, *, descriptor):
                 **(
                     {"research_opportunity_basis": shard["research_opportunity_basis"]}
                     if "research_opportunity_basis" in shard
+                    else {}
+                ),
+                **(
+                    {"sensitivity_evidence": shard["sensitivity_evidence"]}
+                    if "sensitivity_evidence" in shard
                     else {}
                 ),
             },

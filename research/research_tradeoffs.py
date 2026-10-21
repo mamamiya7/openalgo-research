@@ -18,7 +18,7 @@ VERSION = "research-development-tradeoffs-v1"
 MAX_ROWS = 1000
 MAX_BYTES = 16 * 1024**2
 MAX_CHOICES = 4
-SUPPORTED = tuple(f"automatic-hypotheses-v{number}" for number in range(8, 14))
+SUPPORTED = tuple(f"automatic-hypotheses-v{number}" for number in range(8, 15))
 LIMITATIONS = [
     "Exploratory final-development-fit accounts only; alternatives have not inherited the selected setup's later-window, cost, neighbour or uncertainty checks.",
     "Closed-trade count is recorded activity, not turnover, liquidity, independent observations or statistical confidence.",

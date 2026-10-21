@@ -40,6 +40,7 @@ def _trailing_axes(experiment):
             "automatic-hypotheses-v11",
             "automatic-hypotheses-v12",
             "automatic-hypotheses-v13",
+            "automatic-hypotheses-v14",
         )
         or not isinstance(specification, dict)
         or specification.get("version") != TRAILING_VERSION
@@ -89,6 +90,7 @@ def _timing_axes(experiment):
             "automatic-hypotheses-v11",
             "automatic-hypotheses-v12",
             "automatic-hypotheses-v13",
+            "automatic-hypotheses-v14",
         )
         or not isinstance(specification, dict)
         or specification.get("version") != TIMING_VERSION
@@ -153,7 +155,12 @@ def reconstruct_study(experiment):
     maximum = (
         PRIORITY_MAX_AXES
         if experiment.get("experiment_version")
-        in ("automatic-hypotheses-v11", "automatic-hypotheses-v12", "automatic-hypotheses-v13")
+        in (
+            "automatic-hypotheses-v11",
+            "automatic-hypotheses-v12",
+            "automatic-hypotheses-v13",
+            "automatic-hypotheses-v14",
+        )
         else EXECUTION_MAX_AXES
         if experiment.get("experiment_version")
         in (
@@ -161,6 +168,7 @@ def reconstruct_study(experiment):
             "automatic-hypotheses-v11",
             "automatic-hypotheses-v12",
             "automatic-hypotheses-v13",
+            "automatic-hypotheses-v14",
         )
         else MAX_AXES
     )
@@ -191,6 +199,7 @@ def reconstruct_study(experiment):
             "automatic-hypotheses-v11",
             "automatic-hypotheses-v12",
             "automatic-hypotheses-v13",
+            "automatic-hypotheses-v14",
         ):
             raise ValueError("Execution research needs its recorded programme")
         from research.execution_search import axes as execution_domains
@@ -221,6 +230,7 @@ def reconstruct_study(experiment):
                     "automatic-hypotheses-v11",
                     "automatic-hypotheses-v12",
                     "automatic-hypotheses-v13",
+                    "automatic-hypotheses-v14",
                 ):
                     from research.expanded_stock_market import catalog
 

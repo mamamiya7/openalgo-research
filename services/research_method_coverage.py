@@ -20,6 +20,7 @@ SUPPORTED_RECIPES = (
     "automatic-hypotheses-v11",
     "automatic-hypotheses-v12",
     "automatic-hypotheses-v13",
+    "automatic-hypotheses-v14",
 )
 
 
@@ -33,7 +34,12 @@ def _complete(calculation):
     proposal_limit = (
         68
         if calculation.get("version")
-        in ("automatic-hypotheses-v11", "automatic-hypotheses-v12", "automatic-hypotheses-v13")
+        in (
+            "automatic-hypotheses-v11",
+            "automatic-hypotheses-v12",
+            "automatic-hypotheses-v13",
+            "automatic-hypotheses-v14",
+        )
         else 64
         if calculation.get("version") == "automatic-hypotheses-v10"
         else 48

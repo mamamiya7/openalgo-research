@@ -36,6 +36,7 @@ def _bounded(value):
             "automatic-hypotheses-v11",
             "automatic-hypotheses-v12",
             "automatic-hypotheses-v13",
+            "automatic-hypotheses-v14",
         )
         else MAX_METADATA_BYTES
     )
@@ -143,11 +144,21 @@ def build(evidence, *, inputs_artifact):
     if validation_mode not in ("chronological", "exploratory_only"):
         raise ValueError("Research mandate validation mode is unsupported")
     periods = []
+    sensitivity_names = {
+        row["name"]
+        for row in recipe.get("recommendation_sensitivity", {}).get("scenarios", [])
+        if row.get("status") == "available"
+    }
     for name, bounds in recipe["periods"].items():
-        if name not in ("search", "check1", "check2", "check3", "fit1", "fit2", "fit3", "final"):
+        if (
+            name not in ("search", "check1", "check2", "check3", "fit1", "fit2", "fit3", "final")
+            and name not in sensitivity_names
+        ):
             raise ValueError("Research mandate period role is unsupported")
         role = (
-            "development_selection"
+            "development_sensitivity"
+            if name in sensitivity_names
+            else "development_selection"
             if name in ("search", "fit1", "fit2", "fit3")
             else "reserved_final_verification"
             if name == "final"
@@ -273,6 +284,10 @@ def build(evidence, *, inputs_artifact):
         mandate["search"]["portfolio_execution_features_id"] = recipe[
             "portfolio_execution_features_id"
         ]
+    if "recommendation_sensitivity" in recipe:
+        mandate["search"]["recommendation_sensitivity"] = deepcopy(
+            recipe["recommendation_sensitivity"]
+        )
     _bounded(mandate)
     mandate["id"] = fingerprint(mandate)
     _bounded(mandate)

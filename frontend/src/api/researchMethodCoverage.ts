@@ -68,6 +68,7 @@ export interface ResearchMethodCoverage {
       | 'automatic-hypotheses-v11'
       | 'automatic-hypotheses-v12'
       | 'automatic-hypotheses-v13'
+      | 'automatic-hypotheses-v14'
     catalog_id: string
     family_count: number
     hypothesis_count: number

@@ -47,7 +47,7 @@ export function limitsForScope(
     max_correlated_exposure_pct,
     ...prior
   } = limits ?? defaultRiskLimits
-  if (scope === 'automatic-hypotheses-v13')
+  if (['automatic-hypotheses-v13', 'automatic-hypotheses-v14'].includes(scope))
     return {
       ...prior,
       version: 'research-risk-limits-v3',
@@ -161,15 +161,15 @@ export function selectPortfolioRun(draft: PortfolioDraft, optimizing: boolean): 
         automatic_research: {
           version:
             draft.portfolio.engine === 'vectorbt'
-              ? 'automatic-hypotheses-v13'
+              ? 'automatic-hypotheses-v14'
               : 'automatic-trade-management-v2',
         },
         ...(draft.portfolio.engine === 'vectorbt'
           ? {
-              risk_limits: limitsForScope(draft.portfolio.risk_limits, 'automatic-hypotheses-v13'),
+              risk_limits: limitsForScope(draft.portfolio.risk_limits, 'automatic-hypotheses-v14'),
               strategies: newPriorityReference(
                 draft.portfolio.strategies,
-                limitsForScope(draft.portfolio.risk_limits, 'automatic-hypotheses-v13')
+                limitsForScope(draft.portfolio.risk_limits, 'automatic-hypotheses-v14')
               ),
             }
           : {}),
@@ -334,6 +334,7 @@ export function portfolioPayload(draft: PortfolioDraft): PortfolioRequest {
     'automatic-hypotheses-v11',
     'automatic-hypotheses-v12',
     'automatic-hypotheses-v13',
+    'automatic-hypotheses-v14',
   ].includes(automatic_research?.version ?? '')
     ? limitsForScope(portfolio.risk_limits, automatic_research!.version)
     : portfolio.risk_limits
@@ -442,6 +443,7 @@ export function portfolioEngineIssue(
           'automatic-hypotheses-v11',
           'automatic-hypotheses-v12',
           'automatic-hypotheses-v13',
+          'automatic-hypotheses-v14',
         ].includes(draft.portfolio.automatic_research?.version ?? ''))
     )
       return 'Entry conditions currently need VectorBT. Choose VectorBT to keep these rules.'
@@ -849,18 +851,18 @@ export function PortfolioBuilder({
                       automatic_research: {
                         version:
                           portfolio.engine === 'vectorbt'
-                            ? 'automatic-hypotheses-v13'
+                            ? 'automatic-hypotheses-v14'
                             : 'automatic-trade-management-v2',
                       },
                       ...(portfolio.engine === 'vectorbt'
                         ? {
                             risk_limits: limitsForScope(
                               portfolio.risk_limits,
-                              'automatic-hypotheses-v13'
+                              'automatic-hypotheses-v14'
                             ),
                             strategies: newPriorityReference(
                               portfolio.strategies,
-                              limitsForScope(portfolio.risk_limits, 'automatic-hypotheses-v13')
+                              limitsForScope(portfolio.risk_limits, 'automatic-hypotheses-v14')
                             ),
                           }
                         : {}),
@@ -879,6 +881,7 @@ export function PortfolioBuilder({
               'automatic-hypotheses-v11',
               'automatic-hypotheses-v12',
               'automatic-hypotheses-v13',
+              'automatic-hypotheses-v14',
             ].includes(portfolio.automatic_research?.version ?? '')) && (
             <fieldset disabled={disabled} className="mt-4 grid gap-3 sm:grid-cols-3">
               <legend className="mb-2 text-sm font-medium">Portfolio limits</legend>
@@ -953,7 +956,9 @@ export function PortfolioBuilder({
                   portfolio.risk_limits?.version ?? ''
                 ) && ' Daily buy budget uses opening account value; exits remain unrestricted.'}
               </p>
-              {portfolio.automatic_research?.version === 'automatic-hypotheses-v13' && (
+              {['automatic-hypotheses-v13', 'automatic-hypotheses-v14'].includes(
+                portfolio.automatic_research?.version ?? ''
+              ) && (
                 <label className="flex items-center gap-2 text-sm sm:col-span-3">
                   <input
                     type="checkbox"
@@ -1023,6 +1028,7 @@ export function PortfolioBuilder({
                           'automatic-hypotheses-v11',
                           'automatic-hypotheses-v12',
                           'automatic-hypotheses-v13',
+                          'automatic-hypotheses-v14',
                         ].includes(event.target.value)
                           ? limitsForScope(portfolio.risk_limits, event.target.value)
                           : portfolio.strategies.some((row) => row.execution_policy)
@@ -1036,6 +1042,7 @@ export function PortfolioBuilder({
                               'automatic-hypotheses-v11',
                               'automatic-hypotheses-v12',
                               'automatic-hypotheses-v13',
+                              'automatic-hypotheses-v14',
                             ].includes(event.target.value)
                           )
                             return row
@@ -1053,24 +1060,33 @@ export function PortfolioBuilder({
                                 portfolio.risk_limits,
                                 event.target.value
                               ),
-                              ...(event.target.value === 'automatic-hypotheses-v13'
+                              ...(['automatic-hypotheses-v13', 'automatic-hypotheses-v14'].includes(
+                                event.target.value
+                              )
                                 ? {
-                                    capacity_mode: 'prior20_broker_reported' as const,
-                                    correlation_mode: 'prior60_positive_080' as const,
+                                    capacity_mode:
+                                      row.execution_policy.capacity_mode ??
+                                      ('prior20_broker_reported' as const),
+                                    correlation_mode:
+                                      row.execution_policy.correlation_mode ??
+                                      ('prior60_positive_080' as const),
                                   }
                                 : {}),
-                              version:
-                                event.target.value === 'automatic-hypotheses-v13'
-                                  ? 'research-execution-aware-v4'
-                                  : event.target.value === 'automatic-hypotheses-v12'
-                                    ? 'research-execution-aware-v3'
-                                    : event.target.value === 'automatic-hypotheses-v11'
-                                      ? 'research-execution-aware-v2'
-                                      : 'research-execution-aware-v1',
+                              version: [
+                                'automatic-hypotheses-v13',
+                                'automatic-hypotheses-v14',
+                              ].includes(event.target.value)
+                                ? 'research-execution-aware-v4'
+                                : event.target.value === 'automatic-hypotheses-v12'
+                                  ? 'research-execution-aware-v3'
+                                  : event.target.value === 'automatic-hypotheses-v11'
+                                    ? 'research-execution-aware-v2'
+                                    : 'research-execution-aware-v1',
                               ...([
                                 'automatic-hypotheses-v11',
                                 'automatic-hypotheses-v12',
                                 'automatic-hypotheses-v13',
+                                'automatic-hypotheses-v14',
                               ].includes(event.target.value ?? '')
                                 ? { entry_priority: 'source' as const }
                                 : {}),
@@ -1080,6 +1096,12 @@ export function PortfolioBuilder({
                       })
                     }
                   >
+                    <option
+                      value="automatic-hypotheses-v14"
+                      disabled={portfolio.engine !== 'vectorbt'}
+                    >
+                      {researchRecipeLabel('automatic-hypotheses-v14')}
+                    </option>
                     <option
                       value="automatic-hypotheses-v13"
                       disabled={portfolio.engine !== 'vectorbt'}
@@ -1172,10 +1194,13 @@ export function PortfolioBuilder({
                     'automatic-hypotheses-v11',
                     'automatic-hypotheses-v12',
                     'automatic-hypotheses-v13',
+                    'automatic-hypotheses-v14',
                   ].includes(portfolio.automatic_research?.version ?? '') && (
                     <p className="text-xs text-muted-foreground">
                       Tests percentage and ATR exits, risk-based sizing and portfolio limits, with
                       three later validation windows. Up to 384 calculations.
+                      {portfolio.automatic_research?.version === 'automatic-hypotheses-v14' &&
+                        ' Also checks separate symbol groups and development dates before selecting settings.'}
                     </p>
                   )}
                   {['automatic-hypotheses-v11', 'automatic-hypotheses-v12'].includes(

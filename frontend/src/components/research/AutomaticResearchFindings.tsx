@@ -32,6 +32,7 @@ function recordedWalkForward(findings: Findings): WalkForwardFindings | undefine
       'automatic-hypotheses-v11',
       'automatic-hypotheses-v12',
       'automatic-hypotheses-v13',
+      'automatic-hypotheses-v14',
     ].includes(findings.version) ||
     receipt?.version !== 'research-walk-forward-findings-v1' ||
     !receipt ||
@@ -173,6 +174,81 @@ function WalkForwardChecks({ receipt }: { receipt: WalkForwardFindings }) {
   )
 }
 
+function SymbolDateChecks({ findings }: { findings: Findings }) {
+  const receipt = findings.recommendation_checks?.sensitivity
+  if (receipt?.version !== 'research-recommendation-sensitivity-v1') return null
+  const labels: Record<string, string> = {
+    sens_symbols_a: 'Symbol group A',
+    sens_symbols_b: 'Symbol group B',
+    sens_dates_early: 'Earlier dates',
+    sens_dates_late: 'Later dates',
+  }
+  return (
+    <section aria-label="Symbol and date checks" className="space-y-2">
+      <p className="font-medium">Symbol and date checks</p>
+      <p className="text-muted-foreground">
+        {receipt.status === 'not_run'
+          ? 'Earlier checks did not qualify settings, so these additional reruns were not needed.'
+          : receipt.status === 'supported' && receipt.qualified
+            ? 'The settings held up across separate symbol groups and development dates.'
+            : 'These checks did not qualify stronger settings; the original remains the reference.'}
+      </p>
+      {receipt.scenarios.length > 0 && (
+        <div className="overflow-x-auto">
+          <table aria-label="Symbol and date comparison" className="w-full text-left tabular-nums">
+            <thead>
+              <tr className="text-muted-foreground">
+                <th className="p-2 font-medium">Check</th>
+                <th className="p-2 text-right font-medium">Selected return</th>
+                <th className="p-2 text-right font-medium">Original return</th>
+                <th className="p-2 text-right font-medium">Selected drawdown</th>
+                <th className="p-2 font-medium">Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              {receipt.scenarios.map((scenario) => (
+                <tr key={scenario.name} className="border-t border-border/60">
+                  <th scope="row" className="p-2 font-normal">
+                    <span className="block">
+                      {scenario.label || labels[scenario.name] || scenario.name}
+                    </span>
+                    <span className="block whitespace-nowrap text-muted-foreground">
+                      {researchDates(scenario.from, scenario.to)}
+                      {scenario.symbols ? ` · ${scenario.symbols.length} symbols` : ''}
+                    </span>
+                  </th>
+                  <td className="p-2 text-right">{number(scenario.candidate_return_pct, '%')}</td>
+                  <td className="p-2 text-right">{number(scenario.baseline_return_pct, '%')}</td>
+                  <td className="p-2 text-right">
+                    {number(scenario.candidate_max_drawdown_pct, '%')}
+                  </td>
+                  <td className="p-2">
+                    {scenario.passes && scenario.support_sufficient !== false
+                      ? 'Passed'
+                      : 'Not supported'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {receipt.reasons.map((reason) => (
+        <p key={reason} className="text-muted-foreground">
+          {Object.entries(labels).reduce(
+            (text, [name, label]) => text.replaceAll(name, label),
+            reason
+          )}
+        </p>
+      ))}
+      <p className="text-muted-foreground">
+        Separate accounts use the same saved prices and limits. Final-check dates do not select
+        settings.
+      </p>
+    </section>
+  )
+}
+
 export function AutomaticResearchFindings({
   findings,
   jobId,
@@ -261,6 +337,7 @@ export function AutomaticResearchFindings({
             'automatic-hypotheses-v11',
             'automatic-hypotheses-v12',
             'automatic-hypotheses-v13',
+            'automatic-hypotheses-v14',
           ].includes(findings.version) &&
             selectedSettings?.map((strategy) => (
               <p key={strategy.id} className="text-sm">
@@ -373,6 +450,7 @@ export function AutomaticResearchFindings({
               <p className="text-muted-foreground">
                 Historical sensitivity only; this is not a probability of future profit.
               </p>
+              <SymbolDateChecks findings={findings} />
             </section>
           )}
           {walkForward ? (
@@ -404,12 +482,14 @@ export function AutomaticResearchFindings({
             'automatic-hypotheses-v11',
             'automatic-hypotheses-v12',
             'automatic-hypotheses-v13',
+            'automatic-hypotheses-v14',
           ].includes(findings.version) &&
             findings.execution_research &&
             [
               'research-execution-findings-v1',
               'research-execution-findings-v2',
               'research-execution-findings-v3',
+              'research-execution-findings-v4',
             ].includes(findings.execution_research.version) && (
               <div className="overflow-x-auto">
                 <p className="mb-2 font-medium">Sizing comparison · development dates</p>
@@ -488,7 +568,7 @@ export function AutomaticResearchFindings({
               Not included in this run: {findings.unsupported_families.join(', ')}.
             </p>
           )}
-          {findings.version === 'automatic-hypotheses-v13' && (
+          {['automatic-hypotheses-v13', 'automatic-hypotheses-v14'].includes(findings.version) && (
             <p className="text-muted-foreground">
               Both settings use the same portfolio limits. Volume participation uses prior
               broker-reported history; it is a backtest assumption. Correlation limits new entries

@@ -78,6 +78,13 @@ not executable-liquidity estimates. Saved recommendation checks reconcile the
 limits against native fills before preferring changed settings. Old studies keep
 their original versions. Public ZIPs remain unchanged.
 
+The [v14 sensitivity increment](docs/research/SYMBOL_DATE_SENSITIVITY_20261021.md)
+checks a supported setup on separate symbol groups and earlier/later development
+dates using actual native account reruns. The app chooses these tests and reuses
+saved prices automatically. Weak or incomplete evidence keeps the unchanged
+reference; passing is historical robustness evidence, not a probability of future
+profit. Details stay inside the existing Research details view.
+
 The next workflow increment previews CSV counts and dates before setup, simplifies
 experiment navigation to **Overview → Setup → Results → Saved setups**, and lets
 you prepare the selected tested report once, save it by name and reuse its exact

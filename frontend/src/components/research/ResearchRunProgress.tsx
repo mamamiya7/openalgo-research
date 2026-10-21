@@ -213,6 +213,7 @@ function stageTitle(activity?: ResearchActivity, optimizing = false, recipe?: st
           'automatic-hypotheses-v11',
           'automatic-hypotheses-v12',
           'automatic-hypotheses-v13',
+          'automatic-hypotheses-v14',
         ].includes(recipe ?? '')
       )
         return 'Checking the next window'

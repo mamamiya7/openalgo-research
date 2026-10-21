@@ -105,6 +105,7 @@ REQUIRED_RESEARCH_FILES = {
     "research/execution_activity.py",
     "research/recommendation_evidence.py",
     "research/recommendation_plan.py",
+    "research/recommendation_sensitivity.py",
     "research/volume_admission.py",
     "research/volume_provenance.py",
     "research/portfolio_execution_features.py",

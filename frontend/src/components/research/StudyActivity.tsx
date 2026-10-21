@@ -86,6 +86,7 @@ function proposalLabel(index: number, recipeVersion?: string) {
     'automatic-hypotheses-v11',
     'automatic-hypotheses-v12',
     'automatic-hypotheses-v13',
+    'automatic-hypotheses-v14',
   ].includes(recipeVersion ?? '')
     ? 68
     : recipeVersion === 'automatic-hypotheses-v10'
@@ -99,6 +100,7 @@ function proposalLabel(index: number, recipeVersion?: string) {
       'automatic-hypotheses-v11',
       'automatic-hypotheses-v12',
       'automatic-hypotheses-v13',
+      'automatic-hypotheses-v14',
     ].includes(recipeVersion ?? '')
   )
     return { label: `Trial ${index + 1}` }
@@ -169,6 +171,7 @@ function Activity({
     'automatic-hypotheses-v11',
     'automatic-hypotheses-v12',
     'automatic-hypotheses-v13',
+    'automatic-hypotheses-v14',
   ].includes(recipeVersion ?? '')
   function setting(key: string, index: number) {
     if (key === 'portfolio.entry_priority') return 'Account entry priority'

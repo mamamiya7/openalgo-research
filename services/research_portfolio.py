@@ -126,6 +126,7 @@ def resolve_inputs(store, owner, request):
                 "automatic-hypotheses-v11",
                 "automatic-hypotheses-v12",
                 "automatic-hypotheses-v13",
+                "automatic-hypotheses-v14",
             )
             and receipt["symbol_count"] > 200
         ):
@@ -341,6 +342,7 @@ def replay_inputs(store, owner, job_id, *, trial_id=None, period="selection"):
         "automatic-hypotheses-v11",
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
+        "automatic-hypotheses-v14",
     ):
         marker = selected[0].get("entry_condition")
         selected_conditions = deepcopy(marker) if marker else None
@@ -711,6 +713,7 @@ def run(
             "automatic-hypotheses-v11",
             "automatic-hypotheses-v12",
             "automatic-hypotheses-v13",
+            "automatic-hypotheses-v14",
         )
         or bool(evidence.get("execution_features"))
         or any(
@@ -771,6 +774,7 @@ def run(
                 "automatic-hypotheses-v11",
                 "automatic-hypotheses-v12",
                 "automatic-hypotheses-v13",
+                "automatic-hypotheses-v14",
             )
             else _prepare_prices
         )
@@ -828,6 +832,7 @@ def run(
                 "automatic-hypotheses-v11",
                 "automatic-hypotheses-v12",
                 "automatic-hypotheses-v13",
+                "automatic-hypotheses-v14",
             )
             or execution_features_required
             or portfolio_features_required
@@ -960,6 +965,7 @@ def run(
                 JOINT_VERSION,
                 METHOD_VERSION,
                 PRIORITY_VERSION,
+                SENSITIVITY_VERSION,
                 TIMING_VERSION,
                 TRAILING_VERSION,
                 TURNOVER_VERSION,
@@ -982,6 +988,7 @@ def run(
                 PRIORITY_VERSION,
                 TURNOVER_VERSION,
                 CAPACITY_VERSION,
+                SENSITIVITY_VERSION,
             ):
                 from research.automatic_walk_forward import run as automatic_run
 
@@ -1000,6 +1007,7 @@ def run(
                     PRIORITY_VERSION,
                     TURNOVER_VERSION,
                     CAPACITY_VERSION,
+                    SENSITIVITY_VERSION,
                 )
                 and saved_calculation
                 and saved_development is None
@@ -1027,6 +1035,7 @@ def run(
                         PRIORITY_VERSION,
                         TURNOVER_VERSION,
                         CAPACITY_VERSION,
+                        SENSITIVITY_VERSION,
                     )
                     else "automatic_stock_features"
                 )
@@ -1101,7 +1110,11 @@ def run(
                     **(
                         {"read_evaluation": development_writer.read}
                         if portfolio.get("automatic_research", {}).get("version")
-                        in ("automatic-hypotheses-v12", "automatic-hypotheses-v13")
+                        in (
+                            "automatic-hypotheses-v12",
+                            "automatic-hypotheses-v13",
+                            "automatic-hypotheses-v14",
+                        )
                         else {}
                     ),
                 }

@@ -72,7 +72,7 @@ def test_recipe_plan_is_read_only_deterministic_and_independently_fingerprinted(
     assert plan["validation"]["status"] == "requires_frozen_evidence"
     assert plan["next_recipe"] == {
         **plan["next_recipe"],
-        "status": "planned",
+        "status": "available",
         "version": NEXT_RECIPE_VERSION,
     }
     # Every returned collection is per-call, including nested feature recipes.
@@ -438,7 +438,16 @@ def test_nonautomatic_or_unimplemented_recipe_is_not_announced_as_executable():
     with pytest.raises(ValueError, match="automatic"):
         build_plan(raw, interval="D")
     with pytest.raises(ValueError, match="recipe"):
-        build_plan(request(version=NEXT_RECIPE_VERSION), interval="D")
+        build_plan(request(version="automatic-hypotheses-v999"), interval="D")
+
+
+def test_available_automatic_upgrade_has_bounded_sensitivity_without_claiming_data_coverage():
+    plan = build_plan(request(version=NEXT_RECIPE_VERSION), interval="D")
+    assert plan["execution_recipe_version"] == "automatic-hypotheses-v14"
+    assert plan["search"]["proposals"] == 272
+    assert plan["summary"]["max_simulations"] == 384
+    assert plan["search"]["budget"]["max_sensitivity_accounts"] == 8
+    assert families(plan)["symbol_date_sensitivity"]["status"] == "conditional"
 
 
 def test_eight_strategies_use_exact_string_space_size_and_do_not_multiply_run_budget():

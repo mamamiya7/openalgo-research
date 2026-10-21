@@ -1,5 +1,34 @@
 # OpenAlgo Research status
 
+## Symbol and date sensitivity — 21 October 2026 source qualification
+
+The [v14 core increment](SYMBOL_DATE_SENSITIVITY_20261021.md) adds four
+predeclared development masks: two complementary symbol groups and earlier/later
+date halves. A supported development choice and its unchanged reference are
+rerun as actual native accounts with fixed capital, allocations, costs and all
+existing constraints. This requires at most eight additional accounts within the
+unchanged 272-proposal/384-calculation ceiling, using frozen prices. Earlier
+recommendation failure skips the extra work; insufficient or failed challenges
+retain the reference. Final-period outcomes never choose settings.
+
+Immutable account histories retain the native support/audit facts needed to
+verify recovery. The existing Research details view shows four compact matched
+comparisons; saved older recipes remain unchanged. Native sizing comparisons
+also render for the already-recorded execution findings v4.
+
+542 distinct scoped backend and 256 frontend checks pass. Qualification includes
+25 actual native constrained subset accounts, a complete 272-proposal service
+controller with real Optuna/causal gates/history persistence and controlled
+economics, pause inside sensitivity, exact completed recovery, rejection of
+altered saved support facts and reference fallback on a deliberately weak date
+half. Prior v13 contract hashes and its complete recommendation/recovery journey
+remain unchanged. Resource repetitions have stable handles and 53 KB retained
+memory. TypeScript, lint, source compatibility and the production build pass.
+Local activation and source push follow; public release ZIPs remain unchanged.
+These are historical stress checks, not independent replication or calibrated
+search-adjusted confidence. Wider search-seed/false-discovery calibration remains
+the next package 5 dependency.
+
 ## Volume provenance and constrained allocation — 21 October 2026 local activation
 
 The [v13 core increment](PORTFOLIO_CAPACITY_20261021.md) retains native broker-volume

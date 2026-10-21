@@ -81,7 +81,12 @@ def descriptor(evidence, *, strict=False):
         "policy": "same source opportunities; all scheduled branch deadlines purged together; missing evidence excluded across branches; rule filters remain branch-specific",
         "screening": "Per expanding fit: 32 original-clock family screens; 4 momentum probes; up to 4 clock probes; 4 ATR exit and 4 portfolio probes; 2 global entry-priority probes; at least 18 joint refinement proposals within 68 total"
         if evidence["portfolio"].get("automatic_research", {}).get("version")
-        in ("automatic-hypotheses-v11", "automatic-hypotheses-v12", "automatic-hypotheses-v13")
+        in (
+            "automatic-hypotheses-v11",
+            "automatic-hypotheses-v12",
+            "automatic-hypotheses-v13",
+            "automatic-hypotheses-v14",
+        )
         else "Per expanding fit: 32 original-clock family screens; 4 momentum probes; up to 4 clock probes; 4 ATR exit and 4 portfolio probes; at least 16 joint refinement proposals within 64 total"
         if evidence["portfolio"].get("automatic_research", {}).get("version")
         == "automatic-hypotheses-v10"

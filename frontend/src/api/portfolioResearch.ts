@@ -390,6 +390,7 @@ export interface PortfolioRequest {
       | 'automatic-hypotheses-v11'
       | 'automatic-hypotheses-v12'
       | 'automatic-hypotheses-v13'
+      | 'automatic-hypotheses-v14'
   }
   entry_conditions?: EntryConditions
   optimization?: {
@@ -604,12 +605,34 @@ export interface AutomaticResearchFindings {
       }>
     }
     limitations?: string[]
+    sensitivity?: {
+      version: 'research-recommendation-sensitivity-v1'
+      status: 'supported' | 'not_supported' | 'insufficient' | 'unsupported' | 'not_run'
+      qualified: boolean
+      reasons: string[]
+      scenarios: Array<{
+        name: string
+        axis: string
+        label?: string
+        from: string
+        to: string
+        symbols?: string[]
+        candidate_return_pct: number | null
+        baseline_return_pct: number | null
+        return_minus_drawdown_edge_pct: number | null
+        candidate_max_drawdown_pct: number | null
+        passes: boolean
+        support_sufficient?: boolean
+      }>
+      policy?: string | Record<string, unknown>
+    }
   }
   execution_research?: {
     version:
       | 'research-execution-findings-v1'
       | 'research-execution-findings-v2'
       | 'research-execution-findings-v3'
+      | 'research-execution-findings-v4'
     entry_priorities?: Array<NonNullable<ExecutionPolicy['entry_priority']>>
     selected_entry_priority?: ExecutionPolicy['entry_priority']
     risk_limits: PortfolioRiskLimits

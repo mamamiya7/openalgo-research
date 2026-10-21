@@ -98,4 +98,5 @@ need → drill into the specific file. Don't load everything at once.
 - [Core method expansion](research/METHOD_EXPANSION_20261021.md): v9 momentum domains, mandatory probes, bounded search, native recovery and preserved legacy identities.
 - [Turnover and recommendation evidence](research/TURNOVER_RECOMMENDATION_20261021.md): v12 fixed daily buy budgets, comparable opportunities, paired uncertainty and actual neighbouring-account gates.
 - [Saved alternatives and volume admission](research/TRADEOFFS_VOLUME_20261021.md): read-only development trade-offs, exact settings inspection and the qualified-data boundary required before capacity limits.
+- [Symbol and date sensitivity](research/SYMBOL_DATE_SENSITIVITY_20261021.md): v14 predeclared native subset accounts, saved support facts, conservative recommendation fallback and recovery.
 - [Volume provenance and portfolio constraints](research/PORTFOLIO_CAPACITY_20261021.md): v13 native volume reuse, modeled participation budgets, causal correlation-aware allocation and saved recommendation audits.

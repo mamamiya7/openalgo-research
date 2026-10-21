@@ -62,15 +62,20 @@ def descriptor(evidence):
     from research.execution_policy import normalize_limits, normalize_policy
 
     portfolio = evidence["portfolio"]
-    capacity = portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v13"
+    capacity = portfolio.get("automatic_research", {}).get("version") in (
+        "automatic-hypotheses-v13",
+        "automatic-hypotheses-v14",
+    )
     turnover = portfolio.get("automatic_research", {}).get("version") in (
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
+        "automatic-hypotheses-v14",
     )
     priority = portfolio.get("automatic_research", {}).get("version") in (
         "automatic-hypotheses-v11",
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
+        "automatic-hypotheses-v14",
     )
     limits = normalize_limits(portfolio.get("risk_limits"))
     if portfolio.get("risk_limits") != limits:

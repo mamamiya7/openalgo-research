@@ -661,6 +661,7 @@ it.each([
   ['automatic-hypotheses-v6', 'Preparing stock and market conditions'],
   ['automatic-hypotheses-v7', 'Preparing stock and market conditions'],
   ['automatic-hypotheses-v8', 'Preparing stock and market conditions'],
+  ['automatic-hypotheses-v14', 'Preparing stock and market conditions'],
   ['automatic-entry-conditions-v1', 'Preparing market conditions'],
 ] as const)('reports %s warmup separately from completed execution-price counts', (version, title) => {
   render(

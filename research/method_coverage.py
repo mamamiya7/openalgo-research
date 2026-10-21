@@ -25,6 +25,7 @@ from research.method_registry import (
     EXPANDED_RECIPE_VERSION,
     PRIORITY_RECIPE_VERSION,
     RECIPE_VERSION,
+    SENSITIVITY_RECIPE_VERSION,
     TURNOVER_RECIPE_VERSION,
     bounded,
     catalog,
@@ -92,6 +93,7 @@ def _manifest(manifest, calculation, binding, periods, context_id, recipe_versio
                 PRIORITY_RECIPE_VERSION,
                 TURNOVER_RECIPE_VERSION,
                 CAPACITY_RECIPE_VERSION,
+                SENSITIVITY_RECIPE_VERSION,
             )
             else 320
         )
@@ -217,6 +219,7 @@ def _build(mandate, calculation, development_manifest):
             PRIORITY_RECIPE_VERSION,
             TURNOVER_RECIPE_VERSION,
             CAPACITY_RECIPE_VERSION,
+            SENSITIVITY_RECIPE_VERSION,
         )
         else MAX_METADATA_BYTES,
     )
@@ -229,6 +232,7 @@ def _build(mandate, calculation, development_manifest):
         PRIORITY_RECIPE_VERSION,
         TURNOVER_RECIPE_VERSION,
         CAPACITY_RECIPE_VERSION,
+        SENSITIVITY_RECIPE_VERSION,
     ):
         return {
             "version": VERSION,
@@ -244,6 +248,7 @@ def _build(mandate, calculation, development_manifest):
         PRIORITY_RECIPE_VERSION,
         TURNOVER_RECIPE_VERSION,
         CAPACITY_RECIPE_VERSION,
+        SENSITIVITY_RECIPE_VERSION,
     ):
         from research.expanded_stock_market import markers as materialize_markers
     by_hypothesis = {row["id"]: row for row in hypotheses}
@@ -251,7 +256,12 @@ def _build(mandate, calculation, development_manifest):
     proposals_per_fit = (
         68
         if recipe_version
-        in (PRIORITY_RECIPE_VERSION, TURNOVER_RECIPE_VERSION, CAPACITY_RECIPE_VERSION)
+        in (
+            PRIORITY_RECIPE_VERSION,
+            TURNOVER_RECIPE_VERSION,
+            CAPACITY_RECIPE_VERSION,
+            SENSITIVITY_RECIPE_VERSION,
+        )
         else 64
         if recipe_version == EXECUTION_RECIPE_VERSION
         else 48
@@ -264,6 +274,7 @@ def _build(mandate, calculation, development_manifest):
             PRIORITY_RECIPE_VERSION,
             TURNOVER_RECIPE_VERSION,
             CAPACITY_RECIPE_VERSION,
+            SENSITIVITY_RECIPE_VERSION,
         )
         else 320
     )
@@ -287,7 +298,13 @@ def _build(mandate, calculation, development_manifest):
         "search_identity": calculation["binding"],
     }
     periods = {row["name"] for row in mandate.get("validation", {}).get("periods", [])}
-    if periods != {"fit1", "check1", "fit2", "check2", "fit3", "check3", "search", "final"}:
+    expected_periods = {"fit1", "check1", "fit2", "check2", "fit3", "check3", "search", "final"}
+    if recipe_version == SENSITIVITY_RECIPE_VERSION:
+        from research.recommendation_sensitivity import _verified_plan
+
+        scenarios = _verified_plan(search.get("recommendation_sensitivity"))
+        expected_periods.update(row["name"] for row in scenarios if row["status"] == "available")
+    if periods != expected_periods:
         raise ValueError("Saved method period roles changed")
     entries = _manifest(
         development_manifest,
@@ -315,6 +332,7 @@ def _build(mandate, calculation, development_manifest):
         PRIORITY_RECIPE_VERSION,
         TURNOVER_RECIPE_VERSION,
         CAPACITY_RECIPE_VERSION,
+        SENSITIVITY_RECIPE_VERSION,
     ):
         from research.execution_search import axes as policy_axes
         from research.execution_search import descriptor as execution_descriptor
@@ -582,6 +600,7 @@ def _build(mandate, calculation, development_manifest):
         PRIORITY_RECIPE_VERSION,
         TURNOVER_RECIPE_VERSION,
         CAPACITY_RECIPE_VERSION,
+        SENSITIVITY_RECIPE_VERSION,
     ):
         result["limitations"].append(
             "Condition-family counts include execution and sizing variants; exit choices, sizing controls and hard limits are not additional indicator families"
@@ -590,6 +609,7 @@ def _build(mandate, calculation, development_manifest):
         PRIORITY_RECIPE_VERSION,
         TURNOVER_RECIPE_VERSION,
         CAPACITY_RECIPE_VERSION,
+        SENSITIVITY_RECIPE_VERSION,
     ):
         from research.execution_search import ENTRY_PRIORITIES, priority_counts
 

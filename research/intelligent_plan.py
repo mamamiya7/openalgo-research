@@ -62,6 +62,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v11",
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
+        "automatic-hypotheses-v14",
     )
     joint = (
         trailing
@@ -246,6 +247,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v11",
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
+        "automatic-hypotheses-v14",
     ):
         payload["methods"].append(
             {
@@ -262,6 +264,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v11",
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
+        "automatic-hypotheses-v14",
     ):
         payload["budget"].update(
             proposals=192,
@@ -293,6 +296,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v11",
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
+        "automatic-hypotheses-v14",
     ):
         from research.expanded_stock_market import FEATURE_VERSION, catalog, recipe
 
@@ -317,6 +321,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v11",
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
+        "automatic-hypotheses-v14",
     ):
         payload["budget"].update(
             proposals=256,
@@ -352,6 +357,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v11",
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
+        "automatic-hypotheses-v14",
     ):
         payload["budget"].update(
             proposals=272,
@@ -370,7 +376,10 @@ def build_plan(portfolio, *, interval):
                 "reason": "One frozen account-wide ordering: source, reversed source, or lower modeled stop-loss fraction of entry cash cost first. Two explicit priority probes per fit; no future prices or per-strategy priority advantage.",
             }
         )
-    if portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v13":
+    if portfolio.get("automatic_research", {}).get("version") in (
+        "automatic-hypotheses-v13",
+        "automatic-hypotheses-v14",
+    ):
         capacity = portfolio["strategies"][0]["execution_policy"]["capacity_mode"] != "disabled"
         correlation = (
             portfolio["strategies"][0]["execution_policy"]["correlation_mode"] != "disabled"
@@ -391,5 +400,14 @@ def build_plan(portfolio, *, interval):
         payload["data"].update(
             volume_prior_sessions=20 if capacity else 0,
             correlation_prior_closes=61 if correlation else 0,
+        )
+    if portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v14":
+        payload["budget"]["max_sensitivity_accounts"] = 8
+        payload["methods"].append(
+            {
+                "id": "symbol_date_sensitivity",
+                "status": "conditional",
+                "reason": "A supported development choice is rerun against unchanged settings on two complementary original-symbol groups and two chronological development halves, with unchanged capital, limits and normal costs; sparse or unsupported checks keep the reference.",
+            }
         )
     return {**payload, "id": fingerprint(payload)}

@@ -61,6 +61,149 @@ function findings(): Findings {
 }
 
 describe('automatic research findings', () => {
+  it('keeps actual symbol and date reruns inside details with their original reference values', async () => {
+    const data = findings()
+    data.version = 'automatic-hypotheses-v14'
+    data.recommendation_checks = {
+      version: 'research-recommendation-evidence-v1',
+      status: 'supported',
+      reasons: [],
+      sensitivity: {
+        version: 'research-recommendation-sensitivity-v1',
+        status: 'supported',
+        qualified: true,
+        reasons: [],
+        scenarios: ['Symbol group A', 'Symbol group B', 'Earlier dates', 'Later dates'].map(
+          (label, index) => ({
+            name: `scenario-${index}`,
+            label,
+            axis: index < 2 ? 'symbols' : 'dates',
+            from: '2026-01-05',
+            to: '2026-06-30',
+            ...(index < 2 ? { symbols: ['AAA', 'BBB'] } : {}),
+            candidate_return_pct: 5.1,
+            baseline_return_pct: 2.3,
+            return_minus_drawdown_edge_pct: 2.1,
+            candidate_max_drawdown_pct: 1.2,
+            passes: true,
+          })
+        ),
+      },
+    }
+    render(<AutomaticResearchFindings findings={data} />)
+    const table = screen.getByRole('table', { name: 'Symbol and date comparison', hidden: true })
+    expect(table).not.toBeVisible()
+    await userEvent.click(screen.getByText('Research details'))
+    expect(table).toBeVisible()
+    expect(within(table).getAllByRole('row')).toHaveLength(5)
+    expect(within(table).getAllByText('5.1%')).toHaveLength(4)
+    expect(within(table).getAllByText('2.3%')).toHaveLength(4)
+    expect(within(table).getAllByText('Passed')).toHaveLength(4)
+    expect(screen.getByText(/Final-check dates do not select settings/)).toBeVisible()
+  })
+
+  it.each([
+    'not_supported',
+    'insufficient',
+    'unsupported',
+  ] as const)('does not imply symbol and date qualification when the saved receipt is %s', async (status) => {
+    const data = findings()
+    data.version = 'automatic-hypotheses-v14'
+    data.recommendation_checks = {
+      version: 'research-recommendation-evidence-v1',
+      status: 'not_supported',
+      reasons: [],
+      sensitivity: {
+        version: 'research-recommendation-sensitivity-v1',
+        status,
+        qualified: false,
+        reasons: ['Not enough development signals for separate symbol groups.'],
+        scenarios: [],
+      },
+    }
+    render(<AutomaticResearchFindings findings={data} />)
+    await userEvent.click(screen.getByText('Research details'))
+    expect(screen.getByText(/These checks did not qualify stronger settings/)).toBeVisible()
+    expect(
+      screen.getByText('Not enough development signals for separate symbol groups.')
+    ).toBeVisible()
+    expect(
+      screen.queryByRole('table', { name: 'Symbol and date comparison' })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/settings held up across separate symbol groups/)
+    ).not.toBeInTheDocument()
+  })
+
+  it.each([
+    'automatic-hypotheses-v13',
+    'automatic-hypotheses-v14',
+  ])('does not invent symbol and date checks for %s without a saved receipt', async (version) => {
+    const data = findings()
+    data.version = version
+    render(<AutomaticResearchFindings findings={data} />)
+    await userEvent.click(screen.getByText('Research details'))
+    expect(screen.queryByRole('region', { name: 'Symbol and date checks' })).not.toBeInTheDocument()
+  })
+  it('explains when earlier checks avoided unnecessary symbol and date reruns', async () => {
+    const data = findings()
+    data.version = 'automatic-hypotheses-v14'
+    data.recommendation_checks = {
+      version: 'research-recommendation-evidence-v1',
+      status: 'not_supported',
+      reasons: [],
+      sensitivity: {
+        version: 'research-recommendation-sensitivity-v1',
+        status: 'not_run',
+        qualified: false,
+        reasons: [],
+        scenarios: [],
+      },
+    }
+    render(<AutomaticResearchFindings findings={data} />)
+    await userEvent.click(screen.getByText('Research details'))
+    expect(screen.getByText(/additional reruns were not needed/)).toBeVisible()
+    expect(
+      screen.queryByRole('table', { name: 'Symbol and date comparison' })
+    ).not.toBeInTheDocument()
+  })
+  it('does not label a profitable rerun passed when native support is insufficient', async () => {
+    const data = findings()
+    data.version = 'automatic-hypotheses-v14'
+    data.recommendation_checks = {
+      version: 'research-recommendation-evidence-v1',
+      status: 'not_supported',
+      reasons: [],
+      sensitivity: {
+        version: 'research-recommendation-sensitivity-v1',
+        status: 'insufficient',
+        qualified: false,
+        reasons: ['sens_symbols_a: insufficient native trade/date support'],
+        scenarios: [
+          {
+            name: 'sens_symbols_a',
+            axis: 'symbols',
+            from: '2026-01-05',
+            to: '2026-06-30',
+            symbols: ['AAA', 'BBB'],
+            candidate_return_pct: 5.1,
+            baseline_return_pct: 2.3,
+            candidate_max_drawdown_pct: 1.2,
+            return_minus_drawdown_edge_pct: 2.1,
+            passes: true,
+            support_sufficient: false,
+          },
+        ],
+      },
+    }
+    render(<AutomaticResearchFindings findings={data} />)
+    await userEvent.click(screen.getByText('Research details'))
+    const table = screen.getByRole('table', { name: 'Symbol and date comparison' })
+    expect(within(table).getByText('Symbol group A')).toBeVisible()
+    expect(within(table).getByText('Not supported')).toBeVisible()
+    expect(within(table).queryByText('Passed')).not.toBeInTheDocument()
+    expect(screen.getByText('Symbol group A: insufficient native trade/date support')).toBeVisible()
+  })
   it('keeps qualified uncertainty evidence in research details without a future-profit claim', () => {
     const data = findings()
     data.version = 'automatic-hypotheses-v12'
@@ -84,11 +227,14 @@ describe('automatic research findings', () => {
     expect(screen.getByText(/5-session blocks: 1 to 3 basis points per day/)).toBeInTheDocument()
   })
 
-  it('keeps matched original-sizing diagnostics inside development details', async () => {
+  it.each([
+    'research-execution-findings-v1',
+    'research-execution-findings-v4',
+  ] as const)('keeps matched original-sizing diagnostics inside development details for %s', async (version) => {
     const data = findings()
     data.version = 'automatic-hypotheses-v10'
     data.execution_research = {
-      version: 'research-execution-findings-v1',
+      version,
       feature_id: 'sealed-feature',
       policy: 'Development only',
       risk_limits: {

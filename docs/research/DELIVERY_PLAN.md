@@ -34,7 +34,17 @@ constraint receipts before changed settings can be recommended. Missing producer
 semantics remain unavailable; neither a library field nor a sealed declaration
 proves executable capacity or point-in-time corporate-action parity. Broader
 producer profiles, covariance/sector allocation and search-seed/false-discovery
-calibration remain future work. Complete the qualified
+calibration remain future work. The next
+[v14 sensitivity increment](SYMBOL_DATE_SENSITIVITY_20261021.md) adds actual native
+candidate/reference accounts on two predeclared complementary symbol groups and
+two chronological development halves. It freezes masks before scores, retains
+support/audit facts in immutable account histories, and requires all four
+comparisons before preferring changed settings. It uses at most eight additional
+accounts within the existing 272-proposal/384-calculation programme, with no new
+prices. Sparse, failed or unavailable checks retain the unchanged reference;
+earlier recommendation failure skips the extra work. Wider search-seed and
+false-discovery calibration remains the next package 5 dependency before
+statistical-confidence or adaptive-policy claims. Complete the qualified
 research and portfolio features before general UI polish. Learned transforms,
 continuous carry and the later packages
 remain planned.
@@ -272,7 +282,9 @@ durable recovery and exact selected replay are implemented. This is the first
 bounded slice of package 4. Subsequent v11/v12/v13 slices implement overlap-priority
 search, turnover budgets, reviewed historical participation and direct correlated
 exposure, plus the first package 5 recommendation safeguards. Broader allocation,
-producer and calibration coverage remain pending. The next feature work should
+producer and calibration coverage remain pending. V14 additionally implements
+prespecified native symbol/date stress accounts and immutable recovery facts;
+this does not complete wider seed/false-discovery calibration. The next feature work should
 build on these frozen execution and risk contracts before UI polish or wider
 asset admission.
 
