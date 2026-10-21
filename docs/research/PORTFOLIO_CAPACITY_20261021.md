@@ -142,8 +142,12 @@ generic database schema changed; this is a populated local update, not a claim
 of a new full Windows/Linux release qualification.
 
 Controlled broker-labelled fixtures are not represented as real broker downloads.
-Local activation/source push are recorded in STATUS after verification. Public
-ZIP publication remains separate from source push and local installation.
+Activated locally from `b15b557ed`. The existing account, served new assets,
+authentication boundary, installed compatibility and fresh worker heartbeat pass.
+All 63 saved run identities, configuration and Historify bytes remain unchanged.
+Local source/UI rollback files are retained; no normal research or trading job
+was started. Public ZIP publication remains separate from source push and local
+installation.
 
 ## Remaining scope
 

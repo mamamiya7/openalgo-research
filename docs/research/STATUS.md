@@ -1,6 +1,6 @@
 # OpenAlgo Research status
 
-## Volume provenance and constrained allocation — 21 October 2026 source qualification
+## Volume provenance and constrained allocation — 21 October 2026 local activation
 
 The [v13 core increment](PORTFOLIO_CAPACITY_20261021.md) retains native broker-volume
 provenance, adds a shared symbol/session participation budget and clips new
@@ -27,8 +27,13 @@ constraint reconciliation, acquisition reuse and exact replay without broker or
 archive access. Legacy native report identities remain unchanged. Resource
 repetitions show stable handles and bounded retained memory. TypeScript, lint,
 source compatibility and the production build pass. Controlled fixtures are not
-represented as fresh broker downloads. Local activation and source push follow;
-public release ZIPs remain unchanged. Broader producer profiles, covariance/sector
+represented as fresh broker downloads. Activated locally from `b15b557ed`: the
+existing account, newly served UI, authenticated route, installed compatibility
+and fresh worker heartbeat pass. All 63 saved run identities, configuration and
+Historify bytes are unchanged. Source/UI rollback files are retained locally;
+no normal research or trading job was started. The source branch is
+`codex/native-research-refinement`; public release ZIPs remain unchanged.
+Broader producer profiles, covariance/sector
 allocation and search-seed/false-discovery calibration remain planned.
 
 ## Saved alternatives and volume admission — 21 October 2026 local activation

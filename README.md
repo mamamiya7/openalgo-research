@@ -69,7 +69,7 @@ The locally activated [comparison increment](docs/research/TRADEOFFS_VOLUME_2026
 return/drawdown/activity trade-offs without another optimisation or download.
 Alternatives remain exploratory and do not replace the recommendation.
 
-The [v13 portfolio increment](docs/research/PORTFOLIO_CAPACITY_20261021.md) adds
+The locally activated [v13 portfolio increment](docs/research/PORTFOLIO_CAPACITY_20261021.md) adds
 retained broker-volume provenance, a shared daily participation budget and
 correlation-aware entry limits. The first volume model supports reviewed Fyers
 daily NSE equities; other brokers can retain correlation controls with volume
