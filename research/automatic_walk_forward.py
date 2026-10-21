@@ -352,6 +352,7 @@ def run(
     defer_study_analysis=False,
     retain_evaluation=None,
     read_evaluation=None,
+    calibration_seed_plan=None,
 ):
     cancelled()
     if boundary:
@@ -390,6 +391,7 @@ def run(
             defer_study_analysis=defer_study_analysis,
             retain_evaluation=retain_evaluation,
             read_evaluation=read_evaluation,
+            calibration_seed_plan=calibration_seed_plan,
         )
 
 
@@ -411,6 +413,7 @@ def _run(
     defer_study_analysis,
     retain_evaluation,
     read_evaluation,
+    calibration_seed_plan=None,
 ):
     import optuna
 
@@ -426,7 +429,15 @@ def _run(
         or recipe["hypothesis_catalog"] != context.catalog()
     ):
         raise ValueError("Walk-forward research needs its exact saved stock and market context")
-    binding = fingerprint({"recipe": recipe, "stock": stock})
+    binding_inputs = {"recipe": recipe, "stock": stock}
+    if calibration_seed_plan is not None:
+        from research.procedure_seed_calibration import verify_seed_plan
+
+        if version != SEED_VERSION:
+            raise ValueError("Offline sampler qualification requires the declared v15 procedure")
+        calibration_seed_plan = verify_seed_plan(calibration_seed_plan)
+        binding_inputs["offline_calibration_seeds"] = calibration_seed_plan
+    binding = fingerprint(binding_inputs)
     policy = policy_for_version(version)
     proposals_per_fit = policy["proposals_per_fit"]
     max_simulations = policy["max_simulations"]
@@ -487,6 +498,13 @@ def _run(
     }
     if version == SEED_VERSION:
         optimizer["search_repeat_seeds"] = deepcopy(recipe["search_seeds"]["seeds"])
+    if calibration_seed_plan is not None:
+        actual_seeds = calibration_seed_plan["fit_sampler_seeds"]
+        optimizer.update(
+            seed=actual_seeds["search"],
+            search_repeat_seeds=[actual_seeds[name] for name in ("search", *SEED_FITS[4:])],
+            offline_calibration_seeds=deepcopy(calibration_seed_plan),
+        )
     state = (
         deepcopy(saved)
         if saved
@@ -786,6 +804,8 @@ def _run(
         control()
         period = data_period(fit_name)
         seed = SEED_FITS.index(fit_name) - 3 if fit_name in SEED_FITS[4:] else 0
+        if calibration_seed_plan is not None:
+            seed = calibration_seed_plan["fit_sampler_seeds"][fit_name]
         state["active_fit"] = fit_name
         current = state["fits"].setdefault(
             fit_name, {"trials": [], "candidates": {}, "selection": None}
@@ -1496,6 +1516,13 @@ def _run(
     if version == SEED_VERSION:
         result["automatic_research"]["selection_basis"] += (
             " Three declared search seeds must also support a stable development advantage; seed 0 remains primary."
+        )
+    if calibration_seed_plan is not None:
+        result["automatic_research"]["offline_calibration_seeds"] = deepcopy(calibration_seed_plan)
+        result["automatic_research"]["selection_basis"] = (
+            "Offline full-procedure sampler qualification only. Logical repeat indices remain "
+            "0, 1 and 2; actual fit sampler seeds are recorded in offline_calibration_seeds. "
+            "The primary development fit stays fixed; final outcomes cannot select settings."
         )
     from research.automatic_comparison import build as comparison_curves
 

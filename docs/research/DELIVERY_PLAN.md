@@ -2,65 +2,102 @@
 
 ## Feature development order after the human audit
 
-**Updated 21 October 2026. Status: executing.** The first
-[mandate/evidence foundation](DEVELOPMENT_EVIDENCE_20261011.md) is implemented in
-development source, followed by the [v8 expanding-refit slice](WALK_FORWARD_20261020.md).
-It performs three later-window/higher-cost checks and a separate final development
-refit, with untouched final confirmation and recovery of full development histories.
-The first [package 3 registry/coverage slice](METHOD_ADMISSION_20261020.md) is now
-implemented in source: typed definitions of existing methods and metadata-only
-actual per-fit coverage. It does not expand numerical domains or replace
-executable admission. The next [v9 core slice](METHOD_EXPANSION_20261021.md) implements
-10/60-session momentum, mandatory probes and the complete native saved-evidence
-journey, using the same prices and calculation bounds. The subsequent
-[v10 execution core](EXECUTION_CORE_20261021.md) adds ATR protection, distinct
-stop-risk sizing and hard exposure/position/risk limits. The
-[v11 priority increment](PRIORITY_CORE_20261021.md) adds causal ordering of
-competing entries and actual filled trading activity. The
-[v12 turnover/recommendation increment](TURNOVER_RECOMMENDATION_20261021.md)
-implements the fixed daily entry budget and first package 5 evidence gates:
-paired daily-return ranges, cost sensitivity and actual neighbouring accounts,
-with baseline fallback before final confirmation. Broader recommendation
-calibration remains planned. The next [saved alternatives and volume admission
-increment](TRADEOFFS_VOLUME_20261021.md) implements an on-demand exploratory
-return/drawdown/activity comparison without changing the selected recommendation.
-Its pure strict volume-admission contract remains unchanged. The subsequent
-[v13 portfolio increment](PORTFOLIO_CAPACITY_20261021.md) retains observed broker
-volume through acquisition/freezing and adds a separately named historical-coordinate
-participation model, initially reviewed for Fyers daily NSE equities. Shared
-symbol/session buy budgets and prior-return correlated-exposure caps compose with
-the existing hard limits. All 16 development comparison roles require supported
-constraint receipts before changed settings can be recommended. Missing producer
-semantics remain unavailable; neither a library field nor a sealed declaration
-proves executable capacity or point-in-time corporate-action parity. Broader
-producer profiles, covariance/sector allocation and search-seed/false-discovery
-calibration remain future work. The next
-[v14 sensitivity increment](SYMBOL_DATE_SENSITIVITY_20261021.md) adds actual native
-candidate/reference accounts on two predeclared complementary symbol groups and
-two chronological development halves. It freezes masks before scores, retains
-support/audit facts in immutable account histories, and requires all four
-comparisons before preferring changed settings. It uses at most eight additional
-accounts within the existing 272-proposal/384-calculation programme, with no new
-prices. Sparse, failed or unavailable checks retain the unchanged reference;
-earlier recommendation failure skips the extra work. Wider search-seed and
-false-discovery calibration was the next package 5 dependency. The
-[v15 search-repeat increment](SEARCH_SEEDS_20261021.md) now freezes three
-same-data search seeds and requires stable, audited support without replacing
-the primary choice. Matching accounts are reused; earlier failures skip repeats.
-Its separate [controlled calibration protocol](SEARCH_CALIBRATION_PROTOCOL.md)
-measures full-procedure false recommendations and positive-control power under
-explicit generated-account models. This is engineering qualification, not
-general FDR control or live profit confidence. Larger independent model suites,
-whole-process seed stability and qualified statistical diagnostics remain before
-statistical-confidence or adaptive-policy claims. Complete the qualified
-research and portfolio features before general UI polish. Learned transforms,
-continuous carry and the later packages
-remain planned.
-This section owns the next
-implementation order. Build the substantive research features below before the
-final workflow polish. Existing contracts and dated acceptance receipts remain
-valid for their recorded versions; a planned capability is not installed or
-published merely because it appears here.
+**Reconciled 21 October 2026, after v15 activation. Status: core development
+continues.** This section owns the current implementation order. The dated
+checkpoints below are historical evidence, not competing instructions about
+what to build next. [STATUS.md](STATUS.md) owns activation and publication facts.
+
+The installed development build includes code `9399cf2e9`; its qualification
+notes and README were pushed with `84a885d76` on
+`codex/native-research-refinement`. The reviewed native host is OpenAlgo 2.0.2.7
+and the development distribution is preview.8. Public preview.7 ZIPs still use
+OpenAlgo 2.0.2.5 and do not contain this development work. Pushed source,
+local installation and a new public release are separate milestones.
+
+### Current completion against the eight packages
+
+Statuses below describe qualified slices; none imply every ambition in a package
+is complete. Earlier test totals belong to their own scopes and are not summed.
+
+| Package | Implemented and qualified foundation | Still required |
+|---|---|---|
+| 1. Mandate and evidence | [Frozen assumptions and immutable full development histories](DEVELOPMENT_EVIDENCE_20261011.md), bounded retention, input identities, tamper rejection and exact recovery. | Extend these contracts for each new model, allocation policy and engine; do not rebuild the storage foundation. |
+| 2. Chronology | [Three expanding-prefix fits and later checks](WALK_FORWARD_20261020.md), final development refit, higher costs, purging and separate final confirmation. Accounts reset to the same capital. | Learned transforms must fit inside their own training prefixes. Continuous account carry is a separate simulation protocol, not an aggregation of reset accounts. |
+| 3. Applicable methods | [Typed method definitions and recorded coverage](METHOD_ADMISSION_20261020.md), [momentum expansion](METHOD_EXPANSION_20261021.md), 108 stock/market choices across 32 families, bounded conditional search and applicable clock probes. | Broader qualified domains/combinations, volume-derived conditions, actual intraday indicator discovery, confirmed multiple timeframes and later controlled statistical families. A registry is not proof of numerical admission or exhaustive search. |
+| 4. Execution and allocation | [ATR exits, sizing and hard limits](EXECUTION_CORE_20261021.md), [entry priority](PRIORITY_CORE_20261021.md), [turnover constraints](TURNOVER_RECOMMENDATION_20261021.md), [volume provenance, shared participation and direct correlated-exposure caps](PORTFOLIO_CAPACITY_20261021.md). | Portfolio-wide covariance/cluster controls, supported sector/factor metadata, broader broker/quantity profiles and execution models with adequate spread/depth/impact inputs. Current participation is a declared historical assumption, not executable capacity. |
+| 5. Recommendation | Cost/neighbour checks, paired daily ranges, reference fallback, [exploratory saved alternatives](TRADEOFFS_VOLUME_20261021.md), [native symbol/date challenges](SYMBOL_DATE_SENSITIVITY_20261021.md), and [three final-fit search seeds plus controlled calibration](SEARCH_SEEDS_20261021.md). | Genuine native full-procedure synthetic calibration, wider generators/replicates, whole-procedure seed sensitivity, and only then separately qualified selection-adjusted statistical diagnostics. |
+| 6. Regimes and adaptation | Existing fixed causal stock/market conditions and recorded regime attribution are reusable inputs. | A validated suitability report, then a frozen regime-conditioned strategy policy replayed with shared cash and switching costs. No learned regime classifier, live resizing or crisis execution is qualified by v15. |
+| 7. Rule sources and engine/assets | Native saved trade charts/replay and existing separately scoped VectorBT/Nautilus connectors. | Complete scanner-source/universe contracts, selected-condition OpenScript parity, new asset accounting and explicit automatic-research parity per engine/profile. Nautilus does not inherit VectorBT's v15 qualification. |
+| 8. Complete consumer journey | Import/library, automatic runs, findings, reports, saved setup reuse and recovery have implemented paths and dated scoped checks. | Fresh end-to-end acceptance on the exact release, returning/failed/no-edge journeys, accessibility/narrow layouts, installation/update/rollback and clear distribution provenance. Broad visual polish remains after core work. |
+
+### What v15 closes, and what it does not
+
+The latest increment passes 466 distinct scoped backend and 270 frontend checks.
+Its frozen 20-programme controlled suite retains original settings in all 16
+null cases and selects changed settings in all four persistent-edge controls.
+Separate genuine native execution checks and full service recovery tests cover
+different layers. The application is installed and running, with all 63 saved
+run identities, configuration and Historify bytes preserved.
+
+This closes the first search-path/calibration foundation, not general false
+discovery control. The calibration's account outcomes and audit double are
+controlled; four runs per null model give a wide 52.7% one-sided 95% upper bound.
+The repeat searches share development data and repeat only the final fit, not
+the entire chronological procedure. Final results never choose settings. The
+[v15 receipt](SEARCH_SEEDS_20261021.md#qualification-and-activation) records the
+failed initial harness and the consumer-interface correction without retuning
+application thresholds.
+
+### Remaining implementation order
+
+Complete a bounded usable slice at each step. Each runtime policy change gets a
+new version; saved v15 and older studies retain exact contracts. Offline research
+qualification does not silently add work to every user's Optimize action.
+
+| Step | Deliverable and reason for its position | Completion gate |
+|---|---|---|
+| A1 — next coding slice | **Native full-procedure calibration runner.** Replace the controlled account/audit seam with genuine VectorBT accounts and actual constraint audits on independently generated, causally available price/volume/signal fixtures. Exercise the same admission, chronological search, costs, support, native masks, seed checks, selection and recovery as a user run. Reuse the existing sealed plan/receipt CLI. | Frozen model definitions and source identity; declared complete cases, positive controls and no-edge controls; retained failures; actual native fills/audits verified; final-outcome isolation, pause/resume and bounded runtime/storage. An explicit comparison explains differences from the controlled-account suite. Start with a bounded engineering suite, not an unqualified confidence target. |
+| A2 — qualification expansion | **Whole-procedure seed sensitivity and broader calibration.** In offline qualification, vary sampler paths across all earlier fits as well as the final search, using independent outcome datasets with dependence, shifts and sparse opportunities. Predeclare precision/power targets, cases and compute budget before increasing replicate counts. | No lucky-seed replacement, omitted failures or threshold tuning to qualification outcomes. Report model-specific denominators, intervals, power and unresolved scope. The current 32-replicate cap cannot support a 5% zero-event upper-bound target; revise bounds/retention deliberately if that target is adopted. Any runtime whole-procedure repeat policy needs its own measured budget and version rather than silently tripling v15 work. |
+| B — portfolio intelligence | **Portfolio-wide allocation.** Extend direct pairwise exposure control with causal covariance/cluster concentration and a simple constrained allocation policy. Compare with current allocation at matched capital/risk. Admit sector/factor controls only when point-in-time metadata exists. Broaden volume producer profiles individually. | Prefix-only inputs; shrinkage/singular-matrix and missing-data rules; deterministic bounded allocation; cash, participation, turnover, stop-risk and exposure reconciliation on actual fills. Full recommendation/recovery/replay tests; stronger returns from more risk are identified separately. New search choices repeat relevant A qualification. |
+| C — applicable method expansion | **Useful new research, not a larger menu.** Admit volume-derived conditions for qualified producers, then causal intraday/confirmed higher-timeframe features, then limited statistical families. Expand existing price domains only with a clear hypothesis and measured budget. | Each method has formula, causal timestamp, warmup, input/quantity basis, domain, missingness and engine/profile support. Compile one shared Historify requirement union; download only missing coverage. All relevant registered families receive admitted/redundant/unsupported/insufficient/budget-deferred outcomes. Actual simulation, known-edge/no-edge, recovery and budget checks precede inclusion. |
+| D — regime suitability, then policy | **Explain where a setup works.** First report supported trend/volatility/liquidity slices with sufficient dates and costs. Next test a low-complexity, frozen conditional policy against the fixed setup; learned classifiers follow only if they add evidence beyond simple conditions. | Labels available before decisions; training-only fitting; comparable support and uncertainty; shared-cash account replay with transition costs; later confirmation cannot choose regimes. Unavailable VIX/rates/options inputs stay unavailable. Research saving never activates live resizing or a kill switch. |
+| E — source and engine/asset breadth | **Complete rule sources and qualified adapters.** Add selected-condition OpenScript parity and a source contract containing the historical opportunity universe before claiming reproduction of an entire Chartink scanner. Qualify one additional Nautilus/asset/venue profile at a time. | Numerical/availability parity, exact engine-specific fills, lifecycle/expiry/borrow/margin/roll requirements where applicable, saved evidence and replay. A supported library feature or native chart indicator is not automatically an admitted research feature. |
+| F — consumer and release acceptance | **Ship a complete supported loop.** Recheck import → essential intent → automatic research → clear conclusion → inspect → named save → reuse/refresh/recovery against the exact candidate build. Keep charts/metrics/settings progressively disclosed. | Fresh and returning/no-edge/unsupported/interrupted journeys, keyboard/focus/reduced-motion/narrow-layout checks, affected Windows/Linux install/update/rollback and exact package inventory. Update guides and extension onboarding, then publish a specifically qualified release. |
+
+**Active sequence: A1 → A2 → B → C → D → admitted E slices.** F's minimal
+usable interface and relevant acceptance checks accompany every slice; the
+broader polish pass follows stable core contracts. A complete supported release
+can be accepted after A without waiting for every future method or asset. Do not
+let an unbounded calibration study or the entire long-term catalogue become a
+permanent release gate.
+
+### Automatic journey and product acceptance
+
+1. Import the CSV or send the Chartink capture. Preview actual signal dates,
+   accepted opportunities and symbols; retain source identity and limitations.
+2. Ask only for economic intent the data cannot establish: capital, permitted
+   holding horizon and optional risk limits, with explicit editable defaults.
+   Do not ask the consumer to choose a sampler, indicator catalogue or engine
+   diagnostic. The app selects only an admitted engine/profile.
+3. Compile interval, warmup/holding windows, broker-backed missing data, applicable
+   methods, benchmark, chronological checks and bounded work before starting.
+   Show actual stages and counters; reuse matching Historify prices and accounts.
+4. Return one of: supported changed settings, no supported improvement,
+   insufficient evidence or infeasible/unsupported requirements. Show the original
+   comparison and later confirmation separately. Optional alternatives are
+   exploratory until they pass their own decision/evidence contract.
+5. Let the user inspect why settings changed, trades/charts, tear sheet and
+   research scope on demand. Save a named exact setup, reuse its rules on a new
+   capture or resume compatible work without overwriting evidence. New searches
+   and refreshed datasets preserve exposed-period history; an already examined
+   period cannot become a fresh holdout by renaming the study.
+
+**Definition of done per slice:** implemented core semantics, targeted numerical
+and causal tests, genuine native account checks where execution changes, exact
+recovery/replay and old-version regression, relevant resource/runtime bounds,
+minimal usable native UI, and updated status/installation notes. Install/restart
+and Git publication are separate recorded actions when authorized. Documentation
+updates alone do not require a rebuild, restart or full Windows installation test.
 
 The product should answer: **Which settings are strongest for these signals,
 within my trading assumptions, and what evidence supports using them?** It should
@@ -102,13 +139,17 @@ The installed performance changes and composed Windows/Linux qualification are
 complete for their recorded scope. Public preview.7 remains the distributed ZIP;
 preview.8 publication is separate.
 
-The fresh human audit confirmed the normal account/library, setup, saved custom
+The earlier human audit confirmed the normal account/library, setup, saved custom
 study, trial dialog, report, chart/replay and save dialog. Controlled data additionally
 covered CSV preview, automatic findings, chosen-setup reuse and insufficient-history
 admission. It did not complete a new real-broker optimisation or resume the stopped
 normal run. The wider product is still unfinished.
 
 ### Substantive implementation packages
+
+The table retains the full product specification, including capabilities already
+implemented. Use the current-completion table and A1–F worklist above to identify
+remaining work; an imperative here does not reset a completed milestone.
 
 | Order | Feature and new work | Reuse and dependency | Acceptance before moving on |
 |---|---|---|---|
@@ -121,12 +162,11 @@ normal run. The wider product is still unfinished.
 | 7 | Native rule sources, engine breadth and new asset profiles. Add selected-condition OpenScript preview/parity; later admit a complete rule source with a historical universe and non-trigger opportunities. Qualify one additional asset/venue/engine combination at a time. | Reuse exact chosen settings and data contracts from packages 1–6. Keep Nautilus optional and independently qualified. The [asset profiles](ASSET_PROFILES.md) govern historical metadata/accounting needs. | Python/OpenScript numerical and availability parity; exported studies clearly distinguish original scanner logic from added filters. Shorts/derivatives require historical lifecycle, borrow/margin/expiry/roll evidence and accounting. A library's capability is not automatically an adapter capability. |
 | 8 | Complete the simple consumer journey. Apply the audit fixes below across the now-stable feature contracts, followed by native desktop, keyboard, narrow-layout and accessibility checks. | Each earlier package includes the minimal native UI needed to use it. This final pass consolidates navigation and presentation; it does not postpone actionable admission or truthful findings. | A fresh user completes import → automatic run → understood conclusion → inspected report → named save → reuse without understanding engine names or technical diagnostic messages. Returning users retain context and recover without duplicate work. |
 
-**Execution sequence:** 1 → 2 → 3 → 4 → 5 → 6 → admitted slices of 7 → 8.
-Implement a complete usable slice at each step. Basic selection safeguards from
-package 2 apply before expanded searches in package 3; package 5 adds the richer
-recommendation and uncertainty controller. Small dependencies such as volume
-validity may run alongside evidence work, but wider method search does not ship
-ahead of its validation foundation.
+These package numbers describe the original dependency structure, not a demand
+to reimplement completed foundations. The **remaining implementation order**
+above is the active worklist. Extend qualified slices rather than restart a
+package. New method search retains the chronology, execution limits and richer
+recommendation checks already in place; a new method does not bypass them.
 
 ### Method waves inside package 3
 
@@ -144,9 +184,9 @@ One representative of a redundant family may be tested before refinement. The
 receipt records considered, simulated, excluded and deferred families separately;
 the interface summarises this and allows details on demand.
 
-### New contracts and implementation seams
+### Contracts and implementation seams to retain and extend
 
-Extend the existing compiler into a versioned research mandate containing the
+Retain and extend the existing compiler's versioned research mandate containing the
 source fingerprint, economic assumptions, objective/constraints, data requirements,
 admission decisions, fold roles, proposed work and stopping rules. Starting capital,
 cost basis and fill conventions stay fixed by default. User intent such as closing
@@ -159,7 +199,7 @@ objective; the app chooses the applicable methods, parameters, interval, data
 windows, benchmark and validation protocol. A historical drawdown acceptance
 threshold is not a promise to cap future drawdown or an activated live stop.
 
-Introduce a durable development-evidence store referenced from the existing job
+Extend the existing durable development-evidence store referenced from the job
 checkpoint. Each shard retains actual timestamped account marks/returns, observation
 masks, candidate and input identity, fold role, cost scenario and cash/exposure basis.
 Do not embed unbounded curves in trial JSON or substitute plot samples for statistical
@@ -187,7 +227,7 @@ fills, probabilities or recommendations.
 
 ### Search policy and what the user receives
 
-Keep saved v7/v8 limits unchanged. Compile new versions with explicit total
+Keep every saved recipe's limits unchanged, including v15. Compile new versions with explicit total
 limits for acquisition, feature memory, proposals, native calculations, validation,
 statistical analysis, storage and wall time. Reserve final verification capacity
 before exploring. More families must share a measured budget; expansion cannot
@@ -255,13 +295,22 @@ they do not prove optimal future performance.
    broker history, interrupted work, no-edge findings and legacy records. Animation
    reflects actual work and never claims a fabricated percentage or running state.
 
-### First coding increment and release gates
+### Next coding increment and release gates
 
-Start package 1 with a schema and pure contract for development evidence, then
-connect one unchanged-reference and one candidate evaluation to durable shards.
-Exercise interruption, replay, budget exhaustion and hash preservation. Extend to
-every evaluated development window before admitting package 2's rolling protocol.
-This is the next coding increment; adding another large indicator menu is not.
+Start **A1, the genuine native full-procedure calibration runner**, using the
+existing plan/receipt CLI and a bounded predeclared synthetic-market suite.
+Preserve the controlled-account runner as its own qualified model rather than
+silently relabel it as native execution. Qualify generated signals, prices,
+volume provenance, calendars, actual fills and constraint audits together with
+the full recommendation procedure. Pause/recovery and adverse-final isolation
+are acceptance cases. Record actual elapsed time and evidence size before
+expanding the suite. This is offline developer qualification; do not add a
+synthetic calibration stage to the consumer's ordinary optimisation run.
+
+Package 1's storage foundation and package 2's expanding-prefix protocol are
+already implemented. They are extension seams, not the next new build. The v15
+search-seed/controlled calibration milestone is closed for its recorded scope;
+the wider claims and methods remain gated as specified above.
 
 Each subsequent feature slice needs numerical reference cases, causal prefix tests,
 known no-edge/known-edge fixtures, relevant resource audits, measured runtime and a

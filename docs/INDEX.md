@@ -27,8 +27,10 @@ need → drill into the specific file. Don't load everything at once.
 | Step-by-step user guide (setup → first order → integrations) | [userguide/README.md](userguide/README.md) |
 | MCP tool reference (Claude Desktop / Cursor / Windsurf) | [mcp-tool-reference.md](mcp-tool-reference.md) |
 | Native Research roadmap: research intelligence foundations, broader methods and simple automatic journeys | [research/DELIVERY_PLAN.md](research/DELIVERY_PLAN.md#feature-development-order-after-the-human-audit) |
+| Research implementation now: qualified package slices, remaining core sequence and next coding acceptance | [research/DELIVERY_PLAN.md](research/DELIVERY_PLAN.md#current-completion-against-the-eight-packages) · [next steps](research/DELIVERY_PLAN.md#remaining-implementation-order) |
 | Scanner Research: dated CSV, historical execution, search, later tests and retained evidence | [research/STATUS.md](research/STATUS.md) · [research/DEVELOPMENT.md](research/DEVELOPMENT.md) |
 | Search-seed stability and controlled false-recommendation calibration | [research/SEARCH_SEEDS_20261021.md](research/SEARCH_SEEDS_20261021.md) · [research/SEARCH_CALIBRATION_PROTOCOL.md](research/SEARCH_CALIBRATION_PROTOCOL.md) |
+| Native synthetic full-procedure calibration and whole-procedure sampler checks | [research/NATIVE_CALIBRATION_20261021.md](research/NATIVE_CALIBRATION_20261021.md) |
 
 ## Install, deploy & operate
 

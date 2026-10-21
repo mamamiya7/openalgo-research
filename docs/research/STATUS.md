@@ -1,5 +1,28 @@
 # OpenAlgo Research status
 
+The [reconciled implementation plan](DELIVERY_PLAN.md#remaining-implementation-order)
+separates qualified foundations from remaining work. Native full-procedure
+synthetic calibration and bounded whole-procedure seed qualification are now
+implemented in source and undergoing their frozen suite. Portfolio-wide
+allocation, applicable method expansion and regime policy research follow.
+The latest controlled v15 qualification below remains complete for its own scope.
+
+## Native full-procedure qualification — 21 October 2026, in progress
+
+The [native extension](NATIVE_CALIBRATION_20261021.md) uses genuine VectorBT fills,
+actual constraint audits, immutable development histories and committed-proposal
+pause/resume on generated markets. Three sealed sampler programmes cover all six
+fits. The grouped receipt counts independent datasets, not repeated seed paths;
+alternate programmes cannot replace the canonical choice. The controlled-account
+runner and earlier evidence remain separately identified.
+
+233 scoped backend checks pass, including current and prior service recovery,
+native fixture/cache checks and actual seeded proposal replay. The frozen
+five-dataset/fifteen-programme suite is still running; component tests and an
+earlier feasibility diagnostic do not count as completed qualification. No new
+production default, UI, dependency or database schema is introduced. Local
+activation and Git publication follow complete qualification.
+
 ## Search-seed stability and controlled calibration — 21 October 2026
 
 The [v15 core increment](SEARCH_SEEDS_20261021.md) adds two fixed-seed repeats of

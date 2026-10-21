@@ -1,5 +1,10 @@
 # Offline search calibration protocol
 
+The [native full-procedure extension](NATIVE_CALIBRATION_20261021.md) adds genuine
+VectorBT synthetic-market accounts and grouped whole-procedure sampler checks.
+It is a separate qualified model; the original controlled-account runner and
+its earlier receipts are retained rather than relabelled as native execution.
+
 This is an engineering qualification of the complete declared recommendation
 procedure under controlled models. It is not a probability of profit, a live-data
 p-value, or general false-discovery-rate control. Existing descriptive block
