@@ -34,6 +34,7 @@ function recordedWalkForward(findings: Findings): WalkForwardFindings | undefine
       'automatic-hypotheses-v13',
       'automatic-hypotheses-v14',
       'automatic-hypotheses-v15',
+      'automatic-hypotheses-v16',
     ].includes(findings.version) ||
     receipt?.version !== 'research-walk-forward-findings-v1' ||
     !receipt ||
@@ -392,6 +393,7 @@ export function AutomaticResearchFindings({
             'automatic-hypotheses-v13',
             'automatic-hypotheses-v14',
             'automatic-hypotheses-v15',
+            'automatic-hypotheses-v16',
           ].includes(findings.version) &&
             selectedSettings?.map((strategy) => (
               <p key={strategy.id} className="text-sm">
@@ -461,6 +463,15 @@ export function AutomaticResearchFindings({
         <div className="mt-4 space-y-4">
           <p className="font-medium">{researchRecipeLabel(findings.version)}</p>
           <p className="text-muted-foreground">{findings.selection_basis}</p>
+          {findings.execution_research?.selected_allocation_mode && (
+            <p>
+              Portfolio allocation:{' '}
+              {findings.execution_research.selected_allocation_mode ===
+              'prior60_cluster_inverse_vol'
+                ? 'Cluster inverse volatility · new entries'
+                : 'Original allocation'}
+            </p>
+          )}
           <MethodCoverage jobId={jobId} recipeVersion={findings.version} />
           {historySummary && (
             <p className="text-muted-foreground">
@@ -539,6 +550,7 @@ export function AutomaticResearchFindings({
             'automatic-hypotheses-v13',
             'automatic-hypotheses-v14',
             'automatic-hypotheses-v15',
+            'automatic-hypotheses-v16',
           ].includes(findings.version) &&
             findings.execution_research &&
             [
@@ -546,6 +558,7 @@ export function AutomaticResearchFindings({
               'research-execution-findings-v2',
               'research-execution-findings-v3',
               'research-execution-findings-v4',
+              'research-execution-findings-v5',
             ].includes(findings.execution_research.version) && (
               <div className="overflow-x-auto">
                 <p className="mb-2 font-medium">Sizing comparison · development dates</p>
@@ -628,6 +641,7 @@ export function AutomaticResearchFindings({
             'automatic-hypotheses-v13',
             'automatic-hypotheses-v14',
             'automatic-hypotheses-v15',
+            'automatic-hypotheses-v16',
           ].includes(findings.version) && (
             <p className="text-muted-foreground">
               Both settings use the same portfolio limits. Volume participation uses prior

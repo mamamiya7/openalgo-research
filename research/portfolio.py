@@ -163,21 +163,27 @@ def normalize(raw):
             "automatic-hypotheses-v13",
             "automatic-hypotheses-v14",
             "automatic-hypotheses-v15",
+            "automatic-hypotheses-v16",
         )
         or "risk_limits" in raw
         or any("execution_policy" in row for row in strategies)
     )
     if execution_aware:
+        allocation_request = (raw.get("automatic_research") or {}).get(
+            "version"
+        ) == "automatic-hypotheses-v16"
         capacity_request = (raw.get("automatic_research") or {}).get("version") in (
             "automatic-hypotheses-v13",
             "automatic-hypotheses-v14",
             "automatic-hypotheses-v15",
+            "automatic-hypotheses-v16",
         )
         turnover_request = (raw.get("automatic_research") or {}).get("version") in (
             "automatic-hypotheses-v12",
             "automatic-hypotheses-v13",
             "automatic-hypotheses-v14",
             "automatic-hypotheses-v15",
+            "automatic-hypotheses-v16",
         )
         priority_request = (raw.get("automatic_research") or {}).get("version") in (
             "automatic-hypotheses-v11",
@@ -185,6 +191,7 @@ def normalize(raw):
             "automatic-hypotheses-v13",
             "automatic-hypotheses-v14",
             "automatic-hypotheses-v15",
+            "automatic-hypotheses-v16",
         )
         policies = ["execution_policy" in row for row in result["strategies"]]
         if any(policies) and not all(policies):
@@ -203,6 +210,7 @@ def normalize(raw):
             "automatic-hypotheses-v13",
             "automatic-hypotheses-v14",
             "automatic-hypotheses-v15",
+            "automatic-hypotheses-v16",
         ):
             raise ValueError("Choose execution-aware automatic research to use portfolio limits")
         raw_limits = raw.get("risk_limits")
@@ -214,7 +222,9 @@ def normalize(raw):
         result["risk_limits"] = limits
         for row in strategies:
             policy = row.get("execution_policy") or {
-                "version": "research-execution-aware-v4"
+                "version": "research-execution-aware-v5"
+                if allocation_request
+                else "research-execution-aware-v4"
                 if capacity_request
                 else "research-execution-aware-v3"
                 if turnover_request
@@ -224,6 +234,7 @@ def normalize(raw):
                 "exit_mode": "percent",
                 "sizing": "allocation",
                 "risk_limits": limits,
+                **({"allocation_mode": "original"} if allocation_request else {}),
                 **(
                     {
                         "capacity_mode": "prior20_broker_reported",
@@ -242,6 +253,7 @@ def normalize(raw):
                 row["execution_policy"].get("entry_priority"),
                 row["execution_policy"].get("capacity_mode"),
                 row["execution_policy"].get("correlation_mode"),
+                row["execution_policy"].get("allocation_mode"),
             )
             for row in strategies
         }
@@ -252,7 +264,9 @@ def normalize(raw):
         if raw.get("automatic_research") and any(
             row["execution_policy"]["version"]
             != (
-                "research-execution-aware-v4"
+                "research-execution-aware-v5"
+                if allocation_request
+                else "research-execution-aware-v4"
                 if capacity_request
                 else "research-execution-aware-v3"
                 if turnover_request
@@ -269,6 +283,7 @@ def normalize(raw):
             row["execution_policy"]["exit_mode"] != "percent"
             or row["execution_policy"]["sizing"] != "allocation"
             or row["execution_policy"].get("entry_priority", "source") != "source"
+            or row["execution_policy"].get("allocation_mode", "original") != "original"
             for row in strategies
         ):
             raise ValueError(
@@ -505,12 +520,21 @@ def execution_versions(portfolio, recorded=None):
 
             ADAPTER_VERSION, POLICY_VERSION = TURNOVER_ADAPTER_VERSION, TURNOVER_POLICY_VERSION
     if any(
-        row.get("execution_policy", {}).get("version") == "research-execution-aware-v4"
+        row.get("execution_policy", {}).get("version")
+        in ("research-execution-aware-v4", "research-execution-aware-v5")
         for row in portfolio["strategies"]
     ):
         from research.execution_policy import CAPACITY_ADAPTER_VERSION, CAPACITY_POLICY_VERSION
 
         ADAPTER_VERSION, POLICY_VERSION = CAPACITY_ADAPTER_VERSION, CAPACITY_POLICY_VERSION
+    if any(
+        row.get("execution_policy", {}).get("version") == "research-execution-aware-v5"
+        for row in portfolio["strategies"]
+    ):
+        ADAPTER_VERSION, POLICY_VERSION = (
+            "vectorbt-portfolio-adapter-v6",
+            "vectorbt-joint-causal-bars-v6",
+        )
     if engine == "nautilus":
         from research.connectors.nautilus_portfolio import ADAPTER_VERSION, POLICY_VERSION
         from research.connectors.nautilus_runtime import status as runtime_status
@@ -525,7 +549,8 @@ def execution_versions(portfolio, recorded=None):
         "portfolio_version": VERSION,
     }
     if any(
-        row.get("execution_policy", {}).get("version") == "research-execution-aware-v4"
+        row.get("execution_policy", {}).get("version")
+        in ("research-execution-aware-v4", "research-execution-aware-v5")
         for row in portfolio["strategies"]
     ):
         versions["portfolio_features_version"] = "research-portfolio-execution-features-v1"
@@ -575,6 +600,7 @@ def execution_versions(portfolio, recorded=None):
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
         "automatic-hypotheses-v15",
+        "automatic-hypotheses-v16",
     ) or portfolio.get("entry_conditions", {}).get("version") in (
         "research-stock-entry-conditions-v1",
         "research-stock-entry-conditions-v2",
@@ -607,6 +633,7 @@ def execution_versions(portfolio, recorded=None):
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
         "automatic-hypotheses-v15",
+        "automatic-hypotheses-v16",
     ) or portfolio.get("entry_conditions", {}).get("version") in (
         "research-joint-entry-conditions-v1",
         "research-joint-entry-conditions-v2",
@@ -643,6 +670,7 @@ def execution_versions(portfolio, recorded=None):
                 "automatic-hypotheses-v13",
                 "automatic-hypotheses-v14",
                 "automatic-hypotheses-v15",
+                "automatic-hypotheses-v16",
             )
             or portfolio.get("entry_conditions", {}).get("version")
             == "research-joint-entry-conditions-v2"

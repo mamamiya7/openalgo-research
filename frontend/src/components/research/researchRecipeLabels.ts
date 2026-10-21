@@ -17,6 +17,7 @@ const recipeLabels: Record<string, string> = {
   'automatic-hypotheses-v13': 'Capacity-aware portfolio research',
   'automatic-hypotheses-v14': 'Sensitivity-checked portfolio research',
   'automatic-hypotheses-v15': 'Repeat-checked portfolio research',
+  'automatic-hypotheses-v16': 'Portfolio allocation research',
 }
 
 export function researchRecipeLabel(version?: string | null): string {
@@ -41,6 +42,7 @@ export function researchFeaturePreparation(version?: string | null): string {
       'automatic-hypotheses-v13',
       'automatic-hypotheses-v14',
       'automatic-hypotheses-v15',
+      'automatic-hypotheses-v16',
     ].includes(version ?? '')
   )
     return 'Preparing stock and market conditions'

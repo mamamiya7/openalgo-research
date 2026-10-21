@@ -134,6 +134,7 @@ def validate(strategies, snapshot, capital):
                 current["execution_policy"].get("entry_priority"),
                 current["execution_policy"].get("capacity_mode"),
                 current["execution_policy"].get("correlation_mode"),
+                current["execution_policy"].get("allocation_mode"),
             )
             if shared_priority is not None and shared_priority != priority:
                 raise ValueError(
@@ -198,6 +199,7 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
     account_policy = strategies[0].get("execution_policy", {})
     capacity_aware = account_policy.get("capacity_mode") == "prior20_broker_reported"
     correlation_aware = account_policy.get("correlation_mode") == "prior60_positive_080"
+    allocation_aware = account_policy.get("allocation_mode") == "prior60_cluster_inverse_vol"
     # At most one entry per signal: local fill accounting is bounded by MAX_SIGNALS.
     participation = {} if capacity_aware else None
     # Evaluation-local and bounded by snapshot dates; no retained account state.
@@ -378,7 +380,7 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
             capacities["daily_buy_turnover"] = (
                 max(0.0, daily["buy_budget"] - daily["buy_notional"]) / fill
             )
-        if capacity_aware or correlation_aware:
+        if capacity_aware or correlation_aware or allocation_aware:
             entry_day = timeline[c.i][:10]
             decision_at = timeline[c.i] if minute else bounds(snapshot, entry_day)[0].isoformat()
         capacity_feature, correlation_feature, capacity_receipt, correlated = None, None, None, None
@@ -426,6 +428,34 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
             capacities["correlated_exposure"] = exposure_capacity(
                 limits["max_correlated_exposure_pct"] / 100,
                 correlated,
+            )
+        allocation_feature = None
+        if allocation_aware:
+            from research.portfolio_allocation import validate as validate_allocation
+
+            allocation_feature = validate_allocation(
+                signal.get("entry_allocation"),
+                symbol=signal["symbol"],
+                entry_session=entry_day,
+                decision_at=decision_at,
+                required_symbols=sorted({lots[j][1]["symbol"] for j in held}),
+            )
+            cluster = next(
+                group for group in allocation_feature["clusters"] if signal["symbol"] in group
+            )
+            cluster_before = sum(
+                c.last_position[j] * float(bar_at(j, c.i)["open"])
+                for j in held
+                if lots[j][1]["symbol"] in cluster
+            )
+            gross_fraction = limits["max_gross_exposure_pct"] / 100
+            weight = allocation_feature["weights"][signal["symbol"]]
+            cluster_fraction = gross_fraction / len(allocation_feature["clusters"])
+            capacities["portfolio_symbol_allocation"] = exposure_capacity(
+                gross_fraction * weight, symbol
+            )
+            capacities["portfolio_cluster_allocation"] = exposure_capacity(
+                cluster_fraction, cluster_before
             )
         policy = strategy["execution_policy"]
         risk_target = None
@@ -480,6 +510,15 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
                 correlation_feature_id=correlation_feature["id"],
                 correlated_exposure_before=correlated,
                 correlated_capacity_shares=capacities["correlated_exposure"],
+            )
+        if allocation_aware:
+            execution_details[col].update(
+                allocation_feature_id=allocation_feature["id"],
+                allocation_weight=weight,
+                allocation_cluster=cluster,
+                allocation_cluster_before=cluster_before,
+                allocation_symbol_capacity_shares=capacities["portfolio_symbol_allocation"],
+                allocation_cluster_capacity_shares=capacities["portfolio_cluster_allocation"],
             )
         if quantity < 1:
             rejected[col] = "Execution limits cannot admit one whole share: " + ", ".join(
@@ -1034,7 +1073,10 @@ def _report(
             report["limits"].append(
                 "Daily buy-turnover clips new whole-share entries against a frozen first-opening equity budget; actual sales do not replenish it and protective exits are never blocked."
             )
-        if strategies[0]["execution_policy"].get("version") == "research-execution-aware-v4":
+        if strategies[0]["execution_policy"].get("version") in (
+            "research-execution-aware-v4",
+            "research-execution-aware-v5",
+        ):
             policy = strategies[0]["execution_policy"]
             report["policy_version"] = CAPACITY_POLICY_VERSION
             report["execution"].update(
@@ -1075,4 +1117,14 @@ def _report(
                 report["limits"].append(
                     "Correlation controls clip new entries against directly correlated existing exposure. They do not rebalance held positions or perform covariance optimization; relationships can change after entry."
                 )
+    if strategies[0].get("execution_policy", {}).get("version") == "research-execution-aware-v5":
+        report["policy_version"] = "vectorbt-joint-causal-bars-v6"
+        report["execution"].update(
+            adapter_version="vectorbt-portfolio-adapter-v6",
+            allocation_mode=strategies[0]["execution_policy"]["allocation_mode"],
+            allocation={
+                "version": "research-cluster-allocation-v1",
+                "basis": "Prior60 aligned completed returns; 10% diagonal covariance shrinkage; positive regularized rho>=0.8 connected clusters; equal cluster budgets and inverse-volatility symbol weights. Fixed source universe, unavailable series excluded explicitly. Entry caps only; no forced rebalancing or negative-correlation credit.",
+            },
+        )
     return report

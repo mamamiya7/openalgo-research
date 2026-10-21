@@ -17,6 +17,9 @@ CAPACITY_VERSION = "research-execution-aware-v4"
 CAPACITY_RISK_VERSION = "research-risk-limits-v3"
 CAPACITY_ADAPTER_VERSION = "vectorbt-portfolio-adapter-v5"
 CAPACITY_POLICY_VERSION = "vectorbt-joint-causal-bars-v5"
+ALLOCATION_VERSION = "research-execution-aware-v5"
+ALLOCATION_ADAPTER_VERSION = "vectorbt-portfolio-adapter-v6"
+ALLOCATION_POLICY_VERSION = "vectorbt-joint-causal-bars-v6"
 ENTRY_PRIORITIES = ("source", "reversed_source", "lower_stop_risk")
 
 
@@ -106,31 +109,39 @@ def normalize_policy(raw=None):
         "atr_target_multiple",
         "risk_budget_fraction",
     }
-    if version in (PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION):
+    if version == ALLOCATION_VERSION:
+        mode = raw.get("allocation_mode")
+        if mode not in ("original", "prior60_cluster_inverse_vol"):
+            raise ValueError("Choose a supported portfolio allocation mode")
+    if version in (PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION, ALLOCATION_VERSION):
         allowed.add("entry_priority")
-    if version == CAPACITY_VERSION:
+    if version in (CAPACITY_VERSION, ALLOCATION_VERSION):
         allowed.update(("capacity_mode", "correlation_mode"))
+    if version == ALLOCATION_VERSION:
+        allowed.add("allocation_mode")
     if set(raw) - allowed or version not in (
         VERSION,
         PRIORITY_VERSION,
         TURNOVER_VERSION,
         CAPACITY_VERSION,
+        ALLOCATION_VERSION,
     ):
         raise ValueError("Choose a supported execution policy")
     exit_mode, sizing = raw.get("exit_mode", "percent"), raw.get("sizing", "allocation")
     if exit_mode not in ("percent", "atr") or sizing not in ("allocation", "stop_risk"):
         raise ValueError("Choose percentage or ATR exits and allocation or stop-risk sizing")
     raw_limits = raw.get("risk_limits")
-    if version in (TURNOVER_VERSION, CAPACITY_VERSION) and raw_limits is None:
+    if version in (TURNOVER_VERSION, CAPACITY_VERSION, ALLOCATION_VERSION) and raw_limits is None:
         raw_limits = {
             "version": CAPACITY_RISK_VERSION
-            if version == CAPACITY_VERSION
+            if version in (CAPACITY_VERSION, ALLOCATION_VERSION)
             else TURNOVER_RISK_VERSION
         }
     limits = normalize_limits(raw_limits)
     expected_limits = {
         TURNOVER_VERSION: TURNOVER_RISK_VERSION,
         CAPACITY_VERSION: CAPACITY_RISK_VERSION,
+        ALLOCATION_VERSION: CAPACITY_RISK_VERSION,
     }.get(version, RISK_VERSION)
     if limits["version"] != expected_limits:
         raise ValueError("Execution policy and risk-limit versions must match")
@@ -140,7 +151,9 @@ def normalize_policy(raw=None):
         "sizing": sizing,
         "risk_limits": limits,
     }
-    if version == CAPACITY_VERSION:
+    if version == ALLOCATION_VERSION:
+        result["allocation_mode"] = mode
+    if version in (CAPACITY_VERSION, ALLOCATION_VERSION):
         capacity = raw.get("capacity_mode")
         correlation = raw.get("correlation_mode")
         if capacity not in ("prior20_broker_reported", "disabled") or correlation not in (
@@ -155,7 +168,7 @@ def normalize_policy(raw=None):
                 "Capacity-aware execution must enable capacity or correlation controls"
             )
         result.update(capacity_mode=capacity, correlation_mode=correlation)
-    if version in (PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION):
+    if version in (PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION, ALLOCATION_VERSION):
         priority = raw.get("entry_priority", "source")
         if priority not in ENTRY_PRIORITIES:
             raise ValueError("Choose a supported same-opening entry priority")

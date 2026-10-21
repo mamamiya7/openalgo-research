@@ -443,7 +443,7 @@ def test_nonautomatic_or_unimplemented_recipe_is_not_announced_as_executable():
 
 def test_available_automatic_upgrade_has_bounded_sensitivity_without_claiming_data_coverage():
     plan = build_plan(request(version=NEXT_RECIPE_VERSION), interval="D")
-    assert plan["execution_recipe_version"] == "automatic-hypotheses-v15"
+    assert plan["execution_recipe_version"] == "automatic-hypotheses-v16"
     assert plan["search"]["proposals"] == 408
     assert plan["summary"]["max_simulations"] == 512
     assert plan["search"]["budget"]["max_sensitivity_accounts"] == 8

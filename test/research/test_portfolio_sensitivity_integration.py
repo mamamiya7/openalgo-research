@@ -80,7 +80,10 @@ def exercise_full_service(app, client, monkeypatch, value):
     """Shared real-persistence journey, with explicitly controlled account maths."""
     from services.research_portfolio import run
 
-    seed_version = value["automatic_recipe"]["version"] == "automatic-hypotheses-v15"
+    seed_version = value["automatic_recipe"]["version"] in (
+        "automatic-hypotheses-v15",
+        "automatic-hypotheses-v16",
+    )
     original = deepcopy(value)
     store = app.extensions["research_store"]
     monkeypatch.setattr(

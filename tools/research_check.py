@@ -36,6 +36,7 @@ REQUIRED_RESEARCH_FILES = {
     "research/recommendation_seeds.py",
     "research/search_calibration.py",
     "research/native_calibration.py",
+    "research/portfolio_allocation.py",
     "research/procedure_seed_calibration.py",
     "tools/research_calibration.py",
     "research/failures.py",

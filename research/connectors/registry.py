@@ -235,6 +235,12 @@ def policy_for_request(snapshot, spec):
             ):
                 from research.execution_policy import CAPACITY_POLICY_VERSION as POLICY_VERSION
 
+            if (
+                spec["portfolio"]["strategies"][0]["execution_policy"].get("version")
+                == "research-execution-aware-v5"
+            ):
+                POLICY_VERSION = "vectorbt-joint-causal-bars-v6"
+
         return POLICY_VERSION
     execution = spec.get("execution") if isinstance(spec, dict) else None
     if execution and execution.get("engine") == "vectorbt":

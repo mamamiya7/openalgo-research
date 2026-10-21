@@ -102,6 +102,16 @@ export function StrategySettings({ strategy }: { strategy: PortfolioSettings }) 
         ]
       : []),
     ['Allocation', number(strategy.allocation_pct, '%')],
+    ...(policy?.allocation_mode
+      ? [
+          [
+            'Portfolio allocation',
+            policy.allocation_mode === 'prior60_cluster_inverse_vol'
+              ? 'Cluster inverse volatility · new entries'
+              : 'Original allocation',
+          ],
+        ]
+      : []),
     ['Per-trade size', number(config.order_size_pct, '% of allocation')],
     ...(policy?.entry_priority
       ? [['Simultaneous entries', entryPriorityLabel(policy.entry_priority)]]

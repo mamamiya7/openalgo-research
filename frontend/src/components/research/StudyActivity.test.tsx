@@ -353,13 +353,16 @@ describe('durable study activity', () => {
 })
 
 describe('recorded walk-forward activity identity', () => {
-  it('labels extra searches separately while preserving the primary final fit', async () => {
+  it.each([
+    'automatic-hypotheses-v15',
+    'automatic-hypotheses-v16',
+  ])('labels extra searches separately while preserving the primary final fit for %s', async (recipeVersion) => {
     const data = receipt({
       rows: [271, 272, 339, 340, 407].map((number) => row({ id: number + 1, number })),
     })
     data.executions[0].proposal_budget = 408
     vi.mocked(researchStudyActivity.get).mockResolvedValue(data)
-    mount({ recipeVersion: 'automatic-hypotheses-v15' })
+    mount({ recipeVersion })
     const table = await screen.findByRole('table', { name: 'Proposal activity' })
     for (const name of [
       'Final fit · Trial 68 Proposal 272',
@@ -371,6 +374,30 @@ describe('recorded walk-forward activity identity', () => {
       expect(within(table).getByRole('rowheader', { name })).toBeVisible()
   })
 
+  it.each([
+    'original',
+    'prior60_cluster_inverse_vol',
+  ])('shows recorded account allocation %s in proposal settings', async (allocation_mode) => {
+    const data = receipt({
+      rows: [row({ number: 271, params: { 'portfolio.allocation_mode': allocation_mode } })],
+    })
+    data.executions[0].proposal_budget = 408
+    vi.mocked(researchStudyActivity.get).mockResolvedValue(data)
+    mount({ recipeVersion: 'automatic-hypotheses-v16' })
+    const table = await screen.findByRole('table', { name: 'Proposal activity' })
+    await userEvent.click(
+      within(table).getByRole('button', {
+        name: 'View settings for Final fit · Trial 68 (Proposal 272)',
+      })
+    )
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveTextContent('Portfolio allocation')
+    expect(dialog).toHaveTextContent(
+      allocation_mode === 'original'
+        ? 'Original allocation'
+        : 'Cluster inverse volatility · new entries'
+    )
+  })
   it('keeps the 68-trial priority fit labels and selected global policy readable', async () => {
     const data = receipt({
       rows: [row({ number: 271, params: { 'portfolio.entry_priority': 'lower_stop_risk' } })],

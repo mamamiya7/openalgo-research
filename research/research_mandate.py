@@ -38,6 +38,7 @@ def _bounded(value):
             "automatic-hypotheses-v13",
             "automatic-hypotheses-v14",
             "automatic-hypotheses-v15",
+            "automatic-hypotheses-v16",
         )
         else MAX_METADATA_BYTES
     )

@@ -151,7 +151,7 @@ def market_paths(days, symbols, *, data_seed, scenario, adverse_from=None):
     return result
 
 
-def prepared(case):
+def prepared(case, *, recipe_version="automatic-hypotheses-v15"):
     """Reuse native contract scaffolding, replace every price/source observation."""
     value = template()
     context = value["automatic_stock_market_context"]
@@ -217,6 +217,20 @@ def prepared(case):
             adapter_sha256=fingerprint(GENERATOR_IDENTITY),
             captured_at="2026-10-21T00:00:00+00:00",
         )
+    if recipe_version == "automatic-hypotheses-v16":
+        value["portfolio"]["automatic_research"]["version"] = recipe_version
+        for row in value["portfolio"]["strategies"]:
+            row["execution_policy"].update(
+                version="research-execution-aware-v5", allocation_mode="original"
+            )
+        value["portfolio"] = normalize(value["portfolio"])
+        for row, canonical in zip(
+            value["strategies"], value["portfolio"]["strategies"], strict=True
+        ):
+            row.update(deepcopy(canonical))
+        value["versions"] = execution_versions(value["portfolio"])
+    elif recipe_version != "automatic-hypotheses-v15":
+        raise ValueError("Native fixture recipe is unsupported")
     value = prepare_portfolio(value, context, volume)
     value["automatic_recipe"] = compile_recipe(value)
     return value
@@ -225,14 +239,19 @@ def prepared(case):
 def run_case(case, plan, *, calibration_seed_plan=None, native_cache=None):
     """Run real Optuna, real native gates/fills/audits and immutable histories."""
     verify_plan(plan)
+    runner_identity = (
+        RUNNER_IDENTITY
+        if plan["recipe_version"] == "automatic-hypotheses-v15"
+        else "full-v16-native-cluster-allocation-v1"
+    )
     if (
         plan["execution_model"] != "native_synthetic_market"
-        or plan["runner_identity"] != RUNNER_IDENTITY
+        or plan["runner_identity"] != runner_identity
     ):
         raise ValueError("Native runner requires its frozen native-synthetic declaration")
     if case not in plan["cases"]:
         raise ValueError("Case was not frozen in the calibration plan")
-    value = prepared(case)
+    value = prepared(case, recipe_version=plan["recipe_version"])
     recipe = value["automatic_recipe"]
     if (
         recipe["version"] != plan["recipe_version"]
@@ -256,7 +275,7 @@ def run_case(case, plan, *, calibration_seed_plan=None, native_cache=None):
         """A predeclared committed-proposal boundary, never an in-flight fill."""
 
     inputs_id = fingerprint(
-        {"case": case, "snapshot": value["snapshot"], "runner": RUNNER_IDENTITY}
+        {"case": case, "snapshot": value["snapshot"], "runner": runner_identity}
     )
 
     def checkpoint(state, counts):
@@ -273,7 +292,11 @@ def run_case(case, plan, *, calibration_seed_plan=None, native_cache=None):
                 raise AssertionError("Native final requested before frozen selection")
             final_selections.append(latest["selection"]["config_id"])
         report = cache.evaluate(rows, snapshot, capital, progress=progress)
-        if report["policy_version"] != "vectorbt-joint-causal-bars-v5":
+        if report["policy_version"] != (
+            "vectorbt-joint-causal-bars-v6"
+            if plan["recipe_version"] == "automatic-hypotheses-v16"
+            else "vectorbt-joint-causal-bars-v5"
+        ):
             raise AssertionError("Native calibration lost constrained execution")
         pending_native_audits.add(id(report))
         calls += 1
@@ -373,7 +396,11 @@ def run_case(case, plan, *, calibration_seed_plan=None, native_cache=None):
         if not adverse_final_verified:
             raise AssertionError("Native positive control did not exercise adverse final outcomes")
     proposals = sum(len(fit["trials"]) for fit in latest["fits"].values())
-    context = seed_plan(0) if calibration_seed_plan is None else calibration_seed_plan
+    context = (
+        seed_plan(0, recipe_version=plan["recipe_version"])
+        if calibration_seed_plan is None
+        else calibration_seed_plan
+    )
     history_id = fingerprint(sorted(shard["id"] for shard in shards.values()))
     facts = {
         "execution_model": "native_synthetic_market",
@@ -429,7 +456,7 @@ def run_case(case, plan, *, calibration_seed_plan=None, native_cache=None):
                 "case": case,
                 "checkpoint": latest["checkpoint_id"],
                 "histories": sorted(shard["id"] for shard in shards.values()),
-                "runner": RUNNER_IDENTITY,
+                "runner": runner_identity,
             }
         ),
         "native_procedure": {**facts, "id": fingerprint(facts)},

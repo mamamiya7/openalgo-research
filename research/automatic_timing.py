@@ -87,6 +87,7 @@ def descriptor(evidence, *, strict=False):
             "automatic-hypotheses-v13",
             "automatic-hypotheses-v14",
             "automatic-hypotheses-v15",
+            "automatic-hypotheses-v16",
         )
         else "Per expanding fit: 32 original-clock family screens; 4 momentum probes; up to 4 clock probes; 4 ATR exit and 4 portfolio probes; at least 16 joint refinement proposals within 64 total"
         if evidence["portfolio"].get("automatic_research", {}).get("version")

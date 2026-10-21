@@ -83,7 +83,7 @@ function duration(row: Pick<StudyActivityRow, 'started_at' | 'finished_at'>) {
 
 function proposalLabel(index: number, recipeVersion?: string) {
   if (
-    recipeVersion === 'automatic-hypotheses-v15' &&
+    ['automatic-hypotheses-v15', 'automatic-hypotheses-v16'].includes(recipeVersion ?? '') &&
     Number.isInteger(index) &&
     index >= 272 &&
     index < 408
@@ -98,6 +98,7 @@ function proposalLabel(index: number, recipeVersion?: string) {
     'automatic-hypotheses-v13',
     'automatic-hypotheses-v14',
     'automatic-hypotheses-v15',
+    'automatic-hypotheses-v16',
   ].includes(recipeVersion ?? '')
     ? 68
     : recipeVersion === 'automatic-hypotheses-v10'
@@ -113,6 +114,7 @@ function proposalLabel(index: number, recipeVersion?: string) {
       'automatic-hypotheses-v13',
       'automatic-hypotheses-v14',
       'automatic-hypotheses-v15',
+      'automatic-hypotheses-v16',
     ].includes(recipeVersion ?? '')
   )
     return { label: `Trial ${index + 1}` }
@@ -185,9 +187,11 @@ function Activity({
     'automatic-hypotheses-v13',
     'automatic-hypotheses-v14',
     'automatic-hypotheses-v15',
+    'automatic-hypotheses-v16',
   ].includes(recipeVersion ?? '')
   function setting(key: string, index: number) {
     if (key === 'portfolio.entry_priority') return 'Account entry priority'
+    if (key === 'portfolio.allocation_mode') return 'Portfolio allocation'
     const [strategyId, parameter] = key.split('.')
     const label = parameterLabels[parameter] ?? `Setting ${index + 1}`
     const strategy = strategies.find((item) => item.id === strategyId)
@@ -434,9 +438,15 @@ function Activity({
                       <dd className="mt-1 text-sm font-medium tabular-nums">
                         {key === 'portfolio.entry_priority' && typeof value === 'string'
                           ? entryPriorityLabel(value)
-                          : finite(value)
-                            ? String(value)
-                            : '—'}
+                          : key === 'portfolio.allocation_mode'
+                            ? value === 'prior60_cluster_inverse_vol'
+                              ? 'Cluster inverse volatility · new entries'
+                              : value === 'original'
+                                ? 'Original allocation'
+                                : '—'
+                            : finite(value)
+                              ? String(value)
+                              : '—'}
                         {finite(value) && key.endsWith('_pct') ? '%' : ''}
                       </dd>
                     </div>

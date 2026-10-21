@@ -318,11 +318,18 @@ describe('automatic research findings', () => {
   it.each([
     'research-execution-findings-v1',
     'research-execution-findings-v4',
+    'research-execution-findings-v5',
   ] as const)('keeps matched original-sizing diagnostics inside development details for %s', async (version) => {
     const data = findings()
-    data.version = 'automatic-hypotheses-v10'
+    data.version =
+      version === 'research-execution-findings-v5'
+        ? 'automatic-hypotheses-v16'
+        : 'automatic-hypotheses-v10'
     data.execution_research = {
       version,
+      ...(version === 'research-execution-findings-v5'
+        ? { selected_allocation_mode: 'prior60_cluster_inverse_vol' as const }
+        : {}),
       feature_id: 'sealed-feature',
       policy: 'Development only',
       risk_limits: {
@@ -355,6 +362,8 @@ describe('automatic research findings', () => {
     expect(table).not.toBeVisible()
     await userEvent.click(screen.getByText('Research details'))
     expect(table).toBeVisible()
+    if (version === 'research-execution-findings-v5')
+      expect(screen.getByText(/Portfolio allocation: Cluster inverse volatility/)).toBeVisible()
     expect(within(table).getAllByText('4.2%')).toHaveLength(4)
     expect(within(table).getAllByText('3.1%')).toHaveLength(4)
     expect(within(table).getByText('Final development fit')).toBeVisible()

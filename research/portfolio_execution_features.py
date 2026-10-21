@@ -215,12 +215,21 @@ def prepare(evidence, bundle, volume_records=None):
     if volume_records is None:
         volume_records = existing.get("volume_records", {}) if existing else {}
     _json_size(volume_records, MAX_BYTES)
+    allocation_on = any(
+        row.get("execution_policy", {}).get("version") == "research-execution-aware-v5"
+        for row in evidence["strategies"]
+    )
+    allocations = {}
     correlations, capacity = {}, {}
     day_cache = {}
     for key in required:
         symbol, day = key.rsplit("|", 1)
         if day not in day_cache:
             day_cache = {day: {s: _returns(record, day) for s, record in bundle["series"].items()}}
+        if allocation_on and day not in allocations:
+            from research.portfolio_allocation import build
+
+            allocations[day] = build(day_cache[day], day)
         feature = _correlation(symbol, day, bundle["series"], day_cache[day])
         correlations[key] = feature
         record = bundle["series"][symbol]
@@ -274,8 +283,35 @@ def prepare(evidence, bundle, volume_records=None):
             ):
                 reason = "correlation_unavailable: 60 aligned completed daily returns required"
             opportunities[strategy][key] = {"signal": row["signal"], "reason": reason}
+    allocation_marks = {}
+    if allocation_on:
+        snapshot = evidence["snapshot"]
+        # Cover every admitted timing branch, not just the original entry clock.
+        # These frozen opening marks reconcile fills; they are never features
+        # available to the classifier before the entry opening itself.
+        if sum(len(bars) for bars in snapshot["bars"].values()) > MAX_PAIRS:
+            raise ValueError("Allocation opening marks exceed their bounded allowance")
+        for symbol, bars in snapshot["bars"].items():
+            for key, bar in bars.items():
+                allocation_marks.setdefault(key, {})[symbol] = bar["open"]
+        if existing is not None:
+            retained_marks = existing.get("allocation_marks")
+            if not isinstance(retained_marks, dict):
+                raise ValueError("Saved allocation opening marks are missing")
+            # Replays and development slices retain the original union. Check
+            # every expected timestamp in this slice, including absent bars;
+            # an omitted or changed current mark must never pass as a subset.
+            keys = snapshot.get("timeline", snapshot["sessions"])
+            if any(allocation_marks.get(key, {}) != retained_marks.get(key, {}) for key in keys):
+                raise ValueError("Saved allocation opening marks changed their source")
+            allocation_marks = retained_marks
     result = _seal(
         {
+            **(
+                {"allocation": allocations, "allocation_marks": allocation_marks}
+                if allocation_on
+                else {}
+            ),
             "version": VERSION,
             "context_id": bundle["id"],
             "atr_id": atr["id"],
@@ -328,7 +364,7 @@ def attach(evidence):
             signal = {
                 k: v
                 for k, v in original.items()
-                if k not in ("entry_capacity", "entry_correlation")
+                if k not in ("entry_capacity", "entry_correlation", "entry_allocation")
             }
             saved = receipt["opportunities"].get(strategy["id"], {}).get(opportunity)
             if saved is None or saved["signal"] != _identity(original):
@@ -369,6 +405,23 @@ def attach(evidence):
                                 entry_session=day,
                                 decision_at=decision,
                                 required_symbols=[signal["symbol"]],
+                            )
+                        )
+                if policy.get("allocation_mode") == "prior60_cluster_inverse_vol":
+                    from research.portfolio_allocation import validate
+
+                    feature = receipt.get("allocation", {}).get(day)
+                    if feature is None or signal["symbol"] not in feature["weights"]:
+                        signal["research_exclusion"] = (
+                            "allocation_unavailable: 60 aligned completed daily returns required"
+                        )
+                    else:
+                        signal["entry_allocation"] = deepcopy(
+                            validate(
+                                feature,
+                                symbol=signal["symbol"],
+                                entry_session=day,
+                                decision_at=decision,
                             )
                         )
             signals.append(signal)

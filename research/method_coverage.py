@@ -20,6 +20,7 @@ from research.evaluation_basis import IDENTITIES
 from research.evaluation_basis import VERSION as BASIS_VERSION
 from research.joint_stock_market import markers
 from research.method_registry import (
+    ALLOCATION_RECIPE_VERSION,
     CAPACITY_RECIPE_VERSION,
     EXECUTION_RECIPE_VERSION,
     EXPANDED_RECIPE_VERSION,
@@ -88,7 +89,7 @@ def _manifest(manifest, calculation, binding, periods, context_id, recipe_versio
         or len(manifest["entries"])
         > (
             512
-            if recipe_version == SEED_RECIPE_VERSION
+            if recipe_version in (SEED_RECIPE_VERSION, ALLOCATION_RECIPE_VERSION)
             else 384
             if recipe_version
             in (
@@ -98,6 +99,7 @@ def _manifest(manifest, calculation, binding, periods, context_id, recipe_versio
                 CAPACITY_RECIPE_VERSION,
                 SENSITIVITY_RECIPE_VERSION,
                 SEED_RECIPE_VERSION,
+                ALLOCATION_RECIPE_VERSION,
             )
             else 320
         )
@@ -225,6 +227,7 @@ def _build(mandate, calculation, development_manifest):
             CAPACITY_RECIPE_VERSION,
             SENSITIVITY_RECIPE_VERSION,
             SEED_RECIPE_VERSION,
+            ALLOCATION_RECIPE_VERSION,
         )
         else MAX_METADATA_BYTES,
     )
@@ -239,6 +242,7 @@ def _build(mandate, calculation, development_manifest):
         CAPACITY_RECIPE_VERSION,
         SENSITIVITY_RECIPE_VERSION,
         SEED_RECIPE_VERSION,
+        ALLOCATION_RECIPE_VERSION,
     ):
         return {
             "version": VERSION,
@@ -256,6 +260,7 @@ def _build(mandate, calculation, development_manifest):
         CAPACITY_RECIPE_VERSION,
         SENSITIVITY_RECIPE_VERSION,
         SEED_RECIPE_VERSION,
+        ALLOCATION_RECIPE_VERSION,
     ):
         from research.expanded_stock_market import markers as materialize_markers
     by_hypothesis = {row["id"]: row for row in hypotheses}
@@ -269,6 +274,7 @@ def _build(mandate, calculation, development_manifest):
             CAPACITY_RECIPE_VERSION,
             SENSITIVITY_RECIPE_VERSION,
             SEED_RECIPE_VERSION,
+            ALLOCATION_RECIPE_VERSION,
         )
         else 64
         if recipe_version == EXECUTION_RECIPE_VERSION
@@ -276,7 +282,7 @@ def _build(mandate, calculation, development_manifest):
     )
     max_simulations = (
         512
-        if recipe_version == SEED_RECIPE_VERSION
+        if recipe_version in (SEED_RECIPE_VERSION, ALLOCATION_RECIPE_VERSION)
         else 384
         if recipe_version
         in (
@@ -286,6 +292,7 @@ def _build(mandate, calculation, development_manifest):
             CAPACITY_RECIPE_VERSION,
             SENSITIVITY_RECIPE_VERSION,
             SEED_RECIPE_VERSION,
+            ALLOCATION_RECIPE_VERSION,
         )
         else 320
     )
@@ -311,12 +318,16 @@ def _build(mandate, calculation, development_manifest):
     }
     periods = {row["name"] for row in mandate.get("validation", {}).get("periods", [])}
     expected_periods = {"fit1", "check1", "fit2", "check2", "fit3", "check3", "search", "final"}
-    if recipe_version in (SENSITIVITY_RECIPE_VERSION, SEED_RECIPE_VERSION):
+    if recipe_version in (
+        SENSITIVITY_RECIPE_VERSION,
+        SEED_RECIPE_VERSION,
+        ALLOCATION_RECIPE_VERSION,
+    ):
         from research.recommendation_sensitivity import _verified_plan
 
         scenarios = _verified_plan(search.get("recommendation_sensitivity"))
         expected_periods.update(row["name"] for row in scenarios if row["status"] == "available")
-    if recipe_version == SEED_RECIPE_VERSION:
+    if recipe_version in (SEED_RECIPE_VERSION, ALLOCATION_RECIPE_VERSION):
         from research.recommendation_seeds import policy
 
         seed_plan = search.get("search_seeds", {})
@@ -352,6 +363,7 @@ def _build(mandate, calculation, development_manifest):
         CAPACITY_RECIPE_VERSION,
         SENSITIVITY_RECIPE_VERSION,
         SEED_RECIPE_VERSION,
+        ALLOCATION_RECIPE_VERSION,
     ):
         from research.execution_search import axes as policy_axes
         from research.execution_search import descriptor as execution_descriptor
@@ -629,6 +641,7 @@ def _build(mandate, calculation, development_manifest):
         CAPACITY_RECIPE_VERSION,
         SENSITIVITY_RECIPE_VERSION,
         SEED_RECIPE_VERSION,
+        ALLOCATION_RECIPE_VERSION,
     ):
         result["limitations"].append(
             "Condition-family counts include execution and sizing variants; exit choices, sizing controls and hard limits are not additional indicator families"
@@ -639,6 +652,7 @@ def _build(mandate, calculation, development_manifest):
         CAPACITY_RECIPE_VERSION,
         SENSITIVITY_RECIPE_VERSION,
         SEED_RECIPE_VERSION,
+        ALLOCATION_RECIPE_VERSION,
     ):
         from research.execution_search import ENTRY_PRIORITIES, priority_counts
 
@@ -655,7 +669,7 @@ def _build(mandate, calculation, development_manifest):
             ],
             "count_basis": "Proposal-linked training accounts; reused proposals counted separately. Matched sizing controls and final accounts are excluded.",
         }
-    if recipe_version == SEED_RECIPE_VERSION:
+    if recipe_version in (SEED_RECIPE_VERSION, ALLOCATION_RECIPE_VERSION):
         result["limitations"].append(
             "Search-repeat fits can reference the same retained native account; per-fit evaluation links are not distinct calculations or independent samples. Skipped repeat fits are explicitly not run."
         )

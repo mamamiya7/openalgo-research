@@ -95,7 +95,8 @@ def plan(evidence, max_evaluations):
     automatic = portfolio.get("automatic_research") if isinstance(portfolio, dict) else None
     maximum = (
         512
-        if isinstance(automatic, dict) and automatic.get("version") == "automatic-hypotheses-v15"
+        if isinstance(automatic, dict)
+        and automatic.get("version") in ("automatic-hypotheses-v15", "automatic-hypotheses-v16")
         else EXECUTION_MAX_EVALUATIONS
         if isinstance(automatic, dict)
         and automatic.get("version")
@@ -106,6 +107,7 @@ def plan(evidence, max_evaluations):
             "automatic-hypotheses-v13",
             "automatic-hypotheses-v14",
             "automatic-hypotheses-v15",
+            "automatic-hypotheses-v16",
         )
         else MAX_EVALUATIONS
     )

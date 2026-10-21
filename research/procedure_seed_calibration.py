@@ -26,10 +26,12 @@ _SEEDS = (
 )
 
 
-def seed_plan(index):
+def seed_plan(index, *, recipe_version="automatic-hypotheses-v15"):
     """Return one sealed, outcome-independent programme from a fixed small set."""
     if type(index) is not int or not 0 <= index < len(_SEEDS):
         raise ValueError("Choose a declared offline sampler programme index")
+    if recipe_version not in ("automatic-hypotheses-v15", "automatic-hypotheses-v16"):
+        raise ValueError("Choose a declared offline recipe version")
     body = {
         "version": VERSION,
         "scope": "offline_full_procedure_seed_qualification",
@@ -40,6 +42,8 @@ def seed_plan(index):
         "repeat_fits": list(FITS[4:]),
         "limitation": LIMITATION,
     }
+    if recipe_version == "automatic-hypotheses-v16":
+        body.update(version="research-procedure-seed-calibration-v2", recipe_version=recipe_version)
     return {**body, "id": fingerprint(body)}
 
 
@@ -47,7 +51,9 @@ def verify_seed_plan(plan):
     """Reject changed/resealed programmes, extra fields and implicit seed casts."""
     if not isinstance(plan, dict):
         raise ValueError("Offline sampler programme must be a sealed declaration")
-    expected = seed_plan(plan.get("index"))
+    expected = seed_plan(
+        plan.get("index"), recipe_version=plan.get("recipe_version", "automatic-hypotheses-v15")
+    )
     try:
         actual_id = fingerprint({key: value for key, value in plan.items() if key != "id"})
     except (TypeError, ValueError, OverflowError) as error:

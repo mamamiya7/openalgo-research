@@ -22,6 +22,7 @@ SUPPORTED_RECIPES = (
     "automatic-hypotheses-v13",
     "automatic-hypotheses-v14",
     "automatic-hypotheses-v15",
+    "automatic-hypotheses-v16",
 )
 
 
@@ -41,6 +42,7 @@ def _complete(calculation):
             "automatic-hypotheses-v13",
             "automatic-hypotheses-v14",
             "automatic-hypotheses-v15",
+            "automatic-hypotheses-v16",
         )
         else 64
         if calculation.get("version") == "automatic-hypotheses-v10"

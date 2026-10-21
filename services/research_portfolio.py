@@ -128,6 +128,7 @@ def resolve_inputs(store, owner, request):
                 "automatic-hypotheses-v13",
                 "automatic-hypotheses-v14",
                 "automatic-hypotheses-v15",
+                "automatic-hypotheses-v16",
             )
             and receipt["symbol_count"] > 200
         ):
@@ -345,6 +346,7 @@ def replay_inputs(store, owner, job_id, *, trial_id=None, period="selection"):
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
         "automatic-hypotheses-v15",
+        "automatic-hypotheses-v16",
     ):
         marker = selected[0].get("entry_condition")
         selected_conditions = deepcopy(marker) if marker else None
@@ -717,6 +719,7 @@ def run(
             "automatic-hypotheses-v13",
             "automatic-hypotheses-v14",
             "automatic-hypotheses-v15",
+            "automatic-hypotheses-v16",
         )
         or bool(evidence.get("execution_features"))
         or any(
@@ -725,7 +728,8 @@ def run(
         )
     )
     portfolio_features_required = any(
-        row.get("execution_policy", {}).get("version") == "research-execution-aware-v4"
+        row.get("execution_policy", {}).get("version")
+        in ("research-execution-aware-v4", "research-execution-aware-v5")
         for row in portfolio["strategies"]
     )
     if saved and saved.get("phase") in (
@@ -779,6 +783,7 @@ def run(
                 "automatic-hypotheses-v13",
                 "automatic-hypotheses-v14",
                 "automatic-hypotheses-v15",
+                "automatic-hypotheses-v16",
             )
             else _prepare_prices
         )
@@ -838,6 +843,7 @@ def run(
                 "automatic-hypotheses-v13",
                 "automatic-hypotheses-v14",
                 "automatic-hypotheses-v15",
+                "automatic-hypotheses-v16",
             )
             or execution_features_required
             or portfolio_features_required
@@ -965,6 +971,7 @@ def run(
         research_mandate = None
         if portfolio["automatic_research"]["version"] in HYPOTHESIS_VERSIONS:
             from research.automatic_hypotheses import (
+                ALLOCATION_VERSION,
                 CAPACITY_VERSION,
                 EXECUTION_VERSION,
                 JOINT_VERSION,
@@ -996,6 +1003,7 @@ def run(
                 CAPACITY_VERSION,
                 SENSITIVITY_VERSION,
                 SEED_VERSION,
+                ALLOCATION_VERSION,
             ):
                 from research.automatic_walk_forward import run as automatic_run
 
@@ -1016,6 +1024,7 @@ def run(
                     CAPACITY_VERSION,
                     SENSITIVITY_VERSION,
                     SEED_VERSION,
+                    ALLOCATION_VERSION,
                 )
                 and saved_calculation
                 and saved_development is None
@@ -1045,6 +1054,7 @@ def run(
                         CAPACITY_VERSION,
                         SENSITIVITY_VERSION,
                         SEED_VERSION,
+                        ALLOCATION_VERSION,
                     )
                     else "automatic_stock_features"
                 )
@@ -1124,6 +1134,7 @@ def run(
                             "automatic-hypotheses-v13",
                             "automatic-hypotheses-v14",
                             "automatic-hypotheses-v15",
+                            "automatic-hypotheses-v16",
                         )
                         else {}
                     ),

@@ -32,6 +32,8 @@ need → drill into the specific file. Don't load everything at once.
 | Search-seed stability and controlled false-recommendation calibration | [research/SEARCH_SEEDS_20261021.md](research/SEARCH_SEEDS_20261021.md) · [research/SEARCH_CALIBRATION_PROTOCOL.md](research/SEARCH_CALIBRATION_PROTOCOL.md) |
 | Native synthetic full-procedure calibration and whole-procedure sampler checks | [research/NATIVE_CALIBRATION_20261021.md](research/NATIVE_CALIBRATION_20261021.md) |
 
+| Portfolio-wide allocation and measured native runtime | [research/PORTFOLIO_ALLOCATION_20261021.md](research/PORTFOLIO_ALLOCATION_20261021.md) � [runtime](research/PORTFOLIO_RUNTIME_20261021.md) |
+
 ## Install, deploy & operate
 
 | Topic | Entry point |

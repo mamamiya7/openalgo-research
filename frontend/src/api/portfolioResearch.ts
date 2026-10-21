@@ -33,6 +33,8 @@ export interface ExecutionPolicy {
     | 'research-execution-aware-v2'
     | 'research-execution-aware-v3'
     | 'research-execution-aware-v4'
+    | 'research-execution-aware-v5'
+  allocation_mode?: 'original' | 'prior60_cluster_inverse_vol'
   capacity_mode?: 'disabled' | 'prior20_broker_reported'
   correlation_mode?: 'disabled' | 'prior60_positive_080'
   entry_priority?: 'source' | 'reversed_source' | 'lower_stop_risk'
@@ -392,6 +394,7 @@ export interface PortfolioRequest {
       | 'automatic-hypotheses-v13'
       | 'automatic-hypotheses-v14'
       | 'automatic-hypotheses-v15'
+      | 'automatic-hypotheses-v16'
   }
   entry_conditions?: EntryConditions
   optimization?: {
@@ -653,6 +656,10 @@ export interface AutomaticResearchFindings {
       | 'research-execution-findings-v2'
       | 'research-execution-findings-v3'
       | 'research-execution-findings-v4'
+      | 'research-execution-findings-v5'
+    allocation_modes?: Array<NonNullable<ExecutionPolicy['allocation_mode']>>
+    selected_allocation_mode?: ExecutionPolicy['allocation_mode']
+    allocation_policy?: string
     entry_priorities?: Array<NonNullable<ExecutionPolicy['entry_priority']>>
     selected_entry_priority?: ExecutionPolicy['entry_priority']
     risk_limits: PortfolioRiskLimits

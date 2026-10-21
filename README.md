@@ -90,7 +90,12 @@ The locally activated [v15 search-repeat increment](docs/research/SEARCH_SEEDS_2
 whether a supported setup depends on one lucky search path. Two additional
 fixed-seed searches reuse the same prices and matching account calculations;
 they can reject the primary choice but cannot pick a luckier replacement.
-New automatic studies use v15. The separate [controlled calibration protocol](docs/research/SEARCH_CALIBRATION_PROTOCOL.md)
+New automatic studies on this development branch use
+[v16 portfolio-wide allocation](docs/research/PORTFOLIO_ALLOCATION_20261021.md):
+related stocks share an exposure budget, with volatility-based sizing within
+each group. Search and risk budgets stay fixed. Saved v15 and earlier studies
+keep their original recipes. The separate
+[controlled calibration protocol](docs/research/SEARCH_CALIBRATION_PROTOCOL.md)
 measures false recommendations under declared test models, not the probability
 that a user's strategy will profit. Public release ZIPs remain unchanged.
 

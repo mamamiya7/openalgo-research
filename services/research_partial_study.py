@@ -69,6 +69,7 @@ def _search_inputs(evidence, calculation):
             "automatic-hypotheses-v13",
             "automatic-hypotheses-v14",
             "automatic-hypotheses-v15",
+            "automatic-hypotheses-v16",
         ):
             from research.automatic_hypotheses import checkpoint_rows
 
@@ -90,6 +91,7 @@ def _search_inputs(evidence, calculation):
                             "automatic-hypotheses-v13",
                             "automatic-hypotheses-v14",
                             "automatic-hypotheses-v15",
+                            "automatic-hypotheses-v16",
                         )
                         else "automatic_stock_features"
                     ],
@@ -109,10 +111,11 @@ def _search_inputs(evidence, calculation):
                     "automatic-hypotheses-v13",
                     "automatic-hypotheses-v14",
                     "automatic-hypotheses-v15",
+                    "automatic-hypotheses-v16",
                 )
                 else "search"
             )
-            if version == "automatic-hypotheses-v15":
+            if version in ("automatic-hypotheses-v15", "automatic-hypotheses-v16"):
                 from research.automatic_walk_forward import data_period
 
                 period = data_period(period)
@@ -199,6 +202,7 @@ def _validated_rows(evidence, saved, completed):
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
         "automatic-hypotheses-v15",
+        "automatic-hypotheses-v16",
     ):
         from research.automatic_hypotheses import checkpoint_rows
 
@@ -215,6 +219,7 @@ def _validated_rows(evidence, saved, completed):
                 "automatic-hypotheses-v13",
                 "automatic-hypotheses-v14",
                 "automatic-hypotheses-v15",
+                "automatic-hypotheses-v16",
             )
             else saved["trials"]
         )

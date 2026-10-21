@@ -47,6 +47,7 @@ export function MethodCoverage({
       'automatic-hypotheses-v13',
       'automatic-hypotheses-v14',
       'automatic-hypotheses-v15',
+      'automatic-hypotheses-v16',
     ].includes(recipeVersion ?? '')
   )
     return null

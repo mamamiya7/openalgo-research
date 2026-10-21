@@ -25,6 +25,7 @@ TURNOVER_VERSION = "automatic-hypotheses-v12"
 CAPACITY_VERSION = "automatic-hypotheses-v13"
 SENSITIVITY_VERSION = "automatic-hypotheses-v14"
 SEED_VERSION = "automatic-hypotheses-v15"
+ALLOCATION_VERSION = "automatic-hypotheses-v16"
 WALK_FORWARD_VERSIONS = (
     WALK_FORWARD_VERSION,
     METHOD_VERSION,
@@ -34,6 +35,7 @@ WALK_FORWARD_VERSIONS = (
     CAPACITY_VERSION,
     SENSITIVITY_VERSION,
     SEED_VERSION,
+    ALLOCATION_VERSION,
 )
 HYPOTHESIS_VERSIONS = (
     HYPOTHESIS_VERSION,
@@ -50,6 +52,7 @@ HYPOTHESIS_VERSIONS = (
     CAPACITY_VERSION,
     SENSITIVITY_VERSION,
     SEED_VERSION,
+    ALLOCATION_VERSION,
 )
 PERIODS = ("search", "check1", "check2", "final")
 MIN_SESSIONS = 100
@@ -69,7 +72,14 @@ def check_signal_span(portfolio, receipt, *, interval):
     ).days + 1
     minimum = (
         150
-        if version in (TURNOVER_VERSION, CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION)
+        if version
+        in (
+            TURNOVER_VERSION,
+            CAPACITY_VERSION,
+            SENSITIVITY_VERSION,
+            SEED_VERSION,
+            ALLOCATION_VERSION,
+        )
         else 20
         if version in HYPOTHESIS_VERSIONS
         else MIN_SESSIONS
@@ -169,6 +179,7 @@ def automatic_portfolio(portfolio):
             CAPACITY_VERSION,
             SENSITIVITY_VERSION,
             SEED_VERSION,
+            ALLOCATION_VERSION,
         ):
             search["trailing_pct"] = _range(cfg["trailing_pct"], 99)
         row["search"] = search
@@ -199,9 +210,10 @@ def automatic_portfolio(portfolio):
         CAPACITY_VERSION,
         SENSITIVITY_VERSION,
         SEED_VERSION,
+        ALLOCATION_VERSION,
     ):
         result["optimization"]["trials"] = 272
-    if result["automatic_research"]["version"] == SEED_VERSION:
+    if result["automatic_research"]["version"] in (SEED_VERSION, ALLOCATION_VERSION):
         result["optimization"]["trials"] = 408
     return result
 
@@ -259,6 +271,7 @@ def compile_recipe(evidence):
             CAPACITY_VERSION,
             SENSITIVITY_VERSION,
             SEED_VERSION,
+            ALLOCATION_VERSION,
         ) and (
             periods["search"]["sessions"] < 60
             or sum(fold["test"]["sessions"] for fold in walk_forward["folds"]) < 60
@@ -290,6 +303,7 @@ def compile_recipe(evidence):
         CAPACITY_VERSION,
         SENSITIVITY_VERSION,
         SEED_VERSION,
+        ALLOCATION_VERSION,
     ):
         baseline_keys += ("execution_policy",)
     payload = {
@@ -387,6 +401,7 @@ def compile_recipe(evidence):
             CAPACITY_VERSION,
             SENSITIVITY_VERSION,
             SEED_VERSION,
+            ALLOCATION_VERSION,
         )
         if joint:
             from research.joint_stock_market import catalog
@@ -399,6 +414,7 @@ def compile_recipe(evidence):
             CAPACITY_VERSION,
             SENSITIVITY_VERSION,
             SEED_VERSION,
+            ALLOCATION_VERSION,
         ):
             from research.expanded_stock_market import catalog
         stock = (
@@ -458,6 +474,7 @@ def compile_recipe(evidence):
                 CAPACITY_VERSION,
                 SENSITIVITY_VERSION,
                 SEED_VERSION,
+                ALLOCATION_VERSION,
             ):
                 from research.expanded_stock_market import recipe as joint_recipe
 
@@ -505,6 +522,7 @@ def compile_recipe(evidence):
             CAPACITY_VERSION,
             SENSITIVITY_VERSION,
             SEED_VERSION,
+            ALLOCATION_VERSION,
         ):
             from research.execution_search import descriptor as execution_descriptor
 
@@ -527,6 +545,7 @@ def compile_recipe(evidence):
                 CAPACITY_VERSION,
                 SENSITIVITY_VERSION,
                 SEED_VERSION,
+                ALLOCATION_VERSION,
             ):
                 payload["budget"].update(proposals=272, proposals_per_fit=68)
                 payload["policies"]["entry_priority"] = payload["execution_research"][
@@ -537,13 +556,19 @@ def compile_recipe(evidence):
             CAPACITY_VERSION,
             SENSITIVITY_VERSION,
             SEED_VERSION,
+            ALLOCATION_VERSION,
         ):
             from research.recommendation_plan import policy as recommendation_policy
 
             payload["recommendation_checks"] = recommendation_policy()
             payload["budget"].update(max_neighbors=4, max_recommendation_accounts=6)
             payload["policies"]["turnover"] = payload["execution_research"]["turnover_policy"]
-        if payload["version"] in (CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION):
+        if payload["version"] in (
+            CAPACITY_VERSION,
+            SENSITIVITY_VERSION,
+            SEED_VERSION,
+            ALLOCATION_VERSION,
+        ):
             payload["portfolio_execution_features_id"] = evidence.get(
                 "portfolio_execution_features", {}
             ).get("id")
@@ -552,7 +577,7 @@ def compile_recipe(evidence):
                 "correlation": "Fixed positive Pearson>=0.8 on exactly60 prior completed aligned daily returns; new-entry clipping only, no negative-correlation credit or held-position rebalancing",
                 "reference": "Original trade settings under the same newly declared portfolio constraints and common data mask; older v12 accounts are separate evidence",
             }
-        if payload["version"] in (SENSITIVITY_VERSION, SEED_VERSION):
+        if payload["version"] in (SENSITIVITY_VERSION, SEED_VERSION, ALLOCATION_VERSION):
             from research.recommendation_sensitivity import build_plan
 
             sensitivity = build_plan(evidence, periods["search"])
@@ -564,7 +589,7 @@ def compile_recipe(evidence):
                         key: scenario[key] for key in ("from", "to", "sessions")
                     }
             payload["policies"]["sensitivity"] = sensitivity["policy"]
-        if payload["version"] == SEED_VERSION:
+        if payload["version"] in (SEED_VERSION, ALLOCATION_VERSION):
             from research.automatic_timing import axes as timing_axes
             from research.automatic_trailing import axes as trailing_axes
             from research.automatic_walk_forward import _screening_program
@@ -581,7 +606,7 @@ def compile_recipe(evidence):
             }
             screening_count = len(
                 _screening_program(
-                    SEED_VERSION,
+                    payload["version"],
                     payload["hypothesis_catalog"],
                     axes,
                     payload["timing_research"],
@@ -597,6 +622,14 @@ def compile_recipe(evidence):
                 max_seed_accounts=136,
             )
             payload["policies"]["search_seeds"] = payload["search_seeds"]["policy"]
+        if payload["version"] == ALLOCATION_VERSION:
+            payload["policies"]["allocation"] = payload["execution_research"]["allocation_policy"]
+            payload["policies"]["portfolio_constraints"]["allocation"] = payload[
+                "execution_research"
+            ]["allocation_policy"]
+            payload["policies"]["portfolio_constraints"]["reference"] = (
+                "Original allocation under the same capital, fixed hard risk limits, costs, capacity/correlation rules and common source data; new entry-only allocation policy is a separate v16 numerical contract"
+            )
         if validation_mode == "exploratory_only":
             payload["policies"]["final"] = (
                 "No untouched later period; exploratory ranking only, never a validated recommendation"

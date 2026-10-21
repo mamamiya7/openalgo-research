@@ -316,9 +316,11 @@ they do not prove optimal future performance.
 
 ### Next coding increment and release gates
 
-Start **B, portfolio-wide allocation**, by profiling representative native
-account, checkpoint and report costs. Keep the frozen v15 baseline and declared
-risk/capital fixed. Introduce one simple causal covariance/cluster policy with
+The first **B, portfolio-wide allocation** slice is implemented as
+[v16](PORTFOLIO_ALLOCATION_20261021.md), after the
+[measured runtime profile](PORTFOLIO_RUNTIME_20261021.md). The original allocation
+reference, declared risk/capital and 408/512 workload ceilings stay fixed.
+It introduces one simple causal covariance/cluster policy with
 explicit missing-data and singular-matrix behaviour before broader sector/factor
 or continuous-rebalancing work. Reuse native execution and genuine audits;
 verify actual fills, cash competition, capacity where admitted, turnover and

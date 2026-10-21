@@ -119,9 +119,15 @@ def assess(report, features):
         }
         _json_size(subset, MAX_BYTES)
         if (
-            report.get("policy_version") != "vectorbt-joint-causal-bars-v5"
+            report.get("policy_version")
+            not in ("vectorbt-joint-causal-bars-v5", "vectorbt-joint-causal-bars-v6")
             or execution.get("engine") != "vectorbt"
-            or execution.get("adapter_version") != "vectorbt-portfolio-adapter-v5"
+            or execution.get("adapter_version")
+            != (
+                "vectorbt-portfolio-adapter-v6"
+                if report.get("policy_version") == "vectorbt-joint-causal-bars-v6"
+                else "vectorbt-portfolio-adapter-v5"
+            )
             or execution.get("shared_cash") is not True
         ):
             raise ValueError("constraint_native_policy_invalid")
@@ -135,9 +141,15 @@ def assess(report, features):
             ):
                 raise ValueError("constraint_strategy_identity_invalid")
             policy = normalize_policy(strategy.get("execution_policy"))
-            if policy != strategy.get("execution_policy") or policy["version"] != CAPACITY_VERSION:
+            if policy != strategy.get("execution_policy") or policy["version"] != (
+                "research-execution-aware-v5"
+                if report.get("policy_version") == "vectorbt-joint-causal-bars-v6"
+                else CAPACITY_VERSION
+            ):
                 raise ValueError("constraint_strategy_policy_invalid")
             current_modes = {key: policy[key] for key in ("capacity_mode", "correlation_mode")}
+            if policy["version"] == "research-execution-aware-v5":
+                current_modes["allocation_mode"] = policy["allocation_mode"]
             if modes and (modes != current_modes or limits != policy["risk_limits"]):
                 raise ValueError("constraint_account_policy_mismatch")
             modes, limits = current_modes, policy["risk_limits"]
@@ -146,6 +158,12 @@ def assess(report, features):
             execution.get(key) != value for key, value in modes.items()
         ):
             raise ValueError("constraint_declared_limits_mismatch")
+        allocation_on = modes.get("allocation_mode") == "prior60_cluster_inverse_vol"
+        if (
+            "allocation_mode" in modes
+            and execution.get("allocation", {}).get("version") != "research-cluster-allocation-v1"
+        ):
+            raise ValueError("constraint_allocation_declaration_mismatch")
         capacity_on = modes["capacity_mode"] == "prior20_broker_reported"
         correlation_on = modes["correlation_mode"] == "prior60_positive_080"
         if capacity_on:
@@ -186,7 +204,12 @@ def assess(report, features):
             if isinstance(reason, str) and reason.startswith("Portfolio entry evidence"):
                 raise ValueError("constraint_skipped_feature_identity_invalid")
             unavailable = isinstance(reason, str) and any(
-                code in reason for code in ("capacity_unavailable", "correlation_unavailable")
+                code in reason
+                for code in (
+                    "capacity_unavailable",
+                    "correlation_unavailable",
+                    "allocation_unavailable",
+                )
             )
             if unavailable:
                 counts["unavailable_entries"] += 1
@@ -237,18 +260,57 @@ def assess(report, features):
                 buys.append(order)
         if len(buys) != len(entered) or {order["col"] for order in buys} != set(entered):
             raise ValueError("constraint_native_buys_do_not_match_entries")
-        held_by_order, positions = {}, {}
+        held_by_order, positions, allocation_before = {}, {}, {}
+        audit_cash = (
+            _number(report.get("config", {}).get("initial_capital"), positive=True)
+            if allocation_on
+            else None
+        )
         for order in sorted(orders, key=lambda item: item["id"]):
             col = order["col"]
             if order["side"] == 0:
                 held_by_order[order["id"]] = sorted({entered[held][2] for held in positions})
+                if allocation_on:
+                    row, day, symbol, _ = entered[col]
+                    point = features.get("allocation", {}).get(day)
+                    from research.portfolio_allocation import validate as validate_allocation
+
+                    validate_allocation(
+                        point,
+                        symbol=symbol,
+                        entry_session=day,
+                        decision_at=row.get("entry_timestamp") or day + "T00:00:00+05:30",
+                        required_symbols=held_by_order[order["id"]],
+                    )
+                    cluster = next(group for group in point["clusters"] if symbol in group)
+                    marks = features.get("allocation_marks", {}).get(
+                        row.get("entry_timestamp") or day, {}
+                    )
+                    if not _same(marks.get(symbol), row["entry_raw_price"]):
+                        raise ValueError("constraint_allocation_entry_mark_mismatch")
+                    values = [
+                        (
+                            entered[held][2],
+                            size * _number(marks.get(entered[held][2]), positive=True),
+                        )
+                        for held, size in positions.items()
+                    ]
+                    allocation_before[order["id"]] = {
+                        "equity": audit_cash + sum(value for _, value in values),
+                        "symbol": sum(value for name, value in values if name == symbol),
+                        "cluster": sum(value for name, value in values if name in cluster),
+                    }
                 if col in positions:
                     raise ValueError("constraint_native_duplicate_open_lot")
                 positions[col] = order["size"]
+                if allocation_on:
+                    audit_cash -= order["size"] * order["price"] + order["fees"]
             else:
                 if col not in positions or positions[col] != order["size"]:
                     raise ValueError("constraint_native_sell_does_not_match_open_lot")
                 del positions[col]
+                if allocation_on:
+                    audit_cash += order["size"] * order["price"] - order["fees"]
         daily, bought_columns = {}, set()
         for order in sorted(buys, key=lambda item: item["id"]):
             col = order["col"]
@@ -334,6 +396,54 @@ def assess(report, features):
                 observed = _number(details.get("correlated_capacity_shares"))
                 if not _same(observed, expected) or quantity > math.floor(observed + 1e-9):
                     raise ValueError("constraint_correlated_budget_or_quantity_invalid")
+            if allocation_on:
+                from research.portfolio_allocation import validate as validate_allocation
+
+                feature = validate_allocation(
+                    features.get("allocation", {}).get(day),
+                    symbol=symbol,
+                    entry_session=day,
+                    decision_at=decision,
+                    required_symbols=held_by_order[order["id"]],
+                )
+                cluster = next(group for group in feature["clusters"] if symbol in group)
+                weight = feature["weights"][symbol]
+                if (
+                    details.get("allocation_feature_id") != feature["id"]
+                    or details.get("allocation_cluster") != cluster
+                    or not _same(details.get("allocation_weight"), weight)
+                ):
+                    raise ValueError("constraint_allocation_feature_mismatch")
+                observed_before = allocation_before[order["id"]]
+                if (
+                    not _same(details["opening_equity"], observed_before["equity"])
+                    or not _same(details.get("symbol_before"), observed_before["symbol"])
+                    or not _same(
+                        details.get("allocation_cluster_before"), observed_before["cluster"]
+                    )
+                ):
+                    raise ValueError("constraint_allocation_held_marks_mismatch")
+                friction = raw * (1 + slip) * (1 + fee) - raw
+                for name, fraction, existing in (
+                    (
+                        "symbol",
+                        limits["max_gross_exposure_pct"] / 100 * weight,
+                        _number(details.get("symbol_before")),
+                    ),
+                    (
+                        "cluster",
+                        limits["max_gross_exposure_pct"] / 100 / len(feature["clusters"]),
+                        _number(details.get("allocation_cluster_before")),
+                    ),
+                ):
+                    expected = max(
+                        0,
+                        (details["opening_equity"] * fraction - existing)
+                        / (raw + fraction * friction),
+                    )
+                    observed = _number(details.get("allocation_" + name + "_capacity_shares"))
+                    if not _same(expected, observed) or quantity > math.floor(observed + 1e-9):
+                        raise ValueError("constraint_allocation_budget_or_quantity_invalid")
         if capacity_on:
             receipts = execution["capacity"].get("daily_symbols")
             if not isinstance(receipts, list) or len(receipts) > MAX_ROWS:

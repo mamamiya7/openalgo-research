@@ -278,6 +278,7 @@ def prepare(store, owner, study_job_id, config_id):
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
         "automatic-hypotheses-v15",
+        "automatic-hypotheses-v16",
     ):
         expected_basis = selected.get("evaluation_basis")
         if not isinstance(expected_basis, dict) or expected_basis.get("status") != "verified":
