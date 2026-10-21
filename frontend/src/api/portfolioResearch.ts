@@ -391,6 +391,7 @@ export interface PortfolioRequest {
       | 'automatic-hypotheses-v12'
       | 'automatic-hypotheses-v13'
       | 'automatic-hypotheses-v14'
+      | 'automatic-hypotheses-v15'
   }
   entry_conditions?: EntryConditions
   optimization?: {
@@ -605,6 +606,25 @@ export interface AutomaticResearchFindings {
       }>
     }
     limitations?: string[]
+    search_seeds?: {
+      version: 'research-search-seed-evidence-v1'
+      status: 'supported' | 'not_supported' | 'insufficient' | 'not_run' | 'unsupported'
+      qualified: boolean
+      reasons: string[]
+      runs?: Array<{
+        seed: number
+        config_id: string
+        proposals: number
+        unique_accounts: number
+        return_pct: number
+        max_drawdown_pct: number
+        edge_pct: number
+        lower_edge_pct: number | null
+        evidence_id: string
+      }>
+      min_edge_fraction?: number | null
+      limitations: string[]
+    }
     sensitivity?: {
       version: 'research-recommendation-sensitivity-v1'
       status: 'supported' | 'not_supported' | 'insufficient' | 'unsupported' | 'not_run'

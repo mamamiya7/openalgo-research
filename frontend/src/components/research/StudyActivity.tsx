@@ -82,11 +82,22 @@ function duration(row: Pick<StudyActivityRow, 'started_at' | 'finished_at'>) {
 }
 
 function proposalLabel(index: number, recipeVersion?: string) {
+  if (
+    recipeVersion === 'automatic-hypotheses-v15' &&
+    Number.isInteger(index) &&
+    index >= 272 &&
+    index < 408
+  )
+    return {
+      label: `Search repeat ${Math.floor((index - 272) / 68) + 1} · Trial ${((index - 272) % 68) + 1}`,
+      global: `Proposal ${index + 1}`,
+    }
   const perFit = [
     'automatic-hypotheses-v11',
     'automatic-hypotheses-v12',
     'automatic-hypotheses-v13',
     'automatic-hypotheses-v14',
+    'automatic-hypotheses-v15',
   ].includes(recipeVersion ?? '')
     ? 68
     : recipeVersion === 'automatic-hypotheses-v10'
@@ -101,6 +112,7 @@ function proposalLabel(index: number, recipeVersion?: string) {
       'automatic-hypotheses-v12',
       'automatic-hypotheses-v13',
       'automatic-hypotheses-v14',
+      'automatic-hypotheses-v15',
     ].includes(recipeVersion ?? '')
   )
     return { label: `Trial ${index + 1}` }
@@ -172,6 +184,7 @@ function Activity({
     'automatic-hypotheses-v12',
     'automatic-hypotheses-v13',
     'automatic-hypotheses-v14',
+    'automatic-hypotheses-v15',
   ].includes(recipeVersion ?? '')
   function setting(key: string, index: number) {
     if (key === 'portfolio.entry_priority') return 'Account entry priority'

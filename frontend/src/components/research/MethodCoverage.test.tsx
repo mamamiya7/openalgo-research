@@ -287,6 +287,29 @@ describe('recorded method coverage', () => {
     expect(screen.queryByText(/0 method families tested/)).not.toBeInTheDocument()
   })
 
+  it('names repeat fits and distinguishes skipped work from pending work', async () => {
+    const data = receipt()
+    data.coverage!.source.recipe_version = 'automatic-hypotheses-v15'
+    data.coverage!.registry.recipe_version = 'automatic-hypotheses-v15'
+    data.coverage!.fits.push({
+      id: 'search_seed1',
+      status: 'not_run',
+      proposals: 0,
+      proposal_limit: 68,
+      families: [],
+    })
+    vi.mocked(researchMethodCoverage.get).mockResolvedValue(data)
+    mount({ recipeVersion: 'automatic-hypotheses-v15' })
+    await open()
+    const select = await screen.findByRole('combobox', { name: 'Method checks for' })
+    expect(
+      within(select).getByRole('option', { name: 'Search repeat 1 (not needed)' })
+    ).toBeInTheDocument()
+    await userEvent.selectOptions(select, 'search_seed1')
+    expect(screen.getByText('Extra search not needed')).toBeVisible()
+    expect(researchMethodCoverage.get).toHaveBeenCalledTimes(1)
+  })
+
   it('preserves a server explanation for unavailable metadata without fake counts or retry loops', async () => {
     vi.mocked(researchMethodCoverage.get).mockResolvedValue({
       ...receipt(),

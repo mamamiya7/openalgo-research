@@ -33,6 +33,7 @@ function recordedWalkForward(findings: Findings): WalkForwardFindings | undefine
       'automatic-hypotheses-v12',
       'automatic-hypotheses-v13',
       'automatic-hypotheses-v14',
+      'automatic-hypotheses-v15',
     ].includes(findings.version) ||
     receipt?.version !== 'research-walk-forward-findings-v1' ||
     !receipt ||
@@ -249,6 +250,58 @@ function SymbolDateChecks({ findings }: { findings: Findings }) {
   )
 }
 
+function SearchRepeatChecks({ findings }: { findings: Findings }) {
+  const receipt = findings.recommendation_checks?.search_seeds
+  if (receipt?.version !== 'research-search-seed-evidence-v1') return null
+  return (
+    <section aria-label="Search repeat checks" className="space-y-2">
+      <p className="font-medium">Search repeat checks</p>
+      <p className="text-muted-foreground">
+        {receipt.status === 'not_run'
+          ? 'Earlier checks did not qualify settings, so extra searches were not needed.'
+          : receipt.status === 'supported' && receipt.qualified
+            ? 'Repeated searches supported the original development choice.'
+            : receipt.status === 'insufficient'
+              ? 'Not enough evidence from repeated searches to qualify stronger settings.'
+              : 'Repeated searches did not qualify stronger settings; the original remains the reference.'}
+      </p>
+      {receipt.runs && receipt.runs.length > 0 && (
+        <div className="overflow-x-auto">
+          <table aria-label="Repeated search comparison" className="w-full text-left tabular-nums">
+            <thead>
+              <tr className="text-muted-foreground">
+                <th className="p-2 font-medium">Search</th>
+                <th className="p-2 text-right font-medium">Return</th>
+                <th className="p-2 text-right font-medium">Max drawdown</th>
+              </tr>
+            </thead>
+            <tbody>
+              {receipt.runs.map((run, index) => (
+                <tr key={run.seed} className="border-t border-border/60">
+                  <th scope="row" className="p-2 font-normal">
+                    Search {index + 1}
+                  </th>
+                  <td className="p-2 text-right">{number(run.return_pct, '%')}</td>
+                  <td className="p-2 text-right">{number(run.max_drawdown_pct, '%')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {receipt.reasons.map((reason) => (
+        <p key={reason} className="text-muted-foreground">
+          {reason}
+        </p>
+      ))}
+      <p className="text-muted-foreground">
+        Same development dates, saved prices and limits. Repeats check search-path stability, not
+        the probability of future profit; they can reject a choice, never replace it.
+      </p>
+    </section>
+  )
+}
+
 export function AutomaticResearchFindings({
   findings,
   jobId,
@@ -338,6 +391,7 @@ export function AutomaticResearchFindings({
             'automatic-hypotheses-v12',
             'automatic-hypotheses-v13',
             'automatic-hypotheses-v14',
+            'automatic-hypotheses-v15',
           ].includes(findings.version) &&
             selectedSettings?.map((strategy) => (
               <p key={strategy.id} className="text-sm">
@@ -451,6 +505,7 @@ export function AutomaticResearchFindings({
                 Historical sensitivity only; this is not a probability of future profit.
               </p>
               <SymbolDateChecks findings={findings} />
+              <SearchRepeatChecks findings={findings} />
             </section>
           )}
           {walkForward ? (
@@ -483,6 +538,7 @@ export function AutomaticResearchFindings({
             'automatic-hypotheses-v12',
             'automatic-hypotheses-v13',
             'automatic-hypotheses-v14',
+            'automatic-hypotheses-v15',
           ].includes(findings.version) &&
             findings.execution_research &&
             [
@@ -568,7 +624,11 @@ export function AutomaticResearchFindings({
               Not included in this run: {findings.unsupported_families.join(', ')}.
             </p>
           )}
-          {['automatic-hypotheses-v13', 'automatic-hypotheses-v14'].includes(findings.version) && (
+          {[
+            'automatic-hypotheses-v13',
+            'automatic-hypotheses-v14',
+            'automatic-hypotheses-v15',
+          ].includes(findings.version) && (
             <p className="text-muted-foreground">
               Both settings use the same portfolio limits. Volume participation uses prior
               broker-reported history; it is a backtest assumption. Correlation limits new entries

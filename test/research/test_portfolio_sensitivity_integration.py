@@ -73,9 +73,14 @@ def test_recipe_freezes_prespecified_masks_bounds_and_mandate_before_scores():
 def test_full_service_checks_masks_before_final_resumes_and_rejects_changed_facts(
     app, client, monkeypatch
 ):
+    exercise_full_service(app, client, monkeypatch, prepared())
+
+
+def exercise_full_service(app, client, monkeypatch, value):
+    """Shared real-persistence journey, with explicitly controlled account maths."""
     from services.research_portfolio import run
 
-    value = prepared()
+    seed_version = value["automatic_recipe"]["version"] == "automatic-hypotheses-v15"
     original = deepcopy(value)
     store = app.extensions["research_store"]
     monkeypatch.setattr(
@@ -105,7 +110,7 @@ def test_full_service_checks_masks_before_final_resumes_and_rejects_changed_fact
         return {**body, "id": fingerprint(body)}
 
     monkeypatch.setattr("research.portfolio_constraint_evidence.assess", audit)
-    latest = prefix = None
+    latest = prefix = seed_prefix = None
     pause = True
     scenario_loss = False
     scenario_calls = []
@@ -155,15 +160,28 @@ def test_full_service_checks_masks_before_final_resumes_and_rejects_changed_fact
             final_choices.append((selected["config_id"], deepcopy(checks)))
             if not scenario_loss:
                 assert checks["sensitivity"]["status"] == "supported", checks
-                assert not selected["is_baseline"]
+                assert not selected["is_baseline"], checks
             _loss(report, capital, 0.4 if engine.calls[-1]["settings_id"] == baseline_id else 0.6)
         return report
 
     monkeypatch.setattr("research.connectors.vectorbt_portfolio.evaluate", account)
 
     def checkpoint(state, counts):
-        nonlocal latest
+        nonlocal latest, seed_prefix
         latest = state
+        if (
+            seed_version
+            and seed_prefix is None
+            and len(
+                (state.get("calculation") or {})
+                .get("fits", {})
+                .get("search_seed1", {})
+                .get("trials", [])
+            )
+            == 3
+        ):
+            seed_prefix = deepcopy(state)
+            raise Paused
 
     spec = {"portfolio": value["portfolio"], "versions": value["versions"]}
     kwargs = {
@@ -176,15 +194,39 @@ def test_full_service_checks_masks_before_final_resumes_and_rejects_changed_fact
     with pytest.raises(Paused):
         run(store, "research-test", value, spec, **kwargs)
     assert prefix is not None and not scenario_calls
-    result, _ = run(store, "research-test", value, spec, saved=prefix, **kwargs)
+    if seed_version:
+        with pytest.raises(Paused):
+            run(store, "research-test", value, spec, saved=prefix, **kwargs)
+        assert seed_prefix is not None
+    result, _ = run(
+        store, "research-test", value, spec, saved=seed_prefix if seed_version else prefix, **kwargs
+    )
     assert value == original
     findings = result["automatic_research"]
     sensitivity = findings["recommendation_checks"]["sensitivity"]
     assert sensitivity["status"] == "supported", sensitivity
     assert [row["name"] for row in sensitivity["scenarios"]] == list(NAMES)
     assert len(scenario_calls) == 8
-    assert findings["counts"]["proposals"] == 272
-    assert findings["counts"]["simulations"] <= 384
+    assert findings["counts"]["proposals"] == (408 if seed_version else 272)
+    assert findings["counts"]["simulations"] <= (512 if seed_version else 384)
+    if seed_version:
+        assert findings["recommendation_checks"]["search_seeds"]["status"] == "supported", findings[
+            "recommendation_checks"
+        ]
+        assert (
+            findings["selected_config_id"]
+            == latest["calculation"]["fits"]["search"]["selection"]["config_id"]
+        )
+        for name in ("search_seed1", "search_seed2"):
+            assert len(latest["calculation"]["fits"][name]["trials"]) == 68
+        first, second = (
+            latest["calculation"]["fits"][name]["trials"]
+            for name in ("search_seed1", "search_seed2")
+        )
+        screen = value["automatic_recipe"]["search_seeds"]["screening_proposals_per_search"]
+        assert [r["params"] for r in first[:screen]] == [r["params"] for r in second[:screen]]
+        assert [r["params"] for r in first[screen:]] != [r["params"] for r in second[screen:]]
+        assert len(result["experiment"]["trials"]) == 68
     assert findings["status"] != "supported", "Final loss cannot select or rescue the setup"
     assert final_choices and all(
         choice == findings["selected_config_id"] for choice, _ in final_choices
@@ -194,7 +236,9 @@ def test_full_service_checks_masks_before_final_resumes_and_rejects_changed_fact
     periods = [row["period"] for row in manifest["entries"].values()]
     assert all(periods.count(name) == 2 for name in NAMES)
     coverage = method_coverage(latest["research_mandate"], latest["calculation"], manifest)
-    assert coverage["source"]["recipe_version"] == SENSITIVITY_VERSION
+    assert coverage["source"]["recipe_version"] == value["automatic_recipe"]["version"]
+    if seed_version:
+        assert len(coverage["fits"]) == 6
     complete = deepcopy(latest)
     before = len(engine.calls)
     repeated, _ = run(store, "research-test", value, spec, saved=complete, **kwargs)
@@ -213,6 +257,26 @@ def test_full_service_checks_masks_before_final_resumes_and_rejects_changed_fact
         run(store, "research-test", value, spec, saved=changed, **kwargs)
     assert len(engine.calls) == before
 
+    if seed_version:
+        changed = deepcopy(complete)
+        calculation = changed["calculation"]
+        choice = calculation["fits"]["search_seed1"]["selection"]
+        key = fingerprint(
+            {
+                "settings": choice["strategies"],
+                "hypothesis": choice["hypothesis"],
+                "period": "search",
+                "stress": False,
+            }
+        )
+        calculation["evaluations"][key]["entry_dates"] += 1
+        calculation["checkpoint_id"] = _fingerprint(
+            {key: item for key, item in calculation.items() if key != "checkpoint_id"}
+        )
+        with pytest.raises(ValueError, match="search-repeat account facts changed"):
+            run(store, "research-test", value, spec, saved=changed, **kwargs)
+        assert len(engine.calls) == before
+
     # Reuse the paused, pre-challenge fixture to isolate a regime-shift failure.
     # Synthetic engine economics change only the uncommitted masked accounts;
     # no real saved result or previously committed account is overwritten.
@@ -226,6 +290,15 @@ def test_full_service_checks_masks_before_final_resumes_and_rejects_changed_fact
         failed["automatic_research"]["recommendation_checks"]["sensitivity"]["status"]
         == "not_supported"
     )
+    if seed_version:
+        assert (
+            failed["automatic_research"]["recommendation_checks"]["search_seeds"]["status"]
+            == "not_run"
+        )
+        skipped = method_coverage(
+            latest["research_mandate"], latest["calculation"], latest["development_evidence"]
+        )
+        assert [row["status"] for row in skipped["fits"][-2:]] == ["not_run", "not_run"]
 
 
 def _loss(report, capital, loss):

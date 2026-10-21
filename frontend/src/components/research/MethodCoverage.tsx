@@ -14,6 +14,8 @@ const fitLabels: Record<string, string> = {
   fit2: 'Fit 2',
   fit3: 'Fit 3',
   search: 'Final fit',
+  search_seed1: 'Search repeat 1',
+  search_seed2: 'Search repeat 2',
 }
 const requirementLabels: Record<string, string> = {
   stock_daily_close: 'Daily stock closes',
@@ -44,6 +46,7 @@ export function MethodCoverage({
       'automatic-hypotheses-v12',
       'automatic-hypotheses-v13',
       'automatic-hypotheses-v14',
+      'automatic-hypotheses-v15',
     ].includes(recipeVersion ?? '')
   )
     return null
@@ -205,11 +208,13 @@ function RecordedMethods({
     <section aria-label="Recorded method checks" className="space-y-3 text-xs">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="font-medium">
-          {allCountsKnown
-            ? `${count(tried)} method ${tried === 1 ? 'family' : 'families'} tested`
-            : rows.length
-              ? 'Recorded method checks'
-              : 'No method checks recorded yet.'}
+          {fits.find((item) => item.id === fit)?.status === 'not_run'
+            ? 'Extra search not needed'
+            : allCountsKnown
+              ? `${count(tried)} method ${tried === 1 ? 'family' : 'families'} tested`
+              : rows.length
+                ? 'Recorded method checks'
+                : 'No method checks recorded yet.'}
         </p>
         {fits.length > 0 && (
           <label className="flex items-center gap-2 text-muted-foreground">
@@ -227,6 +232,7 @@ function RecordedMethods({
               {fits.map((item) => (
                 <option key={item.id} value={item.id}>
                   {fitLabels[item.id] ?? item.id}
+                  {item.status === 'not_run' ? ' (not needed)' : ''}
                 </option>
               ))}
             </select>

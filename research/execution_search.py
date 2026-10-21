@@ -65,17 +65,20 @@ def descriptor(evidence):
     capacity = portfolio.get("automatic_research", {}).get("version") in (
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
+        "automatic-hypotheses-v15",
     )
     turnover = portfolio.get("automatic_research", {}).get("version") in (
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
+        "automatic-hypotheses-v15",
     )
     priority = portfolio.get("automatic_research", {}).get("version") in (
         "automatic-hypotheses-v11",
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
+        "automatic-hypotheses-v15",
     )
     limits = normalize_limits(portfolio.get("risk_limits"))
     if portfolio.get("risk_limits") != limits:

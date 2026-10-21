@@ -15,6 +15,7 @@ from research.automatic_protocol import (
     EXECUTION_VERSION,
     METHOD_VERSION,
     PRIORITY_VERSION,
+    SEED_VERSION,
     SENSITIVITY_VERSION,
     TURNOVER_VERSION,
     compile_recipe,
@@ -66,7 +67,14 @@ def _display_history(trials):
 
 def policy_for_version(version):
     """Return a fresh bounded policy; a newer recipe never changes old replay."""
-    if version in (TURNOVER_VERSION, CAPACITY_VERSION, SENSITIVITY_VERSION):
+    if version == SEED_VERSION:
+        return {
+            **policy_for_version(PRIORITY_VERSION),
+            "version": version,
+            "proposals": 408,
+            "max_simulations": 512,
+        }
+    if version in (TURNOVER_VERSION, CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION):
         return {**policy_for_version(PRIORITY_VERSION), "version": version}
     if version == PRIORITY_VERSION:
         return {
@@ -233,6 +241,7 @@ def checkpoint_rows(saved):
         TURNOVER_VERSION,
         CAPACITY_VERSION,
         SENSITIVITY_VERSION,
+        SEED_VERSION,
     ):
         from research.automatic_walk_forward import checkpoint_rows as walk_forward_rows
 

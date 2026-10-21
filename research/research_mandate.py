@@ -37,6 +37,7 @@ def _bounded(value):
             "automatic-hypotheses-v12",
             "automatic-hypotheses-v13",
             "automatic-hypotheses-v14",
+            "automatic-hypotheses-v15",
         )
         else MAX_METADATA_BYTES
     )
@@ -288,6 +289,8 @@ def build(evidence, *, inputs_artifact):
         mandate["search"]["recommendation_sensitivity"] = deepcopy(
             recipe["recommendation_sensitivity"]
         )
+    if "search_seeds" in recipe:
+        mandate["search"]["search_seeds"] = deepcopy(recipe["search_seeds"])
     _bounded(mandate)
     mandate["id"] = fingerprint(mandate)
     _bounded(mandate)

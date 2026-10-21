@@ -1,5 +1,34 @@
 # OpenAlgo Research status
 
+## Search-seed stability and controlled calibration — 21 October 2026
+
+The [v15 core increment](SEARCH_SEEDS_20261021.md) adds two fixed-seed repeats of
+the final development search. The compiler records the actual screening and
+adaptive counts before outcomes; all searches share prices, domains and hard
+limits. Matching native accounts/history are reused. Repeats can veto the
+primary seed 0 choice but cannot select a luckier replacement. All earlier
+chronological, cost, neighbour, constraint and symbol/date gates remain.
+Earlier failure skips repeats. New automatic studies use v15, up to 408 proposals
+and 512 calculation attempts; saved older recipes retain their contracts.
+
+Compact native support/audit facts bind repeat winners to immutable development
+histories. Exact seeded replay verifies recovery before the frozen final check.
+Research details adds three compact search-repeat comparisons; skipped fits are
+explicitly not needed. Ordinary automatic setup needs no new choices.
+
+The [offline calibration protocol](SEARCH_CALIBRATION_PROTOCOL.md) measures full
+procedure false recommendations under independent generated-account models,
+separately by null stratum, with a positive control to reject always-reference
+behaviour. Actual Optuna/native causal gates and full development shards compose
+with explicitly controlled accounting and a stubbed native audit. Genuine
+native accounting and populated service recovery are qualified separately.
+These are conditional engineering checks, not general FDR control, independent
+market replication or live strategy confidence. Larger model suites and
+whole-process seed stability remain pending.
+
+Final qualification and activation are in progress; the normal app remains on
+the previously qualified v14 increment until those checks complete.
+
 ## Symbol and date sensitivity — 21 October 2026 local activation
 
 The [v14 core increment](SYMBOL_DATE_SENSITIVITY_20261021.md) adds four

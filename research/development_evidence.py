@@ -94,7 +94,9 @@ def plan(evidence, max_evaluations):
     portfolio = evidence.get("portfolio") if isinstance(evidence, dict) else None
     automatic = portfolio.get("automatic_research") if isinstance(portfolio, dict) else None
     maximum = (
-        EXECUTION_MAX_EVALUATIONS
+        512
+        if isinstance(automatic, dict) and automatic.get("version") == "automatic-hypotheses-v15"
+        else EXECUTION_MAX_EVALUATIONS
         if isinstance(automatic, dict)
         and automatic.get("version")
         in (
@@ -103,6 +105,7 @@ def plan(evidence, max_evaluations):
             "automatic-hypotheses-v12",
             "automatic-hypotheses-v13",
             "automatic-hypotheses-v14",
+            "automatic-hypotheses-v15",
         )
         else MAX_EVALUATIONS
     )
@@ -367,6 +370,36 @@ def _sensitivity_evidence(value, basis, period):
     return deepcopy(value)
 
 
+def _search_seed_evidence(value, basis, period, stress):
+    """Bind native winner facts to immutable search accounts, never final data."""
+    from research.recommendation_seeds import ACCOUNT_VERSION
+
+    if (
+        period != "search"
+        or not isinstance(value, dict)
+        or set(value) != {"version", "plan_id", "basis_id", "support", "constraints", "id"}
+        or value.get("version") != ACCOUNT_VERSION
+        or not isinstance(value.get("plan_id"), str)
+        or not re.fullmatch(r"[a-f0-9]{64}", value["plan_id"])
+        or value.get("basis_id") != fingerprint(basis)
+        or value.get("id") != fingerprint({k: v for k, v in value.items() if k != "id"})
+    ):
+        raise ValueError("Development search-repeat account identity changed")
+    support, audit = value.get("support"), value.get("constraints")
+    if (
+        not isinstance(support, dict)
+        or set(support) != {"closed_trades", "entry_dates"}
+        or any(type(n) is not int or not 0 <= n <= 25_000 for n in support.values())
+        or support["entry_dates"] > support["closed_trades"]
+        or not isinstance(audit, dict)
+        or audit.get("id") != fingerprint({k: v for k, v in audit.items() if k != "id"})
+        or audit.get("feature_id")
+        != basis["comparison"]["execution"].get("portfolio_features", {}).get("id")
+    ):
+        raise ValueError("Development search-repeat native facts changed")
+    return deepcopy(value)
+
+
 def build(
     report, *, evaluation_id, binding, settings, hypothesis, period, stress, expected_timeline
 ):
@@ -469,6 +502,10 @@ def build(
         metadata["sensitivity_evidence"] = _sensitivity_evidence(
             report["sensitivity_evidence"], basis, period
         )
+    if "search_seed_evidence" in report:
+        metadata["search_seed_evidence"] = _search_seed_evidence(
+            report["search_seed_evidence"], basis, period, stress
+        )
     try:
         if _raw_size(metadata) > MAX_METADATA_BYTES:
             raise ValueError("Development evidence metadata limit reached")
@@ -526,6 +563,11 @@ def verify_shard(shard, *, descriptor):
                 **(
                     {"sensitivity_evidence": shard["sensitivity_evidence"]}
                     if "sensitivity_evidence" in shard
+                    else {}
+                ),
+                **(
+                    {"search_seed_evidence": shard["search_seed_evidence"]}
+                    if "search_seed_evidence" in shard
                     else {}
                 ),
             },

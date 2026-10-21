@@ -68,6 +68,7 @@ def _search_inputs(evidence, calculation):
             "automatic-hypotheses-v12",
             "automatic-hypotheses-v13",
             "automatic-hypotheses-v14",
+            "automatic-hypotheses-v15",
         ):
             from research.automatic_hypotheses import checkpoint_rows
 
@@ -88,6 +89,7 @@ def _search_inputs(evidence, calculation):
                             "automatic-hypotheses-v12",
                             "automatic-hypotheses-v13",
                             "automatic-hypotheses-v14",
+                            "automatic-hypotheses-v15",
                         )
                         else "automatic_stock_features"
                     ],
@@ -106,9 +108,14 @@ def _search_inputs(evidence, calculation):
                     "automatic-hypotheses-v12",
                     "automatic-hypotheses-v13",
                     "automatic-hypotheses-v14",
+                    "automatic-hypotheses-v15",
                 )
                 else "search"
             )
+            if version == "automatic-hypotheses-v15":
+                from research.automatic_walk_forward import data_period
+
+                period = data_period(period)
             return slice_period(evidence, period), calculation, period, True, False
         if version == "automatic-entry-conditions-v1":
             binding = fingerprint({"recipe": recipe, "market": evidence["entry_condition_market"]})
@@ -191,6 +198,7 @@ def _validated_rows(evidence, saved, completed):
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
+        "automatic-hypotheses-v15",
     ):
         from research.automatic_hypotheses import checkpoint_rows
 
@@ -206,6 +214,7 @@ def _validated_rows(evidence, saved, completed):
                 "automatic-hypotheses-v12",
                 "automatic-hypotheses-v13",
                 "automatic-hypotheses-v14",
+                "automatic-hypotheses-v15",
             )
             else saved["trials"]
         )

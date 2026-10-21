@@ -9,7 +9,7 @@ import re
 from copy import deepcopy
 
 from research.automatic_trailing import apply_choices as trailing_choices
-from research.automatic_walk_forward import FITS, checkpoint_rows
+from research.automatic_walk_forward import FITS, checkpoint_rows, data_period, fit_names
 from research.connectors.optuna_portfolio import (
     MAX_CHECKPOINT_BYTES,
     _candidate,
@@ -25,6 +25,7 @@ from research.method_registry import (
     EXPANDED_RECIPE_VERSION,
     PRIORITY_RECIPE_VERSION,
     RECIPE_VERSION,
+    SEED_RECIPE_VERSION,
     SENSITIVITY_RECIPE_VERSION,
     TURNOVER_RECIPE_VERSION,
     bounded,
@@ -86,7 +87,9 @@ def _manifest(manifest, calculation, binding, periods, context_id, recipe_versio
         or not isinstance(manifest.get("entries"), dict)
         or len(manifest["entries"])
         > (
-            384
+            512
+            if recipe_version == SEED_RECIPE_VERSION
+            else 384
             if recipe_version
             in (
                 EXECUTION_RECIPE_VERSION,
@@ -94,6 +97,7 @@ def _manifest(manifest, calculation, binding, periods, context_id, recipe_versio
                 TURNOVER_RECIPE_VERSION,
                 CAPACITY_RECIPE_VERSION,
                 SENSITIVITY_RECIPE_VERSION,
+                SEED_RECIPE_VERSION,
             )
             else 320
         )
@@ -220,6 +224,7 @@ def _build(mandate, calculation, development_manifest):
             TURNOVER_RECIPE_VERSION,
             CAPACITY_RECIPE_VERSION,
             SENSITIVITY_RECIPE_VERSION,
+            SEED_RECIPE_VERSION,
         )
         else MAX_METADATA_BYTES,
     )
@@ -233,6 +238,7 @@ def _build(mandate, calculation, development_manifest):
         TURNOVER_RECIPE_VERSION,
         CAPACITY_RECIPE_VERSION,
         SENSITIVITY_RECIPE_VERSION,
+        SEED_RECIPE_VERSION,
     ):
         return {
             "version": VERSION,
@@ -249,6 +255,7 @@ def _build(mandate, calculation, development_manifest):
         TURNOVER_RECIPE_VERSION,
         CAPACITY_RECIPE_VERSION,
         SENSITIVITY_RECIPE_VERSION,
+        SEED_RECIPE_VERSION,
     ):
         from research.expanded_stock_market import markers as materialize_markers
     by_hypothesis = {row["id"]: row for row in hypotheses}
@@ -261,13 +268,16 @@ def _build(mandate, calculation, development_manifest):
             TURNOVER_RECIPE_VERSION,
             CAPACITY_RECIPE_VERSION,
             SENSITIVITY_RECIPE_VERSION,
+            SEED_RECIPE_VERSION,
         )
         else 64
         if recipe_version == EXECUTION_RECIPE_VERSION
         else 48
     )
     max_simulations = (
-        384
+        512
+        if recipe_version == SEED_RECIPE_VERSION
+        else 384
         if recipe_version
         in (
             EXECUTION_RECIPE_VERSION,
@@ -275,6 +285,7 @@ def _build(mandate, calculation, development_manifest):
             TURNOVER_RECIPE_VERSION,
             CAPACITY_RECIPE_VERSION,
             SENSITIVITY_RECIPE_VERSION,
+            SEED_RECIPE_VERSION,
         )
         else 320
     )
@@ -283,7 +294,8 @@ def _build(mandate, calculation, development_manifest):
         or search.get("hypothesis_catalog") != hypotheses
         or not all(_hash(source.get(key)) for key in ("inputs_artifact", "recipe_id"))
         or not _hash(search.get("stock_evidence_id"))
-        or mandate.get("budget", {}).get("proposals") != proposals_per_fit * 4
+        or mandate.get("budget", {}).get("proposals")
+        != proposals_per_fit * len(fit_names(recipe_version))
         or mandate.get("budget", {}).get("max_simulations") != max_simulations
         or mandate.get("economic_assumptions", {}).get("engine") != "vectorbt"
         or mandate.get("subject", {}).get("asset_profile") != "NSE_long_cash_equities"
@@ -299,11 +311,17 @@ def _build(mandate, calculation, development_manifest):
     }
     periods = {row["name"] for row in mandate.get("validation", {}).get("periods", [])}
     expected_periods = {"fit1", "check1", "fit2", "check2", "fit3", "check3", "search", "final"}
-    if recipe_version == SENSITIVITY_RECIPE_VERSION:
+    if recipe_version in (SENSITIVITY_RECIPE_VERSION, SEED_RECIPE_VERSION):
         from research.recommendation_sensitivity import _verified_plan
 
         scenarios = _verified_plan(search.get("recommendation_sensitivity"))
         expected_periods.update(row["name"] for row in scenarios if row["status"] == "available")
+    if recipe_version == SEED_RECIPE_VERSION:
+        from research.recommendation_seeds import policy
+
+        seed_plan = search.get("search_seeds", {})
+        if seed_plan != policy(screening_proposals=seed_plan.get("screening_proposals_per_search")):
+            raise ValueError("Saved search-repeat policy changed")
     if periods != expected_periods:
         raise ValueError("Saved method period roles changed")
     entries = _manifest(
@@ -333,6 +351,7 @@ def _build(mandate, calculation, development_manifest):
         TURNOVER_RECIPE_VERSION,
         CAPACITY_RECIPE_VERSION,
         SENSITIVITY_RECIPE_VERSION,
+        SEED_RECIPE_VERSION,
     ):
         from research.execution_search import axes as policy_axes
         from research.execution_search import descriptor as execution_descriptor
@@ -364,15 +383,23 @@ def _build(mandate, calculation, development_manifest):
     aggregate = {row["id"]: _record(row) for row in registry["families"]}
     total_proposed = total_evaluated = total_reused = retained = unavailable = 0
     fits = []
-    for fit_name in FITS:
+    for fit_name in fit_names(recipe_version):
+        period_name = data_period(fit_name)
         fit = calculation["fits"].get(fit_name)
         records = {row["id"]: _record(row) for row in registry["families"]}
         proposed_ids = {key: set() for key in records}
         if fit is None:
+            skipped = (
+                fit_name.startswith("search_seed")
+                and calculation.get("recommendation_checks", {})
+                .get("search_seeds", {})
+                .get("status")
+                == "not_run"
+            )
             fits.append(
                 {
                     "id": fit_name,
-                    "status": "pending",
+                    "status": "not_run" if skipped else "pending",
                     "proposals": 0,
                     "proposal_limit": proposals_per_fit,
                     "families": list(records.values()),
@@ -448,7 +475,7 @@ def _build(mandate, calculation, development_manifest):
                     {
                         "settings": candidate["strategies"],
                         "hypothesis": hypothesis,
-                        "period": fit_name,
+                        "period": period_name,
                         "stress": False,
                     }
                 )
@@ -468,7 +495,7 @@ def _build(mandate, calculation, development_manifest):
                 if (
                     descriptor is None
                     or descriptor["hypothesis_id"] != fingerprint(hypothesis)
-                    or descriptor["period"] != fit_name
+                    or descriptor["period"] != period_name
                     or descriptor["stress"]
                 ):
                     raise ValueError("Saved method candidate history identity changed")
@@ -534,7 +561,7 @@ def _build(mandate, calculation, development_manifest):
                 "families": list(records.values()),
             }
         )
-    all_complete = all(row["status"] == "complete" for row in fits)
+    all_complete = all(row["status"] in ("complete", "not_run") for row in fits)
     for key, record in aggregate.items():
         observed = {
             row["params"]["hypothesis"]
@@ -601,6 +628,7 @@ def _build(mandate, calculation, development_manifest):
         TURNOVER_RECIPE_VERSION,
         CAPACITY_RECIPE_VERSION,
         SENSITIVITY_RECIPE_VERSION,
+        SEED_RECIPE_VERSION,
     ):
         result["limitations"].append(
             "Condition-family counts include execution and sizing variants; exit choices, sizing controls and hard limits are not additional indicator families"
@@ -610,6 +638,7 @@ def _build(mandate, calculation, development_manifest):
         TURNOVER_RECIPE_VERSION,
         CAPACITY_RECIPE_VERSION,
         SENSITIVITY_RECIPE_VERSION,
+        SEED_RECIPE_VERSION,
     ):
         from research.execution_search import ENTRY_PRIORITIES, priority_counts
 
@@ -622,9 +651,13 @@ def _build(mandate, calculation, development_manifest):
                         calculation["fits"].get(period, {}).get("trials", [])
                     ),
                 }
-                for period in FITS
+                for period in fit_names(recipe_version)
             ],
             "count_basis": "Proposal-linked training accounts; reused proposals counted separately. Matched sizing controls and final accounts are excluded.",
         }
+    if recipe_version == SEED_RECIPE_VERSION:
+        result["limitations"].append(
+            "Search-repeat fits can reference the same retained native account; per-fit evaluation links are not distinct calculations or independent samples. Skipped repeat fits are explicitly not run."
+        )
     bounded(result, MAX_OUTPUT_BYTES)
     return {**result, "id": fingerprint(result)}

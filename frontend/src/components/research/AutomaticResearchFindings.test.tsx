@@ -61,6 +61,94 @@ function findings(): Findings {
 }
 
 describe('automatic research findings', () => {
+  it('keeps repeated-search evidence collapsed and separate from the primary study', async () => {
+    const data = findings()
+    data.version = 'automatic-hypotheses-v15'
+    data.counts = { proposals: 408, simulations: 410, finalists: 1 }
+    data.recommendation_checks = {
+      version: 'research-recommendation-evidence-v1',
+      status: 'supported',
+      reasons: [],
+      search_seeds: {
+        version: 'research-search-seed-evidence-v1',
+        status: 'supported',
+        qualified: true,
+        reasons: [],
+        runs: [0, 1, 2].map((seed) => ({
+          seed,
+          config_id: `choice-${seed}`,
+          proposals: 68,
+          unique_accounts: 60,
+          return_pct: 5.2 + seed,
+          max_drawdown_pct: 1.3,
+          edge_pct: 2,
+          lower_edge_pct: 1,
+          evidence_id: `saved-${seed}`,
+        })),
+        limitations: [],
+      },
+    }
+    render(<AutomaticResearchFindings findings={data} />)
+    const table = screen.getByRole('table', { name: 'Repeated search comparison', hidden: true })
+    expect(table).not.toBeVisible()
+    await userEvent.click(screen.getByText('Research details'))
+    expect(table).toBeVisible()
+    expect(within(table).getAllByRole('row')).toHaveLength(4)
+    expect(within(table).getByRole('rowheader', { name: 'Search 1' })).toBeVisible()
+    expect(within(table).getByRole('rowheader', { name: 'Search 3' })).toBeVisible()
+    expect(within(table).getByText('7.2%')).toBeVisible()
+    expect(
+      screen.getByText(/Repeated searches supported the original development choice/)
+    ).toBeVisible()
+    expect(screen.getByText(/Repeats check search-path stability/)).toHaveTextContent(
+      'never replace it'
+    )
+    expect(screen.queryByText(/seed/i)).not.toBeInTheDocument()
+  })
+
+  it.each([
+    'not_supported',
+    'insufficient',
+    'not_run',
+    'unsupported',
+  ] as const)('never presents %s repeated-search evidence as qualified', async (status) => {
+    const data = findings()
+    data.version = 'automatic-hypotheses-v15'
+    data.recommendation_checks = {
+      version: 'research-recommendation-evidence-v1',
+      status: 'not_supported',
+      reasons: [],
+      search_seeds: {
+        version: 'research-search-seed-evidence-v1',
+        status,
+        qualified: false,
+        reasons: ['No stronger recommendation from these checks.'],
+        limitations: [],
+      },
+    }
+    render(<AutomaticResearchFindings findings={data} />)
+    await userEvent.click(screen.getByText('Research details'))
+    const region = screen.getByRole('region', { name: 'Search repeat checks' })
+    expect(
+      within(region).queryByText(/supported the original development choice/)
+    ).not.toBeInTheDocument()
+    expect(within(region).getByText('No stronger recommendation from these checks.')).toBeVisible()
+    expect(within(region).queryByRole('table')).not.toBeInTheDocument()
+    if (status === 'not_run') expect(region).toHaveTextContent('extra searches were not needed')
+    if (status === 'insufficient') expect(region).toHaveTextContent('Not enough evidence')
+  })
+
+  it.each([
+    'automatic-hypotheses-v14',
+    'automatic-hypotheses-v15',
+  ])('does not invent search repeat checks for saved %s without a receipt', async (version) => {
+    const data = findings()
+    data.version = version
+    render(<AutomaticResearchFindings findings={data} />)
+    await userEvent.click(screen.getByText('Research details'))
+    expect(screen.queryByRole('region', { name: 'Search repeat checks' })).not.toBeInTheDocument()
+  })
+
   it('keeps actual symbol and date reruns inside details with their original reference values', async () => {
     const data = findings()
     data.version = 'automatic-hypotheses-v14'

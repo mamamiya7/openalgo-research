@@ -63,6 +63,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
+        "automatic-hypotheses-v15",
     )
     joint = (
         trailing
@@ -248,6 +249,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
+        "automatic-hypotheses-v15",
     ):
         payload["methods"].append(
             {
@@ -265,6 +267,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
+        "automatic-hypotheses-v15",
     ):
         payload["budget"].update(
             proposals=192,
@@ -297,6 +300,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
+        "automatic-hypotheses-v15",
     ):
         from research.expanded_stock_market import FEATURE_VERSION, catalog, recipe
 
@@ -322,6 +326,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
+        "automatic-hypotheses-v15",
     ):
         payload["budget"].update(
             proposals=256,
@@ -358,6 +363,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
+        "automatic-hypotheses-v15",
     ):
         payload["budget"].update(
             proposals=272,
@@ -379,6 +385,7 @@ def build_plan(portfolio, *, interval):
     if portfolio.get("automatic_research", {}).get("version") in (
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
+        "automatic-hypotheses-v15",
     ):
         capacity = portfolio["strategies"][0]["execution_policy"]["capacity_mode"] != "disabled"
         correlation = (
@@ -401,13 +408,34 @@ def build_plan(portfolio, *, interval):
             volume_prior_sessions=20 if capacity else 0,
             correlation_prior_closes=61 if correlation else 0,
         )
-    if portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v14":
+    if portfolio.get("automatic_research", {}).get("version") in (
+        "automatic-hypotheses-v14",
+        "automatic-hypotheses-v15",
+    ):
         payload["budget"]["max_sensitivity_accounts"] = 8
         payload["methods"].append(
             {
                 "id": "symbol_date_sensitivity",
                 "status": "conditional",
                 "reason": "A supported development choice is rerun against unchanged settings on two complementary original-symbol groups and two chronological development halves, with unchanged capital, limits and normal costs; sparse or unsupported checks keep the reference.",
+            }
+        )
+    if portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v15":
+        payload["budget"].update(
+            proposals=408,
+            max_simulations=512,
+            fits=6,
+            screening_proposals=300,
+            refinement_proposals=108,
+            min_joint_refinement_proposals=108,
+            max_seed_proposals=136,
+            max_seed_accounts=136,
+        )
+        payload["methods"].append(
+            {
+                "id": "search_seed_stability",
+                "status": "conditional",
+                "reason": "Two additional fixed-seed full training searches reuse frozen data and matching accounts. Repeat winners may only veto the primary setup; missing support or excessive search-path sensitivity keeps unchanged settings.",
             }
         )
     return {**payload, "id": fingerprint(payload)}

@@ -443,11 +443,13 @@ def test_nonautomatic_or_unimplemented_recipe_is_not_announced_as_executable():
 
 def test_available_automatic_upgrade_has_bounded_sensitivity_without_claiming_data_coverage():
     plan = build_plan(request(version=NEXT_RECIPE_VERSION), interval="D")
-    assert plan["execution_recipe_version"] == "automatic-hypotheses-v14"
-    assert plan["search"]["proposals"] == 272
-    assert plan["summary"]["max_simulations"] == 384
+    assert plan["execution_recipe_version"] == "automatic-hypotheses-v15"
+    assert plan["search"]["proposals"] == 408
+    assert plan["summary"]["max_simulations"] == 512
     assert plan["search"]["budget"]["max_sensitivity_accounts"] == 8
     assert families(plan)["symbol_date_sensitivity"]["status"] == "conditional"
+    assert families(plan)["search_seed_stability"]["status"] == "conditional"
+    assert plan["search"]["budget"]["max_seed_accounts"] == 136
 
 
 def test_eight_strategies_use_exact_string_space_size_and_do_not_multiply_run_budget():

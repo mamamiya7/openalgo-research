@@ -14,7 +14,7 @@ from research.portfolio import fingerprint, normalize
 from research.regimes import recipe as regime_recipe
 
 CATALOG_VERSION = "automatic-search-plan-v1"
-NEXT_RECIPE_VERSION = "automatic-hypotheses-v14"
+NEXT_RECIPE_VERSION = "automatic-hypotheses-v15"
 
 _PARAMETERS = {
     "target_pct": ("Profit target", "%"),
@@ -60,6 +60,7 @@ def _parameters(strategy, engine, version):
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
+        "automatic-hypotheses-v15",
     )
     trailing = version in (
         "automatic-hypotheses-v6",
@@ -71,6 +72,7 @@ def _parameters(strategy, engine, version):
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
+        "automatic-hypotheses-v15",
     )
     parameters = []
     for key, (label, unit) in _PARAMETERS.items():
@@ -81,6 +83,7 @@ def _parameters(strategy, engine, version):
                 "automatic-hypotheses-v12",
                 "automatic-hypotheses-v13",
                 "automatic-hypotheses-v14",
+                "automatic-hypotheses-v15",
             )
             and key == "entry_priority"
         ):
@@ -147,6 +150,7 @@ def _parameters(strategy, engine, version):
                     "automatic-hypotheses-v12",
                     "automatic-hypotheses-v13",
                     "automatic-hypotheses-v14",
+                    "automatic-hypotheses-v15",
                 )
                 and key != "trade_horizon"
             ):
@@ -208,6 +212,7 @@ def _parameters(strategy, engine, version):
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
+        "automatic-hypotheses-v15",
     ):
         parameters.append(
             {
@@ -248,6 +253,7 @@ def _decisions(portfolio, interval, strategies, *, proposals, max_simulations):
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
+        "automatic-hypotheses-v15",
     )
     trailing = portfolio["automatic_research"]["version"] in (
         "automatic-hypotheses-v6",
@@ -259,6 +265,7 @@ def _decisions(portfolio, interval, strategies, *, proposals, max_simulations):
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
+        "automatic-hypotheses-v15",
     )
     timing = portfolio["automatic_research"]["version"] in (
         "automatic-hypotheses-v7",
@@ -269,6 +276,7 @@ def _decisions(portfolio, interval, strategies, *, proposals, max_simulations):
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
+        "automatic-hypotheses-v15",
     )
     walk_forward = portfolio["automatic_research"]["version"] in (
         "automatic-hypotheses-v8",
@@ -278,6 +286,7 @@ def _decisions(portfolio, interval, strategies, *, proposals, max_simulations):
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
+        "automatic-hypotheses-v15",
     )
     return {
         "version": "automatic-decision-summary-v1",
@@ -296,6 +305,7 @@ def _decisions(portfolio, interval, strategies, *, proposals, max_simulations):
                     "automatic-hypotheses-v12",
                     "automatic-hypotheses-v13",
                     "automatic-hypotheses-v14",
+                    "automatic-hypotheses-v15",
                 )
                 else []
             ),
@@ -635,6 +645,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
+        "automatic-hypotheses-v15",
     ):
         raise ValueError("Choose a supported automatic research recipe before planning")
     version, engine = auto["version"], canonical["engine"]
@@ -666,6 +677,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
+        "automatic-hypotheses-v15",
     ):
         from research.intelligent_plan import build_plan as intelligence_plan
 
@@ -698,6 +710,7 @@ def build_plan(portfolio, *, interval):
                 "automatic-hypotheses-v12",
                 "automatic-hypotheses-v13",
                 "automatic-hypotheses-v14",
+                "automatic-hypotheses-v15",
             )
             else "Cash, allocation, sizing, exposure and costs stay fixed.",
             "decisions": _decisions(

@@ -43,7 +43,15 @@ comparisons before preferring changed settings. It uses at most eight additional
 accounts within the existing 272-proposal/384-calculation programme, with no new
 prices. Sparse, failed or unavailable checks retain the unchanged reference;
 earlier recommendation failure skips the extra work. Wider search-seed and
-false-discovery calibration remains the next package 5 dependency before
+false-discovery calibration was the next package 5 dependency. The
+[v15 search-repeat increment](SEARCH_SEEDS_20261021.md) now freezes three
+same-data search seeds and requires stable, audited support without replacing
+the primary choice. Matching accounts are reused; earlier failures skip repeats.
+Its separate [controlled calibration protocol](SEARCH_CALIBRATION_PROTOCOL.md)
+measures full-procedure false recommendations and positive-control power under
+explicit generated-account models. This is engineering qualification, not
+general FDR control or live profit confidence. Larger independent model suites,
+whole-process seed stability and qualified statistical diagnostics remain before
 statistical-confidence or adaptive-policy claims. Complete the qualified
 research and portfolio features before general UI polish. Learned transforms,
 continuous carry and the later packages
@@ -77,9 +85,11 @@ label the least bad losing trial a trading recommendation.
 ### Existing foundations to retain
 
 The installed development app is OpenAlgo 2.0.2.7. New unconfigured VectorBT
-optimisations select v12 in current source, with 108 registered stock/market choices across 32 families,
+optimisations select v15 in current source, with 108 registered stock/market choices across 32 families,
 conditional exits/trailing and admitted clock alternatives. Current bounds remain
-272 proposals across four independent fits and 384 native calculations. Older
+up to 408 proposals across four original fits plus two same-data search repeats
+and 512 calculation attempts. The repeats can only veto the primary fit, reuse
+matching accounts and never select a lucky alternative. Older
 scopes retain their identities; the v7 limits below remain its dated contract.
 
 Historify reuse and missing-only acquisition, causal feature availability,
@@ -284,7 +294,10 @@ search, turnover budgets, reviewed historical participation and direct correlate
 exposure, plus the first package 5 recommendation safeguards. Broader allocation,
 producer and calibration coverage remain pending. V14 additionally implements
 prespecified native symbol/date stress accounts and immutable recovery facts;
-this does not complete wider seed/false-discovery calibration. The next feature work should
+this does not complete wider seed/false-discovery calibration. V15 now adds
+same-data final-fit search repeats and controlled full-procedure calibration;
+larger model suites, native synthetic-market calibration and whole-process
+seed stability remain qualified extensions. The next feature work should
 build on these frozen execution and risk contracts before UI polish or wider
 asset admission.
 

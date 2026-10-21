@@ -69,6 +69,7 @@ export interface ResearchMethodCoverage {
       | 'automatic-hypotheses-v12'
       | 'automatic-hypotheses-v13'
       | 'automatic-hypotheses-v14'
+      | 'automatic-hypotheses-v15'
     catalog_id: string
     family_count: number
     hypothesis_count: number
@@ -83,7 +84,7 @@ export interface ResearchMethodCoverage {
   }
   fits: Array<{
     id: 'fit1' | 'fit2' | 'fit3' | 'search'
-    status: 'pending' | 'running' | 'complete'
+    status: 'pending' | 'running' | 'complete' | 'not_run'
     proposals: number
     proposal_limit: 48
     families: ResearchMethodCoverageRow[]

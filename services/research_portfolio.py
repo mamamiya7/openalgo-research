@@ -127,6 +127,7 @@ def resolve_inputs(store, owner, request):
                 "automatic-hypotheses-v12",
                 "automatic-hypotheses-v13",
                 "automatic-hypotheses-v14",
+                "automatic-hypotheses-v15",
             )
             and receipt["symbol_count"] > 200
         ):
@@ -343,6 +344,7 @@ def replay_inputs(store, owner, job_id, *, trial_id=None, period="selection"):
         "automatic-hypotheses-v12",
         "automatic-hypotheses-v13",
         "automatic-hypotheses-v14",
+        "automatic-hypotheses-v15",
     ):
         marker = selected[0].get("entry_condition")
         selected_conditions = deepcopy(marker) if marker else None
@@ -714,6 +716,7 @@ def run(
             "automatic-hypotheses-v12",
             "automatic-hypotheses-v13",
             "automatic-hypotheses-v14",
+            "automatic-hypotheses-v15",
         )
         or bool(evidence.get("execution_features"))
         or any(
@@ -775,6 +778,7 @@ def run(
                 "automatic-hypotheses-v12",
                 "automatic-hypotheses-v13",
                 "automatic-hypotheses-v14",
+                "automatic-hypotheses-v15",
             )
             else _prepare_prices
         )
@@ -833,6 +837,7 @@ def run(
                 "automatic-hypotheses-v12",
                 "automatic-hypotheses-v13",
                 "automatic-hypotheses-v14",
+                "automatic-hypotheses-v15",
             )
             or execution_features_required
             or portfolio_features_required
@@ -965,6 +970,7 @@ def run(
                 JOINT_VERSION,
                 METHOD_VERSION,
                 PRIORITY_VERSION,
+                SEED_VERSION,
                 SENSITIVITY_VERSION,
                 TIMING_VERSION,
                 TRAILING_VERSION,
@@ -989,6 +995,7 @@ def run(
                 TURNOVER_VERSION,
                 CAPACITY_VERSION,
                 SENSITIVITY_VERSION,
+                SEED_VERSION,
             ):
                 from research.automatic_walk_forward import run as automatic_run
 
@@ -1008,6 +1015,7 @@ def run(
                     TURNOVER_VERSION,
                     CAPACITY_VERSION,
                     SENSITIVITY_VERSION,
+                    SEED_VERSION,
                 )
                 and saved_calculation
                 and saved_development is None
@@ -1036,6 +1044,7 @@ def run(
                         TURNOVER_VERSION,
                         CAPACITY_VERSION,
                         SENSITIVITY_VERSION,
+                        SEED_VERSION,
                     )
                     else "automatic_stock_features"
                 )
@@ -1114,6 +1123,7 @@ def run(
                             "automatic-hypotheses-v12",
                             "automatic-hypotheses-v13",
                             "automatic-hypotheses-v14",
+                            "automatic-hypotheses-v15",
                         )
                         else {}
                     ),

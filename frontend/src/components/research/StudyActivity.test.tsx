@@ -353,6 +353,24 @@ describe('durable study activity', () => {
 })
 
 describe('recorded walk-forward activity identity', () => {
+  it('labels extra searches separately while preserving the primary final fit', async () => {
+    const data = receipt({
+      rows: [271, 272, 339, 340, 407].map((number) => row({ id: number + 1, number })),
+    })
+    data.executions[0].proposal_budget = 408
+    vi.mocked(researchStudyActivity.get).mockResolvedValue(data)
+    mount({ recipeVersion: 'automatic-hypotheses-v15' })
+    const table = await screen.findByRole('table', { name: 'Proposal activity' })
+    for (const name of [
+      'Final fit · Trial 68 Proposal 272',
+      'Search repeat 1 · Trial 1 Proposal 273',
+      'Search repeat 1 · Trial 68 Proposal 340',
+      'Search repeat 2 · Trial 1 Proposal 341',
+      'Search repeat 2 · Trial 68 Proposal 408',
+    ])
+      expect(within(table).getByRole('rowheader', { name })).toBeVisible()
+  })
+
   it('keeps the 68-trial priority fit labels and selected global policy readable', async () => {
     const data = receipt({
       rows: [row({ number: 271, params: { 'portfolio.entry_priority': 'lower_stop_risk' } })],

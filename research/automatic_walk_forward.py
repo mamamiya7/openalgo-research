@@ -15,6 +15,7 @@ from research.automatic_protocol import (
     EXECUTION_VERSION,
     METHOD_VERSION,
     PRIORITY_VERSION,
+    SEED_VERSION,
     SENSITIVITY_VERSION,
     TURNOVER_VERSION,
     compile_recipe,
@@ -43,6 +44,17 @@ from research.joint_stock_market import PreparedJointContext
 from research.report_contract import fingerprint, settings_identity
 
 FITS = ("fit1", "fit2", "fit3", "search")
+SEED_FITS = (*FITS, "search_seed1", "search_seed2")
+
+
+def fit_names(version):
+    return SEED_FITS if version == SEED_VERSION else FITS
+
+
+def data_period(fit_name):
+    return "search" if fit_name in SEED_FITS[4:] else fit_name
+
+
 PROPOSALS_PER_FIT = 48
 MAX_SIMULATIONS = 320
 FINDINGS_VERSION = "research-walk-forward-findings-v1"
@@ -76,6 +88,7 @@ def _context(version):
         TURNOVER_VERSION,
         CAPACITY_VERSION,
         SENSITIVITY_VERSION,
+        SEED_VERSION,
     ):
         from research import expanded_stock_market as context
     else:
@@ -92,6 +105,7 @@ def _screening_program(version, entries, axes, timing, execution=None):
         TURNOVER_VERSION,
         CAPACITY_VERSION,
         SENSITIVITY_VERSION,
+        SEED_VERSION,
     ):
         policy = policy_for_version(version)
         if (
@@ -112,6 +126,7 @@ def _screening_program(version, entries, axes, timing, execution=None):
             TURNOVER_VERSION,
             CAPACITY_VERSION,
             SENSITIVITY_VERSION,
+            SEED_VERSION,
         )
         else entries,
         axes,
@@ -131,6 +146,7 @@ def _screening_program(version, entries, axes, timing, execution=None):
         TURNOVER_VERSION,
         CAPACITY_VERSION,
         SENSITIVITY_VERSION,
+        SEED_VERSION,
     ):
         registered = {row["id"] for row in entries}
         if not set(METHOD_PROBES) <= registered:
@@ -145,6 +161,7 @@ def _screening_program(version, entries, axes, timing, execution=None):
         TURNOVER_VERSION,
         CAPACITY_VERSION,
         SENSITIVITY_VERSION,
+        SEED_VERSION,
     ):
         from research.execution_search import probes as execution_probes
 
@@ -154,13 +171,20 @@ def _screening_program(version, entries, axes, timing, execution=None):
                     params[name] = "percent"
                 elif name.endswith(".portfolio_choice"):
                     params[name] = "original"
-        if version in (PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION, SENSITIVITY_VERSION):
+        if version in (
+            PRIORITY_VERSION,
+            TURNOVER_VERSION,
+            CAPACITY_VERSION,
+            SENSITIVITY_VERSION,
+            SEED_VERSION,
+        ):
             for params in screening:
                 params["portfolio.entry_priority"] = "source"
         screening.extend(execution_probes(screening[0], execution))
     if len(screening) > (
         50
-        if version in (PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION, SENSITIVITY_VERSION)
+        if version
+        in (PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION)
         else 48
         if version == EXECUTION_VERSION
         else 40
@@ -172,7 +196,9 @@ def _screening_program(version, entries, axes, timing, execution=None):
 def _validate_state(saved, *, version=None):
     saved_version = saved.get("version") if isinstance(saved, dict) else None
     max_simulations = (
-        384
+        512
+        if saved_version == SEED_VERSION
+        else 384
         if saved_version
         in (
             EXECUTION_VERSION,
@@ -180,13 +206,14 @@ def _validate_state(saved, *, version=None):
             TURNOVER_VERSION,
             CAPACITY_VERSION,
             SENSITIVITY_VERSION,
+            SEED_VERSION,
         )
         else MAX_SIMULATIONS
     )
     proposals_per_fit = (
         68
         if saved_version
-        in (PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION, SENSITIVITY_VERSION)
+        in (PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION)
         else 64
         if saved_version == EXECUTION_VERSION
         else PROPOSALS_PER_FIT
@@ -202,6 +229,7 @@ def _validate_state(saved, *, version=None):
             TURNOVER_VERSION,
             CAPACITY_VERSION,
             SENSITIVITY_VERSION,
+            SEED_VERSION,
         )
         or (version is not None and saved.get("version") != version)
         or saved.get("checkpoint_id")
@@ -215,8 +243,8 @@ def _validate_state(saved, *, version=None):
         or not isinstance(saved.get("evaluations"), dict)
         or len(saved["evaluations"]) > saved["simulations"]
         or not isinstance(saved.get("fits"), dict)
-        or set(saved["fits"]) - set(FITS)
-        or saved.get("active_fit") not in FITS
+        or set(saved["fits"]) - set(fit_names(saved_version))
+        or saved.get("active_fit") not in fit_names(saved_version)
         or not isinstance(saved.get("folds"), list)
         or len(saved["folds"]) > 3
     ):
@@ -285,7 +313,7 @@ def sensitivity_window(evidence, name):
         None,
     )
     if (
-        recipe.get("version") != SENSITIVITY_VERSION
+        recipe.get("version") not in (SENSITIVITY_VERSION, SEED_VERSION)
         or scenario is None
         or scenario["status"] != "available"
     ):
@@ -340,6 +368,7 @@ def run(
             TURNOVER_VERSION,
             CAPACITY_VERSION,
             SENSITIVITY_VERSION,
+            SEED_VERSION,
         )
         else prepare_gate
     )
@@ -402,15 +431,23 @@ def _run(
     proposals_per_fit = policy["proposals_per_fit"]
     max_simulations = policy["max_simulations"]
     proposal_budget = policy["proposals"]
-    if version in (PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION, SENSITIVITY_VERSION):
+    if version in (
+        PRIORITY_VERSION,
+        TURNOVER_VERSION,
+        CAPACITY_VERSION,
+        SENSITIVITY_VERSION,
+        SEED_VERSION,
+    ):
         # Worst case: baseline + every unique proposal + one control per fit,
         # four later-window accounts per fold, one selected-report rebuild,
         # final pair, and 64 lost attempts.
         upper = 4 * (proposals_per_fit + 2) + 3 * 4 + 1 + 2 + 64
-        if version in (TURNOVER_VERSION, CAPACITY_VERSION, SENSITIVITY_VERSION):
+        if version in (TURNOVER_VERSION, CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION):
             upper += 6
-        if version == SENSITIVITY_VERSION:
+        if version in (SENSITIVITY_VERSION, SEED_VERSION):
             upper += recipe["budget"]["max_sensitivity_accounts"]
+        if version == SEED_VERSION:
+            upper += recipe["budget"]["max_seed_accounts"]
         if upper > max_simulations or proposals_per_fit - 50 < 16:
             raise ValueError("Priority research exceeded its accounting or refinement reserve")
     base, numeric_axes = _prepare(evidence["strategies"])
@@ -425,6 +462,7 @@ def _run(
         TURNOVER_VERSION,
         CAPACITY_VERSION,
         SENSITIVITY_VERSION,
+        SEED_VERSION,
     ):
         from research.execution_search import axes as execution_axes
 
@@ -447,6 +485,8 @@ def _run(
         "resume_policy": "serial-seeded-ask-tell-replay-v1",
         "objective_definition": "Net return after costs minus maximum drawdown, percentage points",
     }
+    if version == SEED_VERSION:
+        optimizer["search_repeat_seeds"] = deepcopy(recipe["search_seeds"]["seeds"])
     state = (
         deepcopy(saved)
         if saved
@@ -490,7 +530,7 @@ def _run(
         if period not in windows:
             windows[period] = (
                 sensitivity_window(evidence, period)
-                if version == SENSITIVITY_VERSION
+                if version in (SENSITIVITY_VERSION, SEED_VERSION)
                 and period
                 in {row["name"] for row in recipe["recommendation_sensitivity"]["scenarios"]}
                 else slice_period(evidence, period)
@@ -551,11 +591,12 @@ def _run(
             TURNOVER_VERSION,
             CAPACITY_VERSION,
             SENSITIVITY_VERSION,
+            SEED_VERSION,
         ):
             from research.execution_features import attach
 
             current = attach(current)
-        if version in (CAPACITY_VERSION, SENSITIVITY_VERSION):
+        if version in (CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION):
             from research.portfolio_execution_features import attach as attach_portfolio_features
 
             current = attach_portfolio_features(current)
@@ -607,7 +648,7 @@ def _run(
             current, period="evaluation" if period == "final" else "selection"
         )
         if (
-            version in (TURNOVER_VERSION, CAPACITY_VERSION, SENSITIVITY_VERSION)
+            version in (TURNOVER_VERSION, CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION)
             and period != "final"
         ):
             report["research_opportunity_basis"] = build_evaluation_basis(
@@ -622,7 +663,7 @@ def _run(
         report["automatic_recipe"] = deepcopy(recipe)
         if hypothesis["id"] != "none":
             enrich(report, current)
-        if version in (CAPACITY_VERSION, SENSITIVITY_VERSION):
+        if version in (CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION):
             from research.portfolio_constraint_evidence import assess as assess_constraints
 
             report["portfolio_constraint_evidence"] = assess_constraints(
@@ -633,7 +674,7 @@ def _run(
                     "Native portfolio limits did not reconcile with frozen evidence: "
                     + "; ".join(report["portfolio_constraint_evidence"]["reasons"])
                 )
-        if version == SENSITIVITY_VERSION:
+        if version in (SENSITIVITY_VERSION, SEED_VERSION):
             scenario = next(
                 (
                     row
@@ -656,6 +697,10 @@ def _run(
                     "constraints": deepcopy(report["portfolio_constraint_evidence"]),
                 }
                 report["sensitivity_evidence"] = {**facts, "id": fingerprint(facts)}
+        if version == SEED_VERSION and period == "search":
+            from research.recommendation_seeds import account_facts
+
+            report["search_seed_evidence"] = account_facts(report, recipe["search_seeds"])
         state["simulations"] += 1
         return report
 
@@ -687,6 +732,11 @@ def _run(
                 "automatic_stock_condition": deepcopy(report["automatic_stock_condition"]),
                 "evaluation_basis": deepcopy(report["evaluation_basis"]),
                 **(
+                    {"search_seed_evidence": deepcopy(report["search_seed_evidence"])}
+                    if "search_seed_evidence" in report
+                    else {}
+                ),
+                **(
                     {"sensitivity_evidence": deepcopy(report["sensitivity_evidence"])}
                     if "sensitivity_evidence" in report
                     else {}
@@ -698,7 +748,7 @@ def _run(
                             report["portfolio_constraint_evidence"]
                         )
                     }
-                    if version in (CAPACITY_VERSION, SENSITIVITY_VERSION)
+                    if version in (CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION)
                     else {}
                 ),
             }
@@ -732,17 +782,19 @@ def _run(
             }
         )
 
-    def fit(period):
+    def fit(fit_name):
         control()
-        state["active_fit"] = period
+        period = data_period(fit_name)
+        seed = SEED_FITS.index(fit_name) - 3 if fit_name in SEED_FITS[4:] else 0
+        state["active_fit"] = fit_name
         current = state["fits"].setdefault(
-            period, {"trials": [], "candidates": {}, "selection": None}
+            fit_name, {"trials": [], "candidates": {}, "selection": None}
         )
         reference = measured(baseline, none, period)
         study = optuna.create_study(
             direction="maximize",
             sampler=optuna.samplers.TPESampler(
-                seed=0, n_startup_trials=len(screening), constant_liar=False
+                seed=seed, n_startup_trials=len(screening), constant_liar=False
             ),
         )
         for params in screening:
@@ -774,6 +826,7 @@ def _run(
                 TURNOVER_VERSION,
                 CAPACITY_VERSION,
                 SENSITIVITY_VERSION,
+                SEED_VERSION,
             ):
                 from research.execution_search import apply_choices
 
@@ -834,8 +887,9 @@ def _run(
                         {
                             "kind": "proposal_started",
                             **record,
-                            "number": FITS.index(period) * proposals_per_fit + index,
-                            "fit_period": period,
+                            "number": fit_names(version).index(fit_name) * proposals_per_fit
+                            + index,
+                            "fit_period": fit_name,
                         }
                     )
                 tested = measured(settings, hypothesis, period)
@@ -859,11 +913,12 @@ def _run(
                     observe(
                         {
                             "kind": "proposal_finished",
-                            "number": FITS.index(period) * proposals_per_fit + index,
+                            "number": fit_names(version).index(fit_name) * proposals_per_fit
+                            + index,
                             "state": "complete",
                             "value": score,
                             "reused": record["reused"],
-                            "fit_period": period,
+                            "fit_period": fit_name,
                         }
                     )
             study.tell(trial, score)
@@ -894,12 +949,13 @@ def _run(
         current["selection"] = deepcopy(winner)
         # Persist the choice before even requesting the next-window account.
         persist()
-        if version in (
+        if fit_name not in SEED_FITS[4:] and version in (
             EXECUTION_VERSION,
             PRIORITY_VERSION,
             TURNOVER_VERSION,
             CAPACITY_VERSION,
             SENSITIVITY_VERSION,
+            SEED_VERSION,
         ):
             from research.execution_search import original_sizing
 
@@ -956,7 +1012,7 @@ def _run(
     winner, rows = fit("search")
     process_supported = all(row["eligible"] for row in state["folds"])
     folds_supported = process_supported
-    if version in (TURNOVER_VERSION, CAPACITY_VERSION, SENSITIVITY_VERSION):
+    if version in (TURNOVER_VERSION, CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION):
         from research.recommendation_evidence import assess
         from research.recommendation_plan import challenges
 
@@ -1011,7 +1067,7 @@ def _run(
                     for row in plan["neighbors"]
                 ],
             }
-        if version in (CAPACITY_VERSION, SENSITIVITY_VERSION):
+        if version in (CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION):
             audits = []
             for settings, hypothesis, period, stress in (
                 (baseline, none, "search", False),
@@ -1051,7 +1107,7 @@ def _run(
                     *diagnostic.get("reasons", []),
                     "Portfolio constraint evidence is incomplete in a development comparison",
                 ]
-        if version == SENSITIVITY_VERSION:
+        if version in (SENSITIVITY_VERSION, SEED_VERSION):
             from research.recommendation_sensitivity import assess as assess_sensitivity
 
             sensitivity_plan = recipe["recommendation_sensitivity"]
@@ -1114,6 +1170,66 @@ def _run(
                         *sensitivity["reasons"],
                     ]
                 diagnostic["qualified"] = False
+        if version == SEED_VERSION:
+            from research.recommendation_seeds import assess as assess_seeds
+
+            seed_runs = None
+            if diagnostic["status"] == "supported" and winner["config_id"] != baseline_id:
+                seed_runs = []
+                for seed, name in enumerate(("search", *SEED_FITS[4:])):
+                    choice = winner if seed == 0 else fit(name)[0]
+                    row = measured(choice["strategies"], choice["hypothesis"], "search")
+                    shard = (
+                        read_evaluation(
+                            key_for(choice["strategies"], choice["hypothesis"], "search", False)
+                        )
+                        if read_evaluation
+                        else None
+                    )
+                    facts = row.get("search_seed_evidence")
+                    if facts is not None and (
+                        facts.get("support")
+                        != {
+                            "closed_trades": row["summary"]["closed_trades"],
+                            "entry_dates": row["entry_dates"],
+                        }
+                        or facts.get("constraints") != row.get("portfolio_constraint_evidence")
+                        or (isinstance(shard, dict) and shard.get("search_seed_evidence") != facts)
+                    ):
+                        raise ValueError("Saved search-repeat account facts changed on recovery")
+                    current = state["fits"][name]
+                    seed_runs.append(
+                        {
+                            "seed": seed,
+                            "proposals": len(current["trials"]),
+                            "adaptive_proposals": sum(
+                                trial["phase"] == "joint_refinement" for trial in current["trials"]
+                            ),
+                            "unique_accounts": len(current["candidates"]),
+                            "search_id": fingerprint(
+                                {"binding": binding, "seed": seed, "trials": current["trials"]}
+                            ),
+                            "account": shard,
+                            "facts": facts,
+                        }
+                    )
+            seed_check = assess_seeds(
+                recipe["search_seeds"],
+                seed_runs,
+                read_evaluation(key_for(baseline, none, "search", False))
+                if seed_runs and read_evaluation
+                else None,
+            )
+            diagnostic["search_seeds"] = seed_check
+            if seed_check["status"] != "supported":
+                if diagnostic["status"] == "supported":
+                    diagnostic["status"] = (
+                        "insufficient"
+                        if seed_check["status"] == "insufficient"
+                        else "not_supported"
+                    )
+                    diagnostic["reasons"] = [*diagnostic.get("reasons", []), *seed_check["reasons"]]
+                diagnostic["qualified"] = False
         if (
             state.get("recommendation_checks") is not None
             and state["recommendation_checks"] != diagnostic
@@ -1158,7 +1274,7 @@ def _run(
             raise ValueError(
                 "A saved walk-forward report differs from its recorded account evidence"
             )
-        if version in (CAPACITY_VERSION, SENSITIVITY_VERSION):
+        if version in (CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION):
             from research.portfolio_constraint_evidence import assess as assess_constraints
 
             actual = assess_constraints(report, evidence["portfolio_execution_features"])
@@ -1198,7 +1314,7 @@ def _run(
         else "inconclusive"
         if any("Fewer than" in reason for reason in final_reasons)
         or (
-            version in (TURNOVER_VERSION, CAPACITY_VERSION, SENSITIVITY_VERSION)
+            version in (TURNOVER_VERSION, CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION)
             and state["recommendation_checks"]["status"] == "insufficient"
         )
         else "not_supported"
@@ -1207,7 +1323,7 @@ def _run(
         "An improvement held up across refits and the final check"
         if supported
         else "More comparable development history is needed"
-        if version in (TURNOVER_VERSION, CAPACITY_VERSION, SENSITIVITY_VERSION)
+        if version in (TURNOVER_VERSION, CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION)
         and status == "inconclusive"
         else "More completed trades across different dates are needed"
         if status == "inconclusive"
@@ -1265,6 +1381,7 @@ def _run(
         TURNOVER_VERSION,
         CAPACITY_VERSION,
         SENSITIVITY_VERSION,
+        SEED_VERSION,
     ):
         result["experiment"]["execution_research"] = deepcopy(recipe["execution_research"])
     final_info = {
@@ -1319,6 +1436,7 @@ def _run(
         TURNOVER_VERSION,
         CAPACITY_VERSION,
         SENSITIVITY_VERSION,
+        SEED_VERSION,
     ):
         result["automatic_research"]["execution_research"] = {
             "version": "research-execution-findings-v1",
@@ -1329,7 +1447,13 @@ def _run(
             ],
             "policy": "All candidates stay within original allocation and order ceilings and fixed hard risk limits. Original-sizing controls describe development outcomes only; no final-period sizing comparison or larger-exposure improvement claim.",
         }
-    if version in (PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION, SENSITIVITY_VERSION):
+    if version in (
+        PRIORITY_VERSION,
+        TURNOVER_VERSION,
+        CAPACITY_VERSION,
+        SENSITIVITY_VERSION,
+        SEED_VERSION,
+    ):
         from research.execution_search import priority_counts
 
         result["automatic_research"]["execution_research"].update(
@@ -1342,7 +1466,7 @@ def _run(
                 for period in FITS
             ],
         )
-    if version in (TURNOVER_VERSION, CAPACITY_VERSION, SENSITIVITY_VERSION):
+    if version in (TURNOVER_VERSION, CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION):
         result["automatic_research"]["recommendation_checks"] = deepcopy(
             state["recommendation_checks"]
         )
@@ -1355,19 +1479,23 @@ def _run(
             version="research-execution-findings-v3",
             turnover_policy=recipe["execution_research"]["turnover_policy"],
         )
-    if version in (CAPACITY_VERSION, SENSITIVITY_VERSION):
+    if version in (CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION):
         result["automatic_research"]["execution_research"].update(
             version="research-execution-findings-v4",
             portfolio_features_id=recipe["portfolio_execution_features_id"],
             portfolio_constraints=deepcopy(recipe["policies"]["portfolio_constraints"]),
             feature_coverage=deepcopy(evidence["portfolio_execution_features"]["counts"]),
         )
-    if version == SENSITIVITY_VERSION:
+    if version in (SENSITIVITY_VERSION, SEED_VERSION):
         result["automatic_research"]["selection_basis"] = (
             "Training-only expanding refits, later-window and higher-cost checks, "
             "paired daily ranges, measured neighbours, native constraint audits and "
             "prespecified symbol/date account reruns must qualify before freezing a "
             "changed setup. Final outcomes never select settings."
+        )
+    if version == SEED_VERSION:
+        result["automatic_research"]["selection_basis"] += (
+            " Three declared search seeds must also support a stable development advantage; seed 0 remains primary."
         )
     from research.automatic_comparison import build as comparison_curves
 

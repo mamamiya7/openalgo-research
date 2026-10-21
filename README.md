@@ -62,7 +62,7 @@ adds ATR exits, stop-risk sizing and hard portfolio limits. The
 adds daily buy budgets, paired development-return ranges, higher-cost and
 neighbour checks, with unchanged settings retained when evidence is weak.
 Current automatic research considers 108 registered stock/market choices within
-272 proposals and at most 384 calculations, preserving older studies' versions.
+up to 408 proposals and 512 calculations, preserving older studies' versions.
 
 The locally activated [comparison increment](docs/research/TRADEOFFS_VOLUME_20261021.md) adds
 **Compare alternatives** to completed automatic studies: inspect saved
@@ -83,8 +83,16 @@ checks a supported setup on separate symbol groups and earlier/later development
 dates using actual native account reruns. The app chooses these tests and reuses
 saved prices automatically. Weak or incomplete evidence keeps the unchanged
 reference; passing is historical robustness evidence, not a probability of future
-profit. New automatic studies use v14; saved older studies retain their versions.
+profit. Saved v14 studies retain their versions.
 Details stay inside the existing Research details view.
+
+The [v15 search-repeat increment](docs/research/SEARCH_SEEDS_20261021.md) checks
+whether a supported setup depends on one lucky search path. Two additional
+fixed-seed searches reuse the same prices and matching account calculations;
+they can reject the primary choice but cannot pick a luckier replacement.
+New automatic studies use v15. The separate [controlled calibration protocol](docs/research/SEARCH_CALIBRATION_PROTOCOL.md)
+measures false recommendations under declared test models, not the probability
+that a user's strategy will profit. Public release ZIPs remain unchanged.
 
 The next workflow increment previews CSV counts and dates before setup, simplifies
 experiment navigation to **Overview → Setup → Results → Saved setups**, and lets

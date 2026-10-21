@@ -351,6 +351,7 @@ function StudyWorkspace({
           'automatic-hypotheses-v12',
           'automatic-hypotheses-v13',
           'automatic-hypotheses-v14',
+          'automatic-hypotheses-v15',
         ].includes(result.automatic_research?.version ?? '') &&
         job.status === 'completed' && (
           <ResearchTradeoffs
