@@ -1,6 +1,6 @@
 # OpenAlgo Research status
 
-## Saved alternatives and volume admission — 21 October 2026
+## Saved alternatives and volume admission — 21 October 2026 local activation
 
 The [next core increment](TRADEOFFS_VOLUME_20261021.md) adds **Compare alternatives**
 to supported completed automatic studies. It reads saved final-development
@@ -18,8 +18,12 @@ participation-limited execution. Wider recommendation calibration remains planne
 319 distinct scoped backend checks and 33 frontend checks pass, including the
 connected v12 programme/recovery, exact settings inspection, owner/result races,
 volume admission and resource repetitions. TypeScript, source compatibility and
-the production build pass. Source is qualified; local activation is recorded
-after the existing-account and fresh-worker verification below.
+the production build pass. Activated locally from `6f4b9cd43`: the existing
+account, newly served UI, authenticated alternatives route, installed compatibility
+and fresh worker heartbeat pass. All 63 saved run identities, configuration and
+Historify bytes are unchanged. Source/UI rollback files are retained locally;
+no research or trading job was started. Pushed to `codex/native-research-refinement`;
+public release ZIPs remain unchanged.
 
 ## Turnover and recommendation evidence — 21 October 2026 local activation
 

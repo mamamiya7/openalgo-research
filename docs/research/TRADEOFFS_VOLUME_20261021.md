@@ -110,4 +110,9 @@ Graph orientation used the historical Graphify map; current source and the
 delivery plan controlled implementation. Windows application control prevented
 a fresh Graphify CLI rebuild; this is not represented as an updated graph.
 
-Local activation is recorded after post-restart verification.
+Activated locally from `6f4b9cd43`. The existing account, served production UI,
+authenticated alternatives route, installed compatibility and fresh worker
+heartbeat pass. All 63 saved run identities, configuration and Historify bytes
+are unchanged. Source/UI rollback files are retained locally; no normal research
+or trading job was started. Source is pushed to `codex/native-research-refinement`;
+public release ZIPs remain unchanged.
