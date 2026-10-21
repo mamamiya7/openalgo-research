@@ -1,6 +1,6 @@
 # OpenAlgo Research status
 
-## Symbol and date sensitivity — 21 October 2026 source qualification
+## Symbol and date sensitivity — 21 October 2026 local activation
 
 The [v14 core increment](SYMBOL_DATE_SENSITIVITY_20261021.md) adds four
 predeclared development masks: two complementary symbol groups and earlier/later
@@ -24,7 +24,12 @@ altered saved support facts and reference fallback on a deliberately weak date
 half. Prior v13 contract hashes and its complete recommendation/recovery journey
 remain unchanged. Resource repetitions have stable handles and 53 KB retained
 memory. TypeScript, lint, source compatibility and the production build pass.
-Local activation and source push follow; public release ZIPs remain unchanged.
+Activated locally from `c6a40e85a`: the existing account, newly served UI,
+authenticated route, installed compatibility and fresh worker heartbeat pass.
+All 63 saved run identities, configuration and Historify bytes are unchanged.
+Source/UI rollback files are retained locally; no normal research or trading job
+was started. The source branch is `codex/native-research-refinement`;
+public release ZIPs remain unchanged.
 These are historical stress checks, not independent replication or calibrated
 search-adjusted confidence. Wider search-seed/false-discovery calibration remains
 the next package 5 dependency.

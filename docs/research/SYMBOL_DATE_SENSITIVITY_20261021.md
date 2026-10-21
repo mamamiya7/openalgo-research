@@ -126,8 +126,11 @@ cache or database schema. Existing 200-symbol, 25,000-signal, observation,
 metadata, storage and account budgets bound the work. TypeScript, lint, source
 compatibility and the production build pass.
 
-Populated local activation is recorded in STATUS after verification. Controlled
-OHLCV and synthetic selection fixtures are not described as broker downloads or
+Activated locally from `c6a40e85a`. The existing account, served new assets,
+authentication boundary, installed compatibility and fresh worker heartbeat pass.
+All 63 saved run identities, configuration and Historify bytes remain unchanged.
+Source/UI rollback files are retained locally; no normal research or trading job
+was started. Controlled OHLCV and synthetic selection fixtures are not described as broker downloads or
 financial-edge calibration. The ordinary install dependencies do not change;
 this is not a new full Windows/Linux release qualification. Public release ZIP
 publication remains separate from local installation and source push.
