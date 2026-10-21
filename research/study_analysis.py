@@ -13,6 +13,7 @@ VERSION = "research-analysis-v1"
 MAX_TRIALS = 1000
 MAX_AXES = 57
 EXECUTION_MAX_AXES = 73
+PRIORITY_MAX_AXES = 74
 MAX_FIGURE_BYTES = 8 * 1024 * 1024
 # fANOVA integrates all one-hot dimensions of a categorical parameter jointly.
 # Its tree midpoint Cartesian product can grow exponentially with the category
@@ -36,6 +37,7 @@ def _trailing_axes(experiment):
             "automatic-hypotheses-v8",
             "automatic-hypotheses-v9",
             "automatic-hypotheses-v10",
+            "automatic-hypotheses-v11",
         )
         or not isinstance(specification, dict)
         or specification.get("version") != TRAILING_VERSION
@@ -82,6 +84,7 @@ def _timing_axes(experiment):
             "automatic-hypotheses-v8",
             "automatic-hypotheses-v9",
             "automatic-hypotheses-v10",
+            "automatic-hypotheses-v11",
         )
         or not isinstance(specification, dict)
         or specification.get("version") != TIMING_VERSION
@@ -144,8 +147,11 @@ def reconstruct_study(experiment):
     if not isinstance(trials, list) or len(trials) > MAX_TRIALS:
         raise ValueError("Study analysis supports at most 1,000 recorded proposals")
     maximum = (
-        EXECUTION_MAX_AXES
-        if experiment.get("experiment_version") == "automatic-hypotheses-v10"
+        PRIORITY_MAX_AXES
+        if experiment.get("experiment_version") == "automatic-hypotheses-v11"
+        else EXECUTION_MAX_AXES
+        if experiment.get("experiment_version")
+        in ("automatic-hypotheses-v10", "automatic-hypotheses-v11")
         else MAX_AXES
     )
     if not isinstance(axes, dict) or len(axes) > maximum:
@@ -159,8 +165,20 @@ def reconstruct_study(experiment):
     if any(name.endswith(".timing_choice") and name not in timing_axes for name in axes):
         raise ValueError("Recorded timing parameters need their frozen contract")
     execution_axes = {}
+    expected_execution = {
+        "automatic-hypotheses-v10": "research-execution-search-v1",
+        "automatic-hypotheses-v11": "research-execution-search-v2",
+    }.get(experiment.get("experiment_version"))
+    if expected_execution and (
+        not isinstance(experiment.get("execution_research"), dict)
+        or experiment["execution_research"].get("version") != expected_execution
+    ):
+        raise ValueError("Recorded execution descriptor differs from its programme version")
     if experiment.get("execution_research") is not None:
-        if experiment.get("experiment_version") != "automatic-hypotheses-v10":
+        if experiment.get("experiment_version") not in (
+            "automatic-hypotheses-v10",
+            "automatic-hypotheses-v11",
+        ):
             raise ValueError("Execution research needs its recorded programme")
         from research.execution_search import axes as execution_domains
 
@@ -168,7 +186,11 @@ def reconstruct_study(experiment):
         if any(axes.get(name) != axis for name, axis in execution_axes.items()):
             raise ValueError("Recorded execution parameters differ from their frozen contract")
     if any(
-        name.endswith((".execution_choice", ".portfolio_choice")) and name not in execution_axes
+        (
+            name.endswith((".execution_choice", ".portfolio_choice"))
+            or name == "portfolio.entry_priority"
+        )
+        and name not in execution_axes
         for name in axes
     ):
         raise ValueError("Recorded execution parameters need their frozen contract")
@@ -183,6 +205,7 @@ def reconstruct_study(experiment):
                 if experiment.get("experiment_version") in (
                     "automatic-hypotheses-v9",
                     "automatic-hypotheses-v10",
+                    "automatic-hypotheses-v11",
                 ):
                     from research.expanded_stock_market import catalog
 

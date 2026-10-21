@@ -219,6 +219,12 @@ def policy_for_request(snapshot, spec):
         if any("execution_policy" in row for row in spec["portfolio"].get("strategies", [])):
             from .vectorbt_portfolio import EXECUTION_POLICY_VERSION as POLICY_VERSION
 
+            if (
+                spec["portfolio"]["strategies"][0]["execution_policy"].get("version")
+                == "research-execution-aware-v2"
+            ):
+                from research.execution_policy import PRIORITY_POLICY_VERSION as POLICY_VERSION
+
         return POLICY_VERSION
     execution = spec.get("execution") if isinstance(spec, dict) else None
     if execution and execution.get("engine") == "vectorbt":

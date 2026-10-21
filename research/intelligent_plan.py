@@ -59,6 +59,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v8",
         "automatic-hypotheses-v9",
         "automatic-hypotheses-v10",
+        "automatic-hypotheses-v11",
     )
     joint = (
         trailing
@@ -240,6 +241,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v8",
         "automatic-hypotheses-v9",
         "automatic-hypotheses-v10",
+        "automatic-hypotheses-v11",
     ):
         payload["methods"].append(
             {
@@ -253,6 +255,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v8",
         "automatic-hypotheses-v9",
         "automatic-hypotheses-v10",
+        "automatic-hypotheses-v11",
     ):
         payload["budget"].update(
             proposals=192,
@@ -281,6 +284,7 @@ def build_plan(portfolio, *, interval):
     if portfolio.get("automatic_research", {}).get("version") in (
         "automatic-hypotheses-v9",
         "automatic-hypotheses-v10",
+        "automatic-hypotheses-v11",
     ):
         from research.expanded_stock_market import FEATURE_VERSION, catalog, recipe
 
@@ -300,7 +304,10 @@ def build_plan(portfolio, *, interval):
                 method["reason"] = (
                     "Completed NSE daily closes; 5/10/20/60-session change and 0/2% thresholds. Every new10/60-session condition receives a fixed original-clock probe per fit."
                 )
-    if portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v10":
+    if portfolio.get("automatic_research", {}).get("version") in (
+        "automatic-hypotheses-v10",
+        "automatic-hypotheses-v11",
+    ):
         payload["budget"].update(
             proposals=256,
             proposals_per_fit=64,
@@ -330,5 +337,23 @@ def build_plan(portfolio, *, interval):
         )
         payload["objective"] = (
             "Balanced net return minus drawdown under frozen hard risk limits; never increase declared allocation or order ceilings"
+        )
+    if portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v11":
+        payload["budget"].update(
+            proposals=272,
+            proposals_per_fit=68,
+            screening_proposals=200,
+            refinement_proposals=72,
+            entry_priority_probe_limit=8,
+            entry_priority_probe_limit_per_fit=2,
+            min_joint_refinement_proposals=72,
+            min_joint_refinement_proposals_per_fit=18,
+        )
+        payload["methods"].append(
+            {
+                "id": "entry_priority",
+                "status": "admitted",
+                "reason": "One frozen account-wide ordering: source, reversed source, or lower modeled stop-loss fraction of entry cash cost first. Two explicit priority probes per fit; no future prices or per-strategy priority advantage.",
+            }
         )
     return {**payload, "id": fingerprint(payload)}

@@ -236,10 +236,59 @@ describe('native portfolio consumer journey', () => {
     const original = draft()
     const optimized = selectPortfolioRun(original, true)
     expect(optimized.optimizing).toBe(true)
-    expect(optimized.portfolio.automatic_research).toEqual({ version: 'automatic-hypotheses-v10' })
+    expect(optimized.portfolio.automatic_research).toEqual({ version: 'automatic-hypotheses-v11' })
     expect(optimized.portfolio.strategies).toEqual(original.portfolio.strategies)
     expect(optimized.portfolio.capital).toBe(original.portfolio.capital)
     expect(original.portfolio.automatic_research).toBeUndefined()
+  })
+  it('starts a new priority programme from capped percentage rules without changing saved v10', () => {
+    const fixed = draft()
+    fixed.portfolio.risk_limits = { ...defaultRiskLimits }
+    fixed.portfolio.strategies[0].execution_policy = {
+      version: 'research-execution-aware-v1',
+      exit_mode: 'percent',
+      sizing: 'allocation',
+      risk_limits: fixed.portfolio.risk_limits,
+    }
+    const next = selectPortfolioRun(fixed, true)
+    expect(next.portfolio.automatic_research?.version).toBe('automatic-hypotheses-v11')
+    expect(next.portfolio.strategies[0].execution_policy).toEqual({
+      ...fixed.portfolio.strategies[0].execution_policy,
+      version: 'research-execution-aware-v2',
+      entry_priority: 'source',
+    })
+    expect(fixed.portfolio.strategies[0].execution_policy.version).toBe(
+      'research-execution-aware-v1'
+    )
+    fixed.portfolio.automatic_research = { version: 'automatic-hypotheses-v10' }
+    expect(selectPortfolioRun(fixed, true).portfolio).toEqual(fixed.portfolio)
+  })
+  it('adds a CSV to a chosen-policy account with fresh trade rules and shared account limits', () => {
+    const fixed = draft()
+    fixed.portfolio.risk_limits = { ...defaultRiskLimits }
+    fixed.portfolio.strategies[0].execution_policy = {
+      version: 'research-execution-aware-v2',
+      exit_mode: 'atr',
+      atr_period: 14,
+      atr_stop_multiple: 2,
+      atr_target_multiple: 3,
+      sizing: 'stop_risk',
+      risk_budget_fraction: 0.5,
+      entry_priority: 'lower_stop_risk',
+      risk_limits: fixed.portfolio.risk_limits,
+    }
+    const added = addPortfolioSource(fixed, source('b'.repeat(32)), 'Momentum.csv')
+    expect(added.portfolio.strategies[1].execution_policy).toEqual({
+      version: 'research-execution-aware-v2',
+      exit_mode: 'percent',
+      sizing: 'allocation',
+      entry_priority: 'lower_stop_risk',
+      risk_limits: fixed.portfolio.risk_limits,
+    })
+    expect(added.portfolio.strategies[0].execution_policy).toEqual(
+      fixed.portfolio.strategies[0].execution_policy
+    )
+    expect(selectPortfolioRun(fixed, true).portfolio.automatic_research).toBeUndefined()
   })
   it.each([
     'automatic-hypotheses-v2',
@@ -251,6 +300,7 @@ describe('native portfolio consumer journey', () => {
     'automatic-hypotheses-v8',
     'automatic-hypotheses-v9',
     'automatic-hypotheses-v10',
+    'automatic-hypotheses-v11',
   ] as const)('keeps the saved %s recipe when optimizing again', (version) => {
     const saved = draft()
     saved.portfolio.automatic_research = { version }
@@ -274,7 +324,7 @@ describe('native portfolio consumer journey', () => {
     savedDraft({ ...original, optimizing: true })
     mount()
     await userEvent.click(await screen.findByRole('button', { name: 'Automatic research' }))
-    expect(screen.getByLabelText('Research scope')).toHaveValue('automatic-hypotheses-v10')
+    expect(screen.getByLabelText('Research scope')).toHaveValue('automatic-hypotheses-v11')
     await userEvent.click(screen.getByText('Advanced research options'))
     await userEvent.selectOptions(
       screen.getByLabelText('Research scope'),
@@ -458,12 +508,12 @@ describe('native portfolio consumer journey', () => {
     savedDraft({ ...original, optimizing: true })
     mount()
     await userEvent.click(await screen.findByRole('button', { name: 'Automatic research' }))
-    expect(screen.getByLabelText('Research scope')).toHaveValue('automatic-hypotheses-v10')
+    expect(screen.getByLabelText('Research scope')).toHaveValue('automatic-hypotheses-v11')
     expect(screen.getByText(/Tests percentage and ATR exits/)).not.toBeVisible()
     await userEvent.click(screen.getByRole('button', { name: 'Optimize automatically' }))
     await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
     const sent = vi.mocked(portfolioResearch.submit).mock.calls[0][0]
-    expect(sent.automatic_research).toEqual({ version: 'automatic-hypotheses-v10' })
+    expect(sent.automatic_research).toEqual({ version: 'automatic-hypotheses-v11' })
     expect(sent.capital).toBe(original.portfolio.capital)
     expect(sent.strategies[0].config).toEqual(original.portfolio.strategies[0].config)
     expect(sent.strategies[0].allocation_pct).toBe(original.portfolio.strategies[0].allocation_pct)
@@ -483,7 +533,7 @@ describe('native portfolio consumer journey', () => {
     await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
     const sent = vi.mocked(portfolioResearch.submit).mock.calls[0][0]
     expect(sent.risk_limits).toEqual({ ...defaultRiskLimits, max_open_positions: 4 })
-    expect(sent.automatic_research?.version).toBe('automatic-hypotheses-v10')
+    expect(sent.automatic_research?.version).toBe('automatic-hypotheses-v11')
   })
 
   it('rejects invalid caps and keeps selected execution rules in fixed requests', () => {

@@ -214,6 +214,8 @@ def _draft(source, receipt, previous=None):
     draft = library.fresh_draft()
     draft["optimization"]["trials"] = 25
     config, search = config_defaults(), {}
+    allocation = 100
+    execution_policy = None
     if previous:
         old, source_id = previous
         draft["portfolio"].update(
@@ -225,6 +227,10 @@ def _draft(source, receipt, previous=None):
         )
         if strategy:
             config, search = deepcopy(strategy["config"]), deepcopy(strategy["search"])
+            if strategy.get("execution_policy"):
+                execution_policy = deepcopy(strategy["execution_policy"])
+                allocation = strategy["allocation_pct"]
+                draft["portfolio"]["risk_limits"] = deepcopy(execution_policy["risk_limits"])
     draft["portfolio"].update(
         name=source["title"][:120],
         strategies=[
@@ -232,10 +238,11 @@ def _draft(source, receipt, previous=None):
                 "id": uuid.uuid4().hex,
                 "name": source["title"][:80],
                 "source_id": receipt["id"],
-                "allocation_pct": 100,
+                "allocation_pct": allocation,
                 "config": config,
                 "search": search,
                 "type": "signals",
+                **({"execution_policy": execution_policy} if execution_policy else {}),
             }
         ],
     )

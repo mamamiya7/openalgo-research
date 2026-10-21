@@ -22,6 +22,7 @@ from research.joint_stock_market import markers
 from research.method_registry import (
     EXECUTION_RECIPE_VERSION,
     EXPANDED_RECIPE_VERSION,
+    PRIORITY_RECIPE_VERSION,
     RECIPE_VERSION,
     bounded,
     catalog,
@@ -80,7 +81,8 @@ def _manifest(manifest, calculation, binding, periods, context_id, recipe_versio
         or manifest.get("reserved_final_excluded") is not True
         or manifest.get("status") not in ("collecting", "complete", "partial", "unavailable")
         or not isinstance(manifest.get("entries"), dict)
-        or len(manifest["entries"]) > (384 if recipe_version == EXECUTION_RECIPE_VERSION else 320)
+        or len(manifest["entries"])
+        > (384 if recipe_version in (EXECUTION_RECIPE_VERSION, PRIORITY_RECIPE_VERSION) else 320)
     ):
         raise ValueError("Saved method development index changed")
     expected = {}
@@ -197,12 +199,17 @@ def _build(mandate, calculation, development_manifest):
     _sealed(
         mandate,
         maximum=EXECUTION_MAX_METADATA_BYTES
-        if source_version == EXECUTION_RECIPE_VERSION
+        if source_version in (EXECUTION_RECIPE_VERSION, PRIORITY_RECIPE_VERSION)
         else MAX_METADATA_BYTES,
     )
     source = mandate.get("source", {})
     recipe_version = source.get("recipe_version")
-    if recipe_version not in (RECIPE_VERSION, EXPANDED_RECIPE_VERSION, EXECUTION_RECIPE_VERSION):
+    if recipe_version not in (
+        RECIPE_VERSION,
+        EXPANDED_RECIPE_VERSION,
+        EXECUTION_RECIPE_VERSION,
+        PRIORITY_RECIPE_VERSION,
+    ):
         return {
             "version": VERSION,
             "status": "unavailable",
@@ -211,12 +218,24 @@ def _build(mandate, calculation, development_manifest):
     registry = catalog(recipe_version)
     hypotheses = pinned_hypotheses(recipe_version)
     materialize_markers = markers
-    if recipe_version in (EXPANDED_RECIPE_VERSION, EXECUTION_RECIPE_VERSION):
+    if recipe_version in (
+        EXPANDED_RECIPE_VERSION,
+        EXECUTION_RECIPE_VERSION,
+        PRIORITY_RECIPE_VERSION,
+    ):
         from research.expanded_stock_market import markers as materialize_markers
     by_hypothesis = {row["id"]: row for row in hypotheses}
     search = mandate.get("search", {})
-    proposals_per_fit = 64 if recipe_version == EXECUTION_RECIPE_VERSION else 48
-    max_simulations = 384 if recipe_version == EXECUTION_RECIPE_VERSION else 320
+    proposals_per_fit = (
+        68
+        if recipe_version == PRIORITY_RECIPE_VERSION
+        else 64
+        if recipe_version == EXECUTION_RECIPE_VERSION
+        else 48
+    )
+    max_simulations = (
+        384 if recipe_version in (EXECUTION_RECIPE_VERSION, PRIORITY_RECIPE_VERSION) else 320
+    )
     if (
         mandate.get("version") != "research-mandate-v1"
         or search.get("hypothesis_catalog") != hypotheses
@@ -260,7 +279,7 @@ def _build(mandate, calculation, development_manifest):
     base, axes = _prepare([{**row, "search": domains[row["id"]]} for row in settings])
     execution = None
     execution_axes = {}
-    if recipe_version == EXECUTION_RECIPE_VERSION:
+    if recipe_version in (EXECUTION_RECIPE_VERSION, PRIORITY_RECIPE_VERSION):
         from research.execution_search import axes as policy_axes
         from research.execution_search import descriptor as execution_descriptor
 
@@ -270,7 +289,8 @@ def _build(mandate, calculation, development_manifest):
             execution_descriptor(
                 {
                     "portfolio": {
-                        "risk_limits": mandate.get("economic_assumptions", {}).get("risk_limits")
+                        "automatic_research": {"version": recipe_version},
+                        "risk_limits": mandate.get("economic_assumptions", {}).get("risk_limits"),
                     },
                     "strategies": settings,
                 }
@@ -521,9 +541,25 @@ def _build(mandate, calculation, development_manifest):
             "Native clock-grid membership is not re-certified from this compact metadata",
         ],
     }
-    if recipe_version == EXECUTION_RECIPE_VERSION:
+    if recipe_version in (EXECUTION_RECIPE_VERSION, PRIORITY_RECIPE_VERSION):
         result["limitations"].append(
             "Condition-family counts include execution and sizing variants; exit choices, sizing controls and hard limits are not additional indicator families"
         )
+    if recipe_version == PRIORITY_RECIPE_VERSION:
+        from research.execution_search import ENTRY_PRIORITIES, priority_counts
+
+        result["entry_priority"] = {
+            "choices": list(ENTRY_PRIORITIES),
+            "fits": [
+                {
+                    "period": period,
+                    "choices": priority_counts(
+                        calculation["fits"].get(period, {}).get("trials", [])
+                    ),
+                }
+                for period in FITS
+            ],
+            "count_basis": "Proposal-linked training accounts; reused proposals counted separately. Matched sizing controls and final accounts are excluded.",
+        }
     bounded(result, MAX_OUTPUT_BYTES)
     return {**result, "id": fingerprint(result)}

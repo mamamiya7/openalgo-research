@@ -25,9 +25,12 @@ const periods = [
 function recordedWalkForward(findings: Findings): WalkForwardFindings | undefined {
   const receipt = findings.walk_forward
   if (
-    !['automatic-hypotheses-v8', 'automatic-hypotheses-v9', 'automatic-hypotheses-v10'].includes(
-      findings.version
-    ) ||
+    ![
+      'automatic-hypotheses-v8',
+      'automatic-hypotheses-v9',
+      'automatic-hypotheses-v10',
+      'automatic-hypotheses-v11',
+    ].includes(findings.version) ||
     receipt?.version !== 'research-walk-forward-findings-v1' ||
     !receipt ||
     !['supported', 'not_supported'].includes(receipt.status) ||
@@ -253,6 +256,7 @@ export function AutomaticResearchFindings({
             'automatic-hypotheses-v8',
             'automatic-hypotheses-v9',
             'automatic-hypotheses-v10',
+            'automatic-hypotheses-v11',
           ].includes(findings.version) &&
             selectedSettings?.map((strategy) => (
               <p key={strategy.id} className="text-sm">
@@ -367,8 +371,11 @@ export function AutomaticResearchFindings({
             simulations · {number(findings.counts.finalists)} finalist
             {findings.counts.finalists === 1 ? '' : 's'}
           </p>
-          {findings.version === 'automatic-hypotheses-v10' &&
-            findings.execution_research?.version === 'research-execution-findings-v1' && (
+          {['automatic-hypotheses-v10', 'automatic-hypotheses-v11'].includes(findings.version) &&
+            findings.execution_research &&
+            ['research-execution-findings-v1', 'research-execution-findings-v2'].includes(
+              findings.execution_research.version
+            ) && (
               <div className="overflow-x-auto">
                 <p className="mb-2 font-medium">Sizing comparison · development dates</p>
                 <table

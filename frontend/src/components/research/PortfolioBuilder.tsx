@@ -37,6 +37,20 @@ export const defaultRiskLimits: PortfolioRiskLimits = {
   max_trade_risk_pct: 1,
   max_total_stop_risk_pct: 5,
 }
+function newPriorityReference(strategies: PortfolioStrategy[]): PortfolioStrategy[] {
+  return strategies.map((row) =>
+    row.execution_policy
+      ? {
+          ...row,
+          execution_policy: {
+            ...row.execution_policy,
+            version: 'research-execution-aware-v2',
+            entry_priority: 'source',
+          },
+        }
+      : row
+  )
+}
 export function freshPortfolioDraft(): PortfolioDraft {
   return {
     portfolio: {
@@ -69,7 +83,10 @@ export function selectPortfolioRun(draft: PortfolioDraft, optimizing: boolean): 
     draft.portfolio.strategies.some(
       (row) =>
         row.execution_policy &&
-        (row.execution_policy.exit_mode === 'atr' || row.execution_policy.sizing === 'stop_risk')
+        (row.execution_policy.exit_mode === 'atr' ||
+          row.execution_policy.sizing === 'stop_risk' ||
+          (row.execution_policy.entry_priority != null &&
+            row.execution_policy.entry_priority !== 'source'))
     )
   ) {
     return applySuggestedSearch(
@@ -94,11 +111,14 @@ export function selectPortfolioRun(draft: PortfolioDraft, optimizing: boolean): 
         automatic_research: {
           version:
             draft.portfolio.engine === 'vectorbt'
-              ? 'automatic-hypotheses-v10'
+              ? 'automatic-hypotheses-v11'
               : 'automatic-trade-management-v2',
         },
         ...(draft.portfolio.engine === 'vectorbt'
-          ? { risk_limits: draft.portfolio.risk_limits ?? { ...defaultRiskLimits } }
+          ? {
+              risk_limits: draft.portfolio.risk_limits ?? { ...defaultRiskLimits },
+              strategies: newPriorityReference(draft.portfolio.strategies),
+            }
           : {}),
       },
     }
@@ -218,6 +238,20 @@ export function addPortfolioSource(
     config: structuredClone(researchDefaults),
     search: {},
   }
+  const accountPolicy = draft.portfolio.strategies.find(
+    (row) => row.execution_policy
+  )?.execution_policy
+  if (accountPolicy) {
+    strategy.execution_policy = {
+      version: accountPolicy.version,
+      exit_mode: 'percent',
+      sizing: 'allocation',
+      risk_limits: draft.portfolio.risk_limits ?? accountPolicy.risk_limits,
+      ...(accountPolicy.version === 'research-execution-aware-v2'
+        ? { entry_priority: accountPolicy.entry_priority ?? 'source' }
+        : {}),
+    }
+  }
   if (draft.optimizing) strategy.search = suggestedStrategySearch(strategy, draft.portfolio.engine)
   const strategies = [...draft.portfolio.strategies, strategy]
   return {
@@ -232,10 +266,11 @@ export function addPortfolioSource(
 export function portfolioPayload(draft: PortfolioDraft): PortfolioRequest {
   const { optimization: _discarded, validation, automatic_research, ...portfolio } = draft.portfolio
   const automatic = draft.optimizing && Boolean(automatic_research)
-  const riskLimits =
-    automatic_research?.version === 'automatic-hypotheses-v10'
-      ? (portfolio.risk_limits ?? defaultRiskLimits)
-      : portfolio.risk_limits
+  const riskLimits = ['automatic-hypotheses-v10', 'automatic-hypotheses-v11'].includes(
+    automatic_research?.version ?? ''
+  )
+    ? (portfolio.risk_limits ?? defaultRiskLimits)
+    : portfolio.risk_limits
   return {
     ...portfolio,
     ...(riskLimits ? { risk_limits: riskLimits } : {}),
@@ -320,6 +355,7 @@ export function portfolioEngineIssue(
           'automatic-hypotheses-v8',
           'automatic-hypotheses-v9',
           'automatic-hypotheses-v10',
+          'automatic-hypotheses-v11',
         ].includes(draft.portfolio.automatic_research?.version ?? ''))
     )
       return 'Entry conditions currently need VectorBT. Choose VectorBT to keep these rules.'
@@ -678,7 +714,9 @@ export function PortfolioBuilder({
                         (row) =>
                           row.execution_policy &&
                           (row.execution_policy.exit_mode === 'atr' ||
-                            row.execution_policy.sizing === 'stop_risk')
+                            row.execution_policy.sizing === 'stop_risk' ||
+                            (row.execution_policy.entry_priority != null &&
+                              row.execution_policy.entry_priority !== 'source'))
                       ))
                   }
                   title={
@@ -688,7 +726,9 @@ export function PortfolioBuilder({
                         (row) =>
                           row.execution_policy &&
                           (row.execution_policy.exit_mode === 'atr' ||
-                            row.execution_policy.sizing === 'stop_risk')
+                            row.execution_policy.sizing === 'stop_risk' ||
+                            (row.execution_policy.entry_priority != null &&
+                              row.execution_policy.entry_priority !== 'source'))
                       ))
                       ? 'Use Custom search to preserve this setup’s selected entry and execution rules.'
                       : undefined
@@ -711,12 +751,13 @@ export function PortfolioBuilder({
                       automatic_research: {
                         version:
                           portfolio.engine === 'vectorbt'
-                            ? 'automatic-hypotheses-v10'
+                            ? 'automatic-hypotheses-v11'
                             : 'automatic-trade-management-v2',
                       },
                       ...(portfolio.engine === 'vectorbt'
                         ? {
                             risk_limits: portfolio.risk_limits ?? { ...defaultRiskLimits },
+                            strategies: newPriorityReference(portfolio.strategies),
                           }
                         : {}),
                     })
@@ -729,7 +770,9 @@ export function PortfolioBuilder({
             </fieldset>
           )}
           {(portfolio.risk_limits ||
-            portfolio.automatic_research?.version === 'automatic-hypotheses-v10') && (
+            ['automatic-hypotheses-v10', 'automatic-hypotheses-v11'].includes(
+              portfolio.automatic_research?.version ?? ''
+            )) && (
             <fieldset disabled={disabled} className="mt-4 grid gap-3 sm:grid-cols-3">
               <legend className="mb-2 text-sm font-medium">Portfolio limits</legend>
               {(
@@ -806,15 +849,46 @@ export function PortfolioBuilder({
                             PortfolioRequest['automatic_research']
                           >['version'],
                         },
-                        risk_limits:
-                          event.target.value === 'automatic-hypotheses-v10'
-                            ? (portfolio.risk_limits ?? { ...defaultRiskLimits })
-                            : portfolio.strategies.some((row) => row.execution_policy)
-                              ? portfolio.risk_limits
-                              : undefined,
+                        risk_limits: [
+                          'automatic-hypotheses-v10',
+                          'automatic-hypotheses-v11',
+                        ].includes(event.target.value)
+                          ? (portfolio.risk_limits ?? { ...defaultRiskLimits })
+                          : portfolio.strategies.some((row) => row.execution_policy)
+                            ? portfolio.risk_limits
+                            : undefined,
+                        strategies: portfolio.strategies.map((row) => {
+                          if (
+                            !row.execution_policy ||
+                            !['automatic-hypotheses-v10', 'automatic-hypotheses-v11'].includes(
+                              event.target.value
+                            )
+                          )
+                            return row
+                          const { entry_priority: _discarded, ...policy } = row.execution_policy
+                          return {
+                            ...row,
+                            execution_policy: {
+                              ...policy,
+                              version:
+                                event.target.value === 'automatic-hypotheses-v11'
+                                  ? 'research-execution-aware-v2'
+                                  : 'research-execution-aware-v1',
+                              ...(event.target.value === 'automatic-hypotheses-v11'
+                                ? { entry_priority: 'source' as const }
+                                : {}),
+                            },
+                          }
+                        }),
                       })
                     }
                   >
+                    <option
+                      value="automatic-hypotheses-v11"
+                      disabled={portfolio.engine !== 'vectorbt'}
+                    >
+                      {researchRecipeLabel('automatic-hypotheses-v11')}
+                    </option>
                     <option
                       value="automatic-hypotheses-v10"
                       disabled={portfolio.engine !== 'vectorbt'}
@@ -884,10 +958,18 @@ export function PortfolioBuilder({
                       {researchRecipeLabel('automatic-entry-conditions-v1')}
                     </option>
                   </select>
-                  {portfolio.automatic_research?.version === 'automatic-hypotheses-v10' && (
+                  {['automatic-hypotheses-v10', 'automatic-hypotheses-v11'].includes(
+                    portfolio.automatic_research?.version ?? ''
+                  ) && (
                     <p className="text-xs text-muted-foreground">
                       Tests percentage and ATR exits, risk-based sizing and portfolio limits, with
                       three later validation windows. Up to 384 calculations.
+                    </p>
+                  )}
+                  {portfolio.automatic_research?.version === 'automatic-hypotheses-v11' && (
+                    <p className="text-xs text-muted-foreground">
+                      Also compares which simultaneous signals receive cash first. Three entry
+                      priorities; 272 proposals across four fits. No extra price download.
                     </p>
                   )}
                   {['automatic-hypotheses-v8', 'automatic-hypotheses-v9'].includes(

@@ -6,6 +6,10 @@ VERSION = "research-execution-aware-v1"
 RISK_VERSION = "research-risk-limits-v1"
 EXECUTION_ADAPTER_VERSION = "vectorbt-portfolio-adapter-v2"
 POLICY_VERSION = "vectorbt-joint-causal-bars-v2"
+PRIORITY_VERSION = "research-execution-aware-v2"
+PRIORITY_ADAPTER_VERSION = "vectorbt-portfolio-adapter-v3"
+PRIORITY_POLICY_VERSION = "vectorbt-joint-causal-bars-v3"
+ENTRY_PRIORITIES = ("source", "reversed_source", "lower_stop_risk")
 
 
 def _number(value, name, minimum, maximum, *, integer=False, exclusive_min=False):
@@ -51,6 +55,9 @@ def normalize_limits(raw=None):
 def normalize_policy(raw=None):
     if raw is None:
         raw = {}
+    if not isinstance(raw, dict):
+        raise ValueError("Choose a supported execution policy")
+    version = raw.get("version", VERSION)
     allowed = {
         "version",
         "exit_mode",
@@ -61,17 +68,24 @@ def normalize_policy(raw=None):
         "atr_target_multiple",
         "risk_budget_fraction",
     }
-    if not isinstance(raw, dict) or set(raw) - allowed or raw.get("version", VERSION) != VERSION:
+    if version == PRIORITY_VERSION:
+        allowed.add("entry_priority")
+    if set(raw) - allowed or version not in (VERSION, PRIORITY_VERSION):
         raise ValueError("Choose a supported execution policy")
     exit_mode, sizing = raw.get("exit_mode", "percent"), raw.get("sizing", "allocation")
     if exit_mode not in ("percent", "atr") or sizing not in ("allocation", "stop_risk"):
         raise ValueError("Choose percentage or ATR exits and allocation or stop-risk sizing")
     result = {
-        "version": VERSION,
+        "version": version,
         "exit_mode": exit_mode,
         "sizing": sizing,
         "risk_limits": normalize_limits(raw.get("risk_limits")),
     }
+    if version == PRIORITY_VERSION:
+        priority = raw.get("entry_priority", "source")
+        if priority not in ENTRY_PRIORITIES:
+            raise ValueError("Choose a supported same-opening entry priority")
+        result["entry_priority"] = priority
     if sizing == "stop_risk":
         result["risk_budget_fraction"] = _number(
             raw.get("risk_budget_fraction", 0.5), "risk_budget_fraction", 0, 1, exclusive_min=True

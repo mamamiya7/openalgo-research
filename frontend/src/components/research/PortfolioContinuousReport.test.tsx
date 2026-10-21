@@ -99,6 +99,32 @@ beforeEach(() => vi.stubGlobal('IntersectionObserver', undefined))
 afterEach(() => vi.unstubAllGlobals())
 
 describe('continuous portfolio report', () => {
+  it('shows actual fill activity separately from closed-trade counts', () => {
+    const value = fixture()
+    value.execution = {
+      engine: 'vectorbt',
+      entry_priority: 'source',
+      activity: {
+        version: 'research-execution-activity-v1',
+        buy_notional: 50000,
+        sell_notional: 25000,
+        total_traded_notional: 75000,
+        fees: 75,
+        buy_fills: 3,
+        sell_fills: 2,
+        total_fills: 5,
+        traded_notional_to_starting_capital_pct: 75,
+        daily: [],
+        basis: 'Actual orders',
+      },
+    }
+    mount(value)
+    const activity = screen.getByLabelText('Filled trading activity')
+    expect(activity).toHaveTextContent('3 entry fills')
+    expect(activity).toHaveTextContent('2 exit fills')
+    expect(activity).toHaveTextContent('75% of starting cash traded, counting buys and sells')
+    expect(activity).toHaveTextContent('Filled orders only')
+  })
   it('keeps market conditions explicit in the real report and preserves existing figures', async () => {
     const value = fixture()
     const before = JSON.stringify(value)

@@ -188,6 +188,7 @@ def canonical_source(store, owner, experiment_id, job_id, config_id=None):
                 "automatic-hypotheses-v8",
                 "automatic-hypotheses-v9",
                 "automatic-hypotheses-v10",
+                "automatic-hypotheses-v11",
             )
         )
         del inputs, bundle, result
@@ -211,6 +212,7 @@ def canonical_source(store, owner, experiment_id, job_id, config_id=None):
                 "automatic-hypotheses-v8",
                 "automatic-hypotheses-v9",
                 "automatic-hypotheses-v10",
+                "automatic-hypotheses-v11",
             ):
                 # The automatic finding is not an ordinary objective-winning
                 # trial. Its exact fixed replay is a real backtest, with its own

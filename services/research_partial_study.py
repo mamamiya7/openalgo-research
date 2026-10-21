@@ -64,6 +64,7 @@ def _search_inputs(evidence, calculation):
             "automatic-hypotheses-v8",
             "automatic-hypotheses-v9",
             "automatic-hypotheses-v10",
+            "automatic-hypotheses-v11",
         ):
             from research.automatic_hypotheses import checkpoint_rows
 
@@ -80,6 +81,7 @@ def _search_inputs(evidence, calculation):
                             "automatic-hypotheses-v8",
                             "automatic-hypotheses-v9",
                             "automatic-hypotheses-v10",
+                            "automatic-hypotheses-v11",
                         )
                         else "automatic_stock_features"
                     ],
@@ -94,6 +96,7 @@ def _search_inputs(evidence, calculation):
                     "automatic-hypotheses-v8",
                     "automatic-hypotheses-v9",
                     "automatic-hypotheses-v10",
+                    "automatic-hypotheses-v11",
                 )
                 else "search"
             )
@@ -175,6 +178,7 @@ def _validated_rows(evidence, saved, completed):
         "automatic-hypotheses-v8",
         "automatic-hypotheses-v9",
         "automatic-hypotheses-v10",
+        "automatic-hypotheses-v11",
     ):
         from research.automatic_hypotheses import checkpoint_rows
 
@@ -182,7 +186,12 @@ def _validated_rows(evidence, saved, completed):
         trials = (
             saved["fits"].get(saved["active_fit"], {"trials": []})["trials"]
             if saved["version"]
-            in ("automatic-hypotheses-v8", "automatic-hypotheses-v9", "automatic-hypotheses-v10")
+            in (
+                "automatic-hypotheses-v8",
+                "automatic-hypotheses-v9",
+                "automatic-hypotheses-v10",
+                "automatic-hypotheses-v11",
+            )
             else saved["trials"]
         )
         return rows, {

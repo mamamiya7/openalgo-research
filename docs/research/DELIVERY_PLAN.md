@@ -2,7 +2,7 @@
 
 ## Feature development order after the human audit
 
-**Updated 20 October 2026. Status: executing.** The first
+**Updated 21 October 2026. Status: executing.** The first
 [mandate/evidence foundation](DEVELOPMENT_EVIDENCE_20261011.md) is implemented in
 development source, followed by the [v8 expanding-refit slice](WALK_FORWARD_20261020.md).
 It performs three later-window/higher-cost checks and a separate final development
@@ -12,7 +12,13 @@ implemented in source: typed definitions of existing methods and metadata-only
 actual per-fit coverage. It does not expand numerical domains or replace
 executable admission. The next [v9 core slice](METHOD_EXPANSION_20261021.md) implements
 10/60-session momentum, mandatory probes and the complete native saved-evidence
-journey, using the same prices and calculation bounds. Complete the qualified
+journey, using the same prices and calculation bounds. The subsequent
+[v10 execution core](EXECUTION_CORE_20261021.md) adds ATR protection, distinct
+stop-risk sizing and hard exposure/position/risk limits. The
+[v11 priority increment](PRIORITY_CORE_20261021.md) adds causal ordering of
+competing entries and actual filled trading activity. Turnover budgets and
+admitted capacity/allocation work remain in package 4; recommendation uncertainty
+follows in package 5. Complete the qualified
 research and portfolio features before general UI polish. Learned transforms,
 continuous carry and the later packages
 remain planned.
@@ -45,9 +51,9 @@ label the least bad losing trial a trading recommendation.
 ### Existing foundations to retain
 
 The installed development app is OpenAlgo 2.0.2.7. New unconfigured VectorBT
-optimisations select v9 in current source, with 108 registered stock/market choices across 32 families,
+optimisations select v11 in current source, with 108 registered stock/market choices across 32 families,
 conditional exits/trailing and admitted clock alternatives. Current bounds remain
-192 proposals across four independent fits and 320 native calculations. Older
+272 proposals across four independent fits and 384 native calculations. Older
 scopes retain their identities; the v7 limits below remain its dated contract.
 
 Historify reuse and missing-only acquisition, causal feature availability,

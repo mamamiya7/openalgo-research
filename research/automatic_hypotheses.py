@@ -13,6 +13,7 @@ from math import prod
 from research.automatic_protocol import (
     EXECUTION_VERSION,
     METHOD_VERSION,
+    PRIORITY_VERSION,
     compile_recipe,
     slice_period,
 )
@@ -62,6 +63,13 @@ def _display_history(trials):
 
 def policy_for_version(version):
     """Return a fresh bounded policy; a newer recipe never changes old replay."""
+    if version == PRIORITY_VERSION:
+        return {
+            **policy_for_version(EXECUTION_VERSION),
+            "version": version,
+            "proposals": 272,
+            "proposals_per_fit": 68,
+        }
     if version == EXECUTION_VERSION:
         return {
             **policy_for_version(METHOD_VERSION),
@@ -216,6 +224,7 @@ def checkpoint_rows(saved):
         WALK_FORWARD_VERSION,
         METHOD_VERSION,
         EXECUTION_VERSION,
+        PRIORITY_VERSION,
     ):
         from research.automatic_walk_forward import checkpoint_rows as walk_forward_rows
 

@@ -123,6 +123,7 @@ def resolve_inputs(store, owner, request):
                 "automatic-hypotheses-v8",
                 "automatic-hypotheses-v9",
                 "automatic-hypotheses-v10",
+                "automatic-hypotheses-v11",
             )
             and receipt["symbol_count"] > 200
         ):
@@ -335,6 +336,7 @@ def replay_inputs(store, owner, job_id, *, trial_id=None, period="selection"):
         "automatic-hypotheses-v8",
         "automatic-hypotheses-v9",
         "automatic-hypotheses-v10",
+        "automatic-hypotheses-v11",
     ):
         marker = selected[0].get("entry_condition")
         selected_conditions = deepcopy(marker) if marker else None
@@ -699,7 +701,8 @@ def run(
     if activity:
         activity({"stage": "planning"})
     execution_features_required = (
-        portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v10"
+        portfolio.get("automatic_research", {}).get("version")
+        in ("automatic-hypotheses-v10", "automatic-hypotheses-v11")
         or bool(evidence.get("execution_features"))
         or any(
             row.get("execution_policy", {}).get("exit_mode") == "atr"
@@ -752,6 +755,7 @@ def run(
                 "automatic-hypotheses-v8",
                 "automatic-hypotheses-v9",
                 "automatic-hypotheses-v10",
+                "automatic-hypotheses-v11",
             )
             else _prepare_prices
         )
@@ -805,6 +809,7 @@ def run(
                 "automatic-hypotheses-v8",
                 "automatic-hypotheses-v9",
                 "automatic-hypotheses-v10",
+                "automatic-hypotheses-v11",
             )
             or execution_features_required
             or portfolio.get("entry_conditions", {}).get("version")
@@ -930,6 +935,7 @@ def run(
                 EXECUTION_VERSION,
                 JOINT_VERSION,
                 METHOD_VERSION,
+                PRIORITY_VERSION,
                 TIMING_VERSION,
                 TRAILING_VERSION,
                 WALK_FORWARD_VERSION,
@@ -948,6 +954,7 @@ def run(
                 WALK_FORWARD_VERSION,
                 METHOD_VERSION,
                 EXECUTION_VERSION,
+                PRIORITY_VERSION,
             ):
                 from research.automatic_walk_forward import run as automatic_run
 
@@ -959,7 +966,7 @@ def run(
             saved_development = (saved or {}).get("development_evidence")
             if (
                 portfolio["automatic_research"]["version"]
-                in (WALK_FORWARD_VERSION, METHOD_VERSION, EXECUTION_VERSION)
+                in (WALK_FORWARD_VERSION, METHOD_VERSION, EXECUTION_VERSION, PRIORITY_VERSION)
                 and saved_calculation
                 and saved_development is None
             ):
@@ -983,6 +990,7 @@ def run(
                         WALK_FORWARD_VERSION,
                         METHOD_VERSION,
                         EXECUTION_VERSION,
+                        PRIORITY_VERSION,
                     )
                     else "automatic_stock_features"
                 )

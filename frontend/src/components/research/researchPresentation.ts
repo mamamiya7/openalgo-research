@@ -116,5 +116,18 @@ export function strategyRuleSummary(
           `Size by stop risk ${policy.risk_limits.max_trade_risk_pct * (policy.risk_budget_fraction ?? 0.5)}%`,
         ]
       : []),
+    ...(policy?.entry_priority ? [`Entries: ${entryPriorityLabel(policy.entry_priority)}`] : []),
   ].join(' · ')
+}
+
+export function entryPriorityLabel(priority: string): string {
+  return (
+    (
+      {
+        source: 'Source order',
+        reversed_source: 'Reverse source order',
+        lower_stop_risk: 'Lower stop risk first',
+      } as Record<string, string>
+    )[priority] ?? 'Saved priority'
+  )
 }

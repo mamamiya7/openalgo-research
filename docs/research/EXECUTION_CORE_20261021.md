@@ -103,8 +103,8 @@ profitability or future performance. No broker request or order was used. This
 is qualified development source; public release ZIPs remain unchanged.
 
 Local activation of `95d654bae` is verified: the normal account and new built UI
-are served at port5000, the worker heartbeat is fresh and the method route still
-requires authentication. All63 saved run identities, configuration and Historify
+are served at port 5000, the worker heartbeat is fresh and the method route still
+requires authentication. All 63 saved run identities, configuration and Historify
 bytes were preserved; no normal research/trading job was started. The same source
 commit is pushed to `codex/native-research-refinement`. Rollback source/UI files
 are retained under the installation's ignored `.agent-native/execution-core-20261021/before`.

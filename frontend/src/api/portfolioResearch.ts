@@ -25,7 +25,8 @@ export interface PortfolioRiskLimits {
   max_total_stop_risk_pct: number
 }
 export interface ExecutionPolicy {
-  version: 'research-execution-aware-v1'
+  version: 'research-execution-aware-v1' | 'research-execution-aware-v2'
+  entry_priority?: 'source' | 'reversed_source' | 'lower_stop_risk'
   exit_mode: 'percent' | 'atr'
   sizing: 'allocation' | 'stop_risk'
   risk_budget_fraction?: number
@@ -357,6 +358,7 @@ export interface PortfolioRequest {
       | 'automatic-hypotheses-v8'
       | 'automatic-hypotheses-v9'
       | 'automatic-hypotheses-v10'
+      | 'automatic-hypotheses-v11'
   }
   entry_conditions?: EntryConditions
   optimization?: {
@@ -465,7 +467,34 @@ export interface PortfolioResult {
     label: string
     selection_basis: string
   }
-  execution?: { engine: string; engine_version?: string; interval?: string }
+  execution?: {
+    engine: string
+    engine_version?: string
+    interval?: string
+    entry_priority?: ExecutionPolicy['entry_priority']
+    activity?: {
+      version: 'research-execution-activity-v1'
+      buy_notional: number
+      sell_notional: number
+      total_traded_notional: number
+      fees: number
+      buy_fills: number
+      sell_fills: number
+      total_fills: number
+      traded_notional_to_starting_capital_pct: number
+      daily: Array<{
+        date: string
+        buy_notional: number
+        sell_notional: number
+        total_traded_notional: number
+        fees: number
+        buy_fills: number
+        sell_fills: number
+        total_fills: number
+      }>
+      basis: string
+    }
+  }
   experiment?: {
     kind: 'portfolio_optimize'
     evaluation_basis_id?: string
@@ -513,7 +542,9 @@ export interface WalkForwardFindings {
 }
 export interface AutomaticResearchFindings {
   execution_research?: {
-    version: 'research-execution-findings-v1'
+    version: 'research-execution-findings-v1' | 'research-execution-findings-v2'
+    entry_priorities?: Array<NonNullable<ExecutionPolicy['entry_priority']>>
+    selected_entry_priority?: ExecutionPolicy['entry_priority']
     risk_limits: PortfolioRiskLimits
     feature_id: string
     policy: string

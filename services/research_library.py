@@ -1068,6 +1068,7 @@ def _selected_execution_followup(portfolio, *, optimizing):
     specialized = any(
         row.get("execution_policy", {}).get("exit_mode") == "atr"
         or row.get("execution_policy", {}).get("sizing") == "stop_risk"
+        or row.get("execution_policy", {}).get("entry_priority", "source") != "source"
         for row in portfolio["strategies"]
     )
     if not specialized and not portfolio.get("entry_conditions"):

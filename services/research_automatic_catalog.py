@@ -14,7 +14,7 @@ from research.portfolio import fingerprint, normalize
 from research.regimes import recipe as regime_recipe
 
 CATALOG_VERSION = "automatic-search-plan-v1"
-NEXT_RECIPE_VERSION = "automatic-hypotheses-v11"
+NEXT_RECIPE_VERSION = "automatic-hypotheses-v12"
 
 _PARAMETERS = {
     "target_pct": ("Profit target", "%"),
@@ -54,16 +54,19 @@ def _domain(axis, *, integer):
 
 def _parameters(strategy, engine, version):
     cfg, search = strategy["config"], strategy["search"]
-    execution = version == "automatic-hypotheses-v10"
+    execution = version in ("automatic-hypotheses-v10", "automatic-hypotheses-v11")
     trailing = version in (
         "automatic-hypotheses-v6",
         "automatic-hypotheses-v7",
         "automatic-hypotheses-v8",
         "automatic-hypotheses-v9",
         "automatic-hypotheses-v10",
+        "automatic-hypotheses-v11",
     )
     parameters = []
     for key, (label, unit) in _PARAMETERS.items():
+        if version == "automatic-hypotheses-v11" and key == "entry_priority":
+            continue  # The explicit account-wide policy below owns this axis.
         if key not in cfg:
             continue
         status, reason = "fixed", "Retain the original execution assumptions."
@@ -122,6 +125,7 @@ def _parameters(strategy, engine, version):
                     "automatic-hypotheses-v8",
                     "automatic-hypotheses-v9",
                     "automatic-hypotheses-v10",
+                    "automatic-hypotheses-v11",
                 )
                 and key != "trade_horizon"
             ):
@@ -178,6 +182,19 @@ def _parameters(strategy, engine, version):
                 },
             ]
         )
+    if version == "automatic-hypotheses-v11":
+        parameters.append(
+            {
+                "id": "entry_priority",
+                "label": "Priority for simultaneous signals",
+                "unit": "policy",
+                "current": "source",
+                "status": "search",
+                "axis": "portfolio.entry_priority",
+                "choices": ["source", "reversed_source", "lower_stop_risk"],
+                "reason": "One shared-account choice: source order, reverse source order or lower modeled stop-risk fraction first. Current opening and completed ATR only; no future prices.",
+            }
+        )
     return parameters
 
 
@@ -199,28 +216,45 @@ def _decisions(portfolio, interval, strategies, *, proposals, max_simulations):
     execution recipe, the request's version, or any numerical search domain.
     """
     intelligent = portfolio["automatic_research"]["version"].startswith("automatic-hypotheses-")
-    execution = portfolio["automatic_research"]["version"] == "automatic-hypotheses-v10"
+    execution = portfolio["automatic_research"]["version"] in (
+        "automatic-hypotheses-v10",
+        "automatic-hypotheses-v11",
+    )
     trailing = portfolio["automatic_research"]["version"] in (
         "automatic-hypotheses-v6",
         "automatic-hypotheses-v7",
         "automatic-hypotheses-v8",
         "automatic-hypotheses-v9",
         "automatic-hypotheses-v10",
+        "automatic-hypotheses-v11",
     )
     timing = portfolio["automatic_research"]["version"] in (
         "automatic-hypotheses-v7",
         "automatic-hypotheses-v8",
         "automatic-hypotheses-v9",
         "automatic-hypotheses-v10",
+        "automatic-hypotheses-v11",
     )
     walk_forward = portfolio["automatic_research"]["version"] in (
         "automatic-hypotheses-v8",
         "automatic-hypotheses-v9",
         "automatic-hypotheses-v10",
+        "automatic-hypotheses-v11",
     )
     return {
         "version": "automatic-decision-summary-v1",
         "automatic": [
+            *(
+                [
+                    {
+                        "id": "entry_priority",
+                        "label": "Competing signals",
+                        "decision": "Compare source order, reverse order and lower stop-risk fraction first for entries at the same opening. Keep exits and all hard risk limits unchanged; no extra history is needed.",
+                    }
+                ]
+                if portfolio["automatic_research"]["version"] == "automatic-hypotheses-v11"
+                else []
+            ),
             {
                 "id": "interval",
                 "label": "Price interval",
@@ -553,6 +587,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v8",
         "automatic-hypotheses-v9",
         "automatic-hypotheses-v10",
+        "automatic-hypotheses-v11",
     ):
         raise ValueError("Choose a supported automatic research recipe before planning")
     version, engine = auto["version"], canonical["engine"]
@@ -580,6 +615,7 @@ def build_plan(portfolio, *, interval):
         "automatic-hypotheses-v8",
         "automatic-hypotheses-v9",
         "automatic-hypotheses-v10",
+        "automatic-hypotheses-v11",
     ):
         from research.intelligent_plan import build_plan as intelligence_plan
 
@@ -605,7 +641,7 @@ def build_plan(portfolio, *, interval):
             "families": plan["methods"],
             "data": plan["data"],
             "fixed_assumptions": "Cash, costs, hard risk limits and original allocation/order ceilings stay fixed."
-            if version == "automatic-hypotheses-v10"
+            if version in ("automatic-hypotheses-v10", "automatic-hypotheses-v11")
             else "Cash, allocation, sizing, exposure and costs stay fixed.",
             "decisions": _decisions(
                 canonical,

@@ -33,7 +33,7 @@ export interface StudyActivityRow {
   /** Actual stored proposal number; add one only for display. */
   number: number
   config_id: string
-  params: Record<string, number>
+  params: Record<string, number | string>
   state: StudyProposalState
   value: number | null
   reused: boolean

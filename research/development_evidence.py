@@ -95,7 +95,8 @@ def plan(evidence, max_evaluations):
     automatic = portfolio.get("automatic_research") if isinstance(portfolio, dict) else None
     maximum = (
         EXECUTION_MAX_EVALUATIONS
-        if isinstance(automatic, dict) and automatic.get("version") == "automatic-hypotheses-v10"
+        if isinstance(automatic, dict)
+        and automatic.get("version") in ("automatic-hypotheses-v10", "automatic-hypotheses-v11")
         else MAX_EVALUATIONS
     )
     limits = {

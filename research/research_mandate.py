@@ -29,7 +29,8 @@ def _bounded(value):
     source = value.get("source") if isinstance(value, dict) else None
     maximum = (
         EXECUTION_MAX_METADATA_BYTES
-        if isinstance(source, dict) and source.get("recipe_version") == "automatic-hypotheses-v10"
+        if isinstance(source, dict)
+        and source.get("recipe_version") in ("automatic-hypotheses-v10", "automatic-hypotheses-v11")
         else MAX_METADATA_BYTES
     )
     try:

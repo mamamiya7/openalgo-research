@@ -15,6 +15,8 @@ ADAPTER_VERSION = "vectorbt-portfolio-adapter-v1"
 POLICY_VERSION = "vectorbt-joint-causal-bars-v1"
 EXECUTION_ADAPTER_VERSION = "vectorbt-portfolio-adapter-v2"
 EXECUTION_POLICY_VERSION = "vectorbt-joint-causal-bars-v2"
+PRIORITY_ADAPTER_VERSION = "vectorbt-portfolio-adapter-v3"
+PRIORITY_POLICY_VERSION = "vectorbt-joint-causal-bars-v3"
 MAX_MATRIX_CELLS = 500_000
 MAX_SIGNALS = 25_000
 MAX_STRATEGIES = 20
@@ -85,7 +87,7 @@ def validate(strategies, snapshot, capital):
         raise ValueError(f"Supply 1-{MAX_STRATEGIES} strategies")
     normalized, ids, lots = [], set(), []
     execution_aware = any("execution_policy" in row for row in strategies)
-    shared_limits = None
+    shared_limits, shared_priority = None, None
     for strategy in strategies:
         identity = strategy.get("id")
         if not isinstance(identity, str) or not identity or len(identity) > 100 or identity in ids:
@@ -123,6 +125,15 @@ def validate(strategies, snapshot, capital):
             if shared_limits is not None and shared_limits != limits:
                 raise ValueError("All execution-aware strategies must share the same risk limits")
             shared_limits = limits
+            priority = (
+                current["execution_policy"]["version"],
+                current["execution_policy"].get("entry_priority"),
+            )
+            if shared_priority is not None and shared_priority != priority:
+                raise ValueError(
+                    "All strategies must share the same execution policy version and entry priority"
+                )
+            shared_priority = priority
         normalized.append(current)
         for signal in signals:
             if not isinstance(signal, dict) or not signal.get("symbol") or not signal.get("date"):
@@ -174,6 +185,8 @@ def validate(strategies, snapshot, capital):
 def evaluate(strategies, snapshot, capital, *, progress=None):
     strategies, lots, scheduled, coverage = validate(strategies, snapshot, capital)
     execution_aware = "execution_policy" in strategies[0]
+    priority_aware = execution_aware and "entry_priority" in strategies[0]["execution_policy"]
+    priority = strategies[0]["execution_policy"]["entry_priority"] if priority_aware else None
     limits = strategies[0]["execution_policy"]["risk_limits"] if execution_aware else None
     minute = snapshot["provenance"]["interval"] == "1m"
     timeline = snapshot["timeline" if minute else "sessions"]
@@ -358,6 +371,7 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
             name for name, capacity in capacities.items() if math.floor(capacity + 1e-9) < requested
         ]
         execution_details[col] = {
+            **(execution_details[col] or {}),
             "exit_mode": strategy["execution_policy"]["exit_mode"],
             "sizing": strategy["execution_policy"]["sizing"],
             "risk_budget_fraction": policy.get("risk_budget_fraction"),
@@ -405,6 +419,37 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
             nb.get_group_value_nb(0, count, c.last_cash[c.group], c.last_position, c.last_val_price)
         )
         entry_cols = entries.get(c.i, [])
+        if priority_aware:
+            scores = {}
+            for col in entry_cols:
+                cfg = strategies[lots[col][0]]["config"]
+                raw = float(bar_at(col, c.i)["open"])
+                fee, slip = cfg["cost_bps"] / 10000, cfg["slippage_bps"] / 10000
+                cash_cost = raw * (1 + slip) * (1 + fee)
+                try:
+                    stop, _, _ = protection(col, raw * (1 + slip))
+                    loss = cash_cost - stop * (1 - slip) * (1 - fee)
+                    score = loss / cash_cost
+                    if not math.isfinite(score) or score <= 0:
+                        raise ValueError("Execution loss to stop must be positive and finite")
+                    scores[col] = score
+                except ValueError as error:
+                    scores[col] = None
+                    rejected[col] = str(error)
+            if priority == "reversed_source":
+                entry_cols = list(reversed(entry_cols))
+            elif priority == "lower_stop_risk":
+                entry_cols = sorted(
+                    entry_cols,
+                    key=lambda col: (scores[col] if scores[col] is not None else math.inf, col),
+                )
+            for rank, col in enumerate(entry_cols, 1):
+                execution_details[col] = {
+                    "entry_priority": priority,
+                    "entry_rank": rank,
+                    "entry_batch_size": len(entry_cols),
+                    "stop_risk_fraction": scores[col],
+                }
         actions = [(col, proposal) for col, proposal in opening_exits]
         actions += [(col, "entry") for col in entry_cols]
         actions += [(col, "later") for col in sorted(set(held + entry_cols))]
@@ -419,6 +464,8 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
         cfg = strategy["config"]
         fee, slip = cfg["cost_bps"] / 10000, cfg["slippage_bps"] / 10000
         if action == "entry":
+            if priority_aware and rejected[col]:
+                return col, NoOrder
             cap = state["equity"] * strategy["allocation_pct"] / 100
             budget = cap * cfg["order_size_pct"] / 100
             budgets[col] = float(budget)
@@ -807,4 +854,16 @@ def _report(
                 "ATR exits use100 completed prior daily OHLC observations, even when the account executes on minute bars.",
             ]
         )
+        if "entry_priority" in strategies[0]["execution_policy"]:
+            from research.execution_activity import build as build_activity
+
+            report["policy_version"] = PRIORITY_POLICY_VERSION
+            report["execution"].update(
+                adapter_version=PRIORITY_ADAPTER_VERSION,
+                entry_priority=strategies[0]["execution_policy"]["entry_priority"],
+                activity=build_activity(report["engine_records"]["orders"], timeline, capital),
+            )
+            report["limits"][1] = (
+                "Opening exits precede entries under the recorded same-opening priority; ties use original source order. Within-bar and closing proceeds cannot retroactively fund opening entries."
+            )
     return report

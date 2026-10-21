@@ -25,7 +25,11 @@ import { PortfolioTrials } from './PortfolioTrials'
 import { PrepareTestedReport } from './PrepareTestedReport'
 import { reportMoney, useReportCurrency } from './ReportCurrency'
 import { ResearchResultReview } from './ResearchResultReview'
-import { researchResultPeriod, researchResultRole } from './researchPresentation'
+import {
+  entryPriorityLabel,
+  researchResultPeriod,
+  researchResultRole,
+} from './researchPresentation'
 import { SavedTradeChartDialog } from './SavedTradeChartDialog'
 import { SaveTestedSetup } from './SaveTestedSetup'
 import { SaveToShortlist } from './SaveToShortlist'
@@ -99,6 +103,9 @@ export function StrategySettings({ strategy }: { strategy: PortfolioSettings }) 
       : []),
     ['Allocation', number(strategy.allocation_pct, '%')],
     ['Per-trade size', number(config.order_size_pct, '% of allocation')],
+    ...(policy?.entry_priority
+      ? [['Simultaneous entries', entryPriorityLabel(policy.entry_priority)]]
+      : []),
     [
       'Profit target',
       policy?.exit_mode === 'atr'

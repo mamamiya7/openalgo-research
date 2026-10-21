@@ -252,6 +252,7 @@ describe('automatic research findings', () => {
     ['automatic-hypotheses-v8', 'Walk-forward research'],
     ['automatic-hypotheses-v9', 'Expanded automatic research'],
     ['automatic-hypotheses-v10', 'Execution-aware research'],
+    ['automatic-hypotheses-v11', 'Portfolio entry research'],
     ['automatic-future-v99', 'Automatic research'],
   ])('keeps the saved %s scope in the collapsed research details', async (version, label) => {
     const data = findings()

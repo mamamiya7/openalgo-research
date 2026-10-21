@@ -8,6 +8,7 @@ import {
   type StudyProposalState,
 } from '@/api/researchStudyActivity'
 import { Button } from '@/components/ui/button'
+import { entryPriorityLabel } from './researchPresentation'
 import {
   Dialog,
   DialogContent,
@@ -45,6 +46,7 @@ const parameterLabels: Record<string, string> = {
   allocation_pct: 'Allocation',
   execution_choice: 'Exit method',
   portfolio_choice: 'Position sizing',
+  entry_priority: 'Entry priority',
 }
 const reasons: Record<string, string> = {
   calculation_failed: 'The calculation failed during this attempt.',
@@ -80,11 +82,19 @@ function duration(row: Pick<StudyActivityRow, 'started_at' | 'finished_at'>) {
 }
 
 function proposalLabel(index: number, recipeVersion?: string) {
-  const perFit = recipeVersion === 'automatic-hypotheses-v10' ? 64 : 48
+  const perFit =
+    recipeVersion === 'automatic-hypotheses-v11'
+      ? 68
+      : recipeVersion === 'automatic-hypotheses-v10'
+        ? 64
+        : 48
   if (
-    !['automatic-hypotheses-v8', 'automatic-hypotheses-v9', 'automatic-hypotheses-v10'].includes(
-      recipeVersion ?? ''
-    )
+    ![
+      'automatic-hypotheses-v8',
+      'automatic-hypotheses-v9',
+      'automatic-hypotheses-v10',
+      'automatic-hypotheses-v11',
+    ].includes(recipeVersion ?? '')
   )
     return { label: `Trial ${index + 1}` }
   if (!Number.isInteger(index) || index < 0 || index >= perFit * 4)
@@ -149,8 +159,10 @@ function Activity({
     'automatic-hypotheses-v8',
     'automatic-hypotheses-v9',
     'automatic-hypotheses-v10',
+    'automatic-hypotheses-v11',
   ].includes(recipeVersion ?? '')
   function setting(key: string, index: number) {
+    if (key === 'portfolio.entry_priority') return 'Account entry priority'
     const [strategyId, parameter] = key.split('.')
     const label = parameterLabels[parameter] ?? `Setting ${index + 1}`
     const strategy = strategies.find((item) => item.id === strategyId)
@@ -395,7 +407,11 @@ function Activity({
                     <div key={key}>
                       <dt className="text-xs text-muted-foreground">{setting(key, index)}</dt>
                       <dd className="mt-1 text-sm font-medium tabular-nums">
-                        {finite(value) ? String(value) : '—'}
+                        {key === 'portfolio.entry_priority' && typeof value === 'string'
+                          ? entryPriorityLabel(value)
+                          : finite(value)
+                            ? String(value)
+                            : '—'}
                         {finite(value) && key.endsWith('_pct') ? '%' : ''}
                       </dd>
                     </div>

@@ -20,7 +20,8 @@ TIMING_VERSION = "automatic-hypotheses-v7"
 WALK_FORWARD_VERSION = "automatic-hypotheses-v8"
 METHOD_VERSION = "automatic-hypotheses-v9"
 EXECUTION_VERSION = "automatic-hypotheses-v10"
-WALK_FORWARD_VERSIONS = (WALK_FORWARD_VERSION, METHOD_VERSION, EXECUTION_VERSION)
+PRIORITY_VERSION = "automatic-hypotheses-v11"
+WALK_FORWARD_VERSIONS = (WALK_FORWARD_VERSION, METHOD_VERSION, EXECUTION_VERSION, PRIORITY_VERSION)
 HYPOTHESIS_VERSIONS = (
     HYPOTHESIS_VERSION,
     EXPANDED_VERSION,
@@ -31,6 +32,7 @@ HYPOTHESIS_VERSIONS = (
     WALK_FORWARD_VERSION,
     METHOD_VERSION,
     EXECUTION_VERSION,
+    PRIORITY_VERSION,
 )
 PERIODS = ("search", "check1", "check2", "final")
 MIN_SESSIONS = 100
@@ -139,6 +141,7 @@ def automatic_portfolio(portfolio):
             WALK_FORWARD_VERSION,
             METHOD_VERSION,
             EXECUTION_VERSION,
+            PRIORITY_VERSION,
         ):
             search["trailing_pct"] = _range(cfg["trailing_pct"], 99)
         row["search"] = search
@@ -163,6 +166,8 @@ def automatic_portfolio(portfolio):
         result["optimization"]["trials"] = 192
     if result["automatic_research"]["version"] == EXECUTION_VERSION:
         result["optimization"]["trials"] = 256
+    if result["automatic_research"]["version"] == PRIORITY_VERSION:
+        result["optimization"]["trials"] = 272
     return result
 
 
@@ -229,7 +234,7 @@ def compile_recipe(evidence):
                 "history or a shorter baseline holding period."
             )
     baseline_keys = ("id", "name", "allocation_pct", "config")
-    if portfolio["automatic_research"]["version"] == EXECUTION_VERSION:
+    if portfolio["automatic_research"]["version"] in (EXECUTION_VERSION, PRIORITY_VERSION):
         baseline_keys += ("execution_policy",)
     payload = {
         "version": portfolio["automatic_research"]["version"],
@@ -321,11 +326,16 @@ def compile_recipe(evidence):
             WALK_FORWARD_VERSION,
             METHOD_VERSION,
             EXECUTION_VERSION,
+            PRIORITY_VERSION,
         )
         if joint:
             from research.joint_stock_market import catalog
             from research.stock_market_context import validate_bundle
-        if portfolio["automatic_research"]["version"] in (METHOD_VERSION, EXECUTION_VERSION):
+        if portfolio["automatic_research"]["version"] in (
+            METHOD_VERSION,
+            EXECUTION_VERSION,
+            PRIORITY_VERSION,
+        ):
             from research.expanded_stock_market import catalog
         stock = (
             evidence.get("automatic_stock_market_context")
@@ -376,7 +386,7 @@ def compile_recipe(evidence):
         if joint:
             from research.joint_stock_market import recipe as joint_recipe
 
-            if payload["version"] in (METHOD_VERSION, EXECUTION_VERSION):
+            if payload["version"] in (METHOD_VERSION, EXECUTION_VERSION, PRIORITY_VERSION):
                 from research.expanded_stock_market import recipe as joint_recipe
 
             payload["scope"] = (
@@ -416,7 +426,7 @@ def compile_recipe(evidence):
                 selection="Refit only on each earlier expanding prefix; later scores never feed its sampler. All three next-window and cost checks precede the final development refit and frozen choice.",
                 cost_stress="Each next-window account at max(2 * cost_bps, cost_bps + 5); slippage unchanged",
             )
-        if payload["version"] == EXECUTION_VERSION:
+        if payload["version"] in (EXECUTION_VERSION, PRIORITY_VERSION):
             from research.execution_search import descriptor as execution_descriptor
 
             payload["execution_research"] = execution_descriptor(evidence)
@@ -432,6 +442,11 @@ def compile_recipe(evidence):
             )
             payload["policies"]["risk"] = payload["execution_research"]["ceilings"]
             payload["policies"]["sizing_control"] = payload["execution_research"]["sizing_control"]
+            if payload["version"] == PRIORITY_VERSION:
+                payload["budget"].update(proposals=272, proposals_per_fit=68)
+                payload["policies"]["entry_priority"] = payload["execution_research"][
+                    "entry_priority_policy"
+                ]
         if validation_mode == "exploratory_only":
             payload["policies"]["final"] = (
                 "No untouched later period; exploratory ranking only, never a validated recommendation"

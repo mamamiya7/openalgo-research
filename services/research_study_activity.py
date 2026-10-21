@@ -75,6 +75,14 @@ def _params(value):
     if not isinstance(value, dict) or len(value) > MAX_PARAMS:
         raise ValueError("Invalid study activity parameters")
     for key, item in value.items():
+        if key == "portfolio.entry_priority":
+            if not isinstance(item, str) or item not in {
+                "source",
+                "reversed_source",
+                "lower_stop_risk",
+            }:
+                raise ValueError("Invalid study activity account entry priority")
+            continue
         if isinstance(key, str) and re.fullmatch(
             r"[A-Za-z0-9_-]{1,64}\.(?:execution_choice|portfolio_choice)", key
         ):
@@ -366,11 +374,19 @@ class StudyObserver:
                 "automatic-hypotheses-v8",
                 "automatic-hypotheses-v9",
                 "automatic-hypotheses-v10",
+                "automatic-hypotheses-v11",
             ):
                 # Independent fit objectives stay separate scientifically. Only
                 # observation ordinals are flattened into the job's 192 events.
                 names = ("fit1", "fit2", "fit3", "search")
-                per_fit = 64 if calculation.get("version") == "automatic-hypotheses-v10" else 48
+                per_fit = (
+                    68
+                    if calculation.get("version") == "automatic-hypotheses-v11"
+                    else 64
+                    if calculation.get("version")
+                    in ("automatic-hypotheses-v10", "automatic-hypotheses-v11")
+                    else 48
+                )
                 fits = calculation.get("fits")
                 if not isinstance(fits, dict) or set(fits) - set(names):
                     raise ValueError("Invalid expanding-fit observation coverage")

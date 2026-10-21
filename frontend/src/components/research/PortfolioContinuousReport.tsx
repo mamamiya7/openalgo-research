@@ -607,6 +607,19 @@ export function PortfolioContinuousReport({
             View trades
           </Button>
         </div>
+        {result.execution?.activity?.version === 'research-execution-activity-v1' && (
+          <div className="space-y-1 text-sm" aria-label="Filled trading activity">
+            <p>
+              Traded value {cash(result.execution.activity.total_traded_notional)} · Fees{' '}
+              {cash(result.execution.activity.fees)} · {number(result.execution.activity.buy_fills)}{' '}
+              entry fills · {number(result.execution.activity.sell_fills)} exit fills
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {number(result.execution.activity.traded_notional_to_starting_capital_pct, '%')} of
+              starting cash traded, counting buys and sells. Filled orders only.
+            </p>
+          </div>
+        )}
         <div className="grid min-w-0 gap-6 lg:grid-cols-2">
           {showChart('trade-pnl')}
           {showChart('trade-duration')}

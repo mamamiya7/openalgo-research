@@ -17,6 +17,7 @@ SUPPORTED_RECIPES = (
     "automatic-hypotheses-v8",
     "automatic-hypotheses-v9",
     "automatic-hypotheses-v10",
+    "automatic-hypotheses-v11",
 )
 
 
@@ -27,7 +28,13 @@ class CoverageChanged(ValueError):
 def _complete(calculation):
     if not isinstance(calculation, dict) or not isinstance(calculation.get("fits"), dict):
         return False
-    proposal_limit = 64 if calculation.get("version") == "automatic-hypotheses-v10" else 48
+    proposal_limit = (
+        68
+        if calculation.get("version") == "automatic-hypotheses-v11"
+        else 64
+        if calculation.get("version") == "automatic-hypotheses-v10"
+        else 48
+    )
     return (
         all(
             isinstance(calculation["fits"].get(name), dict)

@@ -15,6 +15,7 @@ describe('saved research recipe labels', () => {
     ['automatic-hypotheses-v8', 'Walk-forward research'],
     ['automatic-hypotheses-v9', 'Expanded automatic research'],
     ['automatic-hypotheses-v10', 'Execution-aware research'],
+    ['automatic-hypotheses-v11', 'Portfolio entry research'],
   ])('describes the recorded scope of %s', (version, label) => {
     expect(researchRecipeLabel(version)).toBe(label)
   })

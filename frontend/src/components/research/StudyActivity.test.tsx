@@ -353,6 +353,24 @@ describe('durable study activity', () => {
 })
 
 describe('recorded walk-forward activity identity', () => {
+  it('keeps the 68-trial priority fit labels and selected global policy readable', async () => {
+    const data = receipt({
+      rows: [row({ number: 271, params: { 'portfolio.entry_priority': 'lower_stop_risk' } })],
+    })
+    data.executions[0].proposal_budget = 272
+    vi.mocked(researchStudyActivity.get).mockResolvedValue(data)
+    mount({ recipeVersion: 'automatic-hypotheses-v11' })
+    const table = await screen.findByRole('table', { name: 'Proposal activity' })
+    expect(
+      within(table).getByRole('rowheader', { name: 'Final fit · Trial 68 Proposal 272' })
+    ).toBeVisible()
+    await userEvent.click(
+      within(table).getByRole('button', {
+        name: 'View settings for Final fit · Trial 68 (Proposal 272)',
+      })
+    )
+    expect(screen.getByRole('dialog')).toHaveTextContent('Lower stop risk first')
+  })
   it('uses the recorded execution-aware 64-proposal fit boundaries', async () => {
     const data = receipt({
       rows: [0, 63, 64, 191, 192, 255].map((number) => row({ id: number + 1, number })),

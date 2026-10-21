@@ -1,5 +1,22 @@
 # OpenAlgo Research status
 
+## Competing-entry research — 21 October 2026 qualified source
+
+The [v11 priority increment](PRIORITY_CORE_20261021.md) tests source order,
+reversed source order and lower modeled stop-risk first for simultaneous entries,
+while preserving hard limits and causal opening prices. New automatic studies
+use 272 proposals across four independent fits within the existing 384-account
+ceiling; saved recipes retain their versions. Native reports add actual filled
+trading value, fees and daily fill activity. CSV addition and scanner recapture
+preserve account-wide policies and selected allocation/execution settings.
+
+235 frontend checks, targeted backend/native/service checks, a complete real
+VectorBT/Optuna programme with 284 accounts, source compatibility and the production
+build pass. Full v10 result/state/evidence/registry hashes remain identical.
+Qualification and remaining turnover/capacity scope are recorded in the contract.
+Activation of this increment is pending; the verified running app remains v10
+until its source/UI snapshot and startup checks complete.
+
 ## Execution-aware portfolio research — 21 October 2026 local activation
 
 The [v10 core increment](EXECUTION_CORE_20261021.md) adds native ATR exits,
