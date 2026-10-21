@@ -128,9 +128,14 @@ under ignored `.agent-native/turnover-core-20261021/`,
 `.agent-native/turnover-native-20261021/` and
 `.agent-native/recommendation-core-20261021/`.
 
-No broker request/order, normal research job, live strategy, installation or public
-release was started by this development increment. The running installation
-remains the separately verified v11 activation until explicitly updated.
+No broker request/order, normal research job or live strategy was started during
+qualification or activation. Local activation of `ee5279766` is verified at port
+5000: existing account, newly served UI, authenticated method route, source
+compatibility and a fresh calculation-worker heartbeat pass. All 63 saved run
+identities, configuration and Historify bytes are unchanged. A rollback source/UI
+snapshot is retained under the installation's ignored
+`.agent-native/turnover-core-20261021/before`. The source is pushed to
+`codex/native-research-refinement`; public release ZIPs remain unchanged.
 
 ## Remaining core work
 
