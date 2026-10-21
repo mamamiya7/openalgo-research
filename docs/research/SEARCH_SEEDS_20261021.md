@@ -99,8 +99,42 @@ probability of profit, proof of a universal optimum or general FDR control.
 
 ## Qualification and activation
 
-Qualification results and the local activation receipt will be recorded here
-after the frozen full-procedure suite and recovery checks complete.
+466 distinct scoped backend and 270 frontend checks pass. Coverage includes
+three genuine native constrained account reports, a complete v15 service journey
+with real Optuna, causal gates and persisted development histories, pause inside
+the first repeat, exact completed recovery, changed immutable support rejection,
+adverse final results that cannot rerank the choice and weak-date reference
+fallback. The full service fixture uses controlled account economics and an
+explicit audit double; it is separate from genuine native execution tests.
+The complete prior v14 journey and v13/v14 identity contracts remain unchanged.
+TypeScript, lint, production build and source compatibility pass. One hundred
+seed assessments leave handles at 205, with zero retained traced bytes and a
+70,147-byte peak in the scoped resource check.
+
+The frozen v2 calibration suite completes all 20 declared programmes: four
+replicates of each of the five models. All 16 null cases retain the unchanged
+reference, and all four persistent-edge controls select changed settings. Positive
+controls complete 408 proposals and three search checks; the null cases complete
+272 proposals and skip repeats after earlier rejection. Final outcomes remain
+excluded from selection. The frozen source digest is unchanged throughout.
+The exact one-sided 95% upper bound is 52.7% separately for each four-case null
+stratum. Zero observed events in this small suite cannot establish a 5% guarantee;
+models are not pooled to imply stronger evidence.
+
+The initial suite's failed receipt remains retained: all positive controls were
+rejected because its test audit double supplied incompatible scope/qualification
+metadata to the real consumer. The v2 runner fixes only that interface, explicitly
+seals the model-only test-double declaration and tests the actual consumer
+contract. Application thresholds, case seeds and model parameters were unchanged.
+The same complete declaration was rerun; no cases were dropped or retuned.
+
+Locally activated from code commit `9399cf2e9`. The existing account, newly served
+production UI, authenticated route, fresh research worker heartbeat and installed
+compatibility checks pass. All 63 saved run identities, configuration and
+Historify bytes remain unchanged. Source/UI rollback files are retained locally.
+No normal research job, trading job or order was started during qualification or
+activation. The development branch is `codex/native-research-refinement`; this
+does not publish a replacement public release ZIP.
 
 ## Remaining scope
 

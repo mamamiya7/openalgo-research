@@ -26,8 +26,29 @@ These are conditional engineering checks, not general FDR control, independent
 market replication or live strategy confidence. Larger model suites and
 whole-process seed stability remain pending.
 
-Final qualification and activation are in progress; the normal app remains on
-the previously qualified v14 increment until those checks complete.
+Qualification passes 466 distinct scoped backend and 270 frontend checks,
+including genuine native constrained accounts, full v15 pause/resume and exact
+completed recovery, rejection of altered support facts, baseline fallback and
+unchanged v13/v14 contracts. TypeScript, lint, production build and source
+compatibility pass. One hundred seed assessments keep handles at 205 and retain
+zero traced bytes in the scoped resource check.
+
+The frozen 20-programme controlled calibration passes: zero changed recommendations
+in 16 null cases (four per model), and changed recommendations in all four
+persistent-edge controls. Each positive control completes 408 proposals; null
+cases stop after 272 because earlier checks reject changed settings. The initial
+suite failed its positive controls because the test audit double used incompatible
+consumer metadata. Its failed receipt is retained. Correcting only that test
+interface, with explicit model-only evidence and consumer-contract checks, allowed
+the same declared cases to pass; application thresholds were not retuned.
+Four replicates per null model still give a wide 52.7% one-sided 95% upper bound:
+this does not establish a 5% false-recommendation guarantee or general FDR control.
+
+Activated locally from `9399cf2e9`: the new UI, existing account, authenticated
+route, installed compatibility and fresh worker heartbeat pass. All 63 saved run
+identities, configuration and Historify bytes are unchanged. Source/UI rollback
+files remain local; no normal research or trading job was started. The source
+branch is `codex/native-research-refinement`; public release ZIPs remain unchanged.
 
 ## Symbol and date sensitivity — 21 October 2026 local activation
 

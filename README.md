@@ -86,7 +86,7 @@ reference; passing is historical robustness evidence, not a probability of futur
 profit. Saved v14 studies retain their versions.
 Details stay inside the existing Research details view.
 
-The [v15 search-repeat increment](docs/research/SEARCH_SEEDS_20261021.md) checks
+The locally activated [v15 search-repeat increment](docs/research/SEARCH_SEEDS_20261021.md) checks
 whether a supported setup depends on one lucky search path. Two additional
 fixed-seed searches reuse the same prices and matching account calculations;
 they can reject the primary choice but cannot pick a luckier replacement.
