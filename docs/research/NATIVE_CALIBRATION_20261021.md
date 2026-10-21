@@ -83,12 +83,20 @@ cache may share pristine real reports across programmes. Keys include exact
 conditioned strategies, signals, snapshot/provenance and capital. Reports are
 copied before enrichment and on hits; samplers, search state and audits are not
 reused. New calculations and account reuses are counted separately in sealed facts.
+Bounds can evict earlier reports; an evicted account is calculated again. The
+receipt records actual hits rather than assuming a runtime speedup.
 
 The cache rejects another dataset or reopening after close, clears on success
 and exception, and is bounded to 512 entries and 64 MiB of encoded report bytes.
 That is not a hard Python RSS cap; object overhead and process memory are measured
 separately. Parallel qualification uses bounded separate dataset processes. It
 does not add an executor or persistent cache to the ordinary application.
+
+Complete native programmes remain substantial computational work. Their fixture
+timings are not a forecast for a real broker universe. Measure representative
+account, checkpoint and report costs before increasing ordinary search budgets;
+future method/allocation expansion must preserve validation capacity and usable
+runtime rather than silently add more calculations.
 
 ## Developer command and retained evidence
 
@@ -125,6 +133,35 @@ never overwrites earlier or interrupted evidence. A retry needs a new path.
 
 ## Qualification and activation
 
-The frozen native suite is in progress. Final coverage, resource measurements and
-activation facts will be recorded after complete qualification. Feasibility
-diagnostics and component checks alone do not constitute a passed suite.
+The frozen suite passes all fifteen programmes on five independent generated
+datasets. All twelve null-programme outcomes retain unchanged settings; all three
+positive-control programmes support changed settings. Each null stratum still
+has only one independent dataset. The three positive paths agree on improvement
+but select different exact settings; no alternate replaces the canonical choice.
+
+There are 4,459 account requests, comprising 4,442 actual native calculations and
+17 exact report reuses. Every request receives its genuine audit. All fifteen
+programmes verify committed-proposal pause/resume and immutable prefix histories.
+Positive controls verify adverse final native outcomes without reranking. Every
+declared case completes and the source digest stays unchanged throughout.
+Frozen source identity: `7628564e9f777c097440b777e35ac5bce554ad8122d9aacdb4df0d804ff8c064`.
+Receipt identity: `b41a42867fdfa5c4c5e6ba873f2cd95d3b575449e0f7ca1985130fe37faba4e2`.
+Earlier feasibility diagnostics are excluded from this qualification.
+
+233 distinct scoped backend checks pass: native fixture/cache contracts, grouped
+coverage and failure handling, actual Optuna prefix replay, current v15 and prior
+v14 service recovery and legacy identities. Prefix tests use explicitly controlled
+account/gate fixtures; the fifteen complete programmes qualify genuine native
+calculation separately. Ruff, source compatibility and diff checks pass. Frontend,
+dependencies and schema are unchanged; no new UI build or full installer matrix
+is claimed for this increment.
+
+The resource audit covers 100 genuine 21-session accounts and 100 cache hits after
+five warmup cycles. All 50 normal and 50 populated exception closures empty their
+caches; 100 attempts at cross-dataset reuse are rejected. Handles fall from 944 to
+932. RSS rises about 32.1 MB, mostly initially; the last 40 cycles add 0.72 MB.
+Retained traced allocations plateau around 0.2 MB with a 22.2 MB temporary peak.
+This is a measured fixed-window lifecycle check, not a hard whole-programme RAM cap.
+
+Native implementation commit: `d43bc4d1f`. Local activation follows this completed
+qualification; installed source and saved-data checks are recorded separately.

@@ -2,12 +2,12 @@
 
 The [reconciled implementation plan](DELIVERY_PLAN.md#remaining-implementation-order)
 separates qualified foundations from remaining work. Native full-procedure
-synthetic calibration and bounded whole-procedure seed qualification are now
-implemented in source and undergoing their frozen suite. Portfolio-wide
-allocation, applicable method expansion and regime policy research follow.
+synthetic calibration and the initial whole-procedure seed qualification are now
+complete for their bounded engineering scope. Portfolio-wide allocation,
+applicable method expansion and regime policy research follow.
 The latest controlled v15 qualification below remains complete for its own scope.
 
-## Native full-procedure qualification — 21 October 2026, in progress
+## Native full-procedure qualification — 21 October 2026
 
 The [native extension](NATIVE_CALIBRATION_20261021.md) uses genuine VectorBT fills,
 actual constraint audits, immutable development histories and committed-proposal
@@ -18,10 +18,20 @@ runner and earlier evidence remain separately identified.
 
 233 scoped backend checks pass, including current and prior service recovery,
 native fixture/cache checks and actual seeded proposal replay. The frozen
-five-dataset/fifteen-programme suite is still running; component tests and an
-earlier feasibility diagnostic do not count as completed qualification. No new
-production default, UI, dependency or database schema is introduced. Local
-activation and Git publication follow complete qualification.
+five-dataset/fifteen-programme suite passes: all twelve null-programme outcomes
+retain unchanged settings, and all three positive-control programmes support a
+change while adverse final outcomes cannot rerank the choice. There are 4,442
+actual native calculations and 17 exact report reuses. All programmes verify
+native pause/resume, and the frozen source digest stays unchanged.
+
+Counts remain five independent datasets, not fifteen independent observations.
+One null dataset per model gives a wide 95% one-sided upper bound after zero
+events. This is native engineering qualification, not general false discovery
+control or live strategy confidence. The initial controlled-model receipt remains
+separate. Scoped resource repetitions release every cache on success/error;
+handles do not grow and later memory samples plateau. No new production default,
+UI, dependency or database schema is introduced. Local activation and Git
+publication follow this completed qualification.
 
 ## Search-seed stability and controlled calibration — 21 October 2026
 

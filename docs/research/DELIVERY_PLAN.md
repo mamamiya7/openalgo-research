@@ -25,10 +25,26 @@ is complete. Earlier test totals belong to their own scopes and are not summed.
 | 2. Chronology | [Three expanding-prefix fits and later checks](WALK_FORWARD_20261020.md), final development refit, higher costs, purging and separate final confirmation. Accounts reset to the same capital. | Learned transforms must fit inside their own training prefixes. Continuous account carry is a separate simulation protocol, not an aggregation of reset accounts. |
 | 3. Applicable methods | [Typed method definitions and recorded coverage](METHOD_ADMISSION_20261020.md), [momentum expansion](METHOD_EXPANSION_20261021.md), 108 stock/market choices across 32 families, bounded conditional search and applicable clock probes. | Broader qualified domains/combinations, volume-derived conditions, actual intraday indicator discovery, confirmed multiple timeframes and later controlled statistical families. A registry is not proof of numerical admission or exhaustive search. |
 | 4. Execution and allocation | [ATR exits, sizing and hard limits](EXECUTION_CORE_20261021.md), [entry priority](PRIORITY_CORE_20261021.md), [turnover constraints](TURNOVER_RECOMMENDATION_20261021.md), [volume provenance, shared participation and direct correlated-exposure caps](PORTFOLIO_CAPACITY_20261021.md). | Portfolio-wide covariance/cluster controls, supported sector/factor metadata, broader broker/quantity profiles and execution models with adequate spread/depth/impact inputs. Current participation is a declared historical assumption, not executable capacity. |
-| 5. Recommendation | Cost/neighbour checks, paired daily ranges, reference fallback, [exploratory saved alternatives](TRADEOFFS_VOLUME_20261021.md), [native symbol/date challenges](SYMBOL_DATE_SENSITIVITY_20261021.md), and [three final-fit search seeds plus controlled calibration](SEARCH_SEEDS_20261021.md). | Genuine native full-procedure synthetic calibration, wider generators/replicates, whole-procedure seed sensitivity, and only then separately qualified selection-adjusted statistical diagnostics. |
+| 5. Recommendation | Cost/neighbour checks, paired daily ranges, reference fallback, [exploratory saved alternatives](TRADEOFFS_VOLUME_20261021.md), [native symbol/date challenges](SYMBOL_DATE_SENSITIVITY_20261021.md), and [three final-fit search seeds plus controlled calibration](SEARCH_SEEDS_20261021.md), followed by [native full-procedure and whole-procedure seed qualification](NATIVE_CALIBRATION_20261021.md). | Wider independent generators/replicates and only then separately qualified selection-adjusted statistical diagnostics. |
 | 6. Regimes and adaptation | Existing fixed causal stock/market conditions and recorded regime attribution are reusable inputs. | A validated suitability report, then a frozen regime-conditioned strategy policy replayed with shared cash and switching costs. No learned regime classifier, live resizing or crisis execution is qualified by v15. |
 | 7. Rule sources and engine/assets | Native saved trade charts/replay and existing separately scoped VectorBT/Nautilus connectors. | Complete scanner-source/universe contracts, selected-condition OpenScript parity, new asset accounting and explicit automatic-research parity per engine/profile. Nautilus does not inherit VectorBT's v15 qualification. |
 | 8. Complete consumer journey | Import/library, automatic runs, findings, reports, saved setup reuse and recovery have implemented paths and dated scoped checks. | Fresh end-to-end acceptance on the exact release, returning/failed/no-edge journeys, accessibility/narrow layouts, installation/update/rollback and clear distribution provenance. Broad visual polish remains after core work. |
+
+### Native qualification extension completed
+
+The [native full-procedure extension](NATIVE_CALIBRATION_20261021.md) closes A1 and
+the first bounded A2 seed-path qualification. All fifteen native programmes on
+five independent synthetic datasets pass, with 4,442 actual calculations, 17
+report reuses and verified native pause/resume. Every null path keeps unchanged
+settings; all three positive paths support improvement without letting adverse
+final results rerank the choice. 233 scoped backend checks also pass. Production
+v15 defaults and older numerical contracts remain unchanged.
+
+This does not close larger independent calibration or selection-adjusted
+statistical-confidence work. One dataset per null model is a broad-path
+engineering check with a very wide rate bound. Three seed programmes are not
+three independent datasets. The next new core feature is **B, portfolio-wide
+allocation**, with representative runtime profiling before expanding its search.
 
 ### What v15 closes, and what it does not
 
@@ -50,13 +66,16 @@ application thresholds.
 
 ### Remaining implementation order
 
+**A1 and the initial A2 engineering slice are qualified. B is next.** Their
+specifications remain below for traceability; larger independent A2 suites remain
+an ongoing qualification requirement, not a claim completed by fifteen paths.
 Complete a bounded usable slice at each step. Each runtime policy change gets a
 new version; saved v15 and older studies retain exact contracts. Offline research
 qualification does not silently add work to every user's Optimize action.
 
 | Step | Deliverable and reason for its position | Completion gate |
 |---|---|---|
-| A1 — next coding slice | **Native full-procedure calibration runner.** Replace the controlled account/audit seam with genuine VectorBT accounts and actual constraint audits on independently generated, causally available price/volume/signal fixtures. Exercise the same admission, chronological search, costs, support, native masks, seed checks, selection and recovery as a user run. Reuse the existing sealed plan/receipt CLI. | Frozen model definitions and source identity; declared complete cases, positive controls and no-edge controls; retained failures; actual native fills/audits verified; final-outcome isolation, pause/resume and bounded runtime/storage. An explicit comparison explains differences from the controlled-account suite. Start with a bounded engineering suite, not an unqualified confidence target. |
+| A1 — bounded slice qualified | **Native full-procedure calibration runner.** Replace the controlled account/audit seam with genuine VectorBT accounts and actual constraint audits on independently generated, causally available price/volume/signal fixtures. Exercise the same admission, chronological search, costs, support, native masks, seed checks, selection and recovery as a user run. Reuse the existing sealed plan/receipt CLI. | Frozen model definitions and source identity; declared complete cases, positive controls and no-edge controls; retained failures; actual native fills/audits verified; final-outcome isolation, pause/resume and bounded runtime/storage. An explicit comparison explains differences from the controlled-account suite. Start with a bounded engineering suite, not an unqualified confidence target. |
 | A2 — qualification expansion | **Whole-procedure seed sensitivity and broader calibration.** In offline qualification, vary sampler paths across all earlier fits as well as the final search, using independent outcome datasets with dependence, shifts and sparse opportunities. Predeclare precision/power targets, cases and compute budget before increasing replicate counts. | No lucky-seed replacement, omitted failures or threshold tuning to qualification outcomes. Report model-specific denominators, intervals, power and unresolved scope. The current 32-replicate cap cannot support a 5% zero-event upper-bound target; revise bounds/retention deliberately if that target is adopted. Any runtime whole-procedure repeat policy needs its own measured budget and version rather than silently tripling v15 work. |
 | B — portfolio intelligence | **Portfolio-wide allocation.** Extend direct pairwise exposure control with causal covariance/cluster concentration and a simple constrained allocation policy. Compare with current allocation at matched capital/risk. Admit sector/factor controls only when point-in-time metadata exists. Broaden volume producer profiles individually. | Prefix-only inputs; shrinkage/singular-matrix and missing-data rules; deterministic bounded allocation; cash, participation, turnover, stop-risk and exposure reconciliation on actual fills. Full recommendation/recovery/replay tests; stronger returns from more risk are identified separately. New search choices repeat relevant A qualification. |
 | C — applicable method expansion | **Useful new research, not a larger menu.** Admit volume-derived conditions for qualified producers, then causal intraday/confirmed higher-timeframe features, then limited statistical families. Expand existing price domains only with a clear hypothesis and measured budget. | Each method has formula, causal timestamp, warmup, input/quantity basis, domain, missingness and engine/profile support. Compile one shared Historify requirement union; download only missing coverage. All relevant registered families receive admitted/redundant/unsupported/insufficient/budget-deferred outcomes. Actual simulation, known-edge/no-edge, recovery and budget checks precede inclusion. |
@@ -64,7 +83,8 @@ qualification does not silently add work to every user's Optimize action.
 | E — source and engine/asset breadth | **Complete rule sources and qualified adapters.** Add selected-condition OpenScript parity and a source contract containing the historical opportunity universe before claiming reproduction of an entire Chartink scanner. Qualify one additional Nautilus/asset/venue profile at a time. | Numerical/availability parity, exact engine-specific fills, lifecycle/expiry/borrow/margin/roll requirements where applicable, saved evidence and replay. A supported library feature or native chart indicator is not automatically an admitted research feature. |
 | F — consumer and release acceptance | **Ship a complete supported loop.** Recheck import → essential intent → automatic research → clear conclusion → inspect → named save → reuse/refresh/recovery against the exact candidate build. Keep charts/metrics/settings progressively disclosed. | Fresh and returning/no-edge/unsupported/interrupted journeys, keyboard/focus/reduced-motion/narrow-layout checks, affected Windows/Linux install/update/rollback and exact package inventory. Update guides and extension onboarding, then publish a specifically qualified release. |
 
-**Active sequence: A1 → A2 → B → C → D → admitted E slices.** F's minimal
+**Remaining core sequence: B → C → D → admitted E slices.** Broader independent
+A2 calibration accompanies relevant new policies. F's minimal
 usable interface and relevant acceptance checks accompany every slice; the
 broader polish pass follows stable core contracts. A complete supported release
 can be accepted after A without waiting for every future method or asset. Do not
@@ -297,15 +317,19 @@ they do not prove optimal future performance.
 
 ### Next coding increment and release gates
 
-Start **A1, the genuine native full-procedure calibration runner**, using the
-existing plan/receipt CLI and a bounded predeclared synthetic-market suite.
-Preserve the controlled-account runner as its own qualified model rather than
-silently relabel it as native execution. Qualify generated signals, prices,
-volume provenance, calendars, actual fills and constraint audits together with
-the full recommendation procedure. Pause/recovery and adverse-final isolation
-are acceptance cases. Record actual elapsed time and evidence size before
-expanding the suite. This is offline developer qualification; do not add a
-synthetic calibration stage to the consumer's ordinary optimisation run.
+Start **B, portfolio-wide allocation**, by profiling representative native
+account, checkpoint and report costs. Keep the frozen v15 baseline and declared
+risk/capital fixed. Introduce one simple causal covariance/cluster policy with
+explicit missing-data and singular-matrix behaviour before broader sector/factor
+or continuous-rebalancing work. Reuse native execution and genuine audits;
+verify actual fills, cash competition, capacity where admitted, turnover and
+stop-risk together. Every new numerical policy gets its own version, exact
+recovery/replay, matched-risk comparison and relevant native calibration.
+
+A1's native runner and the initial A2 whole-procedure seed checks are implemented
+and qualified as described above. Preserve both controlled-account and native
+model receipts with their own scope. Larger replicate sets require a predeclared
+precision and compute plan, not an automatic multiplication of consumer work.
 
 Package 1's storage foundation and package 2's expanding-prefix protocol are
 already implemented. They are extension seams, not the next new build. The v15
