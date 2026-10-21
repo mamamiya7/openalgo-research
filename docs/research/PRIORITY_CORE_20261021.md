@@ -87,6 +87,13 @@ No broker request, order, normal research job or trading job was started for thi
 qualification. Controlled fixtures do not establish profitability or live broker
 performance. Public release ZIPs remain unchanged.
 
+Local activation of `9f384f959` is verified at port 5000: the existing account,
+new served UI, authenticated method route and fresh calculation-worker heartbeat
+pass, as does installed source compatibility. All 63 saved run identities,
+configuration and Historify bytes are unchanged. The same code is pushed to
+`codex/native-research-refinement`. Rollback source/UI files are retained under
+the installation's ignored `.agent-native/priority-core-20261021/before`.
+
 ## Next core work
 
 Continue package 4 with an explicit entry turnover budget using actual buy fills

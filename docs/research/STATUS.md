@@ -1,6 +1,6 @@
 # OpenAlgo Research status
 
-## Competing-entry research — 21 October 2026 qualified source
+## Competing-entry research — 21 October 2026 local activation
 
 The [v11 priority increment](PRIORITY_CORE_20261021.md) tests source order,
 reversed source order and lower modeled stop-risk first for simultaneous entries,
@@ -14,8 +14,11 @@ preserve account-wide policies and selected allocation/execution settings.
 VectorBT/Optuna programme with 284 accounts, source compatibility and the production
 build pass. Full v10 result/state/evidence/registry hashes remain identical.
 Qualification and remaining turnover/capacity scope are recorded in the contract.
-Activation of this increment is pending; the verified running app remains v10
-until its source/UI snapshot and startup checks complete.
+Activated locally from `9f384f959` and pushed to
+`codex/native-research-refinement`. The served UI, existing account, authenticated
+method route, source compatibility and fresh worker heartbeat pass. All 63 saved
+run identities, configuration and Historify bytes are unchanged. Source/UI rollback
+files are retained locally; no normal research or trading job was started.
 
 ## Execution-aware portfolio research — 21 October 2026 local activation
 
