@@ -329,3 +329,74 @@ def test_cli_failure_keeps_all_cases_and_returns_nonzero(tmp_path, monkeypatch):
     receipt = verify_receipt(json.loads(destination.read_text(encoding="utf-8")))
     assert receipt["status"] == "incomplete"
     assert len(receipt["cases"]) == 5
+
+
+def controlled_audit_fixture():
+    from calibration_runner import controlled_audit
+
+    feature_id = fingerprint("controlled-calibration-features")
+    report = {
+        "summary": {},
+        "equity_curve": [],
+        "strategies": [],
+        "evaluation_basis": {
+            "comparison": {"execution": {"portfolio_features": {"id": feature_id}}}
+        },
+    }
+    return controlled_audit(report, {"id": feature_id}), report
+
+
+def test_controlled_audit_implements_actual_sensitivity_consumer_contract():
+    from calibration_runner import RUNNER_IDENTITY
+
+    from research.recommendation_sensitivity import _constraints
+
+    audit, report = controlled_audit_fixture()
+    assert RUNNER_IDENTITY.endswith("-v2")
+    assert _constraints(audit, report) is True
+    assert audit["id"] == fingerprint({key: value for key, value in audit.items() if key != "id"})
+    assert audit["test_double"] == {
+        "kind": "controlled_account_model",
+        "native_execution": False,
+        "purpose": "full_controller_orchestration_only",
+    }
+    # Canonical schema strings exercise the real consumer; the explicit sealed
+    # flag and the outer model declaration retain the simulation-only scope.
+    assert audit["scope"] == "caller_admitted_development_account"
+    assert audit["qualification"] == "recorded_constraints_and_native_fills_only"
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("scope", "controlled_account_model_audit_stub"),
+        ("qualification", "orchestration_only_not_native_constraint_execution"),
+        ("feature_id", fingerprint("another-features-root")),
+    ],
+)
+def test_actual_sensitivity_consumer_rejects_incompatible_audit_interface(field, value):
+    from research.recommendation_sensitivity import _constraints
+
+    audit, report = controlled_audit_fixture()
+    audit[field] = value
+    with pytest.raises(ValueError, match="constraint audit identity"):
+        _constraints(reseal(audit), report)
+
+
+def test_model_only_flag_is_sealed_and_cannot_be_removed_without_changing_identity():
+    from research.recommendation_sensitivity import _constraints
+
+    audit, report = controlled_audit_fixture()
+    original_id = audit["id"]
+    audit["test_double"]["native_execution"] = True
+    with pytest.raises(ValueError, match="constraint audit identity"):
+        _constraints(audit, report)
+    assert reseal(audit)["id"] != original_id
+
+
+def test_controlled_audit_never_declares_native_model_scope_in_plan():
+    from calibration_runner import RUNNER_IDENTITY
+
+    declaration = compile_plan(code_identity="contract-precheck", runner_identity=RUNNER_IDENTITY)
+    assert declaration["execution_model"] == "controlled_account_model"
+    assert "Not general" in declaration["limitation"]

@@ -30,6 +30,17 @@ This qualifies orchestration under that model, rather than native fill economics
 or the correctness of broker prices. Durable service storage/restart and genuine
 native execution are qualified separately.
 
+Runner v2 supplies canonical audit-interface strings so the actual sensitivity
+consumer is exercised. A sealed `test_double` declaration explicitly records
+`kind: controlled_account_model`, `native_execution: false` and the orchestration
+purpose. Those canonical interface strings are test-double inputs, not evidence
+that native constraints or fills were evaluated. Before an expensive suite,
+run the fast consumer-contract tests: they invoke the actual sensitivity audit
+consumer and reject incompatible scope, qualification, feature identity or seals.
+An earlier v1 runner used incompatible interface strings and failed its positive
+control. Its failed receipt is retained and must not qualify a release or be
+counted as evidence of successful false-recommendation control.
+
 Its market-price, source-signal and causal-gate fixture is fixed across cases.
 Independent data seeds generate independent **controlled account-outcome
 datasets conditional on that shared fixture**, not independent raw-price
@@ -87,7 +98,7 @@ study as calibrated strategy confidence.
 
 For a developer qualification from the repository root, with the development
 dependencies installed, use a new ignored output path. The explicit runner
-identity is `full-v15-optuna-native-gates-controlled-account-model-v1`:
+identity is `full-v15-optuna-native-gates-controlled-account-model-v2`:
 
 ```powershell
 $env:PYTHON_DOTENV_DISABLED = '1'
@@ -98,9 +109,10 @@ $env:DATABASE_URL = 'sqlite:///.agent-native/calibration/isolated.db'
 $env:LOG_DIR = '.agent-native/calibration/logs'
 $env:LOG_FORMAT = '%(levelname)s %(name)s %(message)s'
 $calibrationCode = git rev-parse HEAD
+python -m pytest test/research/test_search_calibration.py --confcutdir=test/research -q
 python tools/research_calibration.py `
   --runner calibration_runner:run_case `
-  --runner-identity full-v15-optuna-native-gates-controlled-account-model-v1 `
+  --runner-identity full-v15-optuna-native-gates-controlled-account-model-v2 `
   --code-identity $calibrationCode `
   --execution-model controlled_account_model `
   --replicates 4 `

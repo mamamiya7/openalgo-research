@@ -23,7 +23,7 @@ from research.development_evidence import MAX_TOTAL_BYTES, MAX_TOTAL_MARKS, buil
 from research.report_contract import fingerprint, settings_identity
 from research.search_calibration import verify_plan
 
-RUNNER_IDENTITY = "full-v15-optuna-native-gates-controlled-account-model-v1"
+RUNNER_IDENTITY = "full-v15-optuna-native-gates-controlled-account-model-v2"
 
 
 def economic_identity(settings):
@@ -125,7 +125,12 @@ class ControlledAccounts:
 
 
 def controlled_audit(report, features):
-    """Explicit stub; qualifies orchestration only, never native risk arithmetic."""
+    """Explicit schema-compatible stub, never evidence of native risk arithmetic.
+
+    The scope/qualification strings implement the interface consumed by the
+    real controller. The sealed test_double flag and outer runner/model identity
+    distinguish these simulated facts from native execution qualification.
+    """
     body = {
         "version": "research-portfolio-constraint-evidence-v1",
         "status": "supported",
@@ -137,8 +142,13 @@ def controlled_audit(report, features):
             }
         ),
         "unavailable_entries": 0,
-        "scope": "controlled_account_model_audit_stub",
-        "qualification": "orchestration_only_not_native_constraint_execution",
+        "scope": "caller_admitted_development_account",
+        "qualification": "recorded_constraints_and_native_fills_only",
+        "test_double": {
+            "kind": "controlled_account_model",
+            "native_execution": False,
+            "purpose": "full_controller_orchestration_only",
+        },
     }
     return {**body, "id": fingerprint(body)}
 
