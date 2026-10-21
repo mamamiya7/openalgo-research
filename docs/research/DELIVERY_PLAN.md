@@ -23,7 +23,7 @@ is complete. Earlier test totals belong to their own scopes and are not summed.
 | 1. Mandate and evidence | [Frozen assumptions and immutable full development histories](DEVELOPMENT_EVIDENCE_20261011.md), bounded retention, input identities, tamper rejection and exact recovery. | Extend these contracts for each new model, allocation policy and engine; do not rebuild the storage foundation. |
 | 2. Chronology | [Three expanding-prefix fits and later checks](WALK_FORWARD_20261020.md), final development refit, higher costs, purging and separate final confirmation. Accounts reset to the same capital. | Learned transforms must fit inside their own training prefixes. Continuous account carry is a separate simulation protocol, not an aggregation of reset accounts. |
 | 3. Applicable methods | [Typed method definitions and recorded coverage](METHOD_ADMISSION_20261020.md), [momentum expansion](METHOD_EXPANSION_20261021.md), 108 stock/market choices across 32 families, bounded conditional search and applicable clock probes. | Broader qualified domains/combinations, volume-derived conditions, actual intraday indicator discovery, confirmed multiple timeframes and later controlled statistical families. A registry is not proof of numerical admission or exhaustive search. |
-| 4. Execution and allocation | [ATR exits, sizing and hard limits](EXECUTION_CORE_20261021.md), [entry priority](PRIORITY_CORE_20261021.md), [turnover constraints](TURNOVER_RECOMMENDATION_20261021.md), [volume provenance, shared participation and direct correlated-exposure caps](PORTFOLIO_CAPACITY_20261021.md). | Portfolio-wide covariance/cluster controls, supported sector/factor metadata, broader broker/quantity profiles and execution models with adequate spread/depth/impact inputs. Current participation is a declared historical assumption, not executable capacity. |
+| 4. Execution and allocation | [ATR exits, sizing and hard limits](EXECUTION_CORE_20261021.md), [entry priority](PRIORITY_CORE_20261021.md), [turnover constraints](TURNOVER_RECOMMENDATION_20261021.md), [volume provenance, shared participation and direct correlated-exposure caps](PORTFOLIO_CAPACITY_20261021.md), and the first [portfolio-wide allocation policy](PORTFOLIO_ALLOCATION_20261021.md). | Broader allocation/rebalancing and supported sector/factor metadata, broader broker/quantity profiles and execution models with adequate spread/depth/impact inputs. Current participation is a declared historical assumption, not executable capacity. |
 | 5. Recommendation | Cost/neighbour checks, paired daily ranges, reference fallback, [exploratory saved alternatives](TRADEOFFS_VOLUME_20261021.md), [native symbol/date challenges](SYMBOL_DATE_SENSITIVITY_20261021.md), and [three final-fit search seeds plus controlled calibration](SEARCH_SEEDS_20261021.md), followed by [native full-procedure and whole-procedure seed qualification](NATIVE_CALIBRATION_20261021.md). | Wider independent generators/replicates and only then separately qualified selection-adjusted statistical diagnostics. |
 | 6. Regimes and adaptation | Existing fixed causal stock/market conditions and recorded regime attribution are reusable inputs. | A validated suitability report, then a frozen regime-conditioned strategy policy replayed with shared cash and switching costs. No learned regime classifier, live resizing or crisis execution is qualified by v15. |
 | 7. Rule sources and engine/assets | Native saved trade charts/replay and existing separately scoped VectorBT/Nautilus connectors. | Complete scanner-source/universe contracts, selected-condition OpenScript parity, new asset accounting and explicit automatic-research parity per engine/profile. Nautilus does not inherit VectorBT's v15 qualification. |
@@ -37,13 +37,14 @@ five independent synthetic datasets pass, with 4,442 actual calculations, 17
 report reuses and verified native pause/resume. Every null path keeps unchanged
 settings; all three positive paths support improvement without letting adverse
 final results rerank the choice. 233 scoped backend checks also pass. Production
-v15 defaults and older numerical contracts remain unchanged.
+That qualification left v15 and older numerical contracts unchanged; v16 is
+qualified separately in the portfolio allocation slice.
 
 This does not close larger independent calibration or selection-adjusted
 statistical-confidence work. One dataset per null model is a broad-path
 engineering check with a very wide rate bound. Three seed programmes are not
-three independent datasets. The next new core feature is **B, portfolio-wide
-allocation**, with representative runtime profiling before expanding its search.
+three independent datasets. The first **B, portfolio-wide allocation** slice
+is now implemented and profiled separately below; wider calibration remains open.
 
 ### What v15 closes, and what it does not
 
@@ -321,11 +322,19 @@ The first **B, portfolio-wide allocation** slice is implemented as
 [measured runtime profile](PORTFOLIO_RUNTIME_20261021.md). The original allocation
 reference, declared risk/capital and 408/512 workload ceilings stay fixed.
 It introduces one simple causal covariance/cluster policy with
-explicit missing-data and singular-matrix behaviour before broader sector/factor
-or continuous-rebalancing work. Reuse native execution and genuine audits;
-verify actual fills, cash competition, capacity where admitted, turnover and
-stop-risk together. Every new numerical policy gets its own version, exact
+explicit missing-data and singular-matrix behaviour. Native fills, cash,
+participation, turnover, stop-risk and independent held-mark audits have scoped
+checks. Broader sector/factor and continuous rebalancing remain future work. Every new numerical policy gets its own version, exact
 recovery/replay, matched-risk comparison and relevant native calibration.
+
+Before adding more method/search dimensions, address the measured repeated JSON
+integrity and report-statistics costs. Profile a larger symbol universe and minute
+workload; retain every required validation, metric and immutable history. Any
+reuse or deferred report materialization must prove identical decisions, saved
+results and recovery, with bounded ownership and measured resource release.
+The first complete v16 native controls take roughly10/14minutes on the shared
+qualification machine; a small warm-account timing is not a full-run promise.
+Then resume C's staged, admitted methods within measured budgets.
 
 A1's native runner and the initial A2 whole-procedure seed checks are implemented
 and qualified as described above. Preserve both controlled-account and native

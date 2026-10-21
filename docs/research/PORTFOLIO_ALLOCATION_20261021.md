@@ -72,8 +72,23 @@ Component checks cover binding native fills, duplicate buys, fees, turnover,
 singular dependence, unequal volatility, constant/missing series, causal future
 price changes, exact resume, tampering and changed intraday entry clocks.
 The pure allocation builder's 100-cycle resource check retains no cache or
-external resource; handles stay flat and memory plateaus. Full-search and
-service qualification results are recorded in STATUS when complete.
+external resource; handles stay flat and memory plateaus.
+
+400 distinct backend checks and276 frontend checks pass. Two separately declared
+complete native v16 programmes pass: independent noise retains original settings,
+and persistent edge supports changed settings while an adverse final period
+cannot rerank the selection. Both verify genuine audits and exact pause/resume;
+636 account requests contain634 native calculations and two exact report reuses.
+This is two generated datasets, not the previous v15 five-model/three-programme
+qualification and not general false-discovery control. The full controlled-account
+service journey separately verifies storage, seed vetoes, exact resume and
+altered-evidence rejection. Saved selected cluster allocation replays with equal
+native orders and no broker access. See [STATUS](STATUS.md) for activation.
+
+The complete native runs preserve a frozen source digest. Subsequent changes
+only fix metadata/report readers; their separate tests verify v16 coverage,
+75-dimension reconstruction and the unchanged old v15 coverage identity. A
+source comparison verifies all other calculation files remain unchanged.
 
 Broader sector/factor controls, continuous rebalancing, executable capacity,
 larger independent calibration samples and new asset accounting remain future

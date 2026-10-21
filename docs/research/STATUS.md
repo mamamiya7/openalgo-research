@@ -24,7 +24,7 @@ and new-original native accounts have exactly equal orders/summary/equity; the
 allocation warm-account median is 0.742 s versus 0.725 s for original allocation.
 Those small nonbinding accounts do not predict whole-search throughput.
 
-399 distinct scoped backend checks and 276 frontend checks pass so far. The
+400 distinct scoped backend checks and 276 frontend checks pass. The
 separately declared two-model native full-procedure regression passes: independent
 noise keeps original settings (272 proposals), and the positive control supports
 a change (408 proposals) while adverse final outcomes cannot select settings.
@@ -33,11 +33,20 @@ Both verify exact committed-proposal pause/resume. There are 636 account request
 datasets, not a complete v16 five-model/alternate-programme calibration or a
 probability of profit. Earlier v15 qualification remains separate.
 
-The full controlled-account service rerun and local activation are pending.
-Report-only v16 method-coverage/reconstruction fixes have separate checks;
-all other calculation source remains identical to the frozen native test source.
-No new dependency or database schema is introduced. Public release ZIPs remain
-unchanged; this development branch is `codex/native-research-refinement`.
+The full controlled-account service journey passes, including six-fit retention,
+completed resume without recalculation, altered-evidence rejection and a failed
+validation fallback. It qualifies service/persistence separately from genuine
+native fills. Report-only v16 method-coverage/reconstruction fixes have separate
+checks, including the 75-axis bound and exact old v15 coverage identity. All
+other calculation source remains identical to the frozen native test source.
+
+Locally installed/restarted from implementation `1af6c2e04`. Existing account,
+rebuilt UI, protected route, installed compatibility and fresh worker heartbeat
+pass; all63 saved runs, configuration and Historify bytes are unchanged. Source
+and frontend rollback copies remain local. No normal research/trading job or
+order was started. No dependency or database schema changed; the complete
+Windows installer matrix was not repeated for this numerical/UI slice. Public
+release ZIPs remain unchanged; branch is `codex/native-research-refinement`.
 
 ## Native full-procedure qualification — 21 October 2026
 

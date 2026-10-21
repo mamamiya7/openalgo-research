@@ -110,3 +110,19 @@ A scoped pure-builder resource repetition covered 100 twenty-symbol calls after
 five warmups and a separate 200-symbol bound smoke. Handles stayed at 204, RSS
 rose only 57,344 bytes and plateaued, with no persistent cache or external handles.
 This measures the new builder, not the maximum full-controller working set.
+
+
+## Complete native regression cost
+
+The frozen v16 canonical programmes on independent-noise and persistent-edge
+markets completed in 592.42 s and 841.72 s respectively while running in two
+bounded OS workers on this shared Windows machine. The former stops after its
+272 proposals when earlier evidence vetoes a change; the latter uses all408
+proposals and six fits. They include genuine calculations, audits, retained
+histories and planned pause/resume. They are two engineering workloads, not a
+consumer throughput SLA or independent confidence estimate.
+
+This reinforces the next performance priority: reduce repeated evidence/report
+work while proving identical financial decisions, required metrics, immutable
+histories and recovery. Larger symbol/minute workloads still need their own
+profile. Broader method/search expansion waits behind that measured work.
