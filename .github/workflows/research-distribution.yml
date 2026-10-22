@@ -66,7 +66,7 @@ jobs:
       OPENBLAS_NUM_THREADS: '2'
       NUMBA_NUM_THREADS: '2'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: '3.12'
@@ -162,7 +162,7 @@ jobs:
           else
             echo '## Full runtime and package verification' >> "$GITHUB_STEP_SUMMARY"
           fi
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: '3.12'
@@ -292,7 +292,7 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v6
         with:
           name: openalgo-research-preview
