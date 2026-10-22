@@ -147,6 +147,10 @@ def test_actual_native_vectorbt_curve_is_retained_without_sampling(store):
     assert len(shard["curve"]) == len(current["snapshot"]["sessions"])
 
 
+# The current recipe runs a complete retained-history service/recovery journey.
+# Hosted Windows exceeded the default 60s while still committing checkpoints;
+# match the underlying timing-research fixture's finite integration-test bound.
+@pytest.mark.timeout(300)
 @pytest.mark.parametrize("current_recipe", [False, True])
 def test_native_service_freezes_before_scoring_and_preserves_evidence_through_resume(
     store, monkeypatch, current_recipe

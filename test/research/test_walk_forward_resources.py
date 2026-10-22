@@ -31,7 +31,13 @@ def test_final_calls_and_lost_attempts_remain_reserved(monkeypatch, attempts, si
     assert not engine.calls and saved == original
 
 
-def test_prepared_owner_closes_on_success_cancellation_and_failure_100_times(monkeypatch):
+@pytest.mark.parametrize(
+    "version,gate",
+    [(worker.VERSION, "prepare_gate"), (worker.ALLOCATION_VERSION, "prepare_method_gate")],
+)
+def test_prepared_owner_closes_on_success_cancellation_and_failure_100_times(
+    monkeypatch, version, gate
+):
     owners = []
 
     class Owner:
@@ -44,10 +50,17 @@ def test_prepared_owner_closes_on_success_cancellation_and_failure_100_times(mon
             assert not self.closed
             self.closed = True
 
-    monkeypatch.setattr(worker, "prepare_gate", lambda _: Owner())
+    monkeypatch.setattr(worker, gate, lambda _: Owner())
+    other_gate = "prepare_method_gate" if gate == "prepare_gate" else "prepare_gate"
+    monkeypatch.setattr(worker, other_gate, lambda _: pytest.fail("Used the wrong prepared owner"))
+    # The public wrapper dispatches the admitted recipe before the controlled
+    # calculation double below. Exercise both legacy and current owner branches.
+    evidence = {"portfolio": {"automatic_research": {"version": version}}}
     outcome = None
 
     def calculate(*_args, **_kwargs):
+        assert _kwargs["version"] == version
+        assert _kwargs["prepared_gate"] is owners[-1] and not owners[-1].closed
         if outcome:
             raise outcome
         return {"finished": True}
@@ -62,10 +75,10 @@ def test_prepared_owner_closes_on_success_cancellation_and_failure_100_times(mon
                 "cancelled": lambda: None,
             }
             if outcome is None:
-                assert worker.run({}, **arguments) == {"finished": True}
+                assert worker.run(evidence, **arguments) == {"finished": True}
             else:
                 with pytest.raises(type(outcome)):
-                    worker.run({}, **arguments)
+                    worker.run(evidence, **arguments)
             assert owners[-1].closed
     assert len(owners) == 300 and all(owner.closed for owner in owners)
 
