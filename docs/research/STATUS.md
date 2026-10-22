@@ -1,11 +1,17 @@
 # OpenAlgo Research status
 
-## Release closure — 22 October 2026
+## Supported preview.8 completed — 22 October 2026
 
-Feature expansion is frozen. The [finite release checklist](RELEASE_FINISH_20261022.md)
-now takes priority over broader methods, regimes and assets. v16 is the supported
-development scope; the package/compatibility fixes and current journey acceptance
-are being qualified before a new public ZIP. Public preview.7 remains unchanged.
+The finite [release closure](RELEASE_FINISH_20261022.md) is complete for its
+supported scope. Local installation `1b9fdde1e` has the same application Git source
+and dependency locks as `2c52c262d`, with separately built local frontend assets;
+only two test fixtures differ between those source revisions. All 63 existing
+runs, configuration and Historify bytes were preserved. Current
+Windows/Linux compatibility, fresh installation/reinstallation/restart, synthetic
+populated update/backup restoration and the browser consumer loop are qualified.
+See [release acceptance](RELEASE_ACCEPTANCE_20261022.md) for evidence and limits.
+Public preview.8 uses OpenAlgo 2.0.2.7 and v16 automatic research. Broader methods,
+regimes, allocations and assets below are future product work, not release gates.
 
 The [reconciled implementation plan](DELIVERY_PLAN.md#remaining-implementation-order)
 separates qualified foundations from remaining work. Native full-procedure

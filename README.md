@@ -14,117 +14,47 @@ The aim is to connect broker data, backtesting and optimization in one open-sour
 workflow. Start directly from a Chartink scanner with the Chrome extension, upload
 a CSV export, or reuse saved signals.
 
-**Current preview: `0.1.0-preview.7` · OpenAlgo 2.0.2.5 · Windows and Linux**
+**Current preview: `0.1.0-preview.8` · OpenAlgo 2.0.2.7 · Windows and Linux**
 
-[**Download OpenAlgo Research**](https://github.com/mamamiya7/openalgo-research/releases/download/research-v0.1.0-preview.7/openalgo-research-0.1.0-preview.7.zip)
+[**Download OpenAlgo Research**](https://github.com/mamamiya7/openalgo-research/releases/download/research-v0.1.0-preview.8/openalgo-research-0.1.0-preview.8.zip)
 · [Install and start](docs/research/RUNTIME.md)
-· [Release notes](docs/research/releases/0.1.0-preview.7.md)
+· [Release notes](docs/research/releases/0.1.0-preview.8.md)
 · [Architecture](docs/research/SYSTEM_MAP.md)
 · [Released source](https://github.com/mamamiya7/openalgo-research/tree/main)
 
-Preview.7 includes [faster Historify cache checks](docs/research/HISTORIFY_CHECKS.md)
-and the patched Axios dependency. Guided setup, Chartink entry and saved reports
-remain available in the same installation. The OpenAlgo 2.0.2.7 development
-features described below are not included in preview.7; their
-[reconciliation and package checks](docs/research/PACKAGE_RECONCILIATION.md) are separate.
+## What’s in preview.8
 
-## Current development
+Upload a signal CSV or send a Chartink history, review your capital and trading
+rules, then choose **Backtest** or **Optimize → Automatic research**. The app
+selects the required prices, applicable research methods and validation. Existing
+Historify prices are reused; only missing required coverage comes from your broker.
+Date-only daily strategies stay on daily candles.
 
-Feature expansion is frozen while the supported **preview.8** release is finished.
-The [release checklist](docs/research/RELEASE_FINISH_20261022.md) separates that
-finite work from future methods, regimes and asset classes. Public download links
-remain on the verified preview.7 artifact until a new artifact is qualified.
+- **One automatic research action.** Compare supported stock/market conditions,
+  timing, ATR/percentage exits, trailing rules, sizing and causal portfolio
+  allocation. Capital and risk limits stay fixed; detailed controls are optional.
+- **A conclusion you can inspect.** Compare the original setup with proposed
+  settings, later-window checks, costs and stability. Weak evidence keeps the
+  original. This is a bounded historical search, not a universal optimum.
+- **Reports and native trade charts.** Inspect tear-sheet statistics, Optuna plots,
+  trial settings, entry/exit markers and saved-price bar replay without exporting
+  your work to another research website.
+- **Save, pause and return.** Keep a named exact setup, reopen its evidence,
+  reuse its rules with another capture, or resume compatible saved progress.
+  Earlier studies preserve their original numerical versions.
 
-The development source integrates OpenAlgo **2.0.2.7** at reviewed upstream
-`12e111465798`, with native charts 2.6.0 and OpenScript 0.8.1. Research
-**preview.8** adds bounded automatic stock/market-condition research, trailing
-stop and trade-timing selection, concise findings and native chart Values.
-One Optimize action compares the original settings with supported candidates;
-it checks later periods, costs and stability when the available history permits.
+Automatic v16 supports the admitted VectorBT NSE cash-equity profile, with up to
+408 proposals and 512 account calculations. Broker-volume participation requires
+qualified volume provenance; other brokers can use supported methods without
+that assumption. Optional Nautilus fixed/custom calculations have their own
+supported contract and Linux/WSL runtime.
 
-[Development source](https://github.com/mamamiya7/openalgo-research/tree/codex/native-research-refinement)
-· [Integration PR](https://github.com/mamamiya7/openalgo-research/pull/6).
-Preflight also explains the selected candle interval from actual CSV timing and
-holding rules under **Why these candles?**. New automatic studies compare
-[meaningful trade clocks](docs/research/AUTOMATIC_TIMING_20261011.md) using one
-shared Historify price preparation and the same price-complete opportunities.
-Daily inputs remain daily, and saved older studies keep their original scope.
-
-The development foundation adds [expanding validation](docs/research/WALK_FORWARD_20261020.md):
-three earlier fits checked on later windows, then a final development refit and
-separate final comparison. It retains full development histories and shows each
-window's actual settings and results. This increment is activated in the local
-development installation; the public download remains preview.7.
-
-An optional [Methods considered](docs/research/METHOD_ADMISSION_20261020.md) view is available
-inside Research details: inspect what each fit tested, reused or left untried,
-with optional formulas and input requirements. It reads saved metadata on demand;
-the existing optimisation methods and numerical results remain unchanged.
-
-The locally activated [execution core](docs/research/EXECUTION_CORE_20261021.md)
-adds ATR exits, stop-risk sizing and hard portfolio limits. The
-[turnover and recommendation increment](docs/research/TURNOVER_RECOMMENDATION_20261021.md)
-adds daily buy budgets, paired development-return ranges, higher-cost and
-neighbour checks, with unchanged settings retained when evidence is weak.
-Current automatic research considers 108 registered stock/market choices within
-up to 408 proposals and 512 calculations, preserving older studies' versions.
-
-The locally activated [comparison increment](docs/research/TRADEOFFS_VOLUME_20261021.md) adds
-**Compare alternatives** to completed automatic studies: inspect saved
-return/drawdown/activity trade-offs without another optimisation or download.
-Alternatives remain exploratory and do not replace the recommendation.
-
-The locally activated [v13 portfolio increment](docs/research/PORTFOLIO_CAPACITY_20261021.md) adds
-retained broker-volume provenance, a shared daily participation budget and
-correlation-aware entry limits. The first volume model supports reviewed Fyers
-daily NSE equities; other brokers can retain correlation controls with volume
-participation turned off. These are explicit historical simulation assumptions,
-not executable-liquidity estimates. Saved recommendation checks reconcile the
-limits against native fills before preferring changed settings. Old studies keep
-their original versions. Public ZIPs remain unchanged.
-
-The locally activated [v14 sensitivity increment](docs/research/SYMBOL_DATE_SENSITIVITY_20261021.md)
-checks a supported setup on separate symbol groups and earlier/later development
-dates using actual native account reruns. The app chooses these tests and reuses
-saved prices automatically. Weak or incomplete evidence keeps the unchanged
-reference; passing is historical robustness evidence, not a probability of future
-profit. Saved v14 studies retain their versions.
-Details stay inside the existing Research details view.
-
-The locally activated [v15 search-repeat increment](docs/research/SEARCH_SEEDS_20261021.md) checks
-whether a supported setup depends on one lucky search path. Two additional
-fixed-seed searches reuse the same prices and matching account calculations;
-they can reject the primary choice but cannot pick a luckier replacement.
-New automatic studies on this development branch use
-[v16 portfolio-wide allocation](docs/research/PORTFOLIO_ALLOCATION_20261021.md):
-related stocks share an exposure budget, with volatility-based sizing within
-each group. Search and risk budgets stay fixed. Saved v15 and earlier studies
-keep their original recipes. The separate
-[controlled calibration protocol](docs/research/SEARCH_CALIBRATION_PROTOCOL.md)
-measures false recommendations under declared test models, not the probability
-that a user's strategy will profit. Public release ZIPs remain unchanged.
-
-The locally activated [native qualification extension](docs/research/NATIVE_CALIBRATION_20261021.md)
-tests the complete procedure with genuine VectorBT calculations on synthetic
-markets and alternate sampler streams across every fit. This is offline developer
-qualification; ordinary optimisation keeps its existing settings and workload.
-It does not attach a probability of profit to a saved strategy.
-
-The next workflow increment previews CSV counts and dates before setup, simplifies
-experiment navigation to **Overview → Setup → Results → Saved setups**, and lets
-you prepare the selected tested report once, save it by name and reuse its exact
-rules. Financial findings complete independently of optional, cancellable Optuna
-charts. Compatible new automatic runs can compare the original and selected
-account curves on the same recorded evidence. Recovery actions reflect the actual
-saved checkpoint; incompatible calendar evidence does not offer a futile Resume.
-See the [workflow implementation and acceptance plan](docs/research/WORKFLOW_REFINEMENT_20261011.md).
-
-The public ZIP above remains **preview.7**. Preview.8 is qualified in the local
-application and controlled native journeys; its complete Windows/Linux release
-acceptance remains pending. See [current status](docs/research/STATUS.md), the
-[trailing-selection contract](docs/research/AUTOMATIC_TRAILING_20261011.md),
-[native refinement plan](docs/research/DELIVERY_PLAN.md) and
-[upstream update](docs/research/UPSTREAM_UPDATE_20261011.md).
+[Release notes](docs/research/releases/0.1.0-preview.8.md) ·
+[Qualification and limits](docs/research/RELEASE_ACCEPTANCE_20261022.md) ·
+[Future roadmap](docs/research/DELIVERY_PLAN.md).
+The supported preview is complete; broader methods, regimes and assets are future
+increments. No new broker-connectivity or future-profit claim is implied by the
+synthetic installation checks.
 
 ## What do I need to download?
 
@@ -280,7 +210,7 @@ to preserve their accounts, broker settings and saved research.
 To develop from a Git checkout instead, first run `npm ci` and `npm run build` in
 `frontend`, then run the setup script from the repository root. GitHub's automatic
 **Source code** archives do not contain the built interface; use the named
-`openalgo-research-0.1.0-preview.7.zip` asset for the easy installation.
+`openalgo-research-0.1.0-preview.8.zip` asset for the easy installation.
 
 Use the [Chartink extension](extensions/chartink/README.md), or open **Tools →
 Backtest & Optimize** to upload a CSV or reuse saved signals. Review the settings

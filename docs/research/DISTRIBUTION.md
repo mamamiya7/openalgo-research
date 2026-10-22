@@ -9,36 +9,32 @@ prices, saves runs and presents their results.
 This is a native distribution fork of [OpenAlgo](https://github.com/marketcalls/openalgo),
 with explicit host integration hooks, a front end and a worker.
 The [Research repository](https://github.com/mamamiya7/openalgo-research) and
-[versioned preview release](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.7)
-are the distribution locations. [Release notes](releases/0.1.0-preview.7.md) record
-this preview's changes and verification boundaries.
-
-Current development targets preview.8 on OpenAlgo 2.0.2.7, with v16 automatic
-research. Its [release closure](RELEASE_FINISH_20261022.md) is separate from the
-published preview.7 below. Use the packaged Setup/Start launchers; do not download
-VectorBT, Optuna or the OpenAlgo source separately. Optional Nautilus uses the
-supplied installer for its locked Linux runtime, as explained below.
+[preview.8 release](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.8)
+are the distribution locations. This preview uses reviewed OpenAlgo 2.0.2.7 and
+v16 automatic research. [Release notes](releases/0.1.0-preview.8.md) and
+[qualification](RELEASE_ACCEPTANCE_20261022.md) record its supported scope.
+Use the packaged Setup/Start launchers; do not install OpenAlgo, VectorBT or
+Optuna separately. Nautilus is optional and uses the supplied locked Linux/WSL
+installer described below.
 
 ## What is included
 
-- One to eight dated or timestamped NSE cash-equity scanner CSV strategies, with
-  separate rules and allocation caps against one shared starting-cash account.
-- Fixed backtests through VectorBT by default, with NautilusTrader available when
-  its separate Linux runtime is installed. Settings expose each engine's supported
-  rules and preserve the user's choices when switching engines.
-- Optuna optimization of selected strategy parameters and allocations, using TPE
-  by default or a bounded grid. Fixed parameters stay fixed. Objectives are Return,
-  Drawdown, or Balanced: return percentage minus maximum drawdown percentage.
-- An optional later-period check: choose settings on the earlier 80% of distinct
-  signal dates, then test those settings on the later period with fresh starting
-  cash. Trades cannot cross the partition. At least five distinct dates are needed.
-- Combined equity, cash, PnL, return, drawdown and trades; strategy contributions;
-  separate Trades, Settings and Trials views; saved results, exports and exact
-  frozen-input reruns. Earlier scanner runs retain their original evidence.
+- One to eight dated/timestamped NSE cash-equity signal strategies sharing cash,
+  with separate rules and allocation caps.
+- Native VectorBT backtests and bounded automatic VectorBT/Optuna research:
+  supported conditions, timing, exits, sizing and causal portfolio allocation.
+  Capital and hard risk limits stay fixed. The app selects applicable price and
+  validation requirements; detailed portfolio controls remain optional.
+- Chronological development checks, cost/sensitivity/repeat-search challenges,
+  original-setting fallback and separate final confirmation. Custom Optuna
+  searches retain their separately selected objectives and later-period protocol.
+- Saved findings, tear sheets, Optuna analysis, trade charts/replay, exact frozen
+  reruns, named setup reuse and compatible interruption recovery.
+- Optional Nautilus fixed/custom calculations on its separately qualified runtime.
 
-Upload the CSVs, set allocations and rules, then choose **Run backtest** or **Run
-optimization**. The same job prepares prices and calculates the result. There is
-no separate consumer price-preparation action or candle-interval selector.
+Upload the CSVs, review capital/rules, then choose **Run backtest** or
+**Optimize automatically**. There is no separate consumer candle-interval or
+price-preparation action. Actual CSV timing and trading rules determine the data.
 
 The planner uses the CSV timestamps, holding rules and the full allowed optimizer
 range. Date-only signals with ordinary daily rules use EOD candles; timestamps or
@@ -54,7 +50,7 @@ Execution policies and supported scope are documented in
 
 ## Install and open
 
-Download `openalgo-research-0.1.0-preview.7.zip` from the preview release, compare
+Download `openalgo-research-0.1.0-preview.8.zip` from the preview release, compare
 its SHA-256 with the supplied `SHA256SUMS`, and extract it into its installation
 directory. Use this versioned asset for its prebuilt interface; GitHub's automatic
 source archives are source checkouts.

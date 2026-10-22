@@ -2,16 +2,16 @@
 
 ## Feature development order after the human audit
 
-**Reconciled 22 October 2026, after v16 activation. Status: finish the supported
-preview.8 release; feature expansion is frozen.** This section owns the current implementation order. The dated
+**Reconciled 22 October 2026, after v16 activation. Status: supported preview.8 release
+qualified; broader feature expansion is deferred.** This section owns the current implementation order. The dated
 checkpoints below are historical evidence, not competing instructions about
 what to build next. [STATUS.md](STATUS.md) owns activation and publication facts.
 
-The installed native qualification build is `7efa4f07c`, with implementation
-`1af6c2e04`, on `codex/native-research-refinement`. The reviewed native host is OpenAlgo 2.0.2.7
-and the development distribution is preview.8. Public preview.7 ZIPs still use
-OpenAlgo 2.0.2.5 and do not contain this development work. Pushed source,
-local installation and a new public release are separate milestones.
+The qualified runtime source is `2c52c262d`, on reviewed OpenAlgo 2.0.2.7.
+Research preview.8 includes the first v16 portfolio-wide allocation slice and
+the finished supported consumer loop. Final release documentation does not change
+that runtime. See [release acceptance](RELEASE_ACCEPTANCE_20261022.md) for exact
+artifacts and the source/evidence identity checks.
 
 The release closure is [recorded here](RELEASE_FINISH_20261022.md). Its finite
 scope is dependency/package compatibility, measured performance without changing
@@ -33,7 +33,7 @@ is complete. Earlier test totals belong to their own scopes and are not summed.
 | 5. Recommendation | Cost/neighbour checks, paired daily ranges, reference fallback, [exploratory saved alternatives](TRADEOFFS_VOLUME_20261021.md), [native symbol/date challenges](SYMBOL_DATE_SENSITIVITY_20261021.md), and [three final-fit search seeds plus controlled calibration](SEARCH_SEEDS_20261021.md), followed by [native full-procedure and whole-procedure seed qualification](NATIVE_CALIBRATION_20261021.md). | Wider independent generators/replicates and only then separately qualified selection-adjusted statistical diagnostics. |
 | 6. Regimes and adaptation | Existing fixed causal stock/market conditions and recorded regime attribution are reusable inputs. | A validated suitability report, then a frozen regime-conditioned strategy policy replayed with shared cash and switching costs. No learned regime classifier, live resizing or crisis execution is qualified by v15. |
 | 7. Rule sources and engine/assets | Native saved trade charts/replay and existing separately scoped VectorBT/Nautilus connectors. | Complete scanner-source/universe contracts, selected-condition OpenScript parity, new asset accounting and explicit automatic-research parity per engine/profile. Nautilus does not inherit VectorBT's v15 qualification. |
-| 8. Complete consumer journey | Import/library, automatic runs, findings, reports, saved setup reuse and recovery have implemented paths and dated scoped checks. | Fresh end-to-end acceptance on the exact release, returning/failed/no-edge journeys, accessibility/narrow layouts, installation/update/rollback and clear distribution provenance. Broad visual polish remains after core work. |
+| 8. Complete consumer journey | Import/library, automatic runs, findings, reports, named setup reuse, interruption recovery, native chart replay and scoped browser/platform/package acceptance are qualified in the [release record](RELEASE_ACCEPTANCE_20261022.md). | Broader accessibility, reduced-motion and zoom certification, longer production observation and future engine/asset journeys. These remain future work beyond the declared preview scope. |
 
 ### Native qualification extension completed
 
@@ -72,7 +72,7 @@ application thresholds.
 
 ### Remaining implementation order
 
-**A1, the initial A2 engineering slice and the first B slice are qualified. F is now the release priority.** Their
+**A1, the initial A2 engineering slice and the first B slice are qualified. F is qualified for the supported preview scope; the table below records future work.** Their
 specifications remain below for traceability; larger independent A2 suites remain
 an ongoing qualification requirement, not a claim completed by fifteen paths.
 Complete a bounded usable slice at each step. Each runtime policy change gets a

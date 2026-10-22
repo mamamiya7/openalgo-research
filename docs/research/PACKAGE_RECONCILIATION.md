@@ -2,12 +2,13 @@
 
 ## Current release reconciliation — 22 October 2026
 
-Development includes v16 automatic research and the qualified first portfolio
-allocation policy. The October11 v6 acceptance below is historical; it does not
-qualify the current source or ZIP. Public preview.7 remains the released download.
-Use [STATUS.md](STATUS.md) for installed source and
-[release closure](RELEASE_FINISH_20261022.md) for the exact candidate's remaining
-checks. Build from the committed current tree; do not rename an older artifact.
+Preview.8 packages v16 automatic research on reviewed OpenAlgo 2.0.2.7.
+The current executable source, complete platform matrix, exact package
+installation and consumer journey are qualified in
+[release acceptance](RELEASE_ACCEPTANCE_20261022.md). Earlier v6/preview.7
+receipts below remain historical. The final documentation package reuses the
+qualified frontend and verifies every other executable member byte-for-byte;
+documentation-only publication does not rerun the unchanged numerical matrix.
 
 ## Historical October11 development publication
 

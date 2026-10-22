@@ -7,7 +7,14 @@ chronological checks, execution/portfolio constraints, saved findings, reports,
 native trade charts and exact setup reuse. Optional Nautilus calculations keep
 their separately qualified profile; they do not inherit v16 automatic research.
 
-## Finite completion gates
+## Completion
+
+The gates below passed for the declared supported scope. Exact-source platform
+checks, installation receipts, browser observations and documentation-only
+artifact composition are recorded in [release acceptance](RELEASE_ACCEPTANCE_20261022.md).
+This closes the supported preview, not the future product catalogue.
+
+## Completed gates
 
 1. Fix the actual frontend dependency advisory and compatibility-run timeouts
    without dropping tests or weakening evidence checks.
