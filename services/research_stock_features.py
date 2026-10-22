@@ -19,6 +19,52 @@ from research.stock_features import (
 )
 from services import scanner_research_service as service
 
+_CACHE_CHECKPOINT_BATCH_SIZE = 16
+
+
+def _cache_only_checkpoint(native_state, symbol):
+    """Identify a complete native cache read; every broker boundary stays durable."""
+    if _CACHE_CHECKPOINT_BATCH_SIZE <= 1 or not isinstance(native_state, dict):
+        return False
+    if set(native_state) != {
+        "phase",
+        "binding",
+        "reference_artifact",
+        "acquisition",
+        "acquisition_receipts",
+    } or any(
+        not isinstance(native_state[key], str) or len(native_state[key]) != 64
+        for key in ("binding", "reference_artifact")
+    ):
+        return False
+    acquisition = native_state.get("acquisition")
+    if not isinstance(acquisition, dict):
+        return False
+    progress = acquisition.get("progress", {})
+    sources, bars = acquisition.get("source_counts", {}), acquisition.get("bars", {})
+    if not all(isinstance(value, dict) for value in (progress, sources, bars)):
+        return False
+    counts = sources.get(symbol, {})
+    required = progress.get("required_dates")
+    return (
+        native_state.get("phase") == "benchmark"
+        and progress.get("phase") == "checking_prices"
+        and type(required) is int
+        and required > 0
+        and progress.get("covered_dates") == required
+        and acquisition.get("batch_pending") is False
+        and acquisition.get("hard_failures") == []
+        and acquisition.get("transport_attempts") == []
+        and acquisition.get("completed_windows") == []
+        and set(sources) == {symbol}
+        and counts == {"cached": required, "downloaded": 0}
+        and set(bars) == {symbol}
+        and isinstance(bars[symbol], dict)
+        and len(bars[symbol]) == required
+        and isinstance(acquisition.get("receipts"), list)
+        and all(isinstance(row, dict) and not row.get("broker") for row in acquisition["receipts"])
+    )
+
 
 def _identity(evidence):
     return fingerprint(
@@ -150,9 +196,7 @@ def prepare_context(
             "equity_curve": [{"date": day, "equity": capital} for day in sessions],
         }
 
-        def persist():
-            state.pop("state_id", None)
-            state["state_id"] = fingerprint(state)
+        def announce():
             if activity:
                 activity(
                     {
@@ -164,23 +208,59 @@ def prepare_context(
                         "prices": {"current_symbol": state["current_symbol"]},
                     }
                 )
+
+        def persist():
+            state.pop("state_id", None)
+            state["state_id"] = fingerprint(state)
+            announce()
             checkpoint(
                 deepcopy(state),
                 {"completed": len(completed), "total": len(symbols), "stage": "prices"},
             )
 
+        cached_pending = 0
         for symbol in remaining:
             cancelled()
             if state["current_symbol"] is None:
                 state["current_symbol"] = symbol
                 state["market_checkpoint"] = None
-                persist()
+                if not cached_pending:
+                    persist()
             if activity:
                 activity({"stage": "features", "prices": {"current_symbol": symbol}})
 
-            def save_market(native_state, counts):
+            cache_only = False
+            cache_identity = None
+
+            def save_market(native_state, counts, *, _symbol=symbol):
+                nonlocal cache_only, cache_identity, cached_pending
+                if _cache_only_checkpoint(native_state, _symbol):
+                    cache_only = True
+                    cache_identity = (
+                        native_state.get("binding"),
+                        native_state.get("reference_artifact"),
+                    )
+                    return
+                if (
+                    cache_only
+                    and set(native_state)
+                    == {"phase", "binding", "reference_artifact", "inputs_artifact"}
+                    and native_state["phase"] == "benchmark"
+                    and (native_state["binding"], native_state["reference_artifact"])
+                    == cache_identity
+                    and isinstance(native_state["inputs_artifact"], str)
+                    and len(native_state["inputs_artifact"]) == 64
+                    and counts.get("completed") == 1
+                    and counts.get("total") == 1
+                ):
+                    # Benchmark admission already validated and durably saved its
+                    # complete record. Keep this reference in the bounded group.
+                    return
+                cache_only = False
+                cache_identity = None
                 state["market_checkpoint"] = deepcopy(native_state)
                 persist()
+                cached_pending = 0
 
             record = prepare(
                 store,
@@ -206,7 +286,15 @@ def prepare_context(
                 raise ValueError("Stock-feature history exceeds its total session-bar limit")
             completed[symbol] = {"inputs_artifact": service.save_artifact(store, record)}
             state["current_symbol"], state["market_checkpoint"] = None, None
-            persist()
+            if cache_only:
+                cached_pending += 1
+            if not cache_only or cached_pending >= _CACHE_CHECKPOINT_BATCH_SIZE:
+                persist()
+                cached_pending = 0
+            else:
+                # Only recovery publication is grouped. Keep visible symbol
+                # progress current, and still validate every retained record.
+                announce()
             progress(len(completed), len(symbols))
         cancelled()
         payload = {

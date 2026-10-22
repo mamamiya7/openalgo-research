@@ -1,5 +1,21 @@
 # Native research price preparation
 
+## Cached stock preparation (preview.17)
+
+Fully cached daily stock warmup records now publish recovery progress in groups
+of at most 16 stocks. Prices, calendars, receipts and records still receive every
+existing check; visible progress updates for each stock. Before broker work and
+after every broker response, native progress is saved immediately. A stopped
+uncommitted cache group can repeat up to 16 local checks on resume. No downloaded
+response is deferred by this grouping. Final evidence is unchanged.
+
+A short matched three-stock + NIFTY preparation check measured 9.601 →6.237s,
+with 47 →22 strict storage scans and identical final evidence. This excludes
+fresh broker latency and does not establish a new complete optimisation time.
+A repeat with reused immutable records and changed settings measured 4.433 →2.247s
+with the same final evidence. Both are single short matched pairs.
+See [qualification](VERIFICATION.md#cached-stock-preparation--22-october-2026).
+
 The [30 September cache-check increment](HISTORIFY_CHECKS.md) additionally batches
 local archive connections and recovery saves. It preserves the contracts below.
 

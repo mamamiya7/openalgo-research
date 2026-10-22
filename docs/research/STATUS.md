@@ -1,5 +1,23 @@
 # OpenAlgo Research status
 
+## Cached stock preparation — 22 October 2026
+
+Preview.17 groups recovery publication for up to 16 fully cached daily stock
+warmup records. Every candle, receipt, calendar and completed record still passes
+its existing validation; activity and symbol progress remain current. Before a
+broker request and after each response, native acquisition checkpoints still save
+immediately, including any preceding cached prefix. An interrupted uncommitted
+cache group may repeat at most 16 local stock checks; recorded broker progress
+and existing saved evidence remain intact. No new cache, thread or connection.
+61 focused checks passed, including legacy checkpoint recovery and exact final
+evidence. A short matched real-data preparation comparison (three original stocks
+plus NIFTY) took 9.601 →6.237s, 35.0% less; strict scans fell 47 →22. This is not a
+full-file, fresh broker download or complete optimisation timing. A repeat with
+changed settings and reused immutable leaves measured 4.433 →2.247s (49.3% less),
+34 →12 scans, again identical final evidence. Features and
+search budgets remain frozen; the last complete sample automatic time is still
+6m50.091s on preview.15.
+
 ## Trial bookkeeping correction — 22 October 2026
 
 Preview.16 hashes and publishes the same bounded detached checkpoint tree instead

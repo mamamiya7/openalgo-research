@@ -24,6 +24,13 @@ then clicks Optimize. The app owns data preparation, applicable search and check
 
 ## Remaining implementation order
 
+**22 October cached-loading correction:** preview.17 groups only complete cached
+stock recovery in blocks of 16. Broker checkpoints remain immediate; data checks
+and final evidence are unchanged. 61 focused checks passed; a short native
+three-stock + NIFTY preparation comparison measured 9.601 →6.237s. No new complete
+optimisation timing or feature expansion.
+[Measured scope](VERIFICATION.md#cached-stock-preparation--22-october-2026).
+
 **22 October trial bookkeeping correction:** preview.16 removes the second checkpoint
 copy and repeated cancellation connection setup while keeping fresh reads and
 all checks. 122 focused checks passed; matched short native trials used 23.6%

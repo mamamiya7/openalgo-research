@@ -1,5 +1,53 @@
 # OpenAlgo Research verification
 
+## Cached stock preparation — 22 October 2026
+
+Preview.17 groups recovery publication for up to 16 fully cached daily stock
+warmup records. Every candle, receipt, calendar and completed record still passes
+its existing validation; activity and symbol progress remain current. Before a
+broker request and after each response, native acquisition checkpoints still save
+immediately, including any preceding cached prefix. An interrupted uncommitted
+cache group may repeat at most 16 local stock checks; recorded broker progress
+and existing saved evidence remain intact. No new cache, thread or connection.
+61 focused checks passed, including legacy checkpoint recovery and exact final
+evidence. A short matched real-data preparation comparison (three original stocks
+plus NIFTY) took 9.601 →6.237s, 35.0% less; strict scans fell 47 →22. This is not a
+full-file, fresh broker download or complete optimisation timing. Features and
+search budgets remain frozen; the last complete sample automatic time is still
+6m50.091s on preview.15.
+
+A second short pair preseeded only the previous immutable context artifacts
+(no database copy), then changed settings equally. Reused-price preparation took
+4.433 →2.247s (49.3% less), with strict scans 34 →12. Final evidence and checkpoint
+hashes again matched. Each comparison is one before/after pair; neither is a
+statistical runtime guarantee.
+
+The comparison uses the actual native stock-market wrapper, existing read-only
+Historify/volume records and original 100/160-session calendars. Both paths use
+isolated writes, real SQLite metadata reservations and strict read-only ordinary
+store quota scans. Final checkpoint hash/counts, native progress callbacks and
+full evidence hash match; intermediate cache-only recovery boundaries deliberately
+differ (17 →6 outer publications). No broker requests or live archive writes.
+A separate 17-stock native test reduced stock-wrapper checkpoints 69 →4, retaining
+identical final bundle/checkpoint and all visible symbol counts. Connection counts
+balanced after success and interruption. The change retains only a bounded group
+counter and small binding tuple; existing scope cleanup handles all resources.
+Ruff, formatting and whitespace checks passed. No frontend, dependency, schema,
+platform or installer contracts changed; no broad installation matrix was repeated.
+
+Measured alternatives were rejected: one SQL batch saved only about 10ms for 16
+windows; batching every existing checkpoint saved about 3% cold and was slower on
+repeat loading. Neither prototype is included. The adopted change removes repeated
+recovery work rather than reducing data checks or increasing broker pressure.
+
+The comparison with open-source approaches used primary sources:
+[VectorBT data implementation](https://github.com/polakowo/vectorbt/blob/master/vectorbt/data/base.py)
+iterates over symbols and aligns data; [Nautilus catalog](https://nautilustrader.io/docs/latest/concepts/data/catalog/)
+supports bounded batches and identity/date filtering; [Freqtrade history](https://github.com/freqtrade/freqtrade/blob/develop/freqtrade/data/history/history_utils.py)
+loads cached histories with an explicit time range and startup candles. These
+inform the batching/reuse approach; no external source code was copied and no
+second price database was introduced.
+
 ## Trial bookkeeping correction — 22 October 2026
 
 Preview.16 hashes and publishes the same bounded detached checkpoint tree instead

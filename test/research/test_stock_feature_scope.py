@@ -140,6 +140,7 @@ def test_interrupted_batch_discards_borrowed_rows_and_resumes_from_original_cale
 def test_resume_rejects_genuinely_different_active_calendar_before_new_archive_work(
     cached,
     archive,  # noqa: F811 -- isolated immutable-artifact fixture
+    monkeypatch,
 ):
     _, evidence, calendar, _, _, counts = cached
     saved = []
@@ -153,8 +154,12 @@ def test_resume_rejects_genuinely_different_active_calendar_before_new_archive_w
         ):
             raise RuntimeError("pause active acquisition")
 
+    # Produce the individual cached checkpoint retained by older installations;
+    # the normal grouped reader must still reject its changed saved calendar.
+    monkeypatch.setattr(research_stock_features, "_CACHE_CHECKPOINT_BATCH_SIZE", 1)
     with pytest.raises(RuntimeError, match="active acquisition"):
         prepare(evidence, checkpoint=stop)
+    monkeypatch.setattr(research_stock_features, "_CACHE_CHECKPOINT_BATCH_SIZE", 16)
     resumed = deepcopy(saved[-1])
     changed = deepcopy(calendar)
     changed["session_hours"][calendar["sessions"][0]]["close"] = "15:00"
@@ -176,7 +181,7 @@ def test_resume_rejects_genuinely_different_active_calendar_before_new_archive_w
     }
 
 
-def test_active_completed_leaf_recovery_does_not_reread_its_prices(cached):
+def test_active_completed_leaf_recovery_does_not_reread_its_prices(cached, monkeypatch):
     _, evidence, _, _, _, counts = cached
     saved = []
 
@@ -185,8 +190,11 @@ def test_active_completed_leaf_recovery_does_not_reread_its_prices(cached):
         if state["market_checkpoint"] and state["market_checkpoint"].get("inputs_artifact"):
             raise RuntimeError("pause after native leaf saved")
 
+    # Existing saved native leaf references remain valid after cache grouping.
+    monkeypatch.setattr(research_stock_features, "_CACHE_CHECKPOINT_BATCH_SIZE", 1)
     with pytest.raises(RuntimeError, match="leaf saved"):
         prepare(evidence, checkpoint=stop)
+    monkeypatch.setattr(research_stock_features, "_CACHE_CHECKPOINT_BATCH_SIZE", 16)
     assert not saved[-1]["completed_symbols"]
     before = counts["opened"]
     recovered, _ = prepare(evidence, saved=saved[-1])
