@@ -4,6 +4,7 @@ import { Pause, Play } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { type PortfolioJob, type PortfolioSource, portfolioResearch } from '@/api/portfolioResearch'
+import { LiveResearchProgress } from '@/components/research/LiveResearchProgress'
 import { PartialStudy } from '@/components/research/PartialStudy'
 import {
   addPortfolioSource,
@@ -607,6 +608,11 @@ export default function PortfolioResearch({
           <h2 className="text-xl font-semibold">
             {job.specification?.portfolio?.name ?? 'Portfolio run'}
           </h2>
+          <LiveResearchProgress
+            jobId={job.id}
+            jobStatus={job.status}
+            recipeVersion={job.specification?.portfolio?.automatic_research?.version}
+          />
           <ResearchRunProgress job={job} />
           <div className="flex flex-wrap gap-2">
             {active(job.status) ? (

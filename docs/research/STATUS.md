@@ -1,5 +1,49 @@
 # OpenAlgo Research status
 
+## Optimisation runtime batch — 22 October 2026
+
+Preview.11 removes repeated whole-receipt admission from each automatic account
+without changing its candidate checks, report values or evidence IDs. Six matched
+real-data accounts were exactly equal; their median calculation pipeline fell
+from 10.054 to 5.977 seconds, after a 3.126-second one-time preparation. Bounded
+artifact reads also reduced frozen-input/report loading and large temporary
+allocations. [Verification](VERIFICATION.md#optimisation-processing-correction--22-october-2026)
+records measured scope and focused integrity/recovery/resource checks. These are
+component measurements, not another full-search runtime claim. The historical
+mode and live-progress changes below are included in the same delivery batch.
+
+## Real automatic journey and visible progress — 22 October 2026
+
+Chrome acceptance completed the unchanged real CSV (1,850 signals, 144 symbols)
+through automatic v16 research, its saved report and a named reusable setup.
+The user explicitly permitted **Historical optimisation — not independently
+validated** because these dates had already been used. The flag is saved in the
+recipe and mandate; older strict recipes and their evidence remain unchanged.
+Strict date admission now occurs before broker preparation.
+
+The run evaluated 272 proposals and 296 accounts, retaining all 294 development
+histories separately from later-period outcomes. No reliable improvement qualified,
+so the original settings were retained. All 9,028 required daily candles matched
+native Historify, all 144 acquisition receipts verified, and 69 prior runs and
+trading activation/configuration remained unchanged. No live orders were placed.
+Wall time was **3,583.205 seconds**, including a pause/install/recovery check;
+the exact reusable report took a further 120.351 seconds. Functional acceptance
+passes; this runtime remains a consumer-readiness limitation.
+
+The subsequent focused visibility update reads committed checkpoints to show
+current-fit counts, latest/best development return and drawdown, the original
+reference, recorded later-check reasons and measured same-fit pace. Scores never
+compete across different windows; interim results are not recommendations.
+Completed studies retain these facts in Activity. No generated thinking narrative,
+new simulation or whole-programme time promise is added.
+
+Live profiling also found repeated portfolio-receipt serialization. Combining
+size and SHA checks preserves IDs and byte limits; one real 48 MB check measured
+1.122 seconds versus 1.863 seconds previously. This is a guard benchmark, not an
+equivalent whole-run speedup. Relevant historical/recovery, receipt-integrity and
+live-progress checks pass. Feature expansion remains frozen; next work should
+address measured waiting time and complete preparation estimates.
+
 ## Broker-backed acceptance — 22 October 2026
 
 Feature development remains frozen. Chrome acceptance on the normal installation

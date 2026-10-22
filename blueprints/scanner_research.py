@@ -11,6 +11,7 @@ from services import research_chosen_setups as chosen_setups
 from services import research_comparisons as comparisons
 from services import research_decisions as decisions
 from services import research_library as library
+from services import research_live_progress as live_progress
 from services import research_method_coverage as method_coverage
 from services import research_partial_study as partial_study
 from services import research_preferences as preferences
@@ -174,6 +175,15 @@ def portfolio_partial_study(job_id):
             expected_checkpoint=request.args.get("expected_checkpoint"),
         )
     )
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
+@scanner_research_bp.get("/portfolio/jobs/<job_id>/live-progress")
+def portfolio_live_progress(job_id):
+    if request.args:
+        raise ValueError("Invalid live progress query")
+    response = jsonify(live_progress.read(store(), session["user"], job_id))
     response.headers["Cache-Control"] = "private, no-store"
     return response
 

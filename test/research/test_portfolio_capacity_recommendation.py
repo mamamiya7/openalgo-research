@@ -40,7 +40,7 @@ def test_v13_reads_real_histories_qualifies_before_final_and_recovers_exactly(
 
     # The controlled economics do not produce native order records. Keep this
     # isolated admission stub visible rather than pretending to audit fake fills.
-    def supported_audit(report, features):
+    def supported_audit(report, features, _identity_check):
         hypothesis = report.get("automatic_stock_condition", {}).get("hypothesis", {})
         if hypothesis.get("id") != "none":
             marker = report["evaluation_basis"]["comparison"]["execution"].get("entry_conditions")
@@ -63,7 +63,7 @@ def test_v13_reads_real_histories_qualifies_before_final_and_recovers_exactly(
         }
         return {**body, "id": fingerprint(body)}
 
-    monkeypatch.setattr("research.portfolio_constraint_evidence.assess", supported_audit)
+    monkeypatch.setattr("research.portfolio_constraint_evidence._assess", supported_audit)
     real_read = DevelopmentEvidenceWriter.read
     reads = []
 

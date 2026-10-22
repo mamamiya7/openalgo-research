@@ -6,6 +6,7 @@ There is no downloaded data, model service or alternative accounting engine here
 """
 
 from collections import OrderedDict
+from contextlib import nullcontext
 from copy import deepcopy
 from math import prod
 
@@ -42,6 +43,7 @@ from research.connectors.optuna_portfolio import (
 from research.entry_conditions import enrich
 from research.evaluation_basis import build_evaluation_basis
 from research.joint_stock_market import PreparedJointContext
+from research.portfolio_execution_features import _PreparedPortfolioFeatures
 from research.report_contract import fingerprint, settings_identity
 
 FITS = ("fit1", "fit2", "fit3", "search")
@@ -59,6 +61,37 @@ def data_period(fit_name):
 PROPOSALS_PER_FIT = 48
 MAX_SIMULATIONS = 320
 FINDINGS_VERSION = "research-walk-forward-findings-v1"
+
+
+def _historical_result(result):
+    """Label an explicitly historical programme without changing its accounts.
+
+    Selection and every account have already been frozen. An observed advantage
+    is retained as a historical fact, never promoted to independent validation.
+    """
+    findings = result["automatic_research"]
+    findings["historical_checks_passed"] = findings["status"] == "supported"
+    findings["status"] = "historical"
+    findings["headline"] = "Historical optimisation — not independently validated"
+    findings["independently_validated"] = False
+    findings["evidence_scope"] = (
+        "Historical research on recorded scanner signals; dates may have been used before. "
+        "New data is required for independent validation."
+    )
+    final = findings["final"]
+    final["historical_checks_passed"] = final["supports"]
+    final["supports"] = False
+    final["independently_validated"] = False
+    final["reasons"] = [*final["reasons"], "Historical comparison, not an independent final test"]
+    result["validation"]["label"] = "Historical later-period comparison"
+    result["validation"]["independently_validated"] = False
+    result["experiment"]["findings"][0] = findings["headline"]
+    result["experiment"]["next_action"] = (
+        "Save the historical setup; use genuinely new data for independent validation"
+    )
+    return result
+
+
 METHOD_PROBES = (
     "momentum_10_gt0__all",
     "momentum_10_gt2__all",
@@ -399,10 +432,18 @@ def run(
         )
         else prepare_gate
     )
-    with prepare(evidence.get("automatic_stock_market_context")) as prepared:
+    with (
+        prepare(evidence.get("automatic_stock_market_context")) as prepared,
+        (
+            _PreparedPortfolioFeatures(evidence.get("portfolio_execution_features"))
+            if version in (CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION, ALLOCATION_VERSION)
+            else nullcontext()
+        ) as prepared_portfolio,
+    ):
         return _run(
             evidence,
             prepared_gate=prepared,
+            prepared_portfolio=prepared_portfolio,
             version=version,
             context=context,
             evaluate=evaluate,
@@ -425,6 +466,7 @@ def _run(
     evidence,
     *,
     prepared_gate,
+    prepared_portfolio,
     version,
     context,
     evaluate,
@@ -655,9 +697,7 @@ def _run(
 
             current = attach(current)
         if version in (CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION, ALLOCATION_VERSION):
-            from research.portfolio_execution_features import attach as attach_portfolio_features
-
-            current = attach_portfolio_features(current)
+            current = prepared_portfolio.attach(current)
         if hypothesis["id"] != "none":
             current["portfolio"] = {
                 **current["portfolio"],
@@ -729,9 +769,7 @@ def _run(
         if hypothesis["id"] != "none":
             enrich(report, current)
         if version in (CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION, ALLOCATION_VERSION):
-            from research.portfolio_constraint_evidence import assess as assess_constraints
-
-            report["portfolio_constraint_evidence"] = assess_constraints(
+            report["portfolio_constraint_evidence"] = prepared_portfolio.assess(
                 report, current["portfolio_execution_features"]
             )
             if report["portfolio_constraint_evidence"]["status"] == "invalid":
@@ -1351,9 +1389,7 @@ def _run(
                 "A saved walk-forward report differs from its recorded account evidence"
             )
         if version in (CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION, ALLOCATION_VERSION):
-            from research.portfolio_constraint_evidence import assess as assess_constraints
-
-            actual = assess_constraints(report, evidence["portfolio_execution_features"])
+            actual = prepared_portfolio.assess(report, evidence["portfolio_execution_features"])
             if actual != row.get("portfolio_constraint_evidence") or actual != report.get(
                 "portfolio_constraint_evidence"
             ):
@@ -1654,4 +1690,6 @@ def _run(
             report["analysis"] = add_price_charts(
                 report["analysis"], report, window(period)["snapshot"]
             )
-    return result
+    return (
+        _historical_result(result) if recipe.get("validation_mode") == "historical_only" else result
+    )

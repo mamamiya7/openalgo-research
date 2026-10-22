@@ -1055,6 +1055,36 @@ export function PortfolioBuilder({
                   Advanced research options
                 </summary>
                 <div className="mt-3 space-y-2">
+                  {portfolio.automatic_research?.version === 'automatic-hypotheses-v16' && (
+                    <div className="space-y-1">
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={
+                            portfolio.automatic_research.validation_mode === 'historical_only'
+                          }
+                          onChange={(event) =>
+                            update({
+                              automatic_research: event.target.checked
+                                ? {
+                                    version: 'automatic-hypotheses-v16',
+                                    validation_mode: 'historical_only',
+                                  }
+                                : { version: 'automatic-hypotheses-v16' },
+                            })
+                          }
+                          aria-describedby="historical-optimisation-description"
+                        />
+                        Historical optimisation
+                      </label>
+                      <p
+                        id="historical-optimisation-description"
+                        className="text-xs text-muted-foreground"
+                      >
+                        Reuse previously tested dates. Results are not independently validated.
+                      </p>
+                    </div>
+                  )}
                   <Label htmlFor="automatic-research-scope">Research scope</Label>
                   <select
                     id="automatic-research-scope"

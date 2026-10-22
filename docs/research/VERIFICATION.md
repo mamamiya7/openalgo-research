@@ -1,5 +1,42 @@
 # OpenAlgo Research verification
 
+## Optimisation processing correction — 22 October 2026
+
+The preview.11 runtime patch removes repeated admission of one unchanged sealed
+portfolio-feature receipt within an automatic run. A private detached copy is
+bounded and admitted once per run/resume, then released on every exit. Per-entry
+causality, candidate schedules, native fills, cash and portfolio-limit checks still
+execute. Public standalone checks continue to verify the full seal. No calculation
+version, seed, search budget, financial assumption or evidence identity changed.
+
+Six alternating warm accounts used the actual frozen daily CSV inputs, covering
+1,644 development signals across 144 symbols. The median pipeline time fell from
+**10.054 to 5.977 seconds** (40.6% less), with **3.126 seconds** of one-time receipt
+preparation. All six complete native reports and constraint receipts were exactly
+equal. This measures ATR/portfolio attachment, native account calculation and
+constraint reconciliation; it excludes condition-gate hashing, history publication,
+broker preparation and first-use engine compilation. It is not a new full-search
+wall-time claim.
+
+Default saved-artifact reads now use 64 KiB incremental buffers with the unchanged
+512 MiB admission bound. In three alternating reads, the 71.6 MB frozen inputs
+took **7.632 → 4.236 seconds** median and the 9.77 MB saved report took
+**1.233 → 0.570 seconds**, with identical canonical hashes. One compressed leaf's
+peak allocation fell from **528 MiB to 1.31 MiB**. SHA, path, legacy manifest,
+decoded-size, nesting and cycle guards remain intact; no cache was introduced.
+
+Focused checks: 31 native equivalence/recovery/ownership cases, 116 existing
+seal/feature/constraint cases and 34 artifact integrity/resource cases passed.
+The allocation fixtures cover daily and minute accounts and reject altered native
+fills. Repeated success/error reads retained zero measured bytes and kept Windows
+handles at 625; prepared owners are released after 100 success/failure cycles.
+Read-only recovery of the real completed study also reproduced every controller
+result field exactly, verified all 294 development histories and preserved its
+caller-owned checkpoint, without new accounts or artifact/database writes.
+The separately qualified historical-mode/progress UI is included in this delivery.
+Full Windows/Linux numerical and installation matrices are not repeated: dependency
+locks, host calls, launchers and setup procedures are unchanged.
+
 ## Broker history and cache acceptance — 22 October 2026
 
 The operator's normal Windows installation was tested through Chrome using an

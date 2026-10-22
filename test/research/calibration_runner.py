@@ -124,7 +124,7 @@ class ControlledAccounts:
         return result
 
 
-def controlled_audit(report, features):
+def controlled_audit(report, features, _identity_check=None):
     """Explicit schema-compatible stub, never evidence of native risk arithmetic.
 
     The scope/qualification strings implement the interface consumed by the
@@ -221,7 +221,7 @@ def run_case(case, plan):
     engine = ControlledAccounts(value, case, lambda: latest)
     # Do not patch prepare_method_gate: the genuine native causal gate owns and
     # releases its projections for every complete optimisation invocation.
-    with patch("research.portfolio_constraint_evidence.assess", controlled_audit):
+    with patch("research.portfolio_constraint_evidence._assess", controlled_audit):
         result = run(
             value,
             evaluate=engine,

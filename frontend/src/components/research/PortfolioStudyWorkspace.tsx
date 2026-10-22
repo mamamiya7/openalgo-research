@@ -23,6 +23,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { AnalysisFigure } from './AnalysisCharts'
 import { AnalysisMetricTable } from './AnalysisMetricTable'
 import { AutomaticResearchFindings } from './AutomaticResearchFindings'
+import { LiveResearchProgress } from './LiveResearchProgress'
 import { AnalysisBasis, AnalysisPreparation } from './PortfolioAnalysis'
 import { PortfolioTrials } from './PortfolioTrials'
 import { PrepareTestedReport } from './PrepareTestedReport'
@@ -488,12 +489,20 @@ function StudyWorkspace({
         </TabsContent>
         <TabsContent value="activity" className="space-y-5">
           {view.section === 'activity' && (
-            <StudyActivity
-              jobId={job.id}
-              jobStatus={job.status}
-              strategies={result.strategies}
-              recipeVersion={result.automatic_research?.version}
-            />
+            <>
+              <LiveResearchProgress
+                jobId={job.id}
+                jobStatus={job.status}
+                recipeVersion={result.automatic_research?.version}
+                allowCompleted
+              />
+              <StudyActivity
+                jobId={job.id}
+                jobStatus={job.status}
+                strategies={result.strategies}
+                recipeVersion={result.automatic_research?.version}
+              />
+            </>
           )}
           {chart('timeline')}
         </TabsContent>

@@ -13,6 +13,7 @@ from test_automatic_walk_forward import (
 
 from research import automatic_walk_forward as worker
 from research.connectors.optuna_portfolio import MAX_CHECKPOINT_BYTES, _fingerprint
+from research.portfolio_execution_features import VERSION as FEATURE_VERSION
 
 
 @pytest.mark.parametrize("attempts,simulations", [(318, 318), (64, 0)])
@@ -56,6 +57,11 @@ def test_prepared_owner_closes_on_success_cancellation_and_failure_100_times(
     # The public wrapper dispatches the admitted recipe before the controlled
     # calculation double below. Exercise both legacy and current owner branches.
     evidence = {"portfolio": {"automatic_research": {"version": version}}}
+    if version == worker.ALLOCATION_VERSION:
+        from research.portfolio import fingerprint
+
+        receipt = {"version": FEATURE_VERSION}
+        evidence["portfolio_execution_features"] = {**receipt, "id": fingerprint(receipt)}
     outcome = None
 
     def calculate(*_args, **_kwargs):

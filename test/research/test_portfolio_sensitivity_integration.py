@@ -92,7 +92,7 @@ def exercise_full_service(app, client, monkeypatch, value):
     monkeypatch.setattr("services.research_automatic_periods.claim", lambda *a: None)
     monkeypatch.setattr("research.automatic_walk_forward.prepare_method_gate", PreparedJointContext)
 
-    def audit(report, features):
+    def audit(report, features, _identity_check):
         condition = report.get("automatic_stock_condition", {}).get("hypothesis", {})
         if condition.get("id") != "none":
             assert report["evaluation_basis"]["comparison"]["execution"].get("entry_conditions")
@@ -112,7 +112,7 @@ def exercise_full_service(app, client, monkeypatch, value):
         }
         return {**body, "id": fingerprint(body)}
 
-    monkeypatch.setattr("research.portfolio_constraint_evidence.assess", audit)
+    monkeypatch.setattr("research.portfolio_constraint_evidence._assess", audit)
     latest = prefix = seed_prefix = None
     pause = True
     scenario_loss = False

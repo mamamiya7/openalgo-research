@@ -106,7 +106,8 @@ def normalize_auto(raw, strategies=None, engine="vectorbt"):
     """Accept only the named recipe; budgets and evidence gates are versioned."""
     if (
         not isinstance(raw, dict)
-        or set(raw) != {"version"}
+        or "version" not in raw
+        or set(raw) - {"version", "validation_mode"}
         or raw["version"]
         not in (VERSION, CONDITION_VERSION, STABILITY_VERSION, *HYPOTHESIS_VERSIONS)
     ):
@@ -115,7 +116,12 @@ def normalize_auto(raw, strategies=None, engine="vectorbt"):
         raise ValueError("Automatic research needs a supported portfolio engine")
     if raw["version"] in (CONDITION_VERSION, *HYPOTHESIS_VERSIONS) and engine != "vectorbt":
         raise ValueError("Automatic entry-condition research currently needs VectorBT")
-    return {"version": raw["version"]}
+    result = {"version": raw["version"]}
+    if "validation_mode" in raw:
+        if raw["version"] != ALLOCATION_VERSION or raw["validation_mode"] != "historical_only":
+            raise ValueError("Historical optimisation is available only for the current research recipe")
+        result["validation_mode"] = "historical_only"
+    return result
 
 
 def _range(value, ceiling, *, integer=False):
@@ -281,6 +287,10 @@ def compile_recipe(evidence):
                 "Automatic recommendation needs 60 later-window trading sessions across "
                 "three checks. Use a longer signal history, or run a backtest."
             )
+    if portfolio["automatic_research"].get("validation_mode") == "historical_only":
+        # Keep the same chronological fits, comparison periods and search.
+        # Explicit historical research makes no unused-period certification.
+        validation_mode = "historical_only"
     if intelligent and validation_mode == "exploratory_only":
         periods = {
             name: {"from": sessions[0], "to": sessions[-1], "sessions": count} for name in PERIODS
@@ -634,6 +644,12 @@ def compile_recipe(evidence):
             payload["policies"]["final"] = (
                 "No untouched later period; exploratory ranking only, never a validated recommendation"
             )
+    if validation_mode == "historical_only":
+        payload["policies"]["final"] = (
+            "Historical later-period comparison only; dates may have been used before. "
+            "No independent final test or validated recommendation is claimed. "
+            "Later-period results never rerank the development selection."
+        )
     return {**payload, "id": fingerprint(payload)}
 
 

@@ -68,7 +68,7 @@ class Prefix:
             patch(
                 "research.automatic_walk_forward.prepare_method_gate", synthetic_prepare_method_gate
             ),
-            patch("research.portfolio_constraint_evidence.assess", controlled_audit),
+            patch("research.portfolio_constraint_evidence._assess", controlled_audit),
             pytest.raises(Stopped),
         ):
             run(

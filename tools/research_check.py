@@ -90,6 +90,7 @@ REQUIRED_RESEARCH_FILES = {
     "frontend/src/components/research/useStudyWorkspaceView.ts",
     "services/research_candidates.py",
     "services/research_study_activity.py",
+    "services/research_live_progress.py",
     "services/research_partial_study.py",
     "services/research_shortlist.py",
     "services/research_comparisons.py",

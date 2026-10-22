@@ -15,6 +15,7 @@ from research.portfolio_execution_features import (
     VERSION as FEATURE_VERSION,
 )
 from research.portfolio_execution_features import (
+    _sealed_identity,
     validate_capacity_entry,
     validate_correlation_entry,
 )
@@ -62,6 +63,11 @@ def assess(report, features):
     the remaining account made money. A supported result proves only recorded
     constraint arithmetic and native fill reconciliation under the model.
     """
+    return _assess(report, features, _sealed_identity)
+
+
+def _assess(report, features, identity_check):
+    """Private capability seam; every native report check is shared with assess."""
     counts = {"filled_entries": 0, "unavailable_entries": 0, "capacity_days": 0}
     feature_id = features.get("id") if isinstance(features, dict) else None
     modes, limits, report_id = {}, None, None
@@ -87,12 +93,8 @@ def assess(report, features):
     try:
         if not isinstance(report, dict) or not isinstance(features, dict):
             raise ValueError("constraint_report_or_features_missing")
-        _json_size(features, 64 * 1024**2)
-        if (
-            features.get("version") != FEATURE_VERSION
-            or not _digest(feature_id)
-            or feature_id != fingerprint({k: v for k, v in features.items() if k != "id"})
-        ):
+        intact = identity_check(features, 64 * 1024**2)
+        if features.get("version") != FEATURE_VERSION or not _digest(feature_id) or not intact:
             raise ValueError("constraint_feature_identity_invalid")
         ledger, strategies, execution = (
             report.get("ledger"),

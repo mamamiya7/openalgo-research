@@ -82,7 +82,13 @@ function recordedWalkForward(findings: Findings): WalkForwardFindings | undefine
   return receipt
 }
 
-function WalkForwardChecks({ receipt }: { receipt: WalkForwardFindings }) {
+function WalkForwardChecks({
+  receipt,
+  historical = false,
+}: {
+  receipt: WalkForwardFindings
+  historical?: boolean
+}) {
   return (
     <section aria-label="Walk-forward checks" className="space-y-3">
       <p className="text-muted-foreground">
@@ -170,8 +176,10 @@ function WalkForwardChecks({ receipt }: { receipt: WalkForwardFindings }) {
         </table>
       </div>
       <p className="text-muted-foreground">
-        Final fit · {researchDates(receipt.final_fit.from, receipt.final_fit.to)}. Settings were
-        frozen before the reserved final check; that check does not choose or rerank settings.
+        Final fit · {researchDates(receipt.final_fit.from, receipt.final_fit.to)}.{' '}
+        {historical
+          ? 'Settings were frozen before the historical later-period comparison; reused dates do not independently validate them.'
+          : 'Settings were frozen before the reserved final check; that check does not choose or rerank settings.'}
       </p>
     </section>
   )
@@ -316,6 +324,10 @@ export function AutomaticResearchFindings({
   developmentEvidence?: DevelopmentEvidenceMetadata
 }) {
   const final = findings.final
+  const historical =
+    findings.version === 'automatic-hypotheses-v16' &&
+    (findings.status === 'historical' || findings.recipe.validation_mode === 'historical_only')
+  const finalLabel = historical ? 'Historical later-period comparison' : 'Final check'
   const walkForward = recordedWalkForward(findings)
   const selected = findings.checks.find((check) => check.config_id === findings.selected_config_id)
   const retainedHistories = developmentEvidence
@@ -359,7 +371,7 @@ export function AutomaticResearchFindings({
     >
       <div className="flex items-start gap-3">
         <span className="mt-0.5 rounded-full border border-cyan-500/25 p-2" aria-hidden="true">
-          {findings.status === 'supported' ? (
+          {findings.status === 'supported' && !historical ? (
             <Check className="size-4" />
           ) : (
             <FlaskConical className="size-4" />
@@ -367,15 +379,27 @@ export function AutomaticResearchFindings({
         </span>
         <div className="min-w-0 space-y-1">
           <p className="text-xs font-medium tracking-wide text-muted-foreground">
-            {final ? 'Automatic research' : 'Exploratory research'}
-          </p>
-          <h3 className="text-lg font-semibold">{findings.headline}</h3>
-          <p className="max-w-3xl text-sm text-muted-foreground">
-            {findings.selected_is_baseline
-              ? 'No reliable improvement was found. The original settings remain the reference, not a trading recommendation.'
+            {historical
+              ? 'Historical optimisation'
               : final
-                ? 'Checked on later dates and with higher trading costs.'
-                : 'Best settings found on the available research dates.'}
+                ? 'Automatic research'
+                : 'Exploratory research'}
+          </p>
+          <h3 className="text-lg font-semibold">
+            {historical
+              ? 'Historical optimisation — not independently validated'
+              : findings.headline}
+          </h3>
+          <p className="max-w-3xl text-sm text-muted-foreground">
+            {historical
+              ? findings.selected_is_baseline
+                ? 'Historical checks did not support a reliable improvement. The original settings remain the reference, not a trading recommendation.'
+                : 'Settings compared on previously tested dates, including later periods and higher costs. These results are not independently validated.'
+              : findings.selected_is_baseline
+                ? 'No reliable improvement was found. The original settings remain the reference, not a trading recommendation.'
+                : final
+                  ? 'Checked on later dates and with higher trading costs.'
+                  : 'Best settings found on the available research dates.'}
           </p>
           {walkForward && (
             <p className="text-sm text-muted-foreground">Refit and checked on 3 later windows.</p>
@@ -416,13 +440,13 @@ export function AutomaticResearchFindings({
       {final && (
         <div className="mt-5 space-y-3">
           <p className="text-xs text-muted-foreground">
-            Final check ·{' '}
+            {finalLabel} ·{' '}
             {researchDates(findings.recipe.periods.final.from, findings.recipe.periods.final.to)}
           </p>
           <div className="overflow-x-auto">
             <table
               className="w-full text-left text-sm tabular-nums"
-              aria-label="Final period comparison"
+              aria-label={historical ? finalLabel : 'Final period comparison'}
             >
               <thead>
                 <tr className="text-xs text-muted-foreground">
@@ -478,7 +502,11 @@ export function AutomaticResearchFindings({
           {historySummary && (
             <p className="text-muted-foreground">
               {historySummary}
-              {developmentEvidence?.reserved_final_excluded ? ' · final check kept separate' : ''}
+              {developmentEvidence?.reserved_final_excluded
+                ? historical
+                  ? ' · historical later-period comparison kept separate'
+                  : ' · final check kept separate'
+                : ''}
             </p>
           )}
           {findings.comparison?.status === 'available' && findings.comparison.chart && (
@@ -522,14 +550,14 @@ export function AutomaticResearchFindings({
             </section>
           )}
           {walkForward ? (
-            <WalkForwardChecks receipt={walkForward} />
+            <WalkForwardChecks receipt={walkForward} historical={historical} />
           ) : findings.recipe.validation_mode === 'exploratory_only' ? (
             <p>No untouched later check: the signal history is too short for this holding range.</p>
           ) : (
             <dl className="grid gap-4 sm:grid-cols-4">
               {periods.map(([key, label]) => (
                 <div key={key} className="border-t-2 border-cyan-500/30 pt-2">
-                  <dt className="font-medium">{label}</dt>
+                  <dt className="font-medium">{key === 'final' ? finalLabel : label}</dt>
                   <dd className="mt-1 text-muted-foreground">
                     {researchDates(
                       findings.recipe.periods[key].from,
@@ -625,14 +653,18 @@ export function AutomaticResearchFindings({
             </div>
           )}
           {final?.reasons && final.reasons.length > 0 && (
-            <p className="text-muted-foreground">Final check: {final.reasons.join(' · ')}</p>
+            <p className="text-muted-foreground">
+              {finalLabel}: {final.reasons.join(' · ')}
+            </p>
           )}
           <p className="text-muted-foreground">
-            {final
-              ? walkForward
-                ? 'The detailed report covers the final fit on development dates. Final-check values above use the same reserved dates and starting cash for both settings.'
-                : 'The detailed report covers the search dates. Final-check values above use the same later dates and starting cash for both settings.'
-              : 'These settings were selected on the research dates. Later evidence is needed before calling them validated.'}
+            {historical
+              ? 'The detailed report covers development dates. The historical later-period comparison uses the same dates and starting cash for both settings; it is not independent confirmation.'
+              : final
+                ? walkForward
+                  ? 'The detailed report covers the final fit on development dates. Final-check values above use the same reserved dates and starting cash for both settings.'
+                  : 'The detailed report covers the search dates. Final-check values above use the same later dates and starting cash for both settings.'
+                : 'These settings were selected on the research dates. Later evidence is needed before calling them validated.'}
           </p>
           {findings.unsupported_families.length > 0 && (
             <p className="text-muted-foreground">

@@ -438,6 +438,17 @@ def validate_submission(evidence, kind, spec):
     return {"portfolio": portfolio, "versions": spec["versions"]}
 
 
+def _check_automatic_period_admission(store, owner, evidence):
+    from research.automatic_protocol import compile_recipe
+
+    recipe = compile_recipe(evidence)
+    if recipe.get("validation_mode", "chronological") == "chronological":
+        from services.research_automatic_periods import check_available
+
+        check_available(store, owner, {**evidence, "automatic_recipe": recipe})
+    return recipe
+
+
 def _prepare_prices(
     store, owner, evidence, *, saved, checkpoint, progress, cancelled, activity=None, calendar=None
 ):
@@ -484,11 +495,11 @@ def _prepare_prices(
     plan = contract.price_plan(evidence["portfolio"], evidence["strategies"], calendar)
     interval = plan["interval"]
     if evidence["portfolio"].get("automatic_research"):
-        from research.automatic_protocol import compile_recipe
-
         # Reject insufficient chronology before spending broker requests. The
         # final recipe is frozen again with the actual admitted prices below.
-        compile_recipe(
+        _check_automatic_period_admission(
+            store,
+            owner,
             {
                 **evidence,
                 "snapshot": {
@@ -659,7 +670,9 @@ def _prepare_automatic_timing(
         raise ValueError(descriptor.get("reason") or "Native timing history is incomplete")
     plan = build_union(evidence["portfolio"], evidence["strategies"], calendar, descriptor)
     # Admission is price independent; fail before broker work for invalid history.
-    compile_recipe(
+    _check_automatic_period_admission(
+        store,
+        owner,
         {
             **evidence,
             "timing_descriptor": descriptor,
@@ -1080,7 +1093,10 @@ def run(
                 )
                 if saved_calculation:
                     development_writer.reconcile(saved_calculation["evaluations"])
-            if evidence["automatic_recipe"]["validation_mode"] != "exploratory_only":
+            if evidence["automatic_recipe"]["validation_mode"] not in (
+                "exploratory_only",
+                "historical_only",
+            ):
                 claim(store, owner, inputs_id, evidence, job_id)
         elif portfolio["automatic_research"]["version"] == CONDITION_VERSION:
             from research.automatic_conditions import run as automatic_run

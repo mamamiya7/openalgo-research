@@ -4,8 +4,11 @@ These are historical simulation assumptions, not executable liquidity or a
 prediction of future dependence. Native acquisition owns volume provenance.
 """
 
+import hashlib
+import json
 from copy import deepcopy
 from datetime import datetime
+from io import StringIO
 from math import isfinite
 from re import fullmatch
 
@@ -22,6 +25,47 @@ MAX_FEATURES = 25_000
 
 def _seal(value):
     return {**value, "id": fingerprint(value)}
+
+
+def _sealed_identity(value, maximum, *, _capture=None):
+    """Check a sealed receipt's exact byte bound and digest in one traversal.
+
+    Canonical JSON differs from its payload only by the top-level id member:
+    71 bytes, plus one comma for a nonempty payload. Nothing is retained across
+    calls. Malformed/custom inputs and failures keep the original size-check
+    path, including its error precedence and streaming early byte bound.
+    """
+    if (
+        type(value) is not dict
+        or type(value.get("id")) is not str
+        or not fullmatch(r"[a-f0-9]{64}", value["id"])
+        or any(type(key) is not str for key in value)
+    ):
+        _json_size(value, maximum)
+        return isinstance(value, dict) and value.get("id") == fingerprint(
+            {key: item for key, item in value.items() if key != "id"}
+        )
+    payload = {key: item for key, item in value.items() if key != "id"}
+    size = 71 + bool(payload)
+    digest = hashlib.sha256()
+    try:
+        for part in json.JSONEncoder(
+            sort_keys=True, separators=(",", ":"), allow_nan=False
+        ).iterencode(payload):
+            encoded = part.encode()
+            size += len(encoded)
+            if size > maximum:
+                # The id may occur later in the original sorted stream. On an
+                # invalid input preserve whether its old bound or JSON error
+                # would have been encountered first.
+                raise ValueError("Stock-feature evidence exceeds its bounded byte allowance")
+            digest.update(encoded)
+            if _capture is not None:
+                _capture.write(part)
+    except (TypeError, ValueError, RecursionError):
+        _json_size(value, maximum)
+        raise
+    return digest.hexdigest() == value["id"]
 
 
 def _base(value, version, symbol, entry_session, decision_at):
@@ -333,18 +377,19 @@ def prepare(evidence, bundle, volume_records=None):
 
 
 def attach(evidence):
+    receipt = evidence.get("portfolio_execution_features")
+    intact = _sealed_identity(receipt, MAX_BYTES)
+    if not isinstance(receipt, dict) or receipt.get("version") != VERSION or not intact:
+        raise ValueError("Saved portfolio execution features changed")
+    return _attach(evidence, receipt)
+
+
+def _attach(evidence, receipt):
+    """Apply an admitted receipt; candidate schedules and entry checks remain fresh."""
     from research.connectors.vectorbt_portfolio import _schedule
     from research.execution_features import _identity, _opportunity_keys
     from research.intraday import bounds
 
-    receipt = evidence.get("portfolio_execution_features")
-    _json_size(receipt, MAX_BYTES)
-    if (
-        not isinstance(receipt, dict)
-        or receipt.get("version") != VERSION
-        or receipt.get("id") != fingerprint({k: v for k, v in receipt.items() if k != "id"})
-    ):
-        raise ValueError("Saved portfolio execution features changed")
     if evidence.get("execution_features", {}).get("id") != receipt["atr_id"]:
         raise ValueError("Portfolio features belong to another clock/admission mask")
     if (
@@ -427,3 +472,73 @@ def attach(evidence):
             signals.append(signal)
         strategies.append({**strategy, "signals": signals})
     return {**evidence, "strategies": strategies}
+
+
+class _PreparedPortfolioFeatures:
+    """One bounded, detached sealed receipt owned by one automatic run.
+
+    The caller's receipt is an identity capability, never a cache key. Only the
+    full immutable-source seal is reused: schedules, availability, entry feature
+    identities and actual native fill/portfolio constraints still run for every
+    account. The privately owned JSON projection is never returned to callers.
+    Closing the owner releases both source and projection, including on errors.
+    """
+
+    __slots__ = ("__source", "__receipt", "__weakref__")
+
+    def __init__(self, receipt):
+        self.__source = self.__receipt = None
+        if (
+            type(receipt) is not dict
+            or receipt.get("version") != VERSION
+            or type(receipt.get("id")) is not str
+            or not fullmatch(r"[a-f0-9]{64}", receipt["id"])
+            or any(type(key) is not str for key in receipt)
+        ):
+            raise ValueError("Saved portfolio execution features changed")
+        identity = receipt["id"]
+        # Capture the same bounded canonical stream that is hashed. This avoids
+        # validating one mutable tree and then copying a possibly changed tree.
+        # JSON decoding detaches every nested object; StringIO closes on all paths.
+        with StringIO() as captured:
+            if (
+                not _sealed_identity(receipt, MAX_BYTES, _capture=captured)
+                or receipt["id"] != identity
+            ):
+                raise ValueError("Saved portfolio execution features changed")
+            owned = json.loads(captured.getvalue())
+        owned["id"] = identity
+        self.__source, self.__receipt = receipt, owned
+
+    def __receipt_for(self, source):
+        if self.__receipt is None:
+            raise ValueError("The prepared portfolio features have been released")
+        if source is not self.__source:
+            raise ValueError("Prepared portfolio features require the original source object")
+        return self.__receipt
+
+    def __identity(self, receipt, maximum):
+        # This capability is available only for the exact private JSON tree that
+        # construction detached and validated, never for a caller supplied dict.
+        if self.__receipt is None or receipt is not self.__receipt or maximum != MAX_BYTES:
+            raise ValueError("Prepared portfolio feature identity is unavailable")
+        return True
+
+    def attach(self, evidence):
+        return _attach(evidence, self.__receipt_for(evidence.get("portfolio_execution_features")))
+
+    def assess(self, report, source):
+        from research.portfolio_constraint_evidence import _assess
+
+        return _assess(report, self.__receipt_for(source), self.__identity)
+
+    def close(self):
+        self.__source = self.__receipt = None
+
+    def __enter__(self):
+        if self.__receipt is None:
+            raise ValueError("The prepared portfolio features have been released")
+        return self
+
+    def __exit__(self, *_error):
+        self.close()

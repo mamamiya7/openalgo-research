@@ -861,3 +861,69 @@ it('keeps the expanded programme later-window evidence inside research details',
   expect(table).toBeVisible()
   expect(screen.getByText('Refit and checked on 3 later windows.')).toBeVisible()
 })
+
+it('labels successful historical checks without presenting independent final confirmation', async () => {
+  const data = walkForwardFindings()
+  data.version = 'automatic-hypotheses-v16'
+  data.status = 'historical'
+  data.recipe.validation_mode = 'historical_only'
+  data.independently_validated = false
+  data.historical_checks_passed = true
+  data.final!.supports = false
+  data.final!.historical_checks_passed = true
+  const original = structuredClone(data)
+  render(<AutomaticResearchFindings findings={data} />)
+  expect(
+    screen.getByRole('heading', {
+      name: 'Historical optimisation — not independently validated',
+    })
+  ).toBeVisible()
+  const comparison = screen.getByRole('table', { name: 'Historical later-period comparison' })
+  expect(within(comparison).getByRole('row', { name: 'Trial 9 2.8% 0.4% 26' })).toBeVisible()
+  expect(screen.queryByRole('table', { name: 'Final period comparison' })).not.toBeInTheDocument()
+  expect(
+    screen.queryByText('Checked on later dates and with higher trading costs.')
+  ).not.toBeInTheDocument()
+  await userEvent.click(screen.getByText('Research details'))
+  expect(screen.getByText(/reused dates do not independently validate them/)).toBeVisible()
+  expect(
+    screen.queryByText(/Settings were frozen before the reserved final check/)
+  ).not.toBeInTheDocument()
+  expect(data).toEqual(original)
+})
+
+it('retains honest original-setting fallback in historical optimisation', () => {
+  const data = findings()
+  data.version = 'automatic-hypotheses-v16'
+  data.status = 'historical'
+  data.recipe.validation_mode = 'historical_only'
+  data.independently_validated = false
+  data.historical_checks_passed = false
+  data.selected_is_baseline = true
+  data.final!.summary = { ...data.final!.baseline_summary }
+  data.final!.supports = false
+  render(<AutomaticResearchFindings findings={data} />)
+  expect(
+    screen.getByRole('heading', {
+      name: 'Historical optimisation — not independently validated',
+    })
+  ).toBeVisible()
+  expect(screen.getByText(/Historical checks did not support a reliable improvement/)).toBeVisible()
+  const comparison = screen.getByRole('table', { name: 'Historical later-period comparison' })
+  expect(within(comparison).getByRole('rowheader', { name: 'Original settings' })).toBeVisible()
+  expect(within(comparison).queryByRole('rowheader', { name: /Trial/ })).not.toBeInTheDocument()
+})
+
+it('keeps saved strict v16 findings unchanged when no historical mode was recorded', () => {
+  const data = findings()
+  data.version = 'automatic-hypotheses-v16'
+  const original = structuredClone(data)
+  render(<AutomaticResearchFindings findings={data} />)
+  expect(screen.getByRole('heading', { name: original.headline })).toBeVisible()
+  expect(screen.getByRole('table', { name: 'Final period comparison' })).toBeVisible()
+  expect(
+    screen.queryByText('Historical optimisation — not independently validated')
+  ).not.toBeInTheDocument()
+  expect(screen.getByText('Checked on later dates and with higher trading costs.')).toBeVisible()
+  expect(data).toEqual(original)
+})

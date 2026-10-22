@@ -409,7 +409,10 @@ export interface PortfolioRequest {
       | 'automatic-hypotheses-v14'
       | 'automatic-hypotheses-v15'
       | 'automatic-hypotheses-v16'
-  }
+  } & (
+    | { validation_mode?: never }
+    | { version: 'automatic-hypotheses-v16'; validation_mode: 'historical_only' }
+  )
   entry_conditions?: EntryConditions
   optimization?: {
     sampler: 'tpe' | 'grid'
@@ -704,7 +707,9 @@ export interface AutomaticResearchFindings {
     displayed?: number
   }
   version: string
-  status: 'supported' | 'not_supported' | 'inconclusive'
+  status: 'supported' | 'not_supported' | 'inconclusive' | 'historical'
+  independently_validated?: boolean
+  historical_checks_passed?: boolean
   selected_config_id: string
   selected_is_baseline: boolean
   selected_condition?: string
@@ -712,6 +717,7 @@ export interface AutomaticResearchFindings {
   selection_basis: string
   recipe: {
     version: string
+    validation_mode?: 'chronological' | 'exploratory_only' | 'historical_only'
     periods: Record<'search' | 'check1' | 'check2' | 'final', { from: string; to: string }> &
       Partial<Record<'fit1' | 'fit2' | 'fit3' | 'check3', { from: string; to: string }>>
     walk_forward?: {
@@ -757,6 +763,7 @@ export interface AutomaticResearchFindings {
     baseline_summary: Record<string, number | string | null>
     score_delta: number | null
     supports: boolean
+    historical_checks_passed?: boolean
     reasons?: string[]
   } | null
   counts: { proposals: number; simulations: number; finalists: number }

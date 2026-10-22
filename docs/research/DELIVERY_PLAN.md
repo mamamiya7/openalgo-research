@@ -24,6 +24,22 @@ then clicks Optimize. The app owns data preparation, applicable search and check
 
 ## Remaining implementation order
 
+**22 October runtime batch:** repeated whole portfolio-receipt admission is now
+owned once per run/resume, with every candidate check retained. Matched real-data
+account reports are identical; the measured pipeline is 40.6% shorter. Bounded
+artifact reads also remove oversized temporary allocations. Preview.11 batches
+these fixes with historical mode and visible recorded progress. Full-search
+runtime after this patch remains unmeasured; an honest upfront preparation
+estimate remains future work. Do not infer a whole-job guarantee from component timings.
+
+**22 October real-use update:** the full historical automatic CSV journey now
+passes through a named reusable setup, with no live orders. It took 59m43s plus
+2m for the exact reusable report, so speed remains an essential gap. The focused
+live view now exposes committed metrics and actual check reasons. Prioritise a
+measured reduction in repeated processing and an upfront preparation/runtime
+estimate; do not reopen the broader quant-method roadmap or change frozen search
+and financial semantics to make a test appear faster.
+
 **Essential batch completed in preview.9.** The actual browser import → automatic
 research → analysis → tested report → named save → library reopen → reused-setup
 backtest passed. A real pause/restart/resume retained completed work. Four observed

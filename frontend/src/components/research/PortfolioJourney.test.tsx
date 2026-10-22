@@ -2402,3 +2402,135 @@ describe('portfolio result reading', () => {
     ).toHaveTextContent('₹1,01,000')
   })
 })
+
+it('sends historical-only v16 research only after explicitly checking the option', async () => {
+  const original = selectPortfolioRun(draft(), true)
+  savedDraft(original)
+  mount()
+  await userEvent.click(await screen.findByText('Advanced research options'))
+  const option = screen.getByRole('checkbox', { name: 'Historical optimisation' })
+  expect(option).not.toBeChecked()
+  expect(option).toHaveAccessibleDescription(
+    'Reuse previously tested dates. Results are not independently validated.'
+  )
+  await userEvent.click(option)
+  await userEvent.click(screen.getByRole('button', { name: 'Optimize automatically' }))
+  await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
+  const sent = vi.mocked(portfolioResearch.submit).mock.calls[0][0]
+  expect(sent.automatic_research).toEqual({
+    version: 'automatic-hypotheses-v16',
+    validation_mode: 'historical_only',
+  })
+  expect(sent.capital).toBe(original.portfolio.capital)
+  expect(sent.strategies[0].config).toEqual(original.portfolio.strategies[0].config)
+  expect(sent.strategies[0].allocation_pct).toBe(original.portfolio.strategies[0].allocation_pct)
+  expect(original.portfolio.automatic_research).toEqual({ version: 'automatic-hypotheses-v16' })
+})
+
+it('removes the historical flag completely when the user unchecks it', async () => {
+  savedDraft(selectPortfolioRun(draft(), true))
+  mount()
+  await userEvent.click(await screen.findByText('Advanced research options'))
+  const option = screen.getByRole('checkbox', { name: 'Historical optimisation' })
+  await userEvent.click(option)
+  await userEvent.click(option)
+  expect(option).not.toBeChecked()
+  await userEvent.click(screen.getByRole('button', { name: 'Optimize automatically' }))
+  await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
+  expect(vi.mocked(portfolioResearch.submit).mock.calls[0][0].automatic_research).toEqual({
+    version: 'automatic-hypotheses-v16',
+  })
+})
+
+it('does not carry historical-only mode into a previous automatic recipe', async () => {
+  const historical = selectPortfolioRun(draft(), true)
+  historical.portfolio.automatic_research = {
+    version: 'automatic-hypotheses-v16',
+    validation_mode: 'historical_only',
+  }
+  savedDraft(historical)
+  mount()
+  await userEvent.click(await screen.findByText('Advanced research options'))
+  expect(screen.getByRole('checkbox', { name: 'Historical optimisation' })).toBeChecked()
+  await userEvent.selectOptions(screen.getByLabelText('Research scope'), 'automatic-hypotheses-v15')
+  expect(
+    screen.queryByRole('checkbox', { name: 'Historical optimisation' })
+  ).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Optimize automatically' }))
+  await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
+  expect(vi.mocked(portfolioResearch.submit).mock.calls[0][0].automatic_research).toEqual({
+    version: 'automatic-hypotheses-v15',
+  })
+})
+
+it('retains historical qualification when switching to the separate later-period report', async () => {
+  const later: PortfolioResult = {
+    ...result,
+    summary: { ...result.summary, final_equity: 99800, net_pnl: -200 },
+  }
+  const combined: PortfolioResult = {
+    ...result,
+    automatic_research: {
+      version: 'automatic-hypotheses-v16',
+      status: 'historical',
+      independently_validated: false,
+      historical_checks_passed: false,
+      headline: 'Historical optimisation — not independently validated',
+      selected_config_id: 'original',
+      selected_is_baseline: true,
+      selection_basis: 'Historical comparisons only.',
+      recipe: {
+        version: 'automatic-hypotheses-v16',
+        validation_mode: 'historical_only',
+        periods: {
+          search: { from: '2026-01-05', to: '2026-01-20' },
+          check1: { from: '2026-01-21', to: '2026-01-22' },
+          check2: { from: '2026-01-23', to: '2026-01-24' },
+          final: { from: '2026-02-01', to: '2026-02-05' },
+        },
+      },
+      baseline: result.summary,
+      checks: [],
+      final: {
+        summary: later.summary,
+        baseline_summary: later.summary,
+        score_delta: 0,
+        supports: false,
+      },
+      counts: { proposals: 408, simulations: 272, finalists: 1 },
+      unsupported_families: [],
+    },
+    validation: {
+      train_from: '2026-01-05',
+      train_to: '2026-01-20',
+      test_from: '2026-02-01',
+      test_to: '2026-02-05',
+      training_signals: 20,
+      testing_signals: 5,
+      label: 'Historical later-period comparison',
+      selection_basis: 'Historical comparisons only.',
+      result: later,
+    },
+  }
+  const original = structuredClone(combined)
+  render(
+    <PortfolioResults
+      job={{ ...finished, result: combined }}
+      result={combined}
+      onRerun={vi.fn()}
+      rerunning={false}
+      exportUrl="/export"
+    />
+  )
+  expect(screen.queryByRole('button', { name: 'Final check', exact: true })).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Historical comparison', exact: true }))
+  expect(screen.getByText('Historical optimisation — not independently validated')).toBeVisible()
+  expect(
+    screen.queryByRole('region', { name: 'Automatic research findings' })
+  ).not.toBeInTheDocument()
+  expect(
+    screen.getByText('Final equity', { selector: 'summary' }).closest('dt')?.parentElement
+  ).toHaveTextContent('₹99,800')
+  expect(later.automatic_research).toBeUndefined()
+  expect(combined).toEqual(original)
+})

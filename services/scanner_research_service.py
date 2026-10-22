@@ -299,7 +299,16 @@ def _artifact_content(store, digest, *, max_bytes=None):
         opener = gzip.open if path.suffix == ".gz" else open
         with opener(path, "rb") as stream:
             if max_bytes is None:
-                raw = stream.read(MAX_ARTIFACT_BYTES + 1)
+                # Gzip's buffered reader may reserve the requested size even
+                # for a small chunk. Keep the same full historical admission
+                # bound without allocating 512 MiB for every chunk read.
+                buffered = bytearray()
+                while len(buffered) <= MAX_ARTIFACT_BYTES:
+                    part = stream.read(min(64 * 1024, MAX_ARTIFACT_BYTES + 1 - len(buffered)))
+                    if not part:
+                        break
+                    buffered.extend(part)
+                raw = bytes(buffered)
             else:
                 # Our chunk writer puts the three scalar envelope fields before
                 # the tree. Inspect only this bounded preamble before allocating

@@ -241,6 +241,11 @@ export function PortfolioResults(props: ResultProps) {
   }
   const connectedStudy = Boolean(props.result.experiment && props.onOpenReport)
   const validation = props.result.validation
+  const parentAutomatic = props.result.automatic_research ?? props.job.result?.automatic_research
+  const historical =
+    parentAutomatic?.version === 'automatic-hypotheses-v16' &&
+    (parentAutomatic.status === 'historical' ||
+      parentAutomatic.recipe.validation_mode === 'historical_only')
   if (props.freezeAnalysis)
     return (
       <PortfolioReport
@@ -294,6 +299,9 @@ export function PortfolioResults(props: ResultProps) {
   return (
     <div className="space-y-5">
       {back}
+      {historical && period === 'later' && (
+        <p className="text-sm font-medium">Historical optimisation — not independently validated</p>
+      )}
       <fieldset className="inline-flex rounded-lg bg-muted p-1" aria-label="Evaluation period">
         {(['earlier', 'later'] as const).map((value) => (
           <Button
@@ -307,7 +315,9 @@ export function PortfolioResults(props: ResultProps) {
             {props.result.automatic_research
               ? value === 'earlier'
                 ? 'Search period'
-                : 'Final check'
+                : historical
+                  ? 'Historical comparison'
+                  : 'Final check'
               : value === 'earlier'
                 ? 'Earlier period'
                 : 'Later period'}

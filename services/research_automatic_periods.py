@@ -17,7 +17,12 @@ MAX_ROWS = 100000
 MAX_PRIOR_JOBS = 1000
 
 
-def claim(store, owner, inputs_artifact, evidence, job_id):
+def check_available(store, owner, evidence):
+    """Read-only early admission; the fenced claim still owns final reservation."""
+    claim(store, owner, None, evidence, None, dry_run=True)
+
+
+def claim(store, owner, inputs_artifact, evidence, job_id, *, dry_run=False):
     periods = evidence["automatic_recipe"]["periods"]
     final = periods["final"]
     days = [
@@ -28,8 +33,10 @@ def claim(store, owner, inputs_artifact, evidence, job_id):
     if not days or len(days) > 3000:
         raise ValueError("Automatic research needs bounded recorded evaluation dates")
     try:
-        with store.sessions.begin() as db:
-            service.write_guard(db)
+        session_scope = store.sessions if dry_run else store.sessions.begin
+        with session_scope() as db:
+            if not dry_run:
+                service.write_guard(db)
             existing = db.scalars(
                 select(ResearchAutomaticPeriodUse).where(
                     ResearchAutomaticPeriodUse.owner == owner,
@@ -49,8 +56,9 @@ def claim(store, owner, inputs_artifact, evidence, job_id):
                     and (is_final or row.role == "final")
                 ):
                     raise ValueError(
-                        "These dates were already used in research. Use a new later period; "
-                        "previously consumed final dates cannot be searched again."
+                        f"Final test dates {final['from']} to {final['to']} were already used "
+                        "in research. Choose Historical optimisation to reuse dates without "
+                        "independent validation, or use genuinely new later data."
                     )
             if all(
                 by_day.get(day)
@@ -93,8 +101,12 @@ def claim(store, owner, inputs_artifact, evidence, job_id):
                         )
                     if first <= final["to"] and last >= final["from"]:
                         raise ValueError(
-                            "The final dates already have published research outcomes. Choose a genuinely new later period."
+                            f"Final test dates {final['from']} to {final['to']} already have "
+                            "published research outcomes. Choose Historical optimisation to "
+                            "reuse dates without independent validation, or use new later data."
                         )
+            if dry_run:
+                return
             new_days = [day for day in days if day not in by_day]
             count = db.scalar(select(func.count()).select_from(ResearchAutomaticPeriodUse))
             if count + len(new_days) > MAX_ROWS:

@@ -143,7 +143,7 @@ def build(evidence, *, inputs_artifact):
                     reason="Required frozen stock/market context has not been retained.",
                 )
     validation_mode = recipe.get("validation_mode", "chronological")
-    if validation_mode not in ("chronological", "exploratory_only"):
+    if validation_mode not in ("chronological", "exploratory_only", "historical_only"):
         raise ValueError("Research mandate validation mode is unsupported")
     periods = []
     sensitivity_names = {
@@ -168,6 +168,8 @@ def build(evidence, *, inputs_artifact):
         )
         if validation_mode == "exploratory_only":
             role = "exploratory_selection"  # The compiler overlaps these periods.
+        elif validation_mode == "historical_only" and name == "final":
+            role = "historical_comparison"
         periods.append({"name": name, "role": role, **deepcopy(bounds), "untouched_claim": False})
     objective = recipe["search"].get("objective")
     if objective not in OBJECTIVES:
@@ -257,13 +259,22 @@ def build(evidence, *, inputs_artifact):
         },
         "budget": {
             **deepcopy(recipe["budget"]),
-            "max_final_verification_evaluations": 0 if validation_mode == "exploratory_only" else 2,
+            "max_final_verification_evaluations": 2 if validation_mode == "chronological" else 0,
+            **(
+                {"max_historical_comparison_evaluations": 2}
+                if validation_mode == "historical_only"
+                else {}
+            ),
         },
         "validation": {
             "mode": validation_mode,
             "periods": periods,
-            "reservation_owner": "existing_account_period_use_service",
-            "reservation_status": "not_certified_by_this_receipt",
+            "reservation_owner": "not_required_historical"
+            if validation_mode == "historical_only"
+            else "existing_account_period_use_service",
+            "reservation_status": "historical_only"
+            if validation_mode == "historical_only"
+            else "not_certified_by_this_receipt",
             "policies": deepcopy(recipe["policies"]),
         },
         "supported_promise": {
