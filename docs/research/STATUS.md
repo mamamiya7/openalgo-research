@@ -1,5 +1,33 @@
 # OpenAlgo Research status
 
+## Trial bookkeeping correction — 22 October 2026
+
+Preview.16 hashes and publishes the same bounded detached checkpoint tree instead
+of copying it twice. Every cancellation callback still reads current ownership
+and job state; the owner thread reuses one scoped autocommit connection. Independent
+helper/heartbeat connections and atomic pause acknowledgement remain intact.
+122 focused checks passed. Matched native-worker continuations produced identical
+scientific checkpoint hashes: three late proposal observations took median
+3.935 →3.005s (23.6% less); whole short continuation 10.412 →8.647s (16.9% less).
+These are warmed short comparisons, not a new complete-run measurement. The last
+complete cached real-sample automatic job remains 6m50.091s below. No feature,
+search-budget, financial-version or dependency changes; no live orders.
+
+## Complete preview.15 real-sample journey — 22 October 2026
+
+Chrome acceptance completed the same 149 original CSV rows /29 stocks /149 signal
+dates with the unchanged automatic programme: 272 proposals, 296 accounts and all
+294 development histories verified. The fresh automatic job took **6m50.091s**,
+including preparation; the exact tested report took **4.155s**. CSV confirmation
+through named setup save was **9m21.844s**; through verified Chrome reload it was
+**10m10.242s**, including operator setup/review and the existing historical-mode
+choice. All 875 executable daily candles were reused and exactly matched native
+Historify. Development/final numerical summaries match the prior complete sample.
+No pauses, code changes, new features or live orders during this acceptance.
+This is a cached real-data sample, not a full-file/fresh-download timing promise.
+The earlier interrupted 21m17s active sample is now a historical measurement.
+[Verification](VERIFICATION.md#complete-preview15-real-sample-journey--22-october-2026).
+
 ## Validation and replay performance correction — 22 October 2026
 
 Preview.15 reuses only fully content-matched bundle validation within one bounded

@@ -42,7 +42,26 @@ def bounded_canonical_bytes(value, *, max_bytes=None, json_types_only=False):
     return _canonical_bytes(value, MAX_MEDIUM_NODES, maximum, allow_tuples=not json_types_only)
 
 
-def _canonical_bytes(value, maximum_nodes, maximum_bytes, *, allow_tuples=True):
+def bounded_canonical_snapshot(value, *, max_bytes=None):
+    """Return an owned plain-JSON tree and its exact bytes, or ``None``.
+
+    Checkpoint publishers can hash this same detached tree and then hand it to
+    their callback without making another full copy. Bounds/fallback are the
+    same as medium encoding. Tuples and custom values remain the caller's
+    responsibility, preserving their original deepcopy and encoding semantics.
+    No input, snapshot or encoded bytes survive this call except its result.
+    """
+    if max_bytes is not None and (type(max_bytes) is not int or max_bytes < 0):
+        return None
+    maximum = (
+        MAX_MEDIUM_ASCII_BYTES if max_bytes is None else min(max_bytes, MAX_MEDIUM_ASCII_BYTES)
+    )
+    captured = []
+    raw = _canonical_bytes(value, MAX_MEDIUM_NODES, maximum, allow_tuples=False, _capture=captured)
+    return (captured[0], raw) if raw is not None else None
+
+
+def _canonical_bytes(value, maximum_nodes, maximum_bytes, *, allow_tuples=True, _capture=None):
     remaining_nodes = maximum_nodes
     remaining_bytes = maximum_bytes
     active = set()
@@ -97,8 +116,11 @@ def _canonical_bytes(value, maximum_nodes, maximum_bytes, *, allow_tuples=True):
 
     try:
         bounded = copy(value, 0)
-        return json.dumps(
+        raw = json.dumps(
             bounded, sort_keys=True, separators=(",", ":"), allow_nan=False, ensure_ascii=True
         ).encode("ascii")
+        if _capture is not None:
+            _capture.append(bounded)
+        return raw
     except (ValueError, TypeError, RuntimeError, OverflowError):
         return None

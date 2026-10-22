@@ -24,6 +24,13 @@ then clicks Optimize. The app owns data preparation, applicable search and check
 
 ## Remaining implementation order
 
+**22 October trial bookkeeping correction:** preview.16 removes the second checkpoint
+copy and repeated cancellation connection setup while keeping fresh reads and
+all checks. 122 focused checks passed; matched short native trials used 23.6%
+less new-proposal time with exact scientific checkpoints. Complete-run time has
+not been remeasured; feature expansion remains frozen.
+[Measured scope](VERIFICATION.md#trial-bookkeeping-correction--22-october-2026).
+
 **22 October validation/recovery correction:** preview.15 reduces repeated bundle
 validation within a bounded content-matched job scope, verified unchanged fit
 publications and normal replay writer reservations. 158 focused checks passed;

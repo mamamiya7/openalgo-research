@@ -5,6 +5,7 @@ told to it; its winner is frozen before the next-window account is calculated.
 There is no downloaded data, model service or alternative accounting engine here.
 """
 
+import hashlib
 from collections import OrderedDict
 from contextlib import nullcontext
 from copy import deepcopy
@@ -31,6 +32,7 @@ from research.automatic_timing import axes as timing_axes
 from research.automatic_timing import probes
 from research.automatic_trailing import apply_choices as trailing_choices
 from research.automatic_trailing import axes as trailing_axes
+from research.canonical_json import bounded_canonical_snapshot
 from research.connectors.optuna_portfolio import (
     MAX_CHECKPOINT_BYTES,
     TESTED_OPTUNA_VERSION,
@@ -619,9 +621,20 @@ def _run(
 
     def persist():
         state.pop("checkpoint_id", None)
-        state["checkpoint_id"] = _fingerprint(state, max_bytes=MAX_CHECKPOINT_BYTES)
+        captured = bounded_canonical_snapshot(state, max_bytes=MAX_CHECKPOINT_BYTES)
+        if captured is None:
+            state["checkpoint_id"] = _fingerprint(state, max_bytes=MAX_CHECKPOINT_BYTES)
+            snapshot = deepcopy(state)
+        else:
+            snapshot, encoded = captured
+            del captured
+            state["checkpoint_id"] = hashlib.sha256(encoded).hexdigest()
+            # The callback receives the same detached tree that was hashed.
+            # Release the bytes before the artifact encoder allocates its copy.
+            del encoded
+            snapshot["checkpoint_id"] = state["checkpoint_id"]
         checkpoint(
-            deepcopy(state),
+            snapshot,
             {"completed": state["simulations"], "total": max_simulations, "stage": "optimization"},
         )
 

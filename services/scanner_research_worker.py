@@ -98,10 +98,32 @@ def network_lease(store, token, job_id, stop_requested=None):
     """One joined helper in the external worker keeps blocking I/O fenced."""
     finished = threading.Event()
     reasons = []
+    owner_thread = threading.get_ident()
+    read_connection = None
+    live_fence = (
+        select(ResearchWorker.token, ResearchJob.worker, ResearchJob.status)
+        .join(ResearchJob, ResearchJob.id == job_id)
+        .where(ResearchWorker.id == 1)
+    )
 
     def check(*, refresh_heartbeat=False):
         if stop_requested and stop_requested():
             raise Interrupted("Worker shutdown requested")
+        if not refresh_heartbeat:
+            # Keep every callback live, reading both fences in one statement.
+            # ORM loading two separate rows adds work and can mix observations
+            # from opposite sides of a concurrent cancellation/worker takeover.
+            if threading.get_ident() == owner_thread:
+                with read_connection.execute(live_fence) as result:
+                    fence = result.one_or_none()
+            else:
+                # Native acquisition helpers may call this callback too. Their
+                # connections stay independent of the owner's cursor/thread.
+                with store.sessions() as db:
+                    fence = db.execute(live_fence).one_or_none()
+            if fence is None or fence[0] != token or fence[1] != token or fence[2] not in WORKING:
+                raise Cancelled("Cancellation requested or worker lease lost")
+            return
         with store.sessions.begin() as db:
             lease, job = db.get(ResearchWorker, 1), db.get(ResearchJob, job_id)
             if lease.token != token or job.status not in WORKING or job.worker != token:
@@ -128,13 +150,23 @@ def network_lease(store, token, job_id, stop_requested=None):
         return False
 
     helper = threading.Thread(target=monitor, name="research-network-lease", daemon=True)
-    helper.start()
     try:
+        # Keep one read-only callback connection for this owner thread. SQLite
+        # autocommit and promptly consumed/closed results leave no read snapshot
+        # between callbacks, so external commits are visible on the next check.
+        read_connection = store.engine.connect()
+        read_connection.execution_options(isolation_level="AUTOCOMMIT")
+        helper.start()
         yield cancelled
         cancelled()
     finally:
         finished.set()
-        helper.join()
+        try:
+            if helper.ident is not None:
+                helper.join()
+        finally:
+            if read_connection is not None:
+                read_connection.close()
 
 
 def run_one(store, token, stop_requested=None):

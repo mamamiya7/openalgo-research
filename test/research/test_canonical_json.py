@@ -269,6 +269,61 @@ def test_plain_json_mode_does_not_collapse_tuple_and_list_schemas():
     assert bounded_canonical_bytes(tuple_value, json_types_only=True) is None
 
 
+def test_checkpoint_snapshot_and_bytes_own_the_same_detached_plain_tree():
+    from research.canonical_json import bounded_canonical_snapshot
+
+    value = {"returns": [0.0, -0.0, 1e-323], "params": {"label": "भारत 😀", "n": 7}}
+    original = streamed(value)
+    snapshot, raw = bounded_canonical_snapshot(value)
+    assert raw == original == streamed(snapshot)
+    assert snapshot is not value and snapshot["params"] is not value["params"]
+    value["returns"].clear()
+    value["params"]["n"] = 9
+    assert streamed(snapshot) == original
+    snapshot["params"]["n"] = 8
+    assert value["params"]["n"] == 9
+
+
+@pytest.mark.parametrize("value", [(1, 2), {"a": (1, 2)}, float("nan"), {1: "key"}])
+def test_checkpoint_snapshot_leaves_non_plain_schema_and_errors_to_original_path(value):
+    from research.canonical_json import bounded_canonical_snapshot
+
+    assert bounded_canonical_snapshot(value) is None
+
+
+def test_snapshot_byte_node_and_depth_bounds_are_the_existing_medium_limits(monkeypatch):
+    from research import canonical_json
+
+    assert canonical_json.bounded_canonical_snapshot({"a": [1]}, max_bytes=1) is None
+    monkeypatch.setattr(canonical_json, "MAX_MEDIUM_NODES", 3)
+    assert canonical_json.bounded_canonical_snapshot({"a": [1]}) is None
+    monkeypatch.setattr(canonical_json, "MAX_MEDIUM_NODES", 524_288)
+    deep = None
+    for _ in range(MAX_DEPTH + 1):
+        deep = [deep]
+    assert canonical_json.bounded_canonical_snapshot(deep) is None
+    cycle = []
+    cycle.append(cycle)
+    assert canonical_json.bounded_canonical_snapshot(cycle) is None
+
+
+def test_snapshot_hash_is_of_its_owned_tree_when_the_caller_mutates_during_encoding(monkeypatch):
+    from research.canonical_json import bounded_canonical_snapshot
+
+    value = {"rows": [{"number": i} for i in range(20)]}
+    expected = streamed(value)
+    original = json.dumps
+
+    def change_source(copied, **kwargs):
+        value["rows"].append(value)
+        return original(copied, **kwargs)
+
+    monkeypatch.setattr(json, "dumps", change_source)
+    snapshot, raw = bounded_canonical_snapshot(value)
+    assert raw == expected
+    assert len(snapshot["rows"]) == 20
+
+
 def test_medium_size_and_optuna_digest_preserve_exact_values_and_error_precedence():
     from research.connectors.optuna_portfolio import _fingerprint
     from research.stock_features import _json_size

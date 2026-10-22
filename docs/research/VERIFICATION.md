@@ -1,5 +1,86 @@
 # OpenAlgo Research verification
 
+## Trial bookkeeping correction — 22 October 2026
+
+Preview.16 hashes and publishes the same bounded detached checkpoint tree instead
+of copying it twice. Every cancellation callback still reads current ownership
+and job state; the owner thread reuses one scoped autocommit connection. Independent
+helper/heartbeat connections and atomic pause acknowledgement remain intact.
+122 focused checks passed. Matched native-worker continuations produced identical
+scientific checkpoint hashes: three late proposal observations took median
+3.935 →3.005s (23.6% less); whole short continuation 10.412 →8.647s (16.9% less).
+These are warmed short comparisons, not a new complete-run measurement. The last
+complete cached real-sample automatic job remains 6m50.091s below. No feature,
+search-budget, financial-version or dependency changes; no live orders.
+
+Qualification used the same frozen real CSV evidence, original native VectorBT/
+Optuna worker and preview.15 baseline (5899b1a08), isolated writes and read-only
+ordinary-store quota scans. Native imports/warm-up were outside both stopwatches.
+Late pairs ran before/after/after/before, advancing 242 →245 proposals with the
+same six publications and scientific checkpoint hash in all four cases. An early
+2 →5 proposal comparison also matched exactly (new-proposal span 2.322 →1.587s).
+No complete optimisation or new broker acquisition was repeated.
+
+Checks cover canonical bytes/bounds/fallback, detached snapshot mutation, exact
+legacy saved output, publication recovery, attempt/ownership fences, external
+cancellation visibility, pause/resume, helper threads and all connection cleanup
+paths. There were 118 focused checks plus four existing lease/acquisition checks.
+Ruff, formatting and whitespace checks passed. A separate Windows process probe
+kept 268 handles and zero lease helper threads after warm-up, 100 and 200 scopes;
+RSS settled at 60,248,064 bytes. One hundred unit scopes also balanced 100 engine
+checkouts/checkins. No platform/install/dependency/frontend contract changed, so
+no broad platform matrix or frontend rebuild was repeated. Existing validated
+frontend assets are reused only after source and asset hash checks.
+
+## Complete preview.15 real-sample journey — 22 October 2026
+
+A fresh import in the user's usual Chrome/OpenAlgo installation completed the
+same labelled sample as the preceding acceptance: 149 unchanged original CSV
+rows, 29 stocks and all 149 original signal dates. SHA verification confirms the
+sample and each retained original CSV. Automatic v16 budgets/checks and original
+trading assumptions were retained. No shortened search or synthetic candles.
+
+| Measured scope | Actual time |
+|---|---:|
+| Automatic job, including preparation and saved findings | 410.091s (6m50s) |
+| Job creation through first recorded proposal start | 42.463s |
+| Exact tested trade report | 4.155s |
+| Optuna study analysis | 1.595s |
+| CSV confirmation through automatic result saved | 468.378s (7m48s) |
+| CSV confirmation through tested report saved | 494.004s (8m14s) |
+| CSV confirmation through named reusable setup saved | 561.844s (9m22s) |
+| CSV confirmation through verified Chrome reload | 610.242s (10m10s) |
+
+The end-to-end times include operator setup, evidence review and historical-mode
+selection. Initial normal-mode submission correctly refused reused final dates
+in 1.040s; the previously authorised explicit historical option was then selected.
+The successful automatic job ran uninterrupted with one execution, zero replayed
+proposals and no code interventions. Progress and saved metrics kept updating;
+there was no observed stall requiring a pause. This measures a complete cached
+sample journey, not fresh broker acquisition or the full 1,850-row CSV.
+
+The actual programme completed 272 proposals and 296 account calculations, with
+294 retained development histories, 27,040 marks and 6,003,034 bytes. Every history
+and its frozen mandate verified. All 875 execution candles matched native
+Historify OHLC exactly; 29 acquisition receipts verified; no execution candles
+were downloaded. The original settings were retained under the existing
+historical-only/no-independent-validation label. No final-date claim was made.
+
+Development and later-period financial summaries, proposal/account quantities
+and development-history quantities match the preceding complete sample exactly.
+The earlier interrupted run reserved 297 attempts for 296 completed accounts;
+this uninterrupted run reserved 296. This operational difference changes no
+financial result. The earlier 21m17s active observation included interruptions
+and mid-run corrections, so it is historical context, not a controlled whole-run
+A/B comparison with this 6m50s measurement.
+
+The exact report was saved, a named reusable setup was saved and chosen, and its
+result-ready state survived Chrome reload. All 77 prior runs, configuration and
+trading activation state were preserved. No live order, mode change, feature
+development, installation or new code patch was part of this test. Private
+timing, screenshots and verification receipts are retained under ignored
+`.agent-native/complete-journey-preview15-20261022/`.
+
 ## Validation and replay correction — 22 October 2026
 
 Preview.15 applies the measured opportunities from the runtime attribution below:
