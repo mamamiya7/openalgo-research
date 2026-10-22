@@ -3,7 +3,7 @@
 Updated the native host from upstream `12e1114657981a3e50dde8c8ce04eb778ae1cf2f`
 to `f3e7de829d7c93515a3e041bd2a637546c62a1d7`: 42 commits including generated
 frontend builds. Platform **2.0.2.7 →2.0.2.9**; charts **2.6.0 →2.6.7**.
-Research is **0.1.0-preview.18**, a separate distribution version. Python SDK
+Research is **0.1.0-preview.19**, a separate distribution version. Python SDK
 2.0.5 and OpenScript 0.8.1 are unchanged.
 
 [Official 2.0.2.9 release](https://github.com/marketcalls/openalgo/releases/tag/openalgo-custom-timeframe-charts)
@@ -56,9 +56,17 @@ every-tool or Linux/Docker installation acceptance. No full optimisation is reru
 for unrelated host/dependency changes. Public package is rebuilt from merged
 source, not copied from a credentialed live installation.
 
+## Windows bootstrap correction
+
+Actual installation found that Windows PowerShell inherited a module path in
+which Get-FileHash was unavailable after downloading uv. Bootstrap now computes
+the same pinned SHA-256 with disposable .NET streams and extracts the verified
+ZIP with .NET, removing the optional hash/archive module dependency. The
+preliminary preview.18 source candidate is superseded by preview.19.
+
 ## Upgrade operation
 
-Update from the full preview.18 release ZIP. Setup syncs the frozen dependencies,
+Update from the full preview.19 release ZIP. Setup syncs the frozen dependencies,
 checks compatibility and runs the index freeze-limit migration before restart.
 It is idempotent and preserves custom admin values. Existing data paths and
 private .env remain in place. A source build requires patched Node matching

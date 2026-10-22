@@ -24,10 +24,23 @@ try {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         $ProgressPreference = 'SilentlyContinue'
         Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/astral-sh/uv/releases/download/0.12.5/$asset" -OutFile $archivePath -TimeoutSec 240
-        if ((Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expectedHash) {
+        # The optional hash/archive script modules may be unavailable when
+        # Windows PowerShell inherits another host's module path. Use .NET's
+        # built-in implementations without relaxing checksum verification.
+        $archiveStream = $null
+        $hashAlgorithm = [Security.Cryptography.SHA256]::Create()
+        try {
+            $archiveStream = [IO.File]::OpenRead($archivePath)
+            $actualHash = [BitConverter]::ToString($hashAlgorithm.ComputeHash($archiveStream)).Replace('-', '').ToLowerInvariant()
+        } finally {
+            if ($archiveStream) { $archiveStream.Dispose() }
+            $hashAlgorithm.Dispose()
+        }
+        if ($actualHash -ne $expectedHash) {
             throw 'The installer download failed its integrity check. Nothing was installed. Check your connection and retry Setup.cmd.'
         }
-        Expand-Archive -LiteralPath $archivePath -DestinationPath (Join-Path $downloadDirectory 'unpacked')
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        [IO.Compression.ZipFile]::ExtractToDirectory($archivePath, (Join-Path $downloadDirectory 'unpacked'))
         $downloadedUv = Get-ChildItem -LiteralPath (Join-Path $downloadDirectory 'unpacked') -Filter uv.exe -Recurse | Select-Object -First 1
         if (-not $downloadedUv) { throw 'The verified download does not contain uv.exe. Download the release again.' }
         New-Item -ItemType Directory -Path (Split-Path -Parent $uvPath) -Force | Out-Null

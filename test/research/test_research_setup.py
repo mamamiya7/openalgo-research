@@ -298,7 +298,9 @@ def test_bootstrap_pins_and_checksums_match_platforms():
     root = Path(__file__).resolve().parents[2]
     windows = (root / "tools/research_setup.ps1").read_text()
     linux = (root / "setup-research.sh").read_text()
-    assert "Get-FileHash" in windows and "sha256sum" in linux
+    assert "[Security.Cryptography.SHA256]::Create()" in windows
+    assert ".ComputeHash($archiveStream)" in windows and "sha256sum" in linux
+    assert "$archiveStream.Dispose()" in windows and "$hashAlgorithm.Dispose()" in windows
     assert "/download/0.12.5/" in windows and "/download/0.12.5/" in linux
     assert "Set-ExecutionPolicy" not in windows
     assert "Invoke-Expression" not in windows
