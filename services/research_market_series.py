@@ -1,6 +1,7 @@
 """Acquire bounded auxiliary prices through the ordinary OpenAlgo history/archive."""
 
 import time
+from concurrent.futures import ThreadPoolExecutor, wait
 from copy import deepcopy
 
 from research.market_series import freeze_series, plan_series
@@ -13,7 +14,7 @@ from services.research_native_prices import acquire_market_series_prices
 
 
 class StockFeaturePreparationScope:
-    """One preparation's frozen calendar and at most sixteen borrowed windows.
+    """One preparation's calendar, sixteen windows and two broker requests.
 
     Rows are ordinary native OHLC inputs, qualified separately for every saved
     instrument. No connection, DataFrame or scope is retained outside this
@@ -34,6 +35,8 @@ class StockFeaturePreparationScope:
         self._archive_path = None
         self._rows = {}
         self._closed = False
+        self._history_executor = None
+        self._history_futures = []
         self.volume_root = volume_root
         if calendar is not None:
             self._retain_calendar(calendar)
@@ -140,12 +143,62 @@ class StockFeaturePreparationScope:
         if symbol in self._pending:
             self._pending.remove(symbol)
 
+    def history_batch(self, history, requests, *, check=None):
+        """Overlap only broker calls; the caller admits results in request order.
+
+        The native history function retains its host-wide request limiter and
+        timeout. Archive writes, receipts and checkpoints stay on the calling
+        thread. This job owns one lazy executor, never a per-request pool or a
+        retained result cache. Cooperative checks run only on the caller.
+        """
+        if self._closed:
+            raise ValueError("Stock-feature preparation scope is closed")
+        if (
+            not isinstance(requests, (list, tuple))
+            or not 1 <= len(requests) <= 2
+            or self._history_futures
+            or any(
+                not isinstance(request, dict)
+                or request.get("interval") != "D"
+                or request.get("exchange") != "NSE"
+                or request.get("symbol") not in self._pending
+                for request in requests
+            )
+        ):
+            raise ValueError("Stock-feature history batch exceeds its native daily scope")
+        if check:
+            check()
+        if self._history_executor is None:
+            self._history_executor = ThreadPoolExecutor(
+                max_workers=2, thread_name_prefix="research-stock-history"
+            )
+        try:
+            for request in requests:
+                self._history_futures.append(self._history_executor.submit(history, **request))
+            while True:
+                _, pending = wait(self._history_futures, timeout=0.05)
+                if check:
+                    check()
+                if not pending:
+                    break
+            return [future.result() for future in self._history_futures]
+        finally:
+            for future in self._history_futures:
+                future.cancel()
+            self._history_futures.clear()
+
     def close(self):
-        self._rows.clear()
-        self._pending.clear()
-        self._sessions.clear()
-        self._calendar = None
         self._closed = True
+        try:
+            if self._history_executor is not None:
+                self._history_executor.shutdown(wait=True, cancel_futures=True)
+        finally:
+            self._history_executor = None
+            self._history_futures.clear()
+            self._rows.clear()
+            self._pending.clear()
+            self._sessions.clear()
+            self._calendar = None
 
     def __enter__(self):
         return self
@@ -225,6 +278,7 @@ def acquire_series(
         activity=activity,
         cancelled=cancelled,
         history=history,
+        **({"history_batch": scope.history_batch} if scope is not None else {}),
         max_requests=max_requests,
         max_seconds=max_seconds,
         clock=clock,

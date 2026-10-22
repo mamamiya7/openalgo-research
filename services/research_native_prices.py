@@ -163,6 +163,7 @@ def _acquire_prices(
     activity=None,
     cancelled=None,
     history=None,
+    history_batch=None,
     volume_capture=None,
     volume_lookup=None,
     require_volume_provenance=False,
@@ -184,6 +185,13 @@ def _acquire_prices(
     a broker response already received is persisted and verified before yielding.
     """
     interval = plan.get("interval")
+    if history_batch is not None and (
+        not callable(history_batch)
+        or interval != "D"
+        or (_series or {}).get("exchange") != "NSE"
+        or (_series or {}).get("role") != "feature_warmup"
+    ):
+        raise ValueError("Concurrent history is limited to scoped daily stock warmup")
     if require_volume_provenance and (
         interval != "D" or not callable(volume_capture) or not callable(volume_lookup)
     ):
@@ -662,8 +670,39 @@ def _acquire_prices(
         if requests:
             emit("download")
         save()
+        # Only missing daily context windows may overlap. Responses are admitted
+        # in original order; persistence, readback, receipts and checkpoints stay
+        # on this thread. At most two already returned responses are retained.
+        responses = {}
+
+        def fetch_history(**request):
+            try:
+                success, response, status = (history or native_history)(**request)
+                return success, response, status
+            except (InterruptedError, TimeoutError) as error:
+                # Preserve request-order failure semantics even if the second
+                # concurrent request finishes before the first.
+                return error
+            except Exception:
+                return False, {}, 502
+
+        def history_request(window):
+            stock, start, end = window
+            return {
+                "symbol": stock,
+                "exchange": exchange,
+                "interval": interval,
+                "start_date": start[:10],
+                "end_date": end[:10],
+                "source": "api",
+                **login,
+            }
+
         for index, (symbol, first, last) in enumerate(requests):
-            check()
+            # Finish a bounded, already returned batch across the local soft
+            # deadline, exactly as for a returned serial response. Cancellation
+            # and adapter timeouts are still checked and never suppressed.
+            check(boundary=index not in responses)
             if index >= max_requests:
                 state["batch_pending"] = True
                 state["continuation_reason"] = "request_budget"
@@ -675,23 +714,26 @@ def _acquire_prices(
                 login = {key: supplied.get(key) for key in ("auth_token", "feed_token", "broker")}
                 if not login["auth_token"] or not login["broker"]:
                     raise ValueError("Connect your broker in OpenAlgo to download missing prices.")
-            check()
+            check(boundary=index not in responses)
             emit("download", symbol)
-            check()
-            try:
-                success, response, status = (history or native_history)(
-                    symbol=symbol,
-                    exchange=exchange,
-                    interval=interval,
-                    start_date=first[:10],
-                    end_date=last[:10],
-                    source="api",
-                    **login,
-                )
-            except (InterruptedError, TimeoutError):
-                raise
-            except Exception:
-                success, response, status = False, {}, 502
+            check(boundary=index not in responses)
+            if index not in responses:
+                batch = requests[index : min(index + 2, max_requests)]
+                if history_batch is not None and len(batch) == 2:
+                    returned = history_batch(
+                        fetch_history,
+                        [history_request(window) for window in batch],
+                        check=lambda: check(boundary=False),
+                    )
+                    if not isinstance(returned, list) or len(returned) != 2:
+                        raise ValueError("Native history batch changed its bounded request count")
+                    responses.update(zip(range(index, index + 2), returned, strict=True))
+                else:
+                    responses[index] = fetch_history(**history_request(requests[index]))
+            returned = responses.pop(index)
+            if isinstance(returned, (InterruptedError, TimeoutError)):
+                raise returned
+            success, response, status = returned
             # Finish an already returned response across our local deadline.
             # Cancellation and external timeouts still retain their own outcome.
             check(boundary=False)

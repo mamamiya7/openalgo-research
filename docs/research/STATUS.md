@@ -1,5 +1,29 @@
 # OpenAlgo Research status
 
+## Before-search data preparation — 22 October 2026
+
+The original full-CSV run checked all 9,028 executable candles from cache in about
+20 seconds. Most of the subsequent roughly twelve-minute preparation was stock
+warm-up and index context acquisition, not repeated execution-price downloads.
+A read-only repeat of all 144 stocks now checks 37,584 exact cached warm-up candles
+in 40.733 seconds, with broker calls, native writes and volume capture prohibited.
+This measurement covers stock context and checkpointing, not the complete job.
+
+Preview.12 overlaps at most two missing daily stock-context history windows
+through the existing native history service and its shared rate limiter.
+Persistence, readback, admission and checkpoints remain ordered on the caller.
+Requests stay within the same budgets; already returned bounded responses finish
+across a soft segment deadline. Cancellation, errors and native timeouts still
+apply. An in-flight sibling may already have been queried when the first fails;
+its result is never admitted after that failure. The job owns and joins its two
+threads on every exit. Single-window and standalone acquisition stay serial.
+
+One-day correlation inputs are reused during derived preparation, preserving
+ordered numerical operations and the exact receipt. Actual 144-stock preparation
+fell from 65.515 to 48.151 seconds. All warm-up horizons, causal features and volume
+provenance checks remain. First-use live broker timing after overlap is not yet
+measured; controlled two-response overlap is not a whole-job timing promise.
+
 ## Optimisation runtime batch — 22 October 2026
 
 Preview.11 removes repeated whole-receipt admission from each automatic account

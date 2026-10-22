@@ -24,6 +24,14 @@ then clicks Optimize. The app owns data preparation, applicable search and check
 
 ## Remaining implementation order
 
+**22 October preparation batch:** first-use stock warm-up history now overlaps
+up to two missing windows through the native rate-limited service, retaining
+ordered exact admission and verification. Existing stock context reuse is verified
+across 144 actual stocks without broker access. Derived correlation preparation
+is 26.5% shorter with the same receipt. First-use broker wall time remains to be
+measured on genuinely missing required data; do not manufacture downloads by
+deleting valid cache. No warm-up horizon or research method was removed.
+
 **22 October runtime batch:** repeated whole portfolio-receipt admission is now
 owned once per run/resume, with every candidate check retained. Matched real-data
 account reports are identical; the measured pipeline is 40.6% shorter. Bounded

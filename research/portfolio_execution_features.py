@@ -183,23 +183,49 @@ def _returns(record, day):
     }
 
 
-def _correlation(symbol, day, series, prepared):
+def _correlation_inputs(prepared):
+    """Share only identical day-local work; keep each ordered pair calculation."""
+    import numpy as np
+
+    arrays = {
+        symbol: np.asarray(candidate["returns"])
+        for symbol, candidate in prepared.items()
+        if candidate is not None
+    }
+    varying = {symbol: np.std(values) > 1e-14 for symbol, values in arrays.items()}
+    identities = {
+        symbol: candidate["source_id"] if candidate is not None else None
+        for symbol, candidate in prepared.items()
+    }
+    return (
+        arrays,
+        varying,
+        fingerprint(identities),
+        max(
+            (candidate["available_at"] for candidate in prepared.values() if candidate),
+            default=None,
+        ),
+    )
+
+
+def _correlation(symbol, day, series, prepared, *, _inputs=None):
     import numpy as np
 
     own = prepared.get(symbol)
     if own is None:
         return None
-    values, identities = {}, {}
+    arrays, varying, source_id, available_at = (
+        _correlation_inputs(prepared) if _inputs is None else _inputs
+    )
+    values = {}
     for other, candidate in prepared.items():
         rho = None
         if other == symbol:
             rho = 1.0  # Same-instrument exposure is always counted together.
         elif candidate is not None and candidate["dates"] == own["dates"]:
-            left, right = np.asarray(own["returns"]), np.asarray(candidate["returns"])
-            if np.std(left) > 1e-14 and np.std(right) > 1e-14:
-                rho = float(np.clip(np.corrcoef(left, right)[0, 1], -1, 1))
+            if varying[symbol] and varying[other]:
+                rho = float(np.clip(np.corrcoef(arrays[symbol], arrays[other])[0, 1], -1, 1))
         values[other] = rho
-        identities[other] = candidate["source_id"] if candidate is not None else None
     return _seal(
         {
             "version": CORRELATION_VERSION,
@@ -208,8 +234,8 @@ def _correlation(symbol, day, series, prepared):
             "from": own["dates"][0],
             "to": own["dates"][-1],
             "observations": 60,
-            "available_at": max(v["available_at"] for v in prepared.values() if v),
-            "source_id": fingerprint(identities),
+            "available_at": available_at,
+            "source_id": source_id,
             "correlations": values,
         }
     )
@@ -266,15 +292,19 @@ def prepare(evidence, bundle, volume_records=None):
     allocations = {}
     correlations, capacity = {}, {}
     day_cache = {}
+    correlation_inputs = None
     for key in required:
         symbol, day = key.rsplit("|", 1)
         if day not in day_cache:
             day_cache = {day: {s: _returns(record, day) for s, record in bundle["series"].items()}}
+            correlation_inputs = _correlation_inputs(day_cache[day])
         if allocation_on and day not in allocations:
             from research.portfolio_allocation import build
 
             allocations[day] = build(day_cache[day], day)
-        feature = _correlation(symbol, day, bundle["series"], day_cache[day])
+        feature = _correlation(
+            symbol, day, bundle["series"], day_cache[day], _inputs=correlation_inputs
+        )
         correlations[key] = feature
         record = bundle["series"][symbol]
         hours = record["calendar"]["session_hours"].get(day)

@@ -1,5 +1,35 @@
 # OpenAlgo Research verification
 
+## Before-search stock preparation — 22 October 2026
+
+Preview.12 targets first-time auxiliary stock history and derived feature work.
+It overlaps at most two missing daily stock warm-up windows through the ordinary
+native service/limiter, without moving ingestion or evidence publication off the
+caller thread. Requests are bounded by the existing budget; returned responses
+are processed in order, with exact archive readback and provenance checks. The
+job owns and closes its executor. Standalone and single-window calls stay serial.
+
+Read-only native cache acceptance covered all 144 actual stocks and 37,584
+warm-up candles in 40.733 seconds, including isolated checkpoint publication.
+All OHLC matched saved context. Broker calls, live native writes and provenance
+capture were prohibited. This is a warm stock-context measurement, not the first
+download, index-context timing or complete app job. The original run's execution
+cache check finished in about 20 seconds; its stock/index acquisition continued
+to about 704 seconds. No valid cache was purged to force new downloads.
+
+Actual frozen portfolio-feature construction measured 65.515 → 48.151 seconds,
+preserving its complete receipt and identity. One-day array/statistic/source
+reuse retains ordered correlation operations. Controlled two-response waiting
+measured 0.241 → 0.122 seconds with identical responses; live first-use broker
+throughput remains unmeasured. Neither component implies a whole-job promise.
+
+113 focused checks passed across acquisition, exact correlation, cache reuse,
+request-order failures, budgets, native rate limiting and owned thread cleanup.
+Tests verify that a failed first request never admits its already queried sibling,
+completed cache requires no credentials, and writes/checkpoints stay ordered.
+Financial versions, lookback horizons, seed/search budgets, price intervals and
+volume provenance semantics are unchanged. Native broker/Historify core is untouched.
+
 ## Optimisation processing correction — 22 October 2026
 
 The preview.11 runtime patch removes repeated admission of one unchanged sealed
