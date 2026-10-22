@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "engines": {
-    "node": ">=20.20.0 || >=22.22.0 || >=24.13.0"
+    "node": "^22.23.4 || ^24.22.1 || >=26.12.1"
   },
   "scripts": {
     "dev": "vite",
@@ -60,7 +60,7 @@
     "lucide-react": "^0.563.0",
     "next-themes": "^0.4.6",
     "openalgo": "file:..",
-    "openalgo-charts": "2.6.0",
+    "openalgo-charts": "2.6.7",
     "openalgo-script": "0.8.1",
     "plotly.js": "3.3.1",
     "plotly.js-dist-min": "^3.3.1",
@@ -92,6 +92,7 @@
     "source-map-js": "^1.2.2",
     "probe-image-size": "^7.4.0",
     "katex": "^0.18.2",
+    "follow-redirects": "^1.16.1",
     "@openuidev/react-headless": {
       "zustand": "$zustand"
     },

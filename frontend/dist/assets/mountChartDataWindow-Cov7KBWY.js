@@ -1,0 +1,1 @@
+import{M as e,at as t,y as n}from"./openalgo-charts.widget-COs86Dkw.js";function r(r,i){let a=i.ownerDocument;return n(a,t),e({chart:r,document:a,locale:`en-IN`},i)}export{r as t};

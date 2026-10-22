@@ -1,5 +1,18 @@
 # OpenAlgo Research verification
 
+## OpenAlgo host refresh — 22 October 2026
+
+Research preview.18 integrates official OpenAlgo main through f3e7de829
+(22 October), updating the platform 2.0.2.7 →2.0.2.9 and charts 2.6.0 →2.6.7.
+The official 2.0.2.9 release is dated 17 October; this snapshot also includes
+subsequent official Strike Profile and dependency fixes. The combined native /
+Research interface is rebuilt with the new lock and patched private Node 24.22.1.
+Daily/minute research history, calculation pins, frozen evidence and search budgets
+are retained. Setup includes the new idempotent index freeze-limit migration.
+193 focused backend checks and 99 frontend checks passed, with TypeScript and
+production build. No broker calls, orders or mode changes in qualification.
+[Inventory, numerical limits and upgrade details](UPSTREAM_UPDATE_20261022.md).
+
 ## Cached stock preparation — 22 October 2026
 
 Preview.17 groups recovery publication for up to 16 fully cached daily stock

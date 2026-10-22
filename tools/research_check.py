@@ -193,6 +193,7 @@ REQUIRED_RESEARCH_FILES = {
     "services/scanner_research_service.py",
     "services/scanner_research_worker.py",
     "upgrade/migrate_scanner_research.py",
+    "upgrade/migrate_qty_freeze_oct_2026.py",
     "upgrade/migrate_research_nse_calendar.py",
     "tools/research_runtime.py",
     "tools/research_check.py",

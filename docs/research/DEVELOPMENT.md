@@ -64,7 +64,9 @@ membership sample cannot establish historical scanner performance.
 ### Build a reviewable native candidate
 
 Run `uv run --no-sync python tools/research_release.py` from the feature checkout with Git,
-Node and npm available. It stages allowed application source, installs the frozen
+a patched Node release matching frontend/package.json (22.23.4+, 24.22.1+, or
+26.12.1+ on those branches) and npm available. Release ZIP users do not need Node.
+It stages allowed application source, installs the frozen
 frontend lockfile with `npm ci`, builds the interface and creates a unique ignored
 `.agent-native/release/<id>/openalgo-research-<version>.zip`. It leaves the checkout's
 tracked `frontend/dist` unchanged. `manifest.json` (also `RELEASE_MANIFEST.json`

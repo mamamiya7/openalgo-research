@@ -56,6 +56,7 @@ need → drill into the specific file. Don't load everything at once.
 | Integrated Research delivery plan: reconciled whole-product backlog, all 34 journeys, dependencies, assets and release acceptance | [research/DELIVERY_PLAN.md](research/DELIVERY_PLAN.md) |
 | Research workflow refinement: import, automatic progress, actionable recovery, decisive findings, saved setup reuse and trader inspection | [research/WORKFLOW_REFINEMENT_20261011.md](research/WORKFLOW_REFINEMENT_20261011.md) |
 | OpenAlgo 2.0.2.5 upgrade, chart/indicator reuse and upstream feature inventory | [research/UPSTREAM_UPDATE_20260916.md](research/UPSTREAM_UPDATE_20260916.md) |
+| Current OpenAlgo 2.0.2.9 host refresh, charts 2.6.7, security fixes and installation migration | [research/UPSTREAM_UPDATE_20261022.md](research/UPSTREAM_UPDATE_20261022.md) |
 | Saved trade charts: frozen native candles, entry/exit markers, visual indicators and bounded bar replay | [research/SAVED_TRADE_CHARTS.md](research/SAVED_TRADE_CHARTS.md) |
 | Proposed one-click Optimize: automatic trading-rule/condition research, causal indicators, validation, benchmarks and findings | [research/AUTOMATED_RESEARCH_PLAN.md](research/AUTOMATED_RESEARCH_PLAN.md) |
 | Native research timing admission: actual CSV timestamps, daily/minute intent and prerequisites for future clock search | [research/TIMING_ADMISSION_20261011.md](research/TIMING_ADMISSION_20261011.md) |

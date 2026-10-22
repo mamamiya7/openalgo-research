@@ -5,10 +5,10 @@ Finish understandable automatic findings and fix observed journey gaps using the
 existing engines/data/search programme. Broader method/asset/adaptive-policy and
 calibration expansion is outside the active queue. Batch verification and delivery.
 
-Patch distribution: `0.1.0-preview.17`, on reviewed OpenAlgo 2.0.2.7, with v16
+Patch distribution: `0.1.0-preview.18`, on reviewed OpenAlgo 2.0.2.9, with v16
 bounded automatic research, execution/risk constraints, causal portfolio
 allocation, chronological checks, saved evidence and native trade charts.
-The [patch notes](releases/0.1.0-preview.17.md) record grouped recovery publication for fully cached stock preparation,
+The [patch notes](releases/0.1.0-preview.18.md) record the OpenAlgo 2.0.2.9 host update and rebuilt charts,
 alongside the preceding history, preparation and runtime corrections.
 Broker-backed daily/minute acceptance remains separately recorded. The prior
 [release acceptance](RELEASE_ACCEPTANCE_20261022.md) remains a historical record

@@ -27,6 +27,7 @@ MIGRATIONS = (
     "upgrade/migrate_agent.py",
     "upgrade/migrate_agent_voice.py",
     "upgrade/migrate_agent_voice_phrase_removal.py",
+    "upgrade/migrate_qty_freeze_oct_2026.py",
     "upgrade/migrate_research_nse_calendar.py",
     "upgrade/migrate_scanner_research.py",
 )

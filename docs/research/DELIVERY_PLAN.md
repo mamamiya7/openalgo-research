@@ -24,6 +24,11 @@ then clicks Optimize. The app owns data preparation, applicable search and check
 
 ## Remaining implementation order
 
+**22 October native host upkeep:** preview.18 updates OpenAlgo to 2.0.2.9 and
+charts 2.6.7 using official main through 22 October. No research feature expansion;
+retain financial versions and frozen evidence. The public setup runs the new
+index freeze-limit migration. [Qualification](UPSTREAM_UPDATE_20261022.md).
+
 **22 October cached-loading correction:** preview.17 groups only complete cached
 stock recovery in blocks of 16. Broker checkpoints remain immediate; data checks
 and final evidence are unchanged. 61 focused checks passed; a short native

@@ -230,6 +230,7 @@ def test_setup_orders_sync_check_migrations_preserves_settings_and_handles_space
     assert "UV_PYTHON_PREFERENCE" not in setup.clean_environment(root)
     assert calls[1][-1] == "tools/research_check.py"
     assert [command[-1] for command in calls[2:]] == list(setup.MIGRATIONS)
+    assert "upgrade/migrate_qty_freeze_oct_2026.py" in setup.MIGRATIONS
     # uv 0.12.5 reparses absolute Windows env-file paths containing spaces.
     # cwd is the installation above; a relative filename preserves that scope.
     assert all(command[command.index("--env-file") + 1] == ".env" for command in calls[1:])
