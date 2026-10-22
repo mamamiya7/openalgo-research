@@ -25,22 +25,24 @@ def small_canonical_bytes(value):
     return _canonical_bytes(value, MAX_NODES, MAX_ASCII_BYTES)
 
 
-def bounded_canonical_bytes(value, *, max_bytes=None):
+def bounded_canonical_bytes(value, *, max_bytes=None, json_types_only=False):
     """Optionally encode a detached medium tree within the caller's byte limit.
 
     Conservative pre-encoding bounds cap both the copy and C-encoder allocation.
     Inputs that cannot fit, including unusual types, return to the original
     streaming path, which retains its early size/error precedence.
+    ``json_types_only`` also excludes tuples when byte equality is used to
+    recognize a previously validated JSON schema (a tuple encodes like a list).
     """
     if max_bytes is not None and (type(max_bytes) is not int or max_bytes < 0):
         return None
     maximum = (
         MAX_MEDIUM_ASCII_BYTES if max_bytes is None else min(max_bytes, MAX_MEDIUM_ASCII_BYTES)
     )
-    return _canonical_bytes(value, MAX_MEDIUM_NODES, maximum)
+    return _canonical_bytes(value, MAX_MEDIUM_NODES, maximum, allow_tuples=not json_types_only)
 
 
-def _canonical_bytes(value, maximum_nodes, maximum_bytes):
+def _canonical_bytes(value, maximum_nodes, maximum_bytes, *, allow_tuples=True):
     remaining_nodes = maximum_nodes
     remaining_bytes = maximum_bytes
     active = set()
@@ -64,7 +66,7 @@ def _canonical_bytes(value, maximum_nodes, maximum_bytes):
             if not math.isfinite(item):
                 raise ValueError
             allowance = 32
-        elif kind in (dict, list, tuple):
+        elif kind in (dict, list) or (allow_tuples and kind is tuple):
             identity = id(item)
             if identity in active:
                 raise ValueError

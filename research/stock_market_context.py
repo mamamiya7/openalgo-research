@@ -6,16 +6,71 @@ No acquisition or global cache lives here. Prepared job-local views own one
 detached bounded history and release it when their context closes.
 """
 
+from contextlib import contextmanager
+from contextvars import ContextVar
 from copy import deepcopy
 from datetime import date
+from functools import wraps
 
 from research import stock_features as stock
 from research import stock_relative_strength as relative
+from research.canonical_json import bounded_canonical_bytes
 from research.market_series import fingerprint, slice_series
 
 VERSION = "research-stock-market-context-v1"
 MARKET_WARMUP_SESSIONS = 160
 KEY = "automatic_stock_market_context"
+
+
+class _BundleValidation:
+    """One bounded successful content signature, released with its owning job.
+
+    This retains bytes, never caller dictionaries or an object-id approval. A
+    changed input must pass all validators again. Tuples and custom objects are
+    ineligible: their JSON may match a list/plain value with different schema
+    semantics. Inputs beyond the fast encoder's bounds use normal validation.
+    """
+
+    __slots__ = ("_encoded", "_closed", "__weakref__")
+
+    def __init__(self):
+        self._encoded = None
+        self._closed = False
+
+    def matches(self, encoded):
+        return not self._closed and encoded is not None and encoded == self._encoded
+
+    def remember(self, encoded):
+        if not self._closed:
+            self._encoded = encoded
+
+    def close(self):
+        self._encoded = None
+        self._closed = True
+
+
+_bundle_validation = ContextVar("research_stock_market_bundle_validation", default=None)
+
+
+@contextmanager
+def _bundle_validation_scope():
+    """Isolate one job's pure bundle validation, including nested/error paths."""
+    owner = _BundleValidation()
+    token = _bundle_validation.set(owner)
+    try:
+        yield owner
+    finally:
+        owner.close()
+        _bundle_validation.reset(token)
+
+
+def _with_bundle_validation(function):
+    @wraps(function)
+    def scoped(*args, **kwargs):
+        with _bundle_validation_scope():
+            return function(*args, **kwargs)
+
+    return scoped
 
 
 def _market_context():
@@ -91,6 +146,14 @@ def validate_bundle(bundle):
         or days != sorted(set(days))
     ):
         raise ValueError("Stock-market context needs ordered execution sessions")
+    owner = _bundle_validation.get()
+    encoded = (
+        bounded_canonical_bytes(bundle, max_bytes=stock.MAX_BUNDLE_BYTES, json_types_only=True)
+        if owner is not None
+        else None
+    )
+    if owner is not None and owner.matches(encoded):
+        return bundle
     market = relative.validate_benchmark(bundle["market"])
     market_days = market["calendar"]["sessions"]
     if market_days[MARKET_WARMUP_SESSIONS:] != days:
@@ -114,6 +177,15 @@ def validate_bundle(bundle):
     stock._json_size(bundle, stock.MAX_BUNDLE_BYTES)
     if bundle["id"] != fingerprint({k: v for k, v in bundle.items() if k != "id"}):
         raise ValueError("Saved stock-market context changed")
+    if (
+        owner is not None
+        and encoded is not None
+        and bounded_canonical_bytes(bundle, max_bytes=stock.MAX_BUNDLE_BYTES, json_types_only=True)
+        == encoded
+    ):
+        # Do not approve bytes observed before validation if the caller changed
+        # its dictionary while admission was running.
+        owner.remember(encoded)
     return bundle
 
 

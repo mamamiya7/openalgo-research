@@ -11,6 +11,7 @@ from copy import deepcopy
 from time import monotonic
 
 from research import portfolio as contract
+from research.stock_market_context import _with_bundle_validation
 from services import scanner_research_service as service
 
 
@@ -506,7 +507,7 @@ def _prepare_prices(
                     **calendar,
                     "provenance": {**calendar.get("provenance", {}), "interval": interval},
                 },
-            }
+            },
         )
     from research.connectors.vectorbt_portfolio import MAX_MATRIX_CELLS
 
@@ -678,7 +679,7 @@ def _prepare_automatic_timing(
             "timing_descriptor": descriptor,
             "timing_union": plan,
             "snapshot": {**calendar, "provenance": {**calendar["provenance"], "interval": "1m"}},
-        }
+        },
     )
     return prepare_union(
         store,
@@ -701,6 +702,7 @@ def _prepare_automatic_timing(
     )
 
 
+@_with_bundle_validation
 def run(
     store,
     owner,

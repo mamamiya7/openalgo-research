@@ -309,8 +309,25 @@ def run_one(store, token, stop_requested=None):
         # already contains all admitted work, including an empty frozen seed.
         if stop_requested and stop_requested():
             raise Interrupted("Worker shutdown requested")
+        # Replaying admitted proposals changes no state. Read both live fences
+        # together, without reserving SQLite's sole writer on every proposal.
+        with store.sessions() as db:
+            fence = db.execute(
+                select(ResearchWorker.token, ResearchJob.worker, ResearchJob.status)
+                .join(ResearchJob, ResearchJob.id == job.id)
+                .where(ResearchWorker.id == 1)
+            ).one_or_none()
+            if fence is None or fence[0] != token or fence[1] != token or fence[2] not in WORKING:
+                raise Cancelled("Cancellation requested or worker lease lost")
+            if fence[2] == "running":
+                return
+        # Close the read transaction first. A pause still reserves the writer
+        # and rereads the fences, so cancellation or a successor always wins
+        # before this worker can acknowledge the pause.
         with store.sessions.begin() as db:
             db.execute(update(ResearchWorker).where(ResearchWorker.id == 1).values(id=1))
+            if stop_requested and stop_requested():
+                raise Interrupted("Worker shutdown requested")
             lease, current = db.get(ResearchWorker, 1), db.get(ResearchJob, job.id)
             if lease.token != token or current.worker != token or current.status not in WORKING:
                 raise Cancelled("Cancellation requested or worker lease lost")

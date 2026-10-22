@@ -24,6 +24,14 @@ then clicks Optimize. The app owns data preparation, applicable search and check
 
 ## Remaining implementation order
 
+**22 October validation/recovery correction:** preview.15 reduces repeated bundle
+validation within a bounded content-matched job scope, verified unchanged fit
+publications and normal replay writer reservations. 158 focused checks passed;
+matched late continuation measured 13.785 →10.141s with identical scientific
+evidence. Most improvement is recovery/setup; remaining checkpoint growth remains
+the next performance target. No feature/budget expansion or new complete-run
+timing claim. [Measured scope](VERIFICATION.md#validation-and-replay-correction--22-october-2026).
+
 **22 October remaining-work profile:** preview.14 removes consecutive fit-account/
 proposal saves and speeds bounded evidence encoding without changing results or
 checks. Short actual-checkpoint comparisons measured 22% less proposal work and

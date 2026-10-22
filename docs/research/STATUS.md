@@ -1,5 +1,31 @@
 # OpenAlgo Research status
 
+## Validation and replay performance correction — 22 October 2026
+
+Preview.15 reuses only fully content-matched bundle validation within one bounded
+job scope, skips verified unchanged fit/control saves and removes normal replay
+writer reservations while retaining atomic pause acknowledgement and live fences.
+158 focused checks passed. Matched short native-worker comparisons preserved
+exact scientific checkpoints: early continuation 7.783 →6.661s; late continuation
+13.785 →10.141s (26.4% shorter), mostly recovery/setup. New proposal work alone
+changed 3.982 →3.851s. These are warmed isolated-write continuations with read-only
+ordinary-store quota scans, not a new full-journey timing. Growing checkpoint
+cost remains; the earlier interrupted 21m17s sample is still the complete timing.
+Features remain frozen. [Verification](VERIFICATION.md#validation-and-replay-correction--22-october-2026).
+
+## Remaining bottlenecks measured — 22 October 2026
+
+Profiling only; preview.14 runtime code is unchanged. Two early and two late
+real-evidence worker continuations produced exact matching scientific checkpoints
+within each pair. Early continuation: 7.952s total, including 5.526s setup/recovery;
+late continuation: 13.685s total, including 9.660s setup/recovery. These are warmed,
+isolated-write short segments, not new complete-journey timings. Remaining targets
+are repeated full-bundle admission (nine validations /four recipe compilations),
+growing checkpoint encoding and recovery-only republishing, then redundant writer
+reservations during seeded replay. Preserve every financial, evidence, live fence,
+attempt-budget and quota check. No features, installation or publication changed.
+See [runtime attribution](VERIFICATION.md#current-runtime-attribution--22-october-2026).
+
 ## Bounded remaining-work correction — 22 October 2026
 
 Preview.14 combines consecutive account/proposal publications and uses bounded

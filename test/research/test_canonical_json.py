@@ -261,6 +261,14 @@ def test_medium_cycle_falls_back():
     assert bounded_canonical_bytes(value) is None
 
 
+def test_plain_json_mode_does_not_collapse_tuple_and_list_schemas():
+    value = {"dates": ["2026-10-22"], "nested": {"n": 1.0}}
+    assert bounded_canonical_bytes(value, json_types_only=True) == streamed(value)
+    tuple_value = {**value, "dates": tuple(value["dates"])}
+    assert bounded_canonical_bytes(tuple_value) == streamed(value)
+    assert bounded_canonical_bytes(tuple_value, json_types_only=True) is None
+
+
 def test_medium_size_and_optuna_digest_preserve_exact_values_and_error_precedence():
     from research.connectors.optuna_portfolio import _fingerprint
     from research.stock_features import _json_size

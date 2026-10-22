@@ -1079,9 +1079,12 @@ def _run(
             }
         if current["selection"] is not None and current["selection"] != winner:
             raise ValueError("The walk-forward training selection changed on resume")
-        current["selection"] = deepcopy(winner)
-        # Persist the choice before even requesting the next-window account.
-        persist()
+        if current["selection"] is None:
+            current["selection"] = deepcopy(winner)
+            # A new choice must be durable before requesting the next-window
+            # account. On recovery the exact saved choice was verified above;
+            # replaying it has produced no new scientific evidence to publish.
+            persist()
         if fit_name not in SEED_FITS[4:] and version in (
             EXECUTION_VERSION,
             PRIORITY_VERSION,
@@ -1110,8 +1113,9 @@ def _run(
             }
             if current.get("sizing_control") is not None and current["sizing_control"] != receipt:
                 raise ValueError("The matched original-sizing development control changed")
-            current["sizing_control"] = receipt
-            persist()
+            if current.get("sizing_control") is None:
+                current["sizing_control"] = receipt
+                persist()
         return winner, rows
 
     for fold in recipe["walk_forward"]["folds"]:

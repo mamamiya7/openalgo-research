@@ -1,5 +1,138 @@
 # OpenAlgo Research verification
 
+## Validation and replay correction — 22 October 2026
+
+Preview.15 applies the measured opportunities from the runtime attribution below:
+
+- A synchronous portfolio job retains at most one bounded canonical byte
+  signature of a successfully validated stock/market bundle. Every lookup encodes
+  the complete current content; it never approves a mutable object by identity.
+  Changed content is fully readmitted. Plain JSON only is eligible, so tuple/list
+  schema differences and custom objects cannot impersonate an admitted value.
+  The existing encoder's 32 MiB /524,288-node /64-depth caps bound this optional
+  path; larger inputs use the original validators. The first successful admission
+  is encoded again before retention to reject mutation during admission. Current
+  classifier recipe, outer shape and session checks still run on every call.
+  The context-scoped owner clears its byte reference and resets its token in
+  `finally`; no approval survives the job. Public calls outside the scope remain
+  fully validating, and consumer-specific execution/timing checks still run.
+- A seeded fit verifies its previously recorded selection and sizing control
+  without republishing unchanged evidence. Missing/new receipts still persist,
+  and divergent receipts still reject recovery. Pre-engine attempt reservations,
+  newly completed account/proposal publications and live boundaries remain.
+- Normal calculation boundaries read lease/job ownership and status together,
+  without reserving SQLite's writer. Pausing closes the read session, acquires
+  the writer and rechecks fences plus shutdown before acknowledging the pause
+  and its study observation in one transaction. Cancellation latency is unchanged.
+
+158 focused unique checks passed: scoped content admission, type/mutation/bounds,
+100 success/error owner lifetimes, existing context/preparation contracts,
+canonical byte/error equivalence, new/unchanged/divergent recovery receipts,
+attempt reservation and construction failures, native pause/resume, injected
+between-read/write races and the captured exact legacy result/checkpoint.
+Resource audit: sessions remain context-managed; the one-entry byte owner is
+bounded and explicitly released on success/failure/nesting, including a copied
+context carrying a closed owner. No new file handle, thread or external client.
+
+Matched warmed before/current native-worker comparisons used the same real
+acceptance evidence. One early pair added three accounts/proposals; two
+alternating late pairs added three proposal observations/two new accounts. All
+writes were isolated. Strict quota admission included read-only walks of the
+ordinary archive; no broker calls, native archive writes or orders occurred.
+Only segment boundaries were timed, without per-function profiling overhead.
+
+| Scope | Before | After |
+|---|---:|---:|
+| Early whole continuation, one pair | 7.783s | 6.661s |
+| Late whole continuation, median of two pairs | 13.785s | 10.141s |
+| Late setup/recovery before first new proposal | 9.768s | 6.261s |
+| Late three-proposal observation span | 3.982s | 3.851s |
+| Late calculation checkpoint callbacks | 12 | 6 |
+| Late strict quota invocations | 15 | 12 |
+
+All final scientific checkpoint hashes matched the pre-correction references
+exactly. Early continuation was 14.4% shorter and late continuation 26.4% shorter.
+Most of the gain is in setup/recovery; this does not establish a new complete-run
+time or resolve the remaining growing-checkpoint cost. Search budgets, account
+math and validation policy are unchanged. Feature development remains frozen.
+
+An additional root-encoding shortcut was rejected: preserving custom-input
+semantics required a plain-tree guard measured at 21.64ms, exceeding the original
+18.33ms encoding cost on a real 3.53 MB checkpoint. No such change was retained.
+Private comparison/guard receipts are under ignored
+`.agent-native/runtime-breakdown-20261022/`. Dependencies, platform/setup contracts
+and frontend inputs are unchanged; the full installation matrix was not repeated.
+
+## Current runtime attribution — 22 October 2026
+
+Profiling only; preview.14 calculation and validation code is unchanged. Four
+bounded native-worker continuations used the real 149-row /29-stock acceptance
+evidence: two early-checkpoint runs (2 →5 proposals, three new accounts) and two
+late-checkpoint runs (242 →245 proposals, two new accounts and one already saved
+account). Native imports/compilation were warmed first. Metadata and artifact
+writes were isolated; quota checks included a read-only walk of the ordinary
+archive as well as the isolated archive. No broker calls, credentials, native
+database writes or orders were involved. Wall-clock wrappers measured nested
+operations; exclusive category times exclude measured children. These timings
+include instrumentation and are not fresh-download, fresh-start or complete-job
+benchmarks.
+
+| Measured scope | Early checkpoint, median | Late checkpoint, median |
+|---|---:|---:|
+| Whole bounded continuation | 7.952s | 13.685s |
+| Recovery/setup before first new proposal observation | 5.526s | 9.660s |
+| First new proposal through bounded worker stop | 2.427s | 4.025s |
+| Artifact JSON encoding, exclusive | 0.149s | 1.316s |
+| Optimizer fingerprints, exclusive | 0.006s | 0.764s |
+
+Each pair produced identical final scientific checkpoint hashes. The late pair
+also matched the earlier before/after reference checkpoint exactly. These short
+segments do not establish a new total time for the full optimisation programme;
+the previous interrupted 21m17s active sample remains the complete measurement.
+
+Remaining bottlenecks, in order of opportunity:
+
+1. Repeated evidence admission: both early and late workers validated the full
+   stock/market bundle nine times and compiled the frozen recipe four times.
+   Call paths include context execution checks (twice), execution features,
+   portfolio features, recipe/mandate verification, the prepared gate and period
+   slicing. Size guards, portfolio fingerprints and bundle validation together
+   took about 4.2s of exclusive time per worker. A future correction should share
+   a bounded, detached, job-owned validated representation across these consumers
+   while retaining each consumer's scope, timing and financial checks; do not
+   broadly suppress validators or trust a mutable caller dictionary.
+2. Growing checkpoint work: late artifact encoding and optimizer fingerprinting
+   together took about 2.08s, versus about 0.16s early. The two scopes have
+   different new-account counts; this is a scaling diagnostic, not an account
+   speed comparison. The late recovery republished calculation state seven times
+   before any new proposal, with three consecutive equal-digest pairs. Completed
+   fit selections and sizing controls are verified then republished. Avoiding
+   publications when verified scientific state is unchanged is the narrowest
+   next correction; preserve new attempt reservations, newly completed evidence,
+   failures, pause acknowledgement and changed-state publication.
+3. Live worker fencing: the late replay invoked 248 pre-new-proposal pause
+   boundaries, taking about 1.14s; the source uses a writer reservation even when
+   replaying previously saved proposals. Live cancellation/lease callbacks took
+   about 1.02s across recovery and new work. Preserve live checks and atomic pause
+   acknowledgement; investigate redundant writer reservations rather than
+   increasing cancellation latency.
+4. Strict publication quota walks took about 1.21s over 15 invocations late
+   (each invocation walks both the isolated and ordinary stores). Reduce redundant
+   publications before considering a different quota design. Do not introduce
+   stale quota estimates or weaken external-growth/symlink admission.
+
+The two newly calculated late native accounts took 1.10–1.21s inclusive of their
+callbacks, about 0.44–0.56s excluding separately timed nested work. Raw account
+calculation is therefore not the dominant cost in these segments. The remaining
+time includes preparation, copying, study bookkeeping, metadata work and worker
+setup/teardown; no claim is made that every non-engine operation is unnecessary.
+The read/verification of retained development histories is not the first target.
+
+Private receipts and the bounded profiler are under ignored
+`.agent-native/runtime-breakdown-20261022/`. No performance fix, installation or
+publication was performed as part of this profiling-only audit. Feature
+development remains frozen.
+
 ## Remaining repetition profile — 22 October 2026
 
 Preview.14 removes the immediate account-only publication before a new fit
