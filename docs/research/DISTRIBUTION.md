@@ -9,10 +9,12 @@ prices, saves runs and presents their results.
 This is a native distribution fork of [OpenAlgo](https://github.com/marketcalls/openalgo),
 with explicit host integration hooks, a front end and a worker.
 The [Research repository](https://github.com/mamamiya7/openalgo-research) and
-[preview.8 release](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.8)
+[preview.9 release](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.9)
 are the distribution locations. This preview uses reviewed OpenAlgo 2.0.2.7 and
-v16 automatic research. [Release notes](releases/0.1.0-preview.8.md) and
-[qualification](RELEASE_ACCEPTANCE_20261022.md) record its supported scope.
+v16 automatic research. [Release notes](releases/0.1.0-preview.9.md) and
+[patch qualification](releases/0.1.0-preview.9.md#qualification) record its supported scope.
+Preview.9 fixes the worker and diagnostic handoffs found in the complete browser
+journey; the prior preview.8 acceptance remains a separate historical record.
 Use the packaged Setup/Start launchers; do not install OpenAlgo, VectorBT or
 Optuna separately. Nautilus is optional and uses the supplied locked Linux/WSL
 installer described below.
@@ -28,6 +30,8 @@ installer described below.
 - Chronological development checks, cost/sensitivity/repeat-search challenges,
   original-setting fallback and separate final confirmation. Custom Optuna
   searches retain their separately selected objectives and later-period protocol.
+- Market-condition performance and sample sizes from frozen prices, with separate
+  development/final-period reporting and no added downloads or simulations.
 - Saved findings, tear sheets, Optuna analysis, trade charts/replay, exact frozen
   reruns, named setup reuse and compatible interruption recovery.
 - Optional Nautilus fixed/custom calculations on its separately qualified runtime.
@@ -50,7 +54,7 @@ Execution policies and supported scope are documented in
 
 ## Install and open
 
-Download `openalgo-research-0.1.0-preview.8.zip` from the preview release, compare
+Download `openalgo-research-0.1.0-preview.9.zip` from the preview release, compare
 its SHA-256 with the supplied `SHA256SUMS`, and extract it into its installation
 directory. Use this versioned asset for its prebuilt interface; GitHub's automatic
 source archives are source checkouts.

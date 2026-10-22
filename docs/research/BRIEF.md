@@ -5,11 +5,13 @@ Finish understandable automatic findings and fix observed journey gaps using the
 existing engines/data/search programme. Broader method/asset/adaptive-policy and
 calibration expansion is outside the active queue. Batch verification and delivery.
 
-Public distribution: `0.1.0-preview.8`, on reviewed OpenAlgo 2.0.2.7, with v16
+Patch distribution: `0.1.0-preview.9`, on reviewed OpenAlgo 2.0.2.7, with v16
 bounded automatic research, execution/risk constraints, causal portfolio
 allocation, chronological checks, saved evidence and native trade charts.
-The supported preview is complete. [Release acceptance](RELEASE_ACCEPTANCE_20261022.md)
-records its numerical, browser, installation and compatibility scope; the
+The [patch notes](releases/0.1.0-preview.9.md) record the observed automatic-worker
+handoff fixes and focused journey qualification. The prior
+[release acceptance](RELEASE_ACCEPTANCE_20261022.md) remains a historical record
+of preview.8 numerical, installation and compatibility scope; the
 [delivery plan](DELIVERY_PLAN.md) separates future methods/regimes/assets from
 this finished release.
 The following baseline verification was recorded on 9 September.

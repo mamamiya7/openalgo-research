@@ -422,22 +422,7 @@ def run_one(store, token, stop_requested=None):
                     evidence,
                     spec,
                     defer_study_analysis=True,
-                    **(
-                        {"job_id": job.id}
-                        if spec["portfolio"].get("automatic_research", {}).get("version")
-                        in (
-                            "automatic-entry-conditions-v1",
-                            "automatic-trade-management-v2",
-                            "automatic-hypotheses-v2",
-                            "automatic-hypotheses-v3",
-                            "automatic-hypotheses-v4",
-                            "automatic-hypotheses-v5",
-                            "automatic-hypotheses-v6",
-                            "automatic-hypotheses-v7",
-                            "automatic-hypotheses-v8",
-                        )
-                        else {}
-                    ),
+                    job_id=job.id,
                     saved=saved,
                     checkpoint=checkpoint,
                     progress=progress,

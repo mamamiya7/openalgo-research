@@ -149,6 +149,23 @@ def _timing_axes(experiment):
     return result
 
 
+def parameter_limit(version):
+    """One recorded-domain bound for both diagnostic IPC and its reader."""
+    if version == "automatic-hypotheses-v16":
+        return 75
+    if version in (
+        "automatic-hypotheses-v11",
+        "automatic-hypotheses-v12",
+        "automatic-hypotheses-v13",
+        "automatic-hypotheses-v14",
+        "automatic-hypotheses-v15",
+    ):
+        return PRIORITY_MAX_AXES
+    if version == "automatic-hypotheses-v10":
+        return EXECUTION_MAX_AXES
+    return MAX_AXES
+
+
 def reconstruct_study(experiment):
     import optuna
 
@@ -156,32 +173,7 @@ def reconstruct_study(experiment):
     axes = experiment.get("search_space", {}).get("axes", {})
     if not isinstance(trials, list) or len(trials) > MAX_TRIALS:
         raise ValueError("Study analysis supports at most 1,000 recorded proposals")
-    maximum = (
-        75
-        if experiment.get("experiment_version") == "automatic-hypotheses-v16"
-        else PRIORITY_MAX_AXES
-        if experiment.get("experiment_version")
-        in (
-            "automatic-hypotheses-v11",
-            "automatic-hypotheses-v12",
-            "automatic-hypotheses-v13",
-            "automatic-hypotheses-v14",
-            "automatic-hypotheses-v15",
-            "automatic-hypotheses-v16",
-        )
-        else EXECUTION_MAX_AXES
-        if experiment.get("experiment_version")
-        in (
-            "automatic-hypotheses-v10",
-            "automatic-hypotheses-v11",
-            "automatic-hypotheses-v12",
-            "automatic-hypotheses-v13",
-            "automatic-hypotheses-v14",
-            "automatic-hypotheses-v15",
-            "automatic-hypotheses-v16",
-        )
-        else MAX_AXES
-    )
+    maximum = parameter_limit(experiment.get("experiment_version"))
     if not isinstance(axes, dict) or len(axes) > maximum:
         raise ValueError("Invalid recorded study parameter space")
     trailing_axes = _trailing_axes(experiment)

@@ -1,17 +1,32 @@
 # OpenAlgo Research status
 
-## Essential one-click batch — 22 October 2026
+## Essential one-click patch — 22 October 2026
 
-The user narrowed the active [delivery plan](DELIVERY_PLAN.md#remaining-implementation-order)
-to a complete one-click research journey. Broad method, allocation, regime-policy,
-engine/asset and calibration expansion is removed from the active queue.
-The reporting connection is implemented locally: current automatic results include
-development and separate final-period market-condition cohorts from frozen prices,
-with no extra downloads or account simulations. Existing selection rules, saved
-recipes and account results are unchanged. The focused backend and frontend
-checks pass; this batch is not installed or pushed. Preview.8 remains the
-installed/public release.
-Verification stays focused; installation and Git pushes are batched.
+The active [delivery plan](DELIVERY_PLAN.md#remaining-implementation-order) remains
+limited to the complete one-click journey. The queued browser run exposed four
+handoff gaps missed by service-focused qualification: current automatic job
+identity, the admitted daily-price lifecycle marker, recording the registered
+v16 allocation choice, and the diagnostic process execution descriptor. These
+are fixed without weakening frozen-price, mandate or parameter validation. An
+older checkpoint keeps its original input identity through calculation and
+publication. Trial settings now name actual execution, sizing, timing and
+trailing choices; inactive percentage exits are hidden when ATR exits apply.
+
+Current automatic findings include descriptive development and separate final
+market-condition cohorts from already-frozen context. No new broker downloads,
+account simulations, numerical recipe, search budget or selection policy is added.
+Broader methods, assets, adaptive regimes and calibration remain outside this batch.
+
+81 distinct focused backend checks and 89 frontend checks pass, with production
+build, source/dependency compatibility and applicable lint/type checks. The locked
+package build matches the 395 production assets used for the browser check.
+Actual import, automatic research, worker restart/resume, analysis, tested report,
+named save, library reopen and reused-setup backtest passed with controlled native
+Historify data. The completed original artifact and mandate remain unchanged.
+This is one combined installation/restart, source push and versioned download batch.
+The [preview.9 notes](releases/0.1.0-preview.9.md) record patch qualification
+separately from historical preview.8 acceptance below. Screenshot capture is
+unavailable; this establishes functional behavior, not a new visual-layout audit.
 
 ## Supported preview.8 completed — 22 October 2026
 

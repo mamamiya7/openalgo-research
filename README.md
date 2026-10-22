@@ -14,15 +14,15 @@ The aim is to connect broker data, backtesting and optimization in one open-sour
 workflow. Start directly from a Chartink scanner with the Chrome extension, upload
 a CSV export, or reuse saved signals.
 
-**Current preview: `0.1.0-preview.8` · OpenAlgo 2.0.2.7 · Windows and Linux**
+**Current preview: `0.1.0-preview.9` · OpenAlgo 2.0.2.7 · Windows and Linux**
 
-[**Download OpenAlgo Research**](https://github.com/mamamiya7/openalgo-research/releases/download/research-v0.1.0-preview.8/openalgo-research-0.1.0-preview.8.zip)
+[**Download OpenAlgo Research**](https://github.com/mamamiya7/openalgo-research/releases/download/research-v0.1.0-preview.9/openalgo-research-0.1.0-preview.9.zip)
 · [Install and start](docs/research/RUNTIME.md)
-· [Release notes](docs/research/releases/0.1.0-preview.8.md)
+· [Release notes](docs/research/releases/0.1.0-preview.9.md)
 · [Architecture](docs/research/SYSTEM_MAP.md)
 · [Released source](https://github.com/mamamiya7/openalgo-research/tree/main)
 
-## What’s in preview.8
+## What’s in preview.9
 
 Upload a signal CSV or send a Chartink history, review your capital and trading
 rules, then choose **Backtest** or **Optimize → Automatic research**. The app
@@ -36,6 +36,12 @@ Date-only daily strategies stay on daily candles.
 - **A conclusion you can inspect.** Compare the original setup with proposed
   settings, later-window checks, costs and stability. Weak evidence keeps the
   original. This is a bounded historical search, not a universal optimum.
+- **Market suitability from saved prices.** See performance and sample sizes by
+  recorded market condition, with development and final-period findings separate.
+  This reporting adds no downloads, simulations or optimisation rules.
+- **Reliable automatic runs and recovery.** Fixes interruptions when starting,
+  resuming and recording portfolio-allocation proposals, plus the saved-study
+  analysis handoff. Trial choices have readable names and values.
 - **Reports and native trade charts.** Inspect tear-sheet statistics, Optuna plots,
   trial settings, entry/exit markers and saved-price bar replay without exporting
   your work to another research website.
@@ -49,12 +55,13 @@ qualified volume provenance; other brokers can use supported methods without
 that assumption. Optional Nautilus fixed/custom calculations have their own
 supported contract and Linux/WSL runtime.
 
-[Release notes](docs/research/releases/0.1.0-preview.8.md) ·
-[Qualification and limits](docs/research/RELEASE_ACCEPTANCE_20261022.md) ·
+[Release notes](docs/research/releases/0.1.0-preview.9.md) ·
+[Patch qualification and limits](docs/research/releases/0.1.0-preview.9.md#qualification) ·
 [Future roadmap](docs/research/DELIVERY_PLAN.md).
-The supported preview is complete; broader methods, regimes and assets are future
-increments. No new broker-connectivity or future-profit claim is implied by the
-synthetic installation checks.
+Preview.9 fixes the automatic worker and analysis handoffs found in a complete
+browser walkthrough, and makes recorded trial settings readable.
+The patch preserves existing calculation versions and search budgets. Broader
+methods and assets are outside this essential one-click batch.
 
 ## What do I need to download?
 
@@ -210,7 +217,7 @@ to preserve their accounts, broker settings and saved research.
 To develop from a Git checkout instead, first run `npm ci` and `npm run build` in
 `frontend`, then run the setup script from the repository root. GitHub's automatic
 **Source code** archives do not contain the built interface; use the named
-`openalgo-research-0.1.0-preview.8.zip` asset for the easy installation.
+`openalgo-research-0.1.0-preview.9.zip` asset for the easy installation.
 
 Use the [Chartink extension](extensions/chartink/README.md), or open **Tools →
 Backtest & Optimize** to upload a CSV or reuse saved signals. Review the settings

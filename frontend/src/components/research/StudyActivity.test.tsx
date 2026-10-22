@@ -398,6 +398,72 @@ describe('recorded walk-forward activity identity', () => {
         : 'Cluster inverse volatility · new entries'
     )
   })
+
+  it('shows the actual automatic choices instead of blank values and numbered settings', async () => {
+    vi.mocked(researchStudyActivity.get).mockResolvedValue(
+      receipt({
+        rows: [
+          row({
+            params: {
+              hypothesis: 'none',
+              'strategy-id.execution_choice': 'atr_2_4',
+              'strategy-id.stop_pct': 8.75,
+              'strategy-id.target_pct': 17.5,
+              'strategy-id.portfolio_choice': 'allocation_75',
+              'strategy-id.trailing_choice': 6.25,
+              'strategy-id.timing_choice': 'entry_0930',
+            },
+          }),
+        ],
+      })
+    )
+    mount({ recipeVersion: 'automatic-hypotheses-v16' })
+    await userEvent.click(await screen.findByRole('button', { name: /View settings for Fit 1/ }))
+    const dialog = screen.getByRole('dialog')
+    for (const label of [
+      'Entry condition',
+      'No additional filter',
+      'Exit method',
+      'ATR(14) · stop 2× · target 4×',
+      'Position sizing',
+      '75% of original allocation and trade size',
+      'Trailing stop',
+      '6.25%',
+      'Trading times',
+      'Entry from 09:30 IST',
+    ])
+      expect(dialog).toHaveTextContent(label)
+    expect(dialog).not.toHaveTextContent(/Setting \d/)
+    expect(dialog).not.toHaveTextContent('8.75%')
+    expect(dialog).not.toHaveTextContent('17.5%')
+  })
+
+  it('distinguishes unchanged choices and disabled trailing in the proposal dialog', async () => {
+    vi.mocked(researchStudyActivity.get).mockResolvedValue(
+      receipt({
+        rows: [
+          row({
+            params: {
+              'strategy-id.execution_choice': 'percent',
+              'strategy-id.portfolio_choice': 'original',
+              'strategy-id.trailing_choice': 0,
+              'strategy-id.timing_choice': 'original',
+            },
+          }),
+        ],
+      })
+    )
+    mount()
+    await userEvent.click(await screen.findByRole('button', { name: 'View settings for Trial 4' }))
+    const dialog = screen.getByRole('dialog')
+    for (const label of [
+      'Percentage stop and target',
+      'Original allocation and trade size',
+      'Off',
+      'Original trading times',
+    ])
+      expect(dialog).toHaveTextContent(label)
+  })
   it('keeps the 68-trial priority fit labels and selected global policy readable', async () => {
     const data = receipt({
       rows: [row({ number: 271, params: { 'portfolio.entry_priority': 'lower_stop_risk' } })],

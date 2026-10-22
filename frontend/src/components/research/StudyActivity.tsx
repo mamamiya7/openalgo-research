@@ -42,11 +42,62 @@ const parameterLabels: Record<string, string> = {
   hold_sessions: 'Holding sessions',
   hold_minutes: 'Holding minutes',
   trailing_pct: 'Trailing stop',
+  trailing_choice: 'Trailing stop',
+  timing_choice: 'Trading times',
   order_size_pct: 'Per-trade size',
   allocation_pct: 'Allocation',
   execution_choice: 'Exit method',
   portfolio_choice: 'Position sizing',
   entry_priority: 'Entry priority',
+}
+
+function settingValue(key: string, value: number | string): string {
+  const parameter = key.split('.').at(-1)
+  if (key === 'portfolio.entry_priority' && typeof value === 'string')
+    return entryPriorityLabel(value)
+  if (key === 'portfolio.allocation_mode')
+    return value === 'prior60_cluster_inverse_vol'
+      ? 'Cluster inverse volatility · new entries'
+      : value === 'original'
+        ? 'Original allocation'
+        : 'Not recorded'
+  if (key === 'hypothesis' && typeof value === 'string')
+    return value === 'none' ? 'No additional filter' : value.replaceAll('_', ' ')
+  if (parameter === 'timing_choice' && typeof value === 'string') {
+    if (value === 'original') return 'Original trading times'
+    const clock = /^(entry|exit)_(\d{2})(\d{2})$/.exec(value)
+    return clock
+      ? `${clock[1] === 'entry' ? 'Entry from' : 'Exit by'} ${clock[2]}:${clock[3]} IST`
+      : 'Not recorded'
+  }
+  if (parameter === 'execution_choice')
+    return (
+      (
+        {
+          percent: 'Percentage stop and target',
+          atr_1_2: 'ATR(14) · stop 1× · target 2×',
+          atr_1_3: 'ATR(14) · stop 1× · target 3×',
+          atr_2_3: 'ATR(14) · stop 2× · target 3×',
+          atr_2_4: 'ATR(14) · stop 2× · target 4×',
+        } as Record<string, string>
+      )[String(value)] ?? 'Not recorded'
+    )
+  if (parameter === 'portfolio_choice')
+    return (
+      (
+        {
+          original: 'Original allocation and trade size',
+          allocation_75: '75% of original allocation and trade size',
+          allocation_50: '50% of original allocation and trade size',
+          stop_risk: 'Stop-risk sizing · original allocation cap',
+          stop_risk_50: 'Stop-risk sizing · 50% allocation cap',
+        } as Record<string, string>
+      )[String(value)] ?? 'Not recorded'
+    )
+  if (parameter === 'trailing_choice' && value === 0) return 'Off'
+  if (finite(value))
+    return `${value}${key.endsWith('_pct') || parameter === 'trailing_choice' ? '%' : ''}`
+  return 'Not recorded'
 }
 const reasons: Record<string, string> = {
   calculation_failed: 'The calculation failed during this attempt.',
@@ -190,6 +241,7 @@ function Activity({
     'automatic-hypotheses-v16',
   ].includes(recipeVersion ?? '')
   function setting(key: string, index: number) {
+    if (key === 'hypothesis') return 'Entry condition'
     if (key === 'portfolio.entry_priority') return 'Account entry priority'
     if (key === 'portfolio.allocation_mode') return 'Portfolio allocation'
     const [strategyId, parameter] = key.split('.')
@@ -197,6 +249,18 @@ function Activity({
     const strategy = strategies.find((item) => item.id === strategyId)
     return `${label}${strategies.length > 1 && strategy ? ` · ${strategy.name}` : ''}`
   }
+
+  const visibleSettings = row
+    ? Object.entries(row.params).filter(([key]) => {
+        const [strategy, parameter] = key.split('.')
+        const method = row.params[`${strategy}.execution_choice`]
+        return !(
+          (parameter === 'stop_pct' || parameter === 'target_pct') &&
+          typeof method === 'string' &&
+          method.startsWith('atr_')
+        )
+      })
+    : []
 
   if (query.isPending)
     return <output className="block py-5 text-sm text-muted-foreground">Loading activity…</output>
@@ -432,22 +496,11 @@ function Activity({
               )}
               {Object.keys(row.params).length ? (
                 <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  {Object.entries(row.params).map(([key, value], index) => (
+                  {visibleSettings.map(([key, value], index) => (
                     <div key={key}>
                       <dt className="text-xs text-muted-foreground">{setting(key, index)}</dt>
                       <dd className="mt-1 text-sm font-medium tabular-nums">
-                        {key === 'portfolio.entry_priority' && typeof value === 'string'
-                          ? entryPriorityLabel(value)
-                          : key === 'portfolio.allocation_mode'
-                            ? value === 'prior60_cluster_inverse_vol'
-                              ? 'Cluster inverse volatility · new entries'
-                              : value === 'original'
-                                ? 'Original allocation'
-                                : '—'
-                            : finite(value)
-                              ? String(value)
-                              : '—'}
-                        {finite(value) && key.endsWith('_pct') ? '%' : ''}
+                        {settingValue(key, value)}
                       </dd>
                     </div>
                   ))}

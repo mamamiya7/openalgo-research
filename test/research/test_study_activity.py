@@ -644,6 +644,38 @@ def test_joint_stock_checkpoint_marks_categorical_proposal_durably(app):
     finalize(store, job_id, observer)
 
 
+@pytest.mark.parametrize("mode", ["original", "prior60_cluster_inverse_vol"])
+def test_current_allocation_proposal_is_recorded_and_checkpointed(app, mode):
+    store, job_id, observer = claimed(app, budget=408)
+    started = {
+        "kind": "proposal_started",
+        "number": 0,
+        "params": {"hypothesis": "none", "portfolio.allocation_mode": mode},
+        "config_id": "a" * 64,
+        "reused": False,
+    }
+    observer(started)
+    finished = complete(observer)
+    state = {
+        "calculation": {
+            "version": "automatic-hypotheses-v16",
+            "fits": {"fit1": {"trials": checkpoint(started, finished)["calculation"]["trials"]}},
+        }
+    }
+    with store.sessions.begin() as db:
+        observer.checkpoint(db, state)
+    rows = activity.read(store, OWNER, job_id)["rows"]
+    assert len(rows) == 1 and rows[0]["checkpointed"]
+    assert rows[0]["params"] == started["params"]
+    finalize(store, job_id, observer)
+
+
+@pytest.mark.parametrize("mode", ["unknown", "", True, 1, None])
+def test_activity_rejects_unregistered_allocation_modes(mode):
+    with pytest.raises(ValueError, match="allocation mode"):
+        activity._params({"portfolio.allocation_mode": mode})
+
+
 @pytest.mark.parametrize("offset,name", enumerate(("fit1", "fit2", "fit3", "search")))
 def test_expanding_fit_checkpoint_uses_global_observation_numbers(app, offset, name):
     store, job_id, observer = claimed(app, budget=192, replayed=offset * 48)

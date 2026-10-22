@@ -579,7 +579,9 @@ def _prepare_prices(
         from services.research_instruments import prepare_nautilus_instruments
 
         prepared = prepare_nautilus_instruments(prepared)
-    return prepared
+    # Acquisition and coverage admission have finished; calculations now use
+    # this retained snapshot, never the changing Historify archive.
+    return {**prepared, "frozen_prices": True}
 
 
 def _prepare_automatic_timing(
@@ -961,6 +963,12 @@ def run(
                 "prices": {"interval": evidence["snapshot"]["provenance"]["interval"]},
             }
         )
+    # Older daily checkpoints predate the acquisition marker. They reached
+    # this boundary through the verified, content-addressed inputs above.
+    # Mark their in-memory lifecycle without rewriting the saved artifact or
+    # changing a previously frozen mandate, recipe or candidate identity.
+    retained_evidence = evidence
+    evidence = {**evidence, "frozen_prices": True}
     if portfolio["engine"] == "nautilus":
         from research.connectors.nautilus_runtime import evaluate
     else:
@@ -1149,7 +1157,7 @@ def run(
         from research.market_suitability import enrich as enrich_market_suitability
 
         enrich_market_suitability(result, evidence)
-        return result, evidence
+        return result, retained_evidence
 
     calculation_evidence = evidence
     validation_evidence = None

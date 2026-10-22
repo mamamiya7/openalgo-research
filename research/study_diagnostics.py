@@ -70,7 +70,7 @@ def _reap(process):
 
 def payload(experiment, parameters):
     """Only the finite recorded proposal contract crosses the process boundary."""
-    from research.study_analysis import MAX_AXES, MAX_TRIALS
+    from research.study_analysis import MAX_TRIALS, parameter_limit
 
     if not isinstance(experiment, dict):
         raise ValueError("Study diagnostics need recorded proposals")
@@ -81,7 +81,7 @@ def payload(experiment, parameters):
         not isinstance(trials, list)
         or len(trials) > MAX_TRIALS
         or not isinstance(axes, dict)
-        or len(axes) > MAX_AXES
+        or len(axes) > parameter_limit(experiment.get("experiment_version"))
         or any(not isinstance(row, dict) for row in trials)
         or any(
             not isinstance(name, str) or not 1 <= len(name) <= 128 or not isinstance(axis, dict)
@@ -99,7 +99,8 @@ def payload(experiment, parameters):
     selected = {
         key: value
         for key, value in experiment.items()
-        if key in {"experiment_version", "trailing_research", "timing_research"}
+        if key
+        in {"experiment_version", "trailing_research", "timing_research", "execution_research"}
     }
     selected["trials"] = [
         {key: value for key, value in row.items() if key in TRIAL_FIELDS} for row in trials

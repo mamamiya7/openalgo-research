@@ -108,6 +108,7 @@ def test_one_job_prepares_daily_prices_runs_and_reopens_exactly(
     assert result["summary"]["initial_capital"] == 20000
     exported = client.get(f"/scanner-research/api/jobs/{job_id}/export")
     bundle = json.loads(exported.data)
+    assert bundle["inputs"]["frozen_prices"] is True
     assert (
         bundle["inputs"]["snapshot"]["provenance"]["native_price_policy"]
         == "openalgo-native-history-v1"

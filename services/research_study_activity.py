@@ -75,6 +75,12 @@ def _params(value):
     if not isinstance(value, dict) or len(value) > MAX_PARAMS:
         raise ValueError("Invalid study activity parameters")
     for key, item in value.items():
+        if key == "portfolio.allocation_mode":
+            from research.execution_search import ALLOCATION_MODES
+
+            if not isinstance(item, str) or item not in ALLOCATION_MODES:
+                raise ValueError("Invalid study activity account allocation mode")
+            continue
         if key == "portfolio.entry_priority":
             if not isinstance(item, str) or item not in {
                 "source",

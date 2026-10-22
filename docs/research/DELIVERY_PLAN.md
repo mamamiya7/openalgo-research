@@ -3,9 +3,8 @@
 ## Feature development order after the human audit
 
 **Revised 22 October 2026 following the user's scope correction.** This short
-plan replaces the broad method/engine roadmap as the active worklist. Preview.8
-is published; the next changes remain local until one coherent, tested batch is
-ready. Existing financial versions and saved evidence remain unchanged.
+plan replaces the broad method/engine roadmap as the active worklist. The preview.9 patch closes the observed journey gaps in one tested delivery
+batch; the earlier preview.8 acceptance remains historical. Existing financial versions and saved evidence remain unchanged.
 
 The product question is: **For these captured signals and my trading assumptions,
 which tested settings have the strongest support, and where do they struggle?**
@@ -19,24 +18,32 @@ then clicks Optimize. The app owns data preparation, applicable search and check
 | Signal import and broker data | Chartink/CSV capture, dates/counts, automatic interval/windows, shared Historify reuse and missing-only broker acquisition are implemented. |
 | Search and execution | Supported VectorBT/Optuna search, exits/trailing, timing, sizing, fixed risk/turnover/participation limits and initial correlation-aware allocation are implemented. |
 | Selection and validation | Chronological fits, separate final confirmation, costs/neighbours, symbol/date and seed checks, and original-setting fallback are implemented. Keep their current bounded budgets. |
-| Understanding the answer | Main findings, comparisons, reports and methods considered exist. Next: automatically explain descriptive market-condition performance using already-frozen data. |
+| Understanding the answer | Main findings, comparisons, reports and methods considered exist. Current automatic results include descriptive market-condition performance from frozen context, with development and final evidence separate. |
 | Save and return | Named setup save/reuse, saved reports, trade charts/replay and compatible pause/resume are implemented. Fix concrete journey failures if found. |
 | Distribution | Preview.8 installation and platform acceptance passed. Batch subsequent installation, restart and Git/publication work. |
 
 ## Remaining implementation order
 
-1. **Automatic market suitability — current coding batch.** Reuse the existing
+**Essential batch completed in preview.9.** The actual browser import → automatic
+research → analysis → tested report → named save → library reopen → reused-setup
+backtest passed. A real pause/restart/resume retained completed work. Four observed
+worker/analysis handoff gaps and unreadable trial choices were corrected; no new
+methods, search budgets or numerical policies were added. 81 focused backend and
+89 frontend checks pass. The sequence below records this completed batch; it does
+not open another feature programme. Further work should respond to observed use.
+
+1. **Automatic market suitability — complete.** Reuse the existing
    historical Nifty classifier and saved-trade cohort analysis after the optimizer
    has frozen its answer. Show a compact development-period observation with trade
    and distinct-entry-date support. Keep final-period attribution separate. Sparse
    or unknown conditions stay explicit. This is descriptive attribution, not a new
    strategy filter or a forecast. No additional broker downloads or account
    simulations; reuse the existing indicator classifier for each reported period.
-2. **Close concrete one-click journey gaps.** Check one representative import →
+2. **Close concrete one-click journey gaps — complete.** Check one representative import →
    Optimize → understood result → named save → reuse journey. Fix observed blocks,
    unclear waiting states or missing essential intent. No redesign, new dashboard,
    repeated audit campaign or indicator menu without a demonstrated user need.
-3. **One delivery batch.** Run the relevant existing checks plus focused tests for
+3. **One delivery batch — preview.9.** Run the relevant existing checks plus focused tests for
    changed behavior, build once when delivering the UI, install/restart once when
    safe, and push one reviewed batch. Record user-visible changes and remaining
    limitations once; do not create separate activation/documentation commits.
