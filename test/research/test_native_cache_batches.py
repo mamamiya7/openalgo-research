@@ -69,8 +69,39 @@ def test_batch_and_sequential_reads_freeze_identical_evidence_and_count_once(tmp
     )
     assert sequential == batched
     assert list(map(len, batches)) == [16, 16, 1]
-    assert len(saved) == 5  # three cache groups, before downloads, final verification
+    assert len(saved) == 3  # two partial cache groups, then final verification
+    assert saved[-1] == batched["acquisition_checkpoint"]
     assert batched["acquisition_checkpoint"]["activity"]["prices"]["cached_candles"] == 66
+
+
+@pytest.mark.parametrize("count", [1, 16])
+def test_complete_cached_group_commits_once_and_resume_retains_exact_evidence(tmp_path, count):
+    signals, plan, calendar, rows = fixture(count)
+    saved = []
+    result = acquire_native_prices(
+        signals,
+        plan,
+        calendar,
+        **options(tmp_path, rows),
+        reader_many=lambda requests, **_: [copy.deepcopy(rows) for _ in requests],
+        checkpoint=lambda state: saved.append(copy.deepcopy(state)),
+    )
+    assert len(saved) == 1
+    assert saved[0] == result["acquisition_checkpoint"]
+    assert saved[0]["progress"]["phase"] == "checking_prices"
+    resumed = acquire_native_prices(
+        signals,
+        plan,
+        calendar,
+        **{**options(tmp_path, rows), "reader": forbidden},
+        prior=saved[0],
+    )
+    assert {key: value for key, value in resumed.items() if key != "acquisition_checkpoint"} == {
+        key: value for key, value in result.items() if key != "acquisition_checkpoint"
+    }
+    # Existing recovery normalisation discards cache-window markers for symbols
+    # already completely covered by the admitted immutable prices.
+    assert resumed["acquisition_checkpoint"] == {**saved[0], "cache_checked_windows": []}
 
 
 def test_cancellation_mid_admission_saves_completed_cache_units_and_resume_does_not_download(

@@ -320,7 +320,10 @@ def test_no_checkpoint_and_changed_publication_remain_read_only(saved, client, m
         return value
 
     monkeypatch.setattr(service, "read_artifact", changed)
-    assert client.get(URL).json["available"] is False
+    result = client.get(URL).json
+    assert result["available"] is False
+    assert result["reason"] == "Updating saved progress…"
+    assert result["latest"] is result["best"] is result["baseline"] is None
     assert client.get(URL).json["available"] is False
 
 

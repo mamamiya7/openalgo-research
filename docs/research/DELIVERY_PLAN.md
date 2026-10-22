@@ -24,6 +24,15 @@ then clicks Optimize. The app owns data preparation, applicable search and check
 
 ## Remaining implementation order
 
+**22 October bounded Chrome acceptance:** the complete unchanged automatic
+programme passed on 149 real CSV rows/29 stocks, through verified saved reports
+and a named setup. Actual optimisation was 21m17s active /32m04s elapsed, including
+two pauses for measured corrections. The exact report took 9.869s. Preview.13
+removes redundant cached checkpoints and per-bar pause writes; checks and budgets
+are unchanged. Quick-run performance remains a gap. Do not present this
+interrupted subset as a clean latest-build or full-file benchmark. Feature
+expansion remains frozen. [Evidence](VERIFICATION.md#small-real-csv-chrome-acceptance--22-october-2026).
+
 **22 October preparation batch:** first-use stock warm-up history now overlaps
 up to two missing windows through the native rate-limited service, retaining
 ordered exact admission and verification. Existing stock context reuse is verified

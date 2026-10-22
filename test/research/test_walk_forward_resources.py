@@ -97,3 +97,45 @@ def test_already_cancelled_job_does_not_copy_or_validate_history(monkeypatch):
 
     with pytest.raises(Stopped):
         worker.run({}, evaluate=None, checkpoint=None, progress=None, cancelled=cancelled)
+
+
+@pytest.mark.parametrize("cancel_at", [None, 3])
+def test_engine_ticks_keep_live_cancellation_without_acknowledging_pause_mid_account(
+    monkeypatch, cancel_at
+):
+    value = prepared()
+    monkeypatch.setattr(worker, "prepare_gate", synthetic_prepare_gate)
+    in_account, ticks, checks, boundaries, saved = False, 0, 0, 0, []
+
+    def boundary():
+        nonlocal boundaries
+        assert not in_account, "Pause acknowledgement must not interrupt an unfinished account"
+        boundaries += 1
+
+    def cancelled():
+        nonlocal checks
+        if in_account:
+            checks += 1
+            if checks == cancel_at:
+                raise Stopped()
+
+    def engine(*_args, progress, **_kwargs):
+        nonlocal in_account, ticks
+        in_account = True
+        for tick in range(10):
+            ticks += 1
+            progress(tick + 1, 10)
+        raise Stopped()
+
+    with pytest.raises(Stopped):
+        worker.run(
+            value,
+            evaluate=engine,
+            checkpoint=lambda state, _: saved.append(deepcopy(state)),
+            progress=lambda *_: None,
+            cancelled=cancelled,
+            boundary=boundary,
+        )
+    assert boundaries > 0
+    assert ticks == checks == (cancel_at or 10)
+    assert saved[-1]["attempts"] == 1 and saved[-1]["simulations"] == 0

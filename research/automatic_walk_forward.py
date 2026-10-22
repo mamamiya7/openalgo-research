@@ -725,7 +725,10 @@ def _run(
             current["snapshot"],
             capital,
             progress=lambda done, total: (
-                control(),
+                # Keep the live cancellation/lease read on every engine tick.
+                # Pause acknowledgement belongs to completed-calculation
+                # boundaries, not an extra writer transaction for every bar.
+                cancelled(),
                 progress(state["simulations"] + min(1, done / max(1, total)), max_simulations),
             ),
         )

@@ -136,6 +136,7 @@ def read(store, owner, job_id):
     }
     if kind != "portfolio_optimize" or not digest:
         return response
+    updating = False
     try:
         envelope = service.read_artifact(store, digest, max_bytes=MAX_CHECKPOINT_BYTES + 1024**2)
         if not isinstance(envelope, dict) or envelope.get("identity") != identity:
@@ -259,6 +260,7 @@ def read(store, owner, job_id):
             if current_job is None or current_job.owner != owner:
                 raise LookupError("Research run not found")
             if not native or native.checkpoint != digest or current_job.status != status:
+                updating = True
                 raise ValueError("A newer checkpoint is being published")
             response["pace"]["seconds_per_trial"] = _pace(
                 db, owner, job_id, calculation, trials, budget
@@ -268,7 +270,11 @@ def read(store, owner, job_id):
     except (KeyError, TypeError, ValueError, AttributeError, OSError, ArithmeticError):
         response.update(
             available=False,
-            reason="Committed progress could not be verified. The run and its saved results are unchanged.",
+            reason=(
+                "Updating saved progress…"
+                if updating
+                else "Committed progress could not be verified. The run and its saved results are unchanged."
+            ),
             fit=None,
             latest=None,
             best=None,

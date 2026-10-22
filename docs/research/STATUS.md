@@ -1,5 +1,22 @@
 # OpenAlgo Research status
 
+## Small automatic journey and remaining runtime limit — 22 October 2026
+
+Chrome acceptance completed a labelled real-CSV subset: 149 original rows,
+29 stocks, every original signal date, unchanged v16 budgets/checks, 272 proposals
+and 296 accounts. All 294 development histories, 875 native executable candles,
+saved report and named reusable setup verified. No new downloads or live orders.
+Original settings were retained under the historical-only label.
+
+Optimisation took 21m17s active /32m04s elapsed, including 10m47s paused for measured
+corrections; the exact report took 9.869s. Complete-cache saves and duplicate
+per-bar pause writes are corrected in preview.13, with exact evidence/native
+report comparisons and 94 focused passing checks. This interrupted sample is not
+an uninterrupted latest-build or full-file runtime benchmark. Functional acceptance
+passes; quick-run performance remains a consumer-readiness limitation. See
+[verification](VERIFICATION.md#small-real-csv-chrome-acceptance--22-october-2026).
+Feature development remains frozen.
+
 ## Before-search data preparation — 22 October 2026
 
 The original full-CSV run checked all 9,028 executable candles from cache in about
@@ -1616,6 +1633,23 @@ this preview. Research export does not activate paper/live strategies.
 The following 30 September record describes public preview.7, not the newer development build.
 
 # OpenAlgo Research status
+
+## Small automatic journey and remaining runtime limit — 22 October 2026
+
+Chrome acceptance completed a labelled real-CSV subset: 149 original rows,
+29 stocks, every original signal date, unchanged v16 budgets/checks, 272 proposals
+and 296 accounts. All 294 development histories, 875 native executable candles,
+saved report and named reusable setup verified. No new downloads or live orders.
+Original settings were retained under the historical-only label.
+
+Optimisation took 21m17s active /32m04s elapsed, including 10m47s paused for measured
+corrections; the exact report took 9.869s. Complete-cache saves and duplicate
+per-bar pause writes are corrected in preview.13, with exact evidence/native
+report comparisons and 94 focused passing checks. This interrupted sample is not
+an uninterrupted latest-build or full-file runtime benchmark. Functional acceptance
+passes; quick-run performance remains a consumer-readiness limitation. See
+[verification](VERIFICATION.md#small-real-csv-chrome-acceptance--22-october-2026).
+Feature development remains frozen.
 
 Updated: 30 September 2026. Release candidate: **`0.1.0-preview.7`**, targeting OpenAlgo 2.0.2.5.
 

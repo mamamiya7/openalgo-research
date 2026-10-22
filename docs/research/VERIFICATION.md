@@ -1,5 +1,44 @@
 # OpenAlgo Research verification
 
+## Small real-CSV Chrome acceptance — 22 October 2026
+
+A labelled subset of 149 unchanged CSV rows across 29 stocks retained every one
+of the original file's 149 signal dates. The ordinary installation completed the
+same automatic v16 programme: 272 proposals, 296 account calculations and all
+294 development histories retained and verified. All 875 executable daily candles
+matched native Historify; no new broker download or live order was made.
+Historical-only mode remained explicit. No candidate qualified, so original
+settings were retained. The exact report and a named reusable setup were saved
+and reopened in Chrome. The 73 prior runs and trading/configuration were preserved.
+
+Optimisation measured **1,276.650 seconds active (21m17s)** and **1,923.699 seconds
+elapsed (32m04s)**, including **647.049 seconds paused for two measured fixes**.
+The exact reusable report took **9.869 seconds**; Optuna analysis took 2.445 seconds.
+These are sample measurements with operator interventions, not an uninterrupted
+after-all-fixes benchmark, a fresh-download test or the full 1,850-row CSV runtime.
+Runtime remains too long to describe this as a quick consumer run.
+
+Profiling the normal store exposed repeated publication scans after complete
+cached reads. Coalescing their redundant checkpoints preserves identical final
+outputs/receipts, all partial/broker/interruption saves and strict publication
+quotas. It does not cache quota estimates. A controlled fixture reduced 87 saves
+to 29 and strict-scan callback time from 23.790 to 9.752 seconds; synthetic OHLC
+makes this a persistence benchmark only.
+
+Per-bar progress also called a pause-boundary writer in addition to its existing
+live cancellation/ownership read. The duplicate writer was removed from engine
+ticks; live reads and periodic heartbeats remain, and pause acknowledgement stays
+at completed-calculation boundaries. Six actual-sample native accounts retained
+identical reports: 3.839 to 1.094 seconds median with isolated control metadata,
+excluding common progress, publication and other search work. A normal concurrent
+progress read/save now says “Updating saved progress…”; corruption still fails
+closed. No financial version, seed, budget or validation check was reduced.
+
+94 focused checks passed; two platform-specific checks skipped. Resource checks
+cover repeated prepared-owner cleanup and live reads; no new cache, client, thread
+or open handle was added. Dependency/host/setup contracts are unchanged, so the
+full platform matrix was not repeated. Preview.13 packages these narrow fixes.
+
 ## Before-search stock preparation — 22 October 2026
 
 Preview.12 targets first-time auxiliary stock history and derived feature work.

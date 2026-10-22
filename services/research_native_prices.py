@@ -654,7 +654,12 @@ def _acquire_prices(
                 if reader_many:
                     check()
             del row_groups, rows
-            save()
+            # A fully cached final group needs only the final verification
+            # checkpoint below. There is no broker work in between. Earlier
+            # groups and incomplete coverage still commit before moving on;
+            # cancellation/time-budget handlers also save admitted cache units.
+            if offset + len(batch) < len(reads) or covered < total or state["hard_failures"]:
+                save()
         logger.info(
             "Research Historify check: %d windows, %d symbols, %.3fs, %d cached candles",
             len(reads),
@@ -669,7 +674,8 @@ def _acquire_prices(
         report(download_start, "broker_prices")
         if requests:
             emit("download")
-        save()
+        if requests or covered < total or state["hard_failures"]:
+            save()
         # Only missing daily context windows may overlap. Responses are admitted
         # in original order; persistence, readback, receipts and checkpoints stay
         # on this thread. At most two already returned responses are retained.
