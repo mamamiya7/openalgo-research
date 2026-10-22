@@ -49,6 +49,7 @@ REQUIRED_RESEARCH_FILES = {
     "research/connectors/optuna_adapter.py",
     "research/portfolio.py",
     "research/canonical_json.py",
+    "research/market_suitability.py",
     "research/analytics.py",
     "research/report_contract.py",
     "research/evaluation_basis.py",

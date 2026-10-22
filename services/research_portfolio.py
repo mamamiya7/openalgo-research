@@ -1146,6 +1146,9 @@ def run(
         if development_writer is not None:
             result["development_evidence"] = development_writer.snapshot(complete=True)
             result["research_mandate"] = research_mandate
+        from research.market_suitability import enrich as enrich_market_suitability
+
+        enrich_market_suitability(result, evidence)
         return result, evidence
 
     calculation_evidence = evidence

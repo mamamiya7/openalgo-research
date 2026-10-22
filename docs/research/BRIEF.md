@@ -1,5 +1,10 @@
 # Native OpenAlgo Research
 
+Active development is limited to the [essential one-click plan](DELIVERY_PLAN.md).
+Finish understandable automatic findings and fix observed journey gaps using the
+existing engines/data/search programme. Broader method/asset/adaptive-policy and
+calibration expansion is outside the active queue. Batch verification and delivery.
+
 Public distribution: `0.1.0-preview.8`, on reviewed OpenAlgo 2.0.2.7, with v16
 bounded automatic research, execution/risk constraints, causal portfolio
 allocation, chronological checks, saved evidence and native trade charts.

@@ -6,6 +6,7 @@ import type {
   WalkForwardFindings,
 } from '@/api/portfolioResearch'
 import { AnalysisFigure } from './AnalysisCharts'
+import { MarketSuitability } from './MarketSuitability'
 import { MethodCoverage } from './MethodCoverage'
 import { researchDates, strategyRuleSummary } from './researchPresentation'
 import { researchRecipeLabel } from './researchRecipeLabels'
@@ -411,6 +412,7 @@ export function AutomaticResearchFindings({
             ))}
         </div>
       </div>
+      <MarketSuitability suitability={findings.market_suitability} />
       {final && (
         <div className="mt-5 space-y-3">
           <p className="text-xs text-muted-foreground">

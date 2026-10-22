@@ -230,6 +230,20 @@ export interface MarketConditionsAnalysis {
   basis: string[]
   recipe: Record<string, unknown>
 }
+export interface MarketSuitabilityPeriod {
+  dates: { from: string; to: string }
+  coverage: MarketConditionsAnalysis['coverage']
+  cohorts: MarketConditionsAnalysis['cohorts']
+  finding: MarketConditionsAnalysis['finding']
+}
+export interface MarketSuitabilityFindings {
+  version: 'research-market-suitability-v1'
+  status: 'available' | 'partial' | 'unavailable'
+  reason?: string
+  development?: MarketSuitabilityPeriod
+  final?: MarketSuitabilityPeriod
+  limitations: string[]
+}
 export interface ConditionSelection {
   strategy_id: string
   dimension: 'trend' | 'volatility'
@@ -597,6 +611,7 @@ export interface WalkForwardFindings {
   selection_policy: string
 }
 export interface AutomaticResearchFindings {
+  market_suitability?: MarketSuitabilityFindings
   recommendation_checks?: {
     version: string
     status: 'supported' | 'not_supported' | 'insufficient' | 'unsupported'

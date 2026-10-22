@@ -1,5 +1,18 @@
 # OpenAlgo Research status
 
+## Essential one-click batch — 22 October 2026
+
+The user narrowed the active [delivery plan](DELIVERY_PLAN.md#remaining-implementation-order)
+to a complete one-click research journey. Broad method, allocation, regime-policy,
+engine/asset and calibration expansion is removed from the active queue.
+The reporting connection is implemented locally: current automatic results include
+development and separate final-period market-condition cohorts from frozen prices,
+with no extra downloads or account simulations. Existing selection rules, saved
+recipes and account results are unchanged. The focused backend and frontend
+checks pass; this batch is not installed or pushed. Preview.8 remains the
+installed/public release.
+Verification stays focused; installation and Git pushes are batched.
+
 ## Supported preview.8 completed — 22 October 2026
 
 The finite [release closure](RELEASE_FINISH_20261022.md) is complete for its

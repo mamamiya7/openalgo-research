@@ -61,6 +61,52 @@ function findings(): Findings {
 }
 
 describe('automatic research findings', () => {
+  it('integrates descriptive suitability without replacing the recommendation or promoting final conditions', async () => {
+    const data = findings()
+    const development = {
+      dates: { from: '2026-01-01', to: '2026-05-30' },
+      coverage: {
+        total_sessions: 100,
+        classified_sessions: 90,
+        closed_trades: 40,
+        classified_trades: 35,
+        unclassified_trades: 5,
+      },
+      cohorts: [],
+      finding: {
+        status: 'observed' as const,
+        text: 'Development trades had stronger average returns in rising conditions.',
+        next_step: 'A separate test is required.',
+      },
+    }
+    data.market_suitability = {
+      version: 'research-market-suitability-v1',
+      status: 'partial',
+      development,
+      final: {
+        ...development,
+        dates: { from: '2026-08-01', to: '2026-09-10' },
+        coverage: { ...development.coverage, closed_trades: 50, classified_trades: 45 },
+        finding: { ...development.finding, text: 'Final-only high-volatility winner' },
+      },
+      limitations: [],
+    }
+    const original = structuredClone(data)
+    render(<AutomaticResearchFindings findings={data} />)
+    expect(screen.getByRole('heading', { name: original.headline })).toBeVisible()
+    const suitability = screen.getByRole('region', { name: 'Market suitability' })
+    expect(within(suitability).getByText(development.finding.text)).toBeVisible()
+    expect(within(suitability).getByText(/35 of 40 closed trades classified/)).toBeVisible()
+    expect(screen.getByText('Checked on later dates and with higher trading costs.')).toBeVisible()
+    await userEvent.click(within(suitability).getByText('View condition breakdown'))
+    expect(
+      within(suitability).getByRole('region', { name: 'Final market conditions' })
+    ).toBeVisible()
+    expect(screen.queryByText('Final-only high-volatility winner')).not.toBeInTheDocument()
+    expect(data).toEqual(original)
+    expect(data.status).toBe('supported')
+  })
+
   it('keeps repeated-search evidence collapsed and separate from the primary study', async () => {
     const data = findings()
     data.version = 'automatic-hypotheses-v15'
