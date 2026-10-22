@@ -1,6 +1,50 @@
 # OpenAlgo Research verification
 
-Current checkpoint: 9 September 2026, `0.1.0-preview.4`. **Local acceptance is
+## Broker history and cache acceptance — 22 October 2026
+
+The operator's normal Windows installation was tested through Chrome using an
+unchanged real CSV: 1,850 dated signals across 144 NSE stocks. After the operator
+reconnected an expired Fyers session, ordinary OpenAlgo history supplied missing
+daily and one-minute prices. No orders or trading-mode changes were made.
+
+| Scenario | Native evidence | End-to-end worker time |
+|---|---|---|
+| Daily, full CSV, one-session maximum hold | 2,932 cached candles; 29 newly admitted Fyers candles in 25 successful broker requests; all 2,961 required candles available | 101.764 s |
+| Identical fresh daily job before runtime correction | 2,961 cached candles; 144 archive-read receipts; zero broker receipts; identical OHLC and summary | 37.387 s |
+| Intraday, four actual signals dated 19 October, 15-minute maximum hold | Explicit next-session execution on 21 October; 64 newly admitted minute candles in four successful Fyers requests | 8.217 s |
+| Identical fresh intraday job | 64 cached minute candles; four archive-read receipts; zero broker receipts; identical OHLC and summary | 1.153 s |
+| Daily after correction, first account calculation after app restart | Same 2,961 cached candles, no broker requests, identical results; includes engine import/compilation | 44.552 s |
+| Daily after correction, warm calculation process | Same 2,961 cached candles, no broker requests, identical results | 13.885 s |
+
+The CSV contains dates, not intraday observation times. The minute scenario tests
+explicit next-session intraday trading from real dated observations; it does not
+claim to reconstruct an intraday scanner history. These are fixed-account data
+acceptance runs, not a fresh full automatic-search benchmark. Initial daily timing
+also includes first-use calculation startup and must not be described as pure
+network download time. No cache was deleted to manufacture missing prices.
+
+Every saved executable OHLC was compared against native Historify readback,
+receipt hashes verified, and cold/warm summaries matched exactly. All 63 prior
+saved results and the environment configuration were preserved. Earlier cached
+prices retain unknown original-provider provenance; only the new broker receipts
+establish fresh Fyers origin. Other brokers and broader intraday histories were
+not qualified by this run. Private CSVs, source/result identities and profiling
+receipts stay outside Git under ignored `.agent-native/`.
+
+The active-worker profile exposed repeated full-storage scans inside account
+progress callbacks. Portfolio progress now samples quota at most once per ten
+seconds per job, while retaining the existing progress/cancellation/worker fence
+and strict admission for every new artifact/checkpoint publication. No search,
+pricing, execution or result mathematics changed. The correction was installed
+and the idle application restarted once for activation. Four new focused cases
+cover scan frequency, cancellation, worker replacement and immediate publication
+quota rejection. The affected worker/publication suite passed **36 checks with
+two platform-specific skips**; lint passed. Source/package publication is a
+separate delivery step; the existing preview.9 ZIP is unchanged by local testing.
+
+## Historical preview.4 checkpoint
+
+Checkpoint: 9 September 2026, `0.1.0-preview.4`. **Local acceptance is
 complete for the declared native joint-portfolio scope.** Full Docker application
 acceptance, cross-version
 migrations beyond the targeted calendar update, hosted operation and universal

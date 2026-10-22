@@ -1,5 +1,24 @@
 # OpenAlgo Research status
 
+## Broker-backed acceptance — 22 October 2026
+
+Feature development remains frozen. Chrome acceptance on the normal installation
+passed fresh Fyers daily and minute downloads, shared Historify persistence,
+identical fresh-job cache reuse and exact native OHLC/result comparisons using a
+real CSV. Full daily scope was 1,850 signals/144 symbols; the bounded intraday
+scenario used four actual dated observations with explicit next-session execution.
+This does not establish full intraday scanner history or a new automatic-search
+runtime benchmark. [Verification](VERIFICATION.md#broker-history-and-cache-acceptance--22-october-2026)
+records scope and timing separately from earlier controlled-fixture acceptance.
+
+One measured runtime defect was corrected: portfolio progress no longer scans
+the complete research store every quarter second. Strict evidence-publication
+quotas and cancellation/lease fencing remain in place. Warm daily runtime fell
+from 37.387 to 13.885 seconds with identical prices and summaries; minute reuse
+took 1.153 seconds with zero broker requests. 36 affected checks passed, two
+platform-specific checks skipped. The correction is installed locally; preview.9
+download assets have not been republished. No new methods or UI work were added.
+
 ## Essential one-click patch — 22 October 2026
 
 The active [delivery plan](DELIVERY_PLAN.md#remaining-implementation-order) remains

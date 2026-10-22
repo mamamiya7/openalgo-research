@@ -41,6 +41,7 @@ from utils.logging import get_logger
 logger = get_logger(__name__)
 LEASE_SECONDS = 120
 NETWORK_HEARTBEAT_SECONDS = 1
+STORAGE_CHECK_INTERVAL_SECONDS = 10
 WORKING = ("running", "pausing")
 
 
@@ -172,6 +173,7 @@ def run_one(store, token, stop_requested=None):
     saved = None
     policy = POLICY_VERSION
     last_update = 0.0
+    last_storage_check = float("-inf")
     activity_state = json.loads(experiment.counts).get("activity") if experiment else None
     last_activity_update = float("-inf")
     study_observer = (
@@ -253,7 +255,7 @@ def run_one(store, token, stop_requested=None):
         last_activity_update = now
 
     def progress(completed, total, force=False, *, check_storage=True):
-        nonlocal last_update
+        nonlocal last_update, last_storage_check
         # Session-level cancellation remains bounded without a SQLite transaction
         # for every session of every grid configuration.
         now = time.monotonic()
@@ -262,13 +264,27 @@ def run_one(store, token, stop_requested=None):
         if stop_requested and stop_requested():
             raise Interrupted("Worker shutdown requested")
         last_update = now
-        if check_storage and kind in (
-            "acquire",
-            "evidence_update",
-            "portfolio_backtest",
-            "portfolio_optimize",
+        if (
+            check_storage
+            and kind
+            in (
+                "acquire",
+                "evidence_update",
+                "portfolio_backtest",
+                "portfolio_optimize",
+            )
+            and (
+                kind not in ("portfolio_backtest", "portfolio_optimize")
+                or now - last_storage_check >= STORAGE_CHECK_INTERVAL_SECONDS
+            )
         ):
+            # An account tick writes no price/evidence files. Rewalking the
+            # complete research archive four times a second can dominate the
+            # simulation on Windows. Keep periodic admission here; checkpoints
+            # and result/artifact publication still enforce capacity on every
+            # write, independently of this job-local progress interval.
             ensure_storage_capacity(store)
+            last_storage_check = now
         with store.sessions.begin() as db:
             lease = db.get(ResearchWorker, 1)
             current = db.get(ResearchJob, job.id)
