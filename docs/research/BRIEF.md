@@ -1,10 +1,12 @@
 # Native OpenAlgo Research
 
-Public distribution: `0.1.0-preview.7`, on OpenAlgo 2.0.2.5. The October7
-development increment targets `0.1.0-preview.8` on the reviewed OpenAlgo
-2.0.2.7 source after the October11 integration. It adds bounded joint stock/market search and native saved-chart
-Values; it is not yet a public release. See [STATUS.md](STATUS.md) and the
-[current implementation contract](NATIVE_REFINEMENT_20261007.md) for acceptance.
+Public distribution: `0.1.0-preview.7`, on OpenAlgo 2.0.2.5. Current development
+targets `0.1.0-preview.8` on reviewed OpenAlgo 2.0.2.7, with v16 bounded automatic
+research, execution/risk constraints, causal portfolio allocation, chronological
+validation, saved evidence and native trade charts. Feature expansion is frozen
+while the supported release is finished. It is not yet a public release. See
+[STATUS.md](STATUS.md), the [delivery plan](DELIVERY_PLAN.md) and the finite
+[release closure](RELEASE_FINISH_20261022.md) for current acceptance.
 The following baseline verification was recorded on 9 September.
 
 The native joint

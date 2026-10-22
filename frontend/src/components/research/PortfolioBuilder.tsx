@@ -908,126 +908,136 @@ export function PortfolioBuilder({
               'automatic-hypotheses-v15',
               'automatic-hypotheses-v16',
             ].includes(portfolio.automatic_research?.version ?? '')) && (
-            <fieldset disabled={disabled} className="mt-4 grid gap-3 sm:grid-cols-3">
-              <legend className="mb-2 text-sm font-medium">Portfolio limits</legend>
-              {(
-                [
-                  ['max_gross_exposure_pct', 'Gross exposure %'],
-                  ['max_symbol_exposure_pct', 'Per symbol %'],
-                  ['max_open_positions', 'Open positions'],
-                  ['max_trade_risk_pct', 'Risk per trade %'],
-                  ['max_total_stop_risk_pct', 'Total stop risk %'],
-                  ...(portfolio.risk_limits?.version === 'research-risk-limits-v3'
-                    ? [
-                        [
-                          'max_daily_volume_participation_pct',
-                          'Daily volume participation %',
-                        ] as const,
-                        ['max_correlated_exposure_pct', 'Correlated exposure %'] as const,
-                      ]
-                    : []),
-                  ...(['research-risk-limits-v2', 'research-risk-limits-v3'].includes(
-                    portfolio.risk_limits?.version ?? ''
-                  )
-                    ? [['max_daily_buy_turnover_pct', 'Daily buy budget %'] as const]
-                    : []),
-                ] as const
-              ).map(([key, label]) => (
-                <div className="space-y-1" key={key}>
-                  <Label htmlFor={`risk-${key}`}>{label}</Label>
-                  <Input
-                    id={`risk-${key}`}
-                    type="number"
-                    min={key === 'max_open_positions' ? 1 : 0.01}
-                    max={
-                      key === 'max_open_positions'
-                        ? 200
-                        : key === 'max_daily_volume_participation_pct'
-                          ? 10
-                          : key === 'max_daily_buy_turnover_pct'
-                            ? 1000
-                            : 100
-                    }
-                    step={key === 'max_open_positions' ? 1 : 0.01}
-                    value={(portfolio.risk_limits ?? defaultRiskLimits)[key]}
-                    onChange={(event) => {
-                      const limits = {
-                        ...(portfolio.risk_limits ?? defaultRiskLimits),
-                        [key]: Number(event.target.value),
+            <details className="mt-4 text-sm">
+              <summary className="w-fit cursor-pointer rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4">
+                Portfolio limits
+                <span className="ml-2 text-xs text-muted-foreground">
+                  {(portfolio.risk_limits ?? defaultRiskLimits).max_gross_exposure_pct}% exposure ·{' '}
+                  {(portfolio.risk_limits ?? defaultRiskLimits).max_symbol_exposure_pct}% per symbol
+                </span>
+              </summary>
+              <fieldset disabled={disabled} className="mt-3 grid gap-3 sm:grid-cols-3">
+                <legend className="sr-only">Edit portfolio limits</legend>
+                {(
+                  [
+                    ['max_gross_exposure_pct', 'Gross exposure %'],
+                    ['max_symbol_exposure_pct', 'Per symbol %'],
+                    ['max_open_positions', 'Open positions'],
+                    ['max_trade_risk_pct', 'Risk per trade %'],
+                    ['max_total_stop_risk_pct', 'Total stop risk %'],
+                    ...(portfolio.risk_limits?.version === 'research-risk-limits-v3'
+                      ? [
+                          [
+                            'max_daily_volume_participation_pct',
+                            'Daily volume participation %',
+                          ] as const,
+                          ['max_correlated_exposure_pct', 'Correlated exposure %'] as const,
+                        ]
+                      : []),
+                    ...(['research-risk-limits-v2', 'research-risk-limits-v3'].includes(
+                      portfolio.risk_limits?.version ?? ''
+                    )
+                      ? [['max_daily_buy_turnover_pct', 'Daily buy budget %'] as const]
+                      : []),
+                  ] as const
+                ).map(([key, label]) => (
+                  <div className="space-y-1" key={key}>
+                    <Label htmlFor={`risk-${key}`}>{label}</Label>
+                    <Input
+                      id={`risk-${key}`}
+                      type="number"
+                      min={key === 'max_open_positions' ? 1 : 0.01}
+                      max={
+                        key === 'max_open_positions'
+                          ? 200
+                          : key === 'max_daily_volume_participation_pct'
+                            ? 10
+                            : key === 'max_daily_buy_turnover_pct'
+                              ? 1000
+                              : 100
                       }
-                      update({
-                        risk_limits: limits,
-                        strategies: portfolio.strategies.map((row) =>
-                          row.execution_policy
-                            ? {
-                                ...row,
-                                execution_policy: {
-                                  ...row.execution_policy,
-                                  risk_limits: limits,
-                                },
-                              }
-                            : row
-                        ),
-                      })
-                    }}
-                  />
-                </div>
-              ))}
-              <p className="text-xs text-muted-foreground sm:col-span-3">
-                Limits apply when entering trades. Gaps can exceed a stop.
-                {portfolio.risk_limits?.version === 'research-risk-limits-v3' &&
-                  ' Volume uses prior broker history; correlation uses prior completed returns. These are fixed backtest assumptions.'}
-                {['research-risk-limits-v2', 'research-risk-limits-v3'].includes(
-                  portfolio.risk_limits?.version ?? ''
-                ) && ' Daily buy budget uses opening account value; exits remain unrestricted.'}
-              </p>
-              {[
-                'automatic-hypotheses-v13',
-                'automatic-hypotheses-v14',
-                'automatic-hypotheses-v15',
-                'automatic-hypotheses-v16',
-              ].includes(portfolio.automatic_research?.version ?? '') && (
-                <label className="flex items-center gap-2 text-sm sm:col-span-3">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 accent-primary"
-                    checked={
-                      portfolio.strategies[0]?.execution_policy?.capacity_mode !== 'disabled'
-                    }
-                    onChange={(event) => {
-                      const limits = limitsForScope(
-                        portfolio.risk_limits,
-                        'automatic-hypotheses-v13'
-                      )
-                      update({
-                        risk_limits: limits,
-                        strategies: portfolio.strategies.map((row) => ({
-                          ...row,
-                          execution_policy: {
-                            version:
-                              portfolio.automatic_research?.version === 'automatic-hypotheses-v16'
-                                ? 'research-execution-aware-v5'
-                                : 'research-execution-aware-v4',
-                            ...(portfolio.automatic_research?.version === 'automatic-hypotheses-v16'
-                              ? { allocation_mode: 'original' as const }
-                              : {}),
-                            exit_mode: 'percent',
-                            sizing: 'allocation',
-                            entry_priority: 'source',
-                            risk_limits: limits,
-                            correlation_mode: 'prior60_positive_080',
-                            capacity_mode: event.target.checked
-                              ? 'prior20_broker_reported'
-                              : 'disabled',
-                          },
-                        })),
-                      })
-                    }}
-                  />
-                  Use broker-volume participation limit
-                </label>
-              )}
-            </fieldset>
+                      step={key === 'max_open_positions' ? 1 : 0.01}
+                      value={(portfolio.risk_limits ?? defaultRiskLimits)[key]}
+                      onChange={(event) => {
+                        const limits = {
+                          ...(portfolio.risk_limits ?? defaultRiskLimits),
+                          [key]: Number(event.target.value),
+                        }
+                        update({
+                          risk_limits: limits,
+                          strategies: portfolio.strategies.map((row) =>
+                            row.execution_policy
+                              ? {
+                                  ...row,
+                                  execution_policy: {
+                                    ...row.execution_policy,
+                                    risk_limits: limits,
+                                  },
+                                }
+                              : row
+                          ),
+                        })
+                      }}
+                    />
+                  </div>
+                ))}
+                <p className="text-xs text-muted-foreground sm:col-span-3">
+                  Limits apply when entering trades. Gaps can exceed a stop.
+                  {portfolio.risk_limits?.version === 'research-risk-limits-v3' &&
+                    ' Volume uses prior broker history; correlation uses prior completed returns. These are fixed backtest assumptions.'}
+                  {['research-risk-limits-v2', 'research-risk-limits-v3'].includes(
+                    portfolio.risk_limits?.version ?? ''
+                  ) && ' Daily buy budget uses opening account value; exits remain unrestricted.'}
+                </p>
+                {[
+                  'automatic-hypotheses-v13',
+                  'automatic-hypotheses-v14',
+                  'automatic-hypotheses-v15',
+                  'automatic-hypotheses-v16',
+                ].includes(portfolio.automatic_research?.version ?? '') && (
+                  <label className="flex items-center gap-2 text-sm sm:col-span-3">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-primary"
+                      checked={
+                        portfolio.strategies[0]?.execution_policy?.capacity_mode !== 'disabled'
+                      }
+                      onChange={(event) => {
+                        const limits = limitsForScope(
+                          portfolio.risk_limits,
+                          'automatic-hypotheses-v13'
+                        )
+                        update({
+                          risk_limits: limits,
+                          strategies: portfolio.strategies.map((row) => ({
+                            ...row,
+                            execution_policy: {
+                              version:
+                                portfolio.automatic_research?.version === 'automatic-hypotheses-v16'
+                                  ? 'research-execution-aware-v5'
+                                  : 'research-execution-aware-v4',
+                              ...(portfolio.automatic_research?.version ===
+                              'automatic-hypotheses-v16'
+                                ? { allocation_mode: 'original' as const }
+                                : {}),
+                              exit_mode: 'percent',
+                              sizing: 'allocation',
+                              entry_priority: 'source',
+                              risk_limits: limits,
+                              correlation_mode: 'prior60_positive_080',
+                              capacity_mode: event.target.checked
+                                ? 'prior20_broker_reported'
+                                : 'disabled',
+                            },
+                          })),
+                        })
+                      }}
+                    />
+                    Use broker-volume participation limit
+                  </label>
+                )}
+              </fieldset>
+            </details>
           )}
           {automatic && (
             <div className="relative overflow-hidden rounded-xl border border-cyan-500/20 bg-gradient-to-br from-cyan-500/5 via-background to-violet-500/5 p-5 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300">

@@ -13,6 +13,7 @@ import re
 from copy import deepcopy
 from datetime import date, timedelta
 
+from research.canonical_json import small_canonical_bytes
 from research.data import MAX_BARS
 from research.engine import validate_config
 from research.requirements import select_interval
@@ -23,6 +24,9 @@ KINDS = {"portfolio_backtest", "portfolio_optimize"}
 
 
 def fingerprint(value):
+    encoded = small_canonical_bytes(value)
+    if encoded is not None:
+        return hashlib.sha256(encoded).hexdigest()
     digest = hashlib.sha256()
     for part in json.JSONEncoder(sort_keys=True, separators=(",", ":"), allow_nan=False).iterencode(
         value

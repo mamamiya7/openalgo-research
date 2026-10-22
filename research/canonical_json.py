@@ -1,0 +1,81 @@
+"""Bounded fast path for the existing canonical JSON byte representation.
+
+Large or unusual inputs remain the caller's streaming encoder's responsibility.
+The copied tree prevents a mutable caller from growing the C encoder's input
+after the bound has been checked. No input or encoded output is retained.
+"""
+
+import json
+import math
+
+MAX_NODES = 4096
+MAX_DEPTH = 64
+MAX_ASCII_BYTES = 64 * 1024
+
+
+def small_canonical_bytes(value):
+    """Return exact canonical bytes for small plain trees, otherwise ``None``.
+
+    This is an optional optimization, not a validator. In particular, returning
+    ``None`` for non-finite numbers, custom types or cycles leaves the original
+    streaming encoder's behavior and errors unchanged.
+    """
+    remaining_nodes = MAX_NODES
+    remaining_bytes = MAX_ASCII_BYTES
+    active = set()
+
+    def copy(item, depth):
+        nonlocal remaining_nodes, remaining_bytes
+        remaining_nodes -= 1
+        if remaining_nodes < 0 or depth > MAX_DEPTH:
+            raise ValueError
+        kind = type(item)
+        if item is None:
+            allowance = 4
+        elif kind is bool:
+            allowance = 5
+        elif kind is str:
+            # One non-BMP code point becomes two six-byte surrogate escapes.
+            allowance = 12 * len(item) + 2
+        elif kind is int:
+            allowance = item.bit_length() // 3 + 2
+        elif kind is float:
+            if not math.isfinite(item):
+                raise ValueError
+            allowance = 32
+        elif kind in (dict, list, tuple):
+            identity = id(item)
+            if identity in active:
+                raise ValueError
+            # Punctuation and a lower bound on child nodes, before iteration.
+            allowance = 2 + len(item) * (2 if kind is dict else 1)
+            if allowance > remaining_bytes or len(item) > remaining_nodes:
+                raise ValueError
+            remaining_bytes -= allowance
+            active.add(identity)
+            try:
+                if kind is dict:
+                    result = {}
+                    for key, child in item.items():
+                        if type(key) is not str:
+                            raise ValueError
+                        copied_key = copy(key, depth + 1)
+                        result[copied_key] = copy(child, depth + 1)
+                    return result
+                return [copy(child, depth + 1) for child in item]
+            finally:
+                active.remove(identity)
+        else:
+            raise ValueError
+        remaining_bytes -= allowance
+        if remaining_bytes < 0:
+            raise ValueError
+        return item
+
+    try:
+        bounded = copy(value, 0)
+        return json.dumps(
+            bounded, sort_keys=True, separators=(",", ":"), allow_nan=False, ensure_ascii=True
+        ).encode("ascii")
+    except (ValueError, TypeError, RuntimeError, OverflowError):
+        return None

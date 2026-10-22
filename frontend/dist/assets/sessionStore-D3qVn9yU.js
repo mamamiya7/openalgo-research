@@ -1,0 +1,1 @@
+import{t as e}from"./react-CKdlXsxW.js";var t=e(e=>({activeSessionCount:0,setActiveSessionCount:t=>e({activeSessionCount:t})}));export{t};

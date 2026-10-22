@@ -1,6 +1,15 @@
 # Reconcile newer local development into a public package
 
-## October11 development publication
+## Current release reconciliation — 22 October 2026
+
+Development includes v16 automatic research and the qualified first portfolio
+allocation policy. The October11 v6 acceptance below is historical; it does not
+qualify the current source or ZIP. Public preview.7 remains the released download.
+Use [STATUS.md](STATUS.md) for installed source and
+[release closure](RELEASE_FINISH_20261022.md) for the exact candidate's remaining
+checks. Build from the committed current tree; do not rename an older artifact.
+
+## Historical October11 development publication
 
 The current development source targets OpenAlgo **2.0.2.7** at reviewed upstream
 `12e1114657981a3e50dde8c8ce04eb778ae1cf2f`, with Research preview.8 and qualified

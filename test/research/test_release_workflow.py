@@ -68,26 +68,85 @@ def test_windows_slices_cover_every_module_once_and_include_future_modules(tmp_p
     assert "test/test_history_service_source_validation.py" in flattened
 
 
-@pytest.mark.parametrize("index,count", [(0, 0), (-1, 4), (4, 4), (0, 5)])
+@pytest.mark.parametrize("index,count", [(0, 0), (-1, 4), (4, 4), (0, 9)])
 def test_invalid_slice_cannot_silently_skip_the_suite(tmp_path, index, count):
     with pytest.raises(ValueError, match="Test slice"):
         partition(tmp_path, index, count)
 
 
-def test_ci_runs_the_complete_windows_partition_and_full_linux_suite():
+def test_ci_runs_complete_balanced_partitions_on_both_platforms():
     job = workflow()["jobs"]["supported-runtime"]
     matrix = job["strategy"]["matrix"]["include"]
-    windows = [row for row in matrix if row["os"] == "windows-latest"]
-    assert [(row["slice_index"], row["slice_count"]) for row in windows] == [
-        (str(index), "4") for index in range(4)
-    ]
-    assert [row for row in matrix if row["os"] == "ubuntu-latest"] == [
-        {"os": "ubuntu-latest", "slice_index": "0", "slice_count": "1"}
-    ]
+    for platform in ("windows-latest", "ubuntu-latest"):
+        rows = [row for row in matrix if row["os"] == platform]
+        assert [(row["slice_index"], row["slice_count"]) for row in rows] == [
+            (str(index), "8") for index in range(8)
+        ]
     step = next(step for step in job["steps"] if step.get("name", "").startswith("Engine,"))
     assert "research_test_slice.py" in step["run"]
     assert "matrix.slice_index" in step["run"] and "matrix.slice_count" in step["run"]
-    assert "if" not in step
+    assert "--junit-xml" in step["run"] and "if" not in step
+    timings = next(
+        step for step in job["steps"] if step.get("name") == "Retain complete research test timings"
+    )
+    assert timings["if"] == "always()"
+    assert "actions/upload-artifact@" in timings["uses"]
+    linux_steps = [
+        step for step in job["steps"] if str(step.get("if", "")).startswith("runner.os == 'Linux'")
+    ]
+    assert len(linux_steps) == 5
+    assert all(
+        step["if"] == "runner.os == 'Linux' && matrix.slice_index == 0" for step in linux_steps
+    )
+
+
+def test_balanced_slices_preserve_complete_inventory_and_separate_measured_long_modules(tmp_path):
+    directory = tmp_path / "test/research"
+    directory.mkdir(parents=True)
+    for name in (
+        "test_intelligent_workflow.py",
+        "test_portfolio_allocation_replay.py",
+        "test_automatic_walk_forward.py",
+        "test_future_feature.py",
+    ):
+        (directory / name).touch()
+    (tmp_path / "test/test_history_service_source_validation.py").touch()
+    expected = partition(tmp_path, 0, 1)
+    parts = [partition(tmp_path, index, 8) for index in range(8)]
+    flattened = [name for part in parts for name in part]
+    assert sorted(flattened) == sorted(expected)
+    assert len(flattened) == len(set(flattened))
+    assert parts == [partition(tmp_path, index, 8) for index in range(8)]
+    assert all(
+        len(
+            [
+                name
+                for name in part
+                if name.endswith(
+                    (
+                        "test_intelligent_workflow.py",
+                        "test_portfolio_allocation_replay.py",
+                        "test_automatic_walk_forward.py",
+                    )
+                )
+            ]
+        )
+        <= 1
+        for part in parts
+    )
+
+
+def test_empty_slice_does_not_ask_pytest_to_collect_the_whole_repository(monkeypatch):
+    from tools import research_test_slice
+
+    monkeypatch.setattr(sys, "argv", ["research_test_slice.py", "--count", "8"])
+    monkeypatch.setattr(research_test_slice, "partition", lambda *args: [])
+
+    def unexpected_collection(*args):
+        pytest.fail("An empty slice must not start repository-wide collection")
+
+    monkeypatch.setattr(pytest, "main", unexpected_collection)
+    assert research_test_slice.main() == 0
 
 
 def test_slice_recheck_is_explicit_manual_bounded_and_keeps_other_qualification_alive():

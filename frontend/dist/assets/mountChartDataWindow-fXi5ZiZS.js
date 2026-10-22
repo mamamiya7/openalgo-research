@@ -1,0 +1,1 @@
+import{E as e,K as t,X as n}from"./openalgo-charts.widget-DxAnkQMJ.js";function r(r,i){let a=i.ownerDocument;return t(a,e),n({chart:r,document:a,locale:`en-IN`},i)}export{r as t};

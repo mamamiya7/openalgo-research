@@ -13,6 +13,12 @@ The [Research repository](https://github.com/mamamiya7/openalgo-research) and
 are the distribution locations. [Release notes](releases/0.1.0-preview.7.md) record
 this preview's changes and verification boundaries.
 
+Current development targets preview.8 on OpenAlgo 2.0.2.7, with v16 automatic
+research. Its [release closure](RELEASE_FINISH_20261022.md) is separate from the
+published preview.7 below. Use the packaged Setup/Start launchers; do not download
+VectorBT, Optuna or the OpenAlgo source separately. Optional Nautilus uses the
+supplied installer for its locked Linux runtime, as explained below.
+
 ## What is included
 
 - One to eight dated or timestamped NSE cash-equity scanner CSV strategies, with

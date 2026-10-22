@@ -2,16 +2,22 @@
 
 ## Feature development order after the human audit
 
-**Reconciled 21 October 2026, after v15 activation. Status: core development
-continues.** This section owns the current implementation order. The dated
+**Reconciled 22 October 2026, after v16 activation. Status: finish the supported
+preview.8 release; feature expansion is frozen.** This section owns the current implementation order. The dated
 checkpoints below are historical evidence, not competing instructions about
 what to build next. [STATUS.md](STATUS.md) owns activation and publication facts.
 
-The installed native qualification build is `1273be244`, with implementation
-`d43bc4d1f`, on `codex/native-research-refinement`. The reviewed native host is OpenAlgo 2.0.2.7
+The installed native qualification build is `7efa4f07c`, with implementation
+`1af6c2e04`, on `codex/native-research-refinement`. The reviewed native host is OpenAlgo 2.0.2.7
 and the development distribution is preview.8. Public preview.7 ZIPs still use
 OpenAlgo 2.0.2.5 and do not contain this development work. Pushed source,
 local installation and a new public release are separate milestones.
+
+The release closure is [recorded here](RELEASE_FINISH_20261022.md). Its finite
+scope is dependency/package compatibility, measured performance without changing
+saved results, the supported consumer loop, and exact installation artifacts.
+The remaining methods, regimes and asset profiles below are future product work,
+not prerequisites for calling this supported preview usable.
 
 ### Current completion against the eight packages
 
@@ -66,7 +72,7 @@ application thresholds.
 
 ### Remaining implementation order
 
-**A1 and the initial A2 engineering slice are qualified. B is next.** Their
+**A1, the initial A2 engineering slice and the first B slice are qualified. F is now the release priority.** Their
 specifications remain below for traceability; larger independent A2 suites remain
 an ongoing qualification requirement, not a claim completed by fifteen paths.
 Complete a bounded usable slice at each step. Each runtime policy change gets a
@@ -83,7 +89,7 @@ qualification does not silently add work to every user's Optimize action.
 | E — source and engine/asset breadth | **Complete rule sources and qualified adapters.** Add selected-condition OpenScript parity and a source contract containing the historical opportunity universe before claiming reproduction of an entire Chartink scanner. Qualify one additional Nautilus/asset/venue profile at a time. | Numerical/availability parity, exact engine-specific fills, lifecycle/expiry/borrow/margin/roll requirements where applicable, saved evidence and replay. A supported library feature or native chart indicator is not automatically an admitted research feature. |
 | F — consumer and release acceptance | **Ship a complete supported loop.** Recheck import → essential intent → automatic research → clear conclusion → inspect → named save → reuse/refresh/recovery against the exact candidate build. Keep charts/metrics/settings progressively disclosed. | Fresh and returning/no-edge/unsupported/interrupted journeys, keyboard/focus/reduced-motion/narrow-layout checks, affected Windows/Linux install/update/rollback and exact package inventory. Update guides and extension onboarding, then publish a specifically qualified release. |
 
-**Remaining core sequence: B → C → D → admitted E slices.** Broader independent
+**Future core sequence after release: broader B → C → D → admitted E slices.** Broader independent
 A2 calibration accompanies relevant new policies. F's minimal
 usable interface and relevant acceptance checks accompany every slice; the
 broader polish pass follows stable core contracts. A complete supported release

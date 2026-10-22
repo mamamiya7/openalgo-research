@@ -1,5 +1,12 @@
 # OpenAlgo Research status
 
+## Release closure — 22 October 2026
+
+Feature expansion is frozen. The [finite release checklist](RELEASE_FINISH_20261022.md)
+now takes priority over broader methods, regimes and assets. v16 is the supported
+development scope; the package/compatibility fixes and current journey acceptance
+are being qualified before a new public ZIP. Public preview.7 remains unchanged.
+
 The [reconciled implementation plan](DELIVERY_PLAN.md#remaining-implementation-order)
 separates qualified foundations from remaining work. Native full-procedure
 synthetic calibration and the initial whole-procedure seed qualification are now

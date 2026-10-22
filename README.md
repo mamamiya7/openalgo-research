@@ -24,11 +24,16 @@ a CSV export, or reuse saved signals.
 
 Preview.7 includes [faster Historify cache checks](docs/research/HISTORIFY_CHECKS.md)
 and the patched Axios dependency. Guided setup, Chartink entry and saved reports
-remain available in the same installation. The newer local OpenAlgo 2.0.2.6
-condition-search and unfinished-study features are not included; their
+remain available in the same installation. The OpenAlgo 2.0.2.7 development
+features described below are not included in preview.7; their
 [reconciliation and package checks](docs/research/PACKAGE_RECONCILIATION.md) are separate.
 
 ## Current development
+
+Feature expansion is frozen while the supported **preview.8** release is finished.
+The [release checklist](docs/research/RELEASE_FINISH_20261022.md) separates that
+finite work from future methods, regimes and asset classes. Public download links
+remain on the verified preview.7 artifact until a new artifact is qualified.
 
 The development source integrates OpenAlgo **2.0.2.7** at reviewed upstream
 `12e111465798`, with native charts 2.6.0 and OpenScript 0.8.1. Research

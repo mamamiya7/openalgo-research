@@ -620,10 +620,14 @@ describe('native portfolio consumer journey', () => {
     expect(screen.queryByText(/408 proposals in total/)).not.toBeInTheDocument()
   })
 
-  it('shows editable hard limits before optimisation and sends exactly those limits', async () => {
+  it('summarises limits, reveals their controls on demand and sends exactly those limits', async () => {
     savedDraft({ ...draft(), optimizing: true })
     mount()
     await userEvent.click(await screen.findByRole('button', { name: 'Automatic research' }))
+    expect(screen.getByText('100% exposure · 25% per symbol')).toBeVisible()
+    expect(screen.getByLabelText('Gross exposure %')).not.toBeVisible()
+    await userEvent.click(screen.getByText('Portfolio limits', { exact: true }))
+    expect(screen.getByLabelText('Gross exposure %')).toBeVisible()
     expect(screen.getByLabelText('Gross exposure %')).toHaveValue(100)
     expect(screen.getByLabelText('Per symbol %')).toHaveValue(25)
     expect(screen.getByLabelText('Risk per trade %')).toHaveValue(1)
