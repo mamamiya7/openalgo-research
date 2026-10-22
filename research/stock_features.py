@@ -11,7 +11,7 @@ from copy import deepcopy
 from datetime import datetime
 from math import isclose, isfinite
 
-from research.canonical_json import small_canonical_bytes
+from research.canonical_json import bounded_canonical_bytes, small_canonical_bytes
 from research.market_series import IST, _close_at, fingerprint, plan_series, validate_series
 
 VERSION = "research-stock-features-v1"
@@ -91,6 +91,8 @@ def recipe():
 
 def _json_size(value, maximum):
     encoded = small_canonical_bytes(value)
+    if encoded is None:
+        encoded = bounded_canonical_bytes(value, max_bytes=maximum)
     if encoded is not None:
         if len(encoded) > maximum:
             raise ValueError("Stock-feature evidence exceeds its bounded byte allowance")

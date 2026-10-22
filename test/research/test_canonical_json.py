@@ -7,7 +7,13 @@ from decimal import Decimal
 
 import pytest
 
-from research.canonical_json import MAX_ASCII_BYTES, MAX_DEPTH, MAX_NODES, small_canonical_bytes
+from research.canonical_json import (
+    MAX_ASCII_BYTES,
+    MAX_DEPTH,
+    MAX_NODES,
+    bounded_canonical_bytes,
+    small_canonical_bytes,
+)
 
 
 def streamed(value):
@@ -119,7 +125,10 @@ def test_subclasses_are_rejected_without_invoking_custom_methods():
     ):
         assert small_canonical_bytes(value) is None
         assert small_canonical_bytes({"nested": value}) is None
+        assert bounded_canonical_bytes(value) is None
+        assert bounded_canonical_bytes({"nested": value}) is None
     assert small_canonical_bytes({HostileStr("key"): 1}) is None
+    assert bounded_canonical_bytes({HostileStr("key"): 1}) is None
 
 
 def test_depth_boundary_is_bounded():
@@ -177,3 +186,96 @@ def test_rapidly_mutated_dict_falls_back(monkeypatch):
 
     monkeypatch.setattr(math, "isfinite", mutate)
     assert small_canonical_bytes(value) is None
+
+
+def medium_evidence():
+    return {
+        "trials": [
+            {"number": index, "score": index / 7, "label": "भारत 😀", "params": (True, None)}
+            for index in range(1500)
+        ]
+    }
+
+
+def test_medium_tree_has_exact_original_bytes_and_keeps_small_limits():
+    value = medium_evidence()
+    expected = streamed(value)
+    assert len(expected) > MAX_ASCII_BYTES
+    assert small_canonical_bytes(value) is None
+    assert bounded_canonical_bytes(value) == expected
+
+
+def test_medium_encoder_owns_a_detached_tree(monkeypatch):
+    value = medium_evidence()
+    expected = streamed(value)
+    original = json.dumps
+
+    def mutate_then_encode(copied, **kwargs):
+        value["trials"].append(value)
+        value["trials"][0]["label"] = "changed"
+        assert copied is not value
+        assert copied["trials"][0] is not value["trials"][0]
+        return original(copied, **kwargs)
+
+    monkeypatch.setattr(json, "dumps", mutate_then_encode)
+    assert bounded_canonical_bytes(value) == expected
+
+
+@pytest.mark.parametrize("bound", [0, 1, 32, 1024])
+def test_medium_byte_budget_is_checked_before_encoding(monkeypatch, bound):
+    def forbidden(*args, **kwargs):
+        raise AssertionError("over-budget tree entered the C encoder")
+
+    monkeypatch.setattr(json, "dumps", forbidden)
+    assert bounded_canonical_bytes(medium_evidence(), max_bytes=bound) is None
+
+
+def test_medium_node_and_depth_budgets_remain_hard_bounds(monkeypatch):
+    from research import canonical_json
+
+    monkeypatch.setattr(canonical_json, "MAX_MEDIUM_NODES", 32)
+    assert bounded_canonical_bytes([None] * 31) == streamed([None] * 31)
+    assert bounded_canonical_bytes([None] * 32) is None
+    monkeypatch.setattr(canonical_json, "MAX_MEDIUM_NODES", 524_288)
+    value = None
+    for _ in range(MAX_DEPTH + 1):
+        value = [value]
+    assert bounded_canonical_bytes(value) is None
+
+
+def test_medium_byte_cap_cannot_be_raised_by_a_caller(monkeypatch):
+    from research import canonical_json
+
+    monkeypatch.setattr(canonical_json, "MAX_MEDIUM_ASCII_BYTES", 64)
+    assert bounded_canonical_bytes("😀" * 6, max_bytes=1024**3) is None
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), {1: "key"}, Decimal("1.1")])
+def test_medium_unusual_inputs_fall_back(value):
+    assert bounded_canonical_bytes(value) is None
+
+
+def test_medium_cycle_falls_back():
+    value = [medium_evidence()]
+    value.append(value)
+    assert bounded_canonical_bytes(value) is None
+
+
+def test_medium_size_and_optuna_digest_preserve_exact_values_and_error_precedence():
+    from research.connectors.optuna_portfolio import _fingerprint
+    from research.stock_features import _json_size
+
+    value = medium_evidence()
+    expected = streamed(value)
+    assert _json_size(value, 32 * 1024**2) == len(expected)
+    assert _fingerprint(value) == hashlib.sha256(expected).hexdigest()
+    assert _fingerprint(value, max_bytes=len(expected)) == hashlib.sha256(expected).hexdigest()
+    for invalid in (value, {"a": float("nan")}):
+        with pytest.raises(ValueError, match="bounded byte allowance"):
+            _json_size(invalid, 2)
+        with pytest.raises(ValueError, match="storage limit"):
+            _fingerprint(invalid, max_bytes=2)
+    with pytest.raises(ValueError, match="Out of range"):
+        _json_size({"a": float("nan")}, 1024)
+    with pytest.raises(ValueError, match="Out of range"):
+        _fingerprint({"a": float("nan")}, max_bytes=1024)

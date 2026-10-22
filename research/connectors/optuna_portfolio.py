@@ -14,6 +14,7 @@ import re
 from decimal import Decimal
 from time import monotonic
 
+from research.canonical_json import bounded_canonical_bytes
 from research.engine import validate_config
 
 ADAPTER_VERSION = "openalgo-optuna-portfolio-v1"
@@ -41,6 +42,9 @@ OBJECTIVES = {
 
 
 def _fingerprint(value, *, max_bytes=None):
+    encoded = bounded_canonical_bytes(value, max_bytes=max_bytes)
+    if encoded is not None:
+        return hashlib.sha256(encoded).hexdigest()
     digest, size = hashlib.sha256(), 0
     encoder = json.JSONEncoder(sort_keys=True, separators=(",", ":"), allow_nan=False)
     for part in encoder.iterencode(value):

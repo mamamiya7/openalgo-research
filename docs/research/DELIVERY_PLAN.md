@@ -24,6 +24,12 @@ then clicks Optimize. The app owns data preparation, applicable search and check
 
 ## Remaining implementation order
 
+**22 October remaining-work profile:** preview.14 removes consecutive fit-account/
+proposal saves and speeds bounded evidence encoding without changing results or
+checks. Short actual-checkpoint comparisons measured 22% less proposal work and
+9% less complete replay including recovery. These are not whole-run predictions;
+feature expansion stays frozen. [Measured scope](VERIFICATION.md#remaining-repetition-profile--22-october-2026).
+
 **22 October bounded Chrome acceptance:** the complete unchanged automatic
 programme passed on 149 real CSV rows/29 stocks, through verified saved reports
 and a named setup. Actual optimisation was 21m17s active /32m04s elapsed, including

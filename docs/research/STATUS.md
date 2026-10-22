@@ -1,5 +1,18 @@
 # OpenAlgo Research status
 
+## Bounded remaining-work correction — 22 October 2026
+
+Preview.14 combines consecutive account/proposal publications and uses bounded
+C JSON encoding for medium evidence, retaining exact bytes and all admission,
+failure/recovery, attempt-budget, financial and validation checks. 75 focused
+checks pass. Two alternating real-checkpoint worker pairs produced identical
+scientific checkpoint hashes: three new proposal observations took 5.029 →3.942s;
+whole worker replay including verification took 14.963 →13.553s. Writes were
+isolated; normal-store scans were read-only. No broker calls, credentials or
+orders. These short comparisons are not a new full optimisation timing claim.
+The earlier 21m17s active complete journey remains the last such measurement.
+Feature development stays frozen. [Verification](VERIFICATION.md#remaining-repetition-profile--22-october-2026).
+
 ## Small automatic journey and remaining runtime limit — 22 October 2026
 
 Chrome acceptance completed a labelled real-CSV subset: 149 original rows,
@@ -1633,6 +1646,19 @@ this preview. Research export does not activate paper/live strategies.
 The following 30 September record describes public preview.7, not the newer development build.
 
 # OpenAlgo Research status
+
+## Bounded remaining-work correction — 22 October 2026
+
+Preview.14 combines consecutive account/proposal publications and uses bounded
+C JSON encoding for medium evidence, retaining exact bytes and all admission,
+failure/recovery, attempt-budget, financial and validation checks. 75 focused
+checks pass. Two alternating real-checkpoint worker pairs produced identical
+scientific checkpoint hashes: three new proposal observations took 5.029 →3.942s;
+whole worker replay including verification took 14.963 →13.553s. Writes were
+isolated; normal-store scans were read-only. No broker calls, credentials or
+orders. These short comparisons are not a new full optimisation timing claim.
+The earlier 21m17s active complete journey remains the last such measurement.
+Feature development stays frozen. [Verification](VERIFICATION.md#remaining-repetition-profile--22-october-2026).
 
 ## Small automatic journey and remaining runtime limit — 22 October 2026
 

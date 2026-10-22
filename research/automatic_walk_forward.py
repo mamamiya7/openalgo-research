@@ -811,7 +811,14 @@ def _run(
         return report
 
     def measured(
-        settings, hypothesis, period, stress=False, *, report_slot=None, reconstruct=False
+        settings,
+        hypothesis,
+        period,
+        stress=False,
+        *,
+        report_slot=None,
+        reconstruct=False,
+        defer_checkpoint=False,
     ):
         key = key_for(settings, hypothesis, period, stress)
         if key not in state["evaluations"] or reconstruct:
@@ -866,7 +873,8 @@ def _run(
             state["evaluations"][key] = row
             if report_slot:
                 state[report_slot] = report
-            persist()
+            if not defer_checkpoint:
+                persist()
         return {
             key: value
             for key, value in state["evaluations"][
@@ -1002,22 +1010,37 @@ def _run(
                             "fit_period": fit_name,
                         }
                     )
-                tested = measured(settings, hypothesis, period)
-                score = _score(tested["summary"])
-                current["candidates"].setdefault(
-                    config_id,
-                    {
-                        "config_id": config_id,
-                        "strategies": settings,
-                        "hypothesis": hypothesis,
-                        "condition_label": hypothesis["label"],
-                        "trial_number": index,
-                        "score": score,
-                        "stage": record["phase"],
-                        **deepcopy(tested),
-                    },
-                )
-                current["trials"].append({**record, "value": score})
+                tested = measured(settings, hypothesis, period, defer_checkpoint=True)
+                had_candidate = config_id in current["candidates"]
+                trial_count = len(current["trials"])
+                try:
+                    score = _score(tested["summary"])
+                    current["candidates"].setdefault(
+                        config_id,
+                        {
+                            "config_id": config_id,
+                            "strategies": settings,
+                            "hypothesis": hypothesis,
+                            "condition_label": hypothesis["label"],
+                            "trial_number": index,
+                            "score": score,
+                            "stage": record["phase"],
+                            **deepcopy(tested),
+                        },
+                    )
+                    current["trials"].append({**record, "value": score})
+                except BaseException:
+                    # Retain the completed account if building its proposal
+                    # record fails, just as the earlier account-only checkpoint
+                    # did. An incomplete proposal must not appear on recovery.
+                    if not had_candidate:
+                        current["candidates"].pop(config_id, None)
+                    del current["trials"][trial_count:]
+                    persist()
+                    raise
+                # There is no engine work or external observation between the
+                # completed account and this proposal. Publish both together;
+                # the immutable account shard has already been retained above.
                 persist()
                 if observe:
                     observe(

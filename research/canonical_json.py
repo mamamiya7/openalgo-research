@@ -11,6 +11,8 @@ import math
 MAX_NODES = 4096
 MAX_DEPTH = 64
 MAX_ASCII_BYTES = 64 * 1024
+MAX_MEDIUM_NODES = 524_288
+MAX_MEDIUM_ASCII_BYTES = 32 * 1024**2
 
 
 def small_canonical_bytes(value):
@@ -20,8 +22,27 @@ def small_canonical_bytes(value):
     ``None`` for non-finite numbers, custom types or cycles leaves the original
     streaming encoder's behavior and errors unchanged.
     """
-    remaining_nodes = MAX_NODES
-    remaining_bytes = MAX_ASCII_BYTES
+    return _canonical_bytes(value, MAX_NODES, MAX_ASCII_BYTES)
+
+
+def bounded_canonical_bytes(value, *, max_bytes=None):
+    """Optionally encode a detached medium tree within the caller's byte limit.
+
+    Conservative pre-encoding bounds cap both the copy and C-encoder allocation.
+    Inputs that cannot fit, including unusual types, return to the original
+    streaming path, which retains its early size/error precedence.
+    """
+    if max_bytes is not None and (type(max_bytes) is not int or max_bytes < 0):
+        return None
+    maximum = (
+        MAX_MEDIUM_ASCII_BYTES if max_bytes is None else min(max_bytes, MAX_MEDIUM_ASCII_BYTES)
+    )
+    return _canonical_bytes(value, MAX_MEDIUM_NODES, maximum)
+
+
+def _canonical_bytes(value, maximum_nodes, maximum_bytes):
+    remaining_nodes = maximum_nodes
+    remaining_bytes = maximum_bytes
     active = set()
 
     def copy(item, depth):

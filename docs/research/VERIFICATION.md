@@ -1,5 +1,53 @@
 # OpenAlgo Research verification
 
+## Remaining repetition profile — 22 October 2026
+
+Preview.14 removes the immediate account-only publication before a new fit
+proposal publication. Both now share one checkpoint; immutable account shards
+and pre-calculation attempt reservations still publish first. Proposal-construction
+failure rolls back partial proposal changes and saves the completed account for
+recovery. Reference, fold, final and reconstructed-report checkpoints remain.
+
+A bounded medium JSON path avoids Python token-by-token encoding for admitted
+plain trees. It detaches the tree before C encoding, with conservative limits of
+32 MiB, 524,288 nodes and depth 64. Caller byte ceilings can only reduce that
+allowance. Existing small limits and streaming fallback remain; unusual values,
+cycles, nonfinite numbers and size/error precedence preserve prior behavior.
+Canonical bytes, hashes, financial versions and validation are unchanged.
+
+Short native-worker comparisons resumed the same real late-search checkpoint:
+three more proposals, two new native accounts, 353 seeded evidence files. All
+writes used isolated metadata/artifacts. Read-only strict scans of the ordinary
+store were included to represent its size; there were no credentials, downloads,
+native archive writes or orders. Native imports/compilation were warmed before
+both paths. Two alternating pairs without profiling overhead measured:
+
+| Scope | Before | After |
+|---|---:|---:|
+| Three new proposal observations, including their persistence | 5.029s | 3.942s |
+| Whole worker replay, including verification/recovery | 14.963s | 13.553s |
+| Checkpoint callbacks | 14 | 12 |
+| Strict publication quota checks | 19 | 15 |
+
+The complete final scientific checkpoint was byte-identical in all four runs.
+Proposal work was 21.6% shorter; whole replay was 9.4% shorter. These are bounded
+continuation timings with isolated writes, not a new whole-CSV or uninterrupted
+normal-installation optimisation benchmark. The earlier interrupted 21m17s
+sample remains the last complete-journey timing; do not project a new total.
+
+An actual 3.21 MB checkpoint separately retained exact bytes/hash/size: median
+size checking was 69.48 →54.51ms and fingerprinting 85.46 →59.89ms over three
+repetitions. This is a guard benchmark only. The diagnostic cProfile timings
+were not used for speed claims because profiling and cold imports added overhead.
+
+75 focused checks passed, including captured exact legacy result/checkpoint
+fingerprints, completed-account recovery without recalculation, injected
+construction failures, canonical byte/error bounds and prepared-owner cleanup.
+Ruff/format checks pass. No new cache, thread, file handle or external client was
+added; temporary detached JSON trees are bounded and released on success/failure.
+Feature expansion stays frozen. Host/dependency/installation contracts are
+unchanged; the full platform matrix was not repeated.
+
 ## Small real-CSV Chrome acceptance — 22 October 2026
 
 A labelled subset of 149 unchanged CSV rows across 29 stocks retained every one
