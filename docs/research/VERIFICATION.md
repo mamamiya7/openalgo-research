@@ -39,8 +39,10 @@ pricing, execution or result mathematics changed. The correction was installed
 and the idle application restarted once for activation. Four new focused cases
 cover scan frequency, cancellation, worker replacement and immediate publication
 quota rejection. The affected worker/publication suite passed **36 checks with
-two platform-specific skips**; lint passed. Source/package publication is a
-separate delivery step; the existing preview.9 ZIP is unchanged by local testing.
+two platform-specific skips**; lint passed. The correction is included in the preview.10 package; the earlier preview.9 ZIP
+remains unchanged. Preview.10 reuses the verified frontend assets after checking
+all frontend input hashes. Packaging checks are recorded in its release notes;
+this maintenance patch does not repeat the full Windows/Linux matrix.
 
 ## Historical preview.4 checkpoint
 

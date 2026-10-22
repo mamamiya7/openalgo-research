@@ -16,8 +16,9 @@ the complete research store every quarter second. Strict evidence-publication
 quotas and cancellation/lease fencing remain in place. Warm daily runtime fell
 from 37.387 to 13.885 seconds with identical prices and summaries; minute reuse
 took 1.153 seconds with zero broker requests. 36 affected checks passed, two
-platform-specific checks skipped. The correction is installed locally; preview.9
-download assets have not been republished. No new methods or UI work were added.
+platform-specific checks skipped. The correction is installed locally and included in the
+[preview.10 installation package](releases/0.1.0-preview.10.md). No new methods
+or UI work were added.
 
 ## Essential one-click patch — 22 October 2026
 

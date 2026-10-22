@@ -14,15 +14,15 @@ The aim is to connect broker data, backtesting and optimization in one open-sour
 workflow. Start directly from a Chartink scanner with the Chrome extension, upload
 a CSV export, or reuse saved signals.
 
-**Current preview: `0.1.0-preview.9` · OpenAlgo 2.0.2.7 · Windows and Linux**
+**Current preview: `0.1.0-preview.10` · OpenAlgo 2.0.2.7 · Windows and Linux**
 
-[**Download OpenAlgo Research**](https://github.com/mamamiya7/openalgo-research/releases/download/research-v0.1.0-preview.9/openalgo-research-0.1.0-preview.9.zip)
+[**Download OpenAlgo Research**](https://github.com/mamamiya7/openalgo-research/releases/download/research-v0.1.0-preview.10/openalgo-research-0.1.0-preview.10.zip)
 · [Install and start](docs/research/RUNTIME.md)
-· [Release notes](docs/research/releases/0.1.0-preview.9.md)
+· [Release notes](docs/research/releases/0.1.0-preview.10.md)
 · [Architecture](docs/research/SYSTEM_MAP.md)
 · [Released source](https://github.com/mamamiya7/openalgo-research/tree/main)
 
-## What’s in preview.9
+## What’s in preview.10
 
 Upload a signal CSV or send a Chartink history, review your capital and trading
 rules, then choose **Backtest** or **Optimize → Automatic research**. The app
@@ -30,6 +30,9 @@ selects the required prices, applicable research methods and validation. Existin
 Historify prices are reused; only missing required coverage comes from your broker.
 Date-only daily strategies stay on daily candles.
 
+- **Faster cached runs.** Avoid repeated storage-folder scans during calculations,
+  while keeping strict checks before saving evidence. Fresh Fyers daily/minute
+  acquisition and exact Historify reuse were verified in Chrome.
 - **One automatic research action.** Compare supported stock/market conditions,
   timing, ATR/percentage exits, trailing rules, sizing and causal portfolio
   allocation. Capital and risk limits stay fixed; detailed controls are optional.
@@ -55,11 +58,11 @@ qualified volume provenance; other brokers can use supported methods without
 that assumption. Optional Nautilus fixed/custom calculations have their own
 supported contract and Linux/WSL runtime.
 
-[Release notes](docs/research/releases/0.1.0-preview.9.md) ·
-[Patch qualification and limits](docs/research/releases/0.1.0-preview.9.md#qualification) ·
+[Release notes](docs/research/releases/0.1.0-preview.10.md) ·
+[Patch qualification and limits](docs/research/releases/0.1.0-preview.10.md#qualification) ·
 [Future roadmap](docs/research/DELIVERY_PLAN.md).
-Preview.9 fixes the automatic worker and analysis handoffs found in a complete
-browser walkthrough, and makes recorded trial settings readable.
+Preview.10 reduces repeated storage scans during portfolio progress updates.
+It retains the preview.9 automatic-worker fixes and readable trial settings.
 The patch preserves existing calculation versions and search budgets. Broader
 methods and assets are outside this essential one-click batch.
 
@@ -217,7 +220,7 @@ to preserve their accounts, broker settings and saved research.
 To develop from a Git checkout instead, first run `npm ci` and `npm run build` in
 `frontend`, then run the setup script from the repository root. GitHub's automatic
 **Source code** archives do not contain the built interface; use the named
-`openalgo-research-0.1.0-preview.9.zip` asset for the easy installation.
+`openalgo-research-0.1.0-preview.10.zip` asset for the easy installation.
 
 Use the [Chartink extension](extensions/chartink/README.md), or open **Tools →
 Backtest & Optimize** to upload a CSV or reuse saved signals. Review the settings
