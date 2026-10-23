@@ -2,6 +2,17 @@ import type { PortfolioDraft } from '@/components/research/PortfolioBuilder'
 import { webClient } from './client'
 import type { PortfolioJob, PortfolioRequest } from './portfolioResearch'
 import type { ChosenSetup } from './researchChosenSetups'
+import type { ResearchActivity } from './scannerResearch'
+
+export interface PreparationStatus {
+  job_id: string | null
+  status: string
+  progress: number
+  activity: ResearchActivity | null
+  ready: boolean
+  reuse_mode?: 'prepared' | 'cache' | null
+  error: string | null
+}
 
 export interface ExperimentSummary {
   id: string
@@ -58,6 +69,17 @@ const base = '/scanner-research/api/library'
 const path = (id: string) => `${base}/experiments/${encodeURIComponent(id)}`
 const options = { timeout: 30000 }
 export const researchLibrary = {
+  async startPreparation(
+    id: string,
+    revision: number,
+    signal?: AbortSignal
+  ): Promise<PreparationStatus> {
+    return (await webClient.post(`${path(id)}/preparation`, { revision }, { ...options, signal }))
+      .data
+  },
+  async preparation(id: string, signal?: AbortSignal): Promise<PreparationStatus> {
+    return (await webClient.get(`${path(id)}/preparation`, { ...options, signal })).data
+  },
   async replay(
     id: string,
     revision: number,

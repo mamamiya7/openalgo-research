@@ -15,6 +15,7 @@ from services import research_live_progress as live_progress
 from services import research_method_coverage as method_coverage
 from services import research_partial_study as partial_study
 from services import research_preferences as preferences
+from services import research_preparation as preparation
 from services import research_shortlist as shortlist
 from services import research_study_activity as study_activity
 from services import research_tradeoffs as tradeoffs
@@ -219,7 +220,10 @@ def portfolio_tradeoffs(job_id):
     try:
         response = jsonify(
             tradeoffs.read(
-                store(), session["user"], job_id, expected_result=request.args.get("expected_result")
+                store(),
+                session["user"],
+                job_id,
+                expected_result=request.args.get("expected_result"),
             )
         )
     except tradeoffs.TradeoffsChanged as error:
@@ -787,6 +791,17 @@ def library_run(experiment_id):
     return jsonify(
         library.run_experiment(store(), session["user"], experiment_id, library_body())
     ), 202
+
+
+@scanner_research_bp.route(
+    "/library/experiments/<experiment_id>/preparation", methods=["GET", "POST"]
+)
+def library_preparation(experiment_id):
+    if request.method == "GET":
+        return jsonify(preparation.status(store(), session["user"], experiment_id))
+    if current_app.config.get("RESEARCH_PREVIEW"):
+        raise ValueError("Open your native OpenAlgo installation to prepare broker prices.")
+    return jsonify(preparation.start(store(), session["user"], experiment_id, library_body())), 202
 
 
 @scanner_research_bp.post("/library/experiments/<experiment_id>/replay")

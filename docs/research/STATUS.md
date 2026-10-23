@@ -1,5 +1,16 @@
 # OpenAlgo Research status
 
+## Early Chartink input preparation - 23 October 2026
+
+Preview.24 starts background data preparation when a saved Chartink setup opens
+in the native application. It uses the existing bounded worker and broker/cache
+path. Matching fixed daily runs can consume fully validated prepared inputs;
+automatic and minute modes reuse downloaded prices through the ordinary cache.
+Run waits for matching preparation across download batch yields. Changed settings
+cancel obsolete preparation, and source/calendar changes prevent stale reuse.
+No calculation, search budget, setup version or financial result is created just
+by opening the page. [Qualification](releases/0.1.0-preview.24.md).
+
 ## Chartink fixed-backtest journey correction - 23 October 2026
 
 Preview.23 corrects both frontend preview and saved-library launch when a fixed

@@ -191,6 +191,7 @@ REQUIRED_RESEARCH_FILES = {
     "services/research_sources.py",
     "services/research_storage.py",
     "services/research_portfolio.py",
+    "services/research_preparation.py",
     "services/research_instruments.py",
     "services/research_mcp.py",
     "tools/research_engine_worker.py",

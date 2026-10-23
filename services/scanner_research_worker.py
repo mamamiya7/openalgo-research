@@ -14,12 +14,15 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from sqlalchemy import case, select, update
+from sqlalchemy.orm import aliased
 
 from database.research_db import (
     ResearchAttempt,
     ResearchExperiment,
     ResearchHistory,
     ResearchJob,
+    ResearchLibraryJob,
+    ResearchPreparation,
     ResearchSource,
     ResearchSourceReceipt,
     ResearchStore,
@@ -199,10 +202,32 @@ def _run_one(store, token, stop_requested=None):
         ).rowcount
         if not claimed:
             raise Cancelled("Worker lease lost before claim")
+        preparation_job = aliased(ResearchJob)
+        preparation_experiment = aliased(ResearchExperiment)
+        waiting_for_preparation = (
+            select(ResearchPreparation.experiment_id)
+            .join(
+                ResearchLibraryJob,
+                ResearchLibraryJob.experiment_id == ResearchPreparation.experiment_id,
+            )
+            .join(preparation_job, preparation_job.id == ResearchPreparation.job_id)
+            .join(preparation_experiment, preparation_experiment.job_id == preparation_job.id)
+            .where(
+                ResearchLibraryJob.job_id == ResearchJob.id,
+                ResearchPreparation.owner == ResearchJob.owner,
+                preparation_job.owner == ResearchJob.owner,
+                preparation_job.source_id == ResearchJob.source_id,
+                preparation_job.status.in_(("queued", "running")),
+                preparation_experiment.kind == "portfolio_prepare",
+                preparation_experiment.specification == ResearchExperiment.specification,
+            )
+            .correlate(ResearchJob, ResearchExperiment)
+            .exists()
+        )
         job = db.scalar(
             select(ResearchJob)
             .outerjoin(ResearchExperiment, ResearchExperiment.job_id == ResearchJob.id)
-            .where(ResearchJob.status == "queued")
+            .where(ResearchJob.status == "queued", ~waiting_for_preparation)
             .order_by(
                 case((ResearchExperiment.kind == "portfolio_analysis", 1), else_=0),
                 ResearchJob.updated_at,
@@ -319,9 +344,10 @@ def _run_one(store, token, stop_requested=None):
                 "evidence_update",
                 "portfolio_backtest",
                 "portfolio_optimize",
+                "portfolio_prepare",
             )
             and (
-                kind not in ("portfolio_backtest", "portfolio_optimize")
+                kind not in ("portfolio_backtest", "portfolio_optimize", "portfolio_prepare")
                 or now - last_storage_check >= STORAGE_CHECK_INTERVAL_SECONDS
             )
         ):
@@ -567,7 +593,7 @@ def _run_one(store, token, stop_requested=None):
                     cancelled=cancelled,
                 )
                 cancelled()
-        elif kind in ("portfolio_backtest", "portfolio_optimize"):
+        elif kind in ("portfolio_backtest", "portfolio_optimize", "portfolio_prepare"):
             from services.research_activity import initial_activity
             from services.research_portfolio import run as run_portfolio
 
@@ -577,24 +603,48 @@ def _run_one(store, token, stop_requested=None):
                 )
             activity({}, force=True)
             with network_lease(store, token, job.id, stop_requested) as cancelled:
-                result, evidence = run_portfolio(
-                    store,
-                    job.owner,
-                    evidence,
-                    spec,
-                    defer_study_analysis=True,
-                    job_id=job.id,
-                    saved=saved,
-                    checkpoint=checkpoint,
-                    progress=progress,
-                    cancelled=cancelled,
-                    activity=activity,
-                    **(
-                        {"observe": observe, "boundary": calculation_boundary}
-                        if study_observer
-                        else {}
-                    ),
-                )
+                if kind == "portfolio_prepare":
+                    from services.research_portfolio import prepare_inputs
+                    from services.research_preparation import completed_receipt
+
+                    initial_evidence = evidence
+                    evidence, _ = prepare_inputs(
+                        store,
+                        job.owner,
+                        evidence,
+                        spec,
+                        saved=saved,
+                        checkpoint=checkpoint,
+                        progress=progress,
+                        cancelled=cancelled,
+                        activity=activity,
+                    )
+                    preparation_receipt = completed_receipt(store, initial_evidence, evidence, spec)
+                    cancelled()
+                    result = {"prepared": True}
+                else:
+                    if saved is None:
+                        from services.research_preparation import reuse_for_run
+
+                        saved = reuse_for_run(store, job.owner, job.id, evidence, spec)
+                    result, evidence = run_portfolio(
+                        store,
+                        job.owner,
+                        evidence,
+                        spec,
+                        defer_study_analysis=True,
+                        job_id=job.id,
+                        saved=saved,
+                        checkpoint=checkpoint,
+                        progress=progress,
+                        cancelled=cancelled,
+                        activity=activity,
+                        **(
+                            {"observe": observe, "boundary": calculation_boundary}
+                            if study_observer
+                            else {}
+                        ),
+                    )
         elif kind in ("prepare", "acquire"):
             if kind == "acquire":
                 from services.research_sources import acquire_source
@@ -734,7 +784,14 @@ def _run_one(store, token, stop_requested=None):
         else:
             result = evaluate(evidence["signals"], evidence["snapshot"], config, progress=progress)
         if (
-            kind not in ("prepare", "acquire", "evidence_update", "portfolio_analysis")
+            kind
+            not in (
+                "prepare",
+                "acquire",
+                "evidence_update",
+                "portfolio_analysis",
+                "portfolio_prepare",
+            )
             and history_record is None
         ):
             used_signals = evidence["signals"]
@@ -756,7 +813,13 @@ def _run_one(store, token, stop_requested=None):
         if activity_state:
             activity({"stage": "saving"}, force=True)
         progress(1, 1)
-        if kind in ("prepare", "acquire", "portfolio_backtest", "portfolio_optimize"):
+        if kind in (
+            "prepare",
+            "acquire",
+            "portfolio_backtest",
+            "portfolio_optimize",
+            "portfolio_prepare",
+        ):
             inputs_artifact = save_artifact(store, evidence)
         else:
             with store.sessions() as db:
@@ -771,6 +834,7 @@ def _run_one(store, token, stop_requested=None):
             "specification": spec,
             "kind": kind,
             "result": result,
+            **({"preparation": preparation_receipt} if kind == "portfolio_prepare" else {}),
             **(
                 {"parent_result_artifact": parent_result_artifact} if parent_result_artifact else {}
             ),

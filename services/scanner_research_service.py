@@ -1287,6 +1287,7 @@ def job_receipt(store, job, include_result=False, *, experiment_id=None):
                 "acquire": "Broker price download",
                 "evidence_update": "Official evidence update",
                 "portfolio_backtest": "Portfolio backtest",
+                "portfolio_prepare": "Background price preparation",
                 "portfolio_optimize": "Portfolio optimization",
             }.get(value["kind"], value["kind"]),
             source_summary.get("date_from"),

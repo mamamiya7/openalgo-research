@@ -106,6 +106,18 @@ class ResearchLibraryExperiment(Base):
     updated_at = Column(Float, nullable=False)
 
 
+class ResearchPreparation(Base):
+    """One replaceable early-acquisition pointer per editable experiment."""
+
+    __tablename__ = "research_preparations"
+    experiment_id = Column(String(64), primary_key=True)
+    owner = Column(String(255), nullable=False, index=True)
+    job_id = Column(String(64), nullable=False, unique=True)
+    binding = Column(String(64), nullable=False)
+    revision = Column(Integer, nullable=False)
+    reuse_mode = Column(String(16), nullable=False, default="cache")
+
+
 class ResearchSetupVersion(Base):
     __tablename__ = "research_setup_versions"
     __table_args__ = (UniqueConstraint("experiment_id", "number"),)

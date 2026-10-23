@@ -891,6 +891,21 @@ def _enqueue(
             if admission_guard is not None:
                 admission_guard(db, row)
             _check_sources(db, owner, draft)
+            # A Run immediately after editing must not wait for obsolete downloads.
+            from database.research_db import ResearchPreparation
+            from services.research_preparation import _binding
+
+            preparation = db.get(ResearchPreparation, identifier)
+            if (
+                preparation
+                and preparation.owner == owner
+                and preparation.binding != _binding(evidence, specification)
+            ):
+                pending = db.get(ResearchJob, preparation.job_id)
+                if pending and pending.owner == owner and pending.status in evidence_service.ACTIVE:
+                    pending.status = "cancelled" if pending.status == "queued" else "cancelling"
+                    pending.updated_at = time.time()
+                db.flush()
             if (
                 db.scalar(
                     select(func.count())
@@ -1295,6 +1310,8 @@ def list_studies(store, owner, *, search="", archived=False, limit=20, offset=0)
 
 
 def delete_experiment(store, owner, identifier, data):
+    from database.research_db import ResearchPreparation
+
     _object(data, {"revision"}, "experiment deletion")
     with store.sessions.begin() as db:
         evidence_service.write_guard(db)
@@ -1344,5 +1361,12 @@ def delete_experiment(store, owner, identifier, data):
             .where(ResearchChartinkImport.parent_experiment_id == identifier)
             .values(parent_experiment_id=None)
         )
+        preparation = db.get(ResearchPreparation, identifier)
+        if preparation:
+            pending = db.get(ResearchJob, preparation.job_id)
+            if pending and pending.owner == owner and pending.status in evidence_service.ACTIVE:
+                pending.status = "cancelled" if pending.status == "queued" else "cancelling"
+                pending.updated_at = time.time()
+            db.delete(preparation)
         db.delete(row)
     return {"deleted": True, "id": identifier}

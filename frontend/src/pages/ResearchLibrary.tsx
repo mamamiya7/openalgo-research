@@ -24,6 +24,7 @@ import type { ResearchSource } from '@/api/scannerResearch'
 import { ChartinkConnect } from '@/components/research/ChartinkConnect'
 import { ChartinkImport } from '@/components/research/ChartinkImport'
 import { ChartinkSource } from '@/components/research/ChartinkSource'
+import { ChartinkPreparation } from '@/components/research/ChartinkPreparation'
 import { ChosenEntryConditions } from '@/components/research/ChosenEntryConditions'
 import { addPortfolioSource, freshPortfolioDraft } from '@/components/research/PortfolioBuilder'
 import { PortfolioCsvHelp } from '@/components/research/PortfolioCsvHelp'
@@ -1439,6 +1440,16 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
                       : `Back to ${view === 'studies' ? 'optimisations' : 'backtests'}`}
               </Button>
             </div>
+          )}
+        {!jobId &&
+          view === 'setup' &&
+          !server.archived &&
+          Object.values(draft.sources).some((source) => source.receipt.chartink) && (
+            <ChartinkPreparation
+              experimentId={server.id}
+              revision={server.revision}
+              enabled={model.state === 'saved' && !busy}
+            />
           )}
         {(jobId || view === 'setup') && (
           <fieldset

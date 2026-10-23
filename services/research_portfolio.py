@@ -703,31 +703,8 @@ def _prepare_automatic_timing(
     )
 
 
-@_with_bundle_validation
-def run(
-    store,
-    owner,
-    evidence,
-    spec,
-    *,
-    saved=None,
-    checkpoint,
-    progress,
-    cancelled,
-    activity=None,
-    observe=None,
-    boundary=None,
-    job_id=None,
-    defer_study_analysis=False,
-):
-    validate_submission(
-        evidence,
-        "portfolio_optimize" if spec["portfolio"].get("optimization") else "portfolio_backtest",
-        spec,
-    )
+def _preparation_flags(evidence):
     portfolio = evidence["portfolio"]
-    if activity:
-        activity({"stage": "planning"})
     execution_features_required = (
         portfolio.get("automatic_research", {}).get("version")
         in (
@@ -750,6 +727,127 @@ def run(
         in ("research-execution-aware-v4", "research-execution-aware-v5")
         for row in portfolio["strategies"]
     )
+    stock_condition = portfolio.get("entry_conditions", {}).get("version") in (
+        "research-stock-entry-conditions-v1",
+        "research-stock-entry-conditions-v2",
+        "research-stock-entry-conditions-v3",
+        "research-joint-entry-conditions-v1",
+        "research-joint-entry-conditions-v2",
+    )
+    return execution_features_required, portfolio_features_required, stock_condition
+
+
+def validate_prepared_inputs(store, prepared, spec):
+    """Check the execution envelope before the ordinary run re-admits its features.
+
+    The caller separately checks ownership, source identity and current native
+    calendar/archive freshness. Existing exact replays retain their own contract.
+    """
+    from research.portfolio_coverage import prepare as prepare_coverage
+
+    validate_submission(prepared, "portfolio_backtest", spec)
+    portfolio = prepared["portfolio"]
+    if (
+        prepared.get("frozen_prices") is not True
+        or portfolio.get("automatic_research")
+        or portfolio.get("optimization")
+        or prepared.get("replay_origin")
+        or prepared.get("condition_replay")
+    ):
+        raise ValueError("Early preparation needs complete fixed-backtest inputs")
+    if prepare_coverage(prepared) != prepared:
+        raise ValueError("Prepared price coverage does not reproduce its saved inputs")
+    receipts = prepared.get("acquisition_receipts")
+    if not isinstance(receipts, list):
+        raise ValueError("Prepared execution receipt list is missing")
+    total = 0
+    for row in receipts:
+        payload = service.encoded(row["receipt"])
+        total += len(payload)
+        if (
+            len(payload) > 16 * 1024**2
+            or total > 128 * 1024**2
+            or hashlib.sha256(payload).hexdigest() != row["sha256"]
+        ):
+            raise ValueError("Prepared execution receipt integrity check failed")
+    if [row["sha256"] for row in receipts] != [
+        row["sha256"] for row in prepared["snapshot"]["provenance"].get("broker_receipts", [])
+    ]:
+        raise ValueError("Prepared execution receipts do not match their acquisition")
+    # Context/derived-feature reconstruction belongs to the unchanged saved-input
+    # path in run. Repeating it here would calculate every stock's prior windows
+    # twice before the same account begins. Require completeness here; run still
+    # validates the recorded contexts, receipts and derived observations in full.
+    execution, allocation, stock_condition = _preparation_flags(prepared)
+    joint_condition = portfolio.get("entry_conditions", {}).get("version") in (
+        "research-joint-entry-conditions-v1",
+        "research-joint-entry-conditions-v2",
+    )
+    required = []
+    if execution or allocation or joint_condition:
+        required.append("automatic_stock_market_context")
+    elif stock_condition:
+        required.append("automatic_stock_features")
+    if execution:
+        required.append("execution_features")
+    if allocation:
+        required.append("portfolio_execution_features")
+    if portfolio.get("entry_conditions") and not stock_condition:
+        required.append("entry_condition_market")
+    if any(not isinstance(prepared.get(key), dict) for key in required):
+        raise ValueError("Prepared context or derived observations are incomplete")
+    return prepared
+
+
+@_with_bundle_validation
+def prepare_inputs(
+    store,
+    owner,
+    evidence,
+    spec,
+    *,
+    saved=None,
+    checkpoint,
+    progress,
+    cancelled,
+    activity=None,
+):
+    """Freeze and validate native research inputs without calculating an account.
+
+    Acquisition and context services retain their normal bounded checkpoints,
+    cancellation and resource ownership. The returned content address is the
+    same calculation-input artifact consumed by ``run``.
+    """
+    cancelled()
+    evidence, inputs_id, _ = _prepare_inputs(
+        store,
+        owner,
+        evidence,
+        spec,
+        saved=saved,
+        checkpoint=checkpoint,
+        progress=progress,
+        cancelled=cancelled,
+        activity=activity,
+    )
+
+    cancelled()
+    return evidence, inputs_id
+
+
+def _prepare_inputs(
+    store, owner, evidence, spec, *, saved, checkpoint, progress, cancelled, activity
+):
+    validate_submission(
+        evidence,
+        "portfolio_optimize" if spec["portfolio"].get("optimization") else "portfolio_backtest",
+        spec,
+    )
+    portfolio = evidence["portfolio"]
+    if activity:
+        activity({"stage": "planning"})
+    requirements = _preparation_flags(evidence)
+    execution_features_required, portfolio_features_required, stock_condition = requirements
     if saved and saved.get("phase") in (
         "calculation",
         "condition_prices",
@@ -827,16 +925,8 @@ def run(
     from research.automatic_protocol import (
         CONDITION_VERSION,
         HYPOTHESIS_VERSIONS,
-        STABILITY_VERSION,
     )
 
-    stock_condition = portfolio.get("entry_conditions", {}).get("version") in (
-        "research-stock-entry-conditions-v1",
-        "research-stock-entry-conditions-v2",
-        "research-stock-entry-conditions-v3",
-        "research-joint-entry-conditions-v1",
-        "research-joint-entry-conditions-v2",
-    )
     needs_stock = (
         stock_condition
         or execution_features_required
@@ -964,6 +1054,45 @@ def run(
             },
             {"completed": 60, "total": 100, "stage": "backtest"},
         )
+    return evidence, inputs_id, requirements
+
+
+@_with_bundle_validation
+def run(
+    store,
+    owner,
+    evidence,
+    spec,
+    *,
+    saved=None,
+    checkpoint,
+    progress,
+    cancelled,
+    activity=None,
+    observe=None,
+    boundary=None,
+    job_id=None,
+    defer_study_analysis=False,
+):
+    evidence, inputs_id, requirements = _prepare_inputs(
+        store,
+        owner,
+        evidence,
+        spec,
+        saved=saved,
+        checkpoint=checkpoint,
+        progress=progress,
+        cancelled=cancelled,
+        activity=activity,
+    )
+    portfolio = evidence["portfolio"]
+    execution_features_required, portfolio_features_required, stock_condition = requirements
+    from research.automatic_protocol import (
+        CONDITION_VERSION,
+        HYPOTHESIS_VERSIONS,
+        STABILITY_VERSION,
+    )
+
     if boundary:
         boundary()
     if evidence.get("condition_replay"):
