@@ -90,7 +90,13 @@ def partition(evidence, *, prepare_period="both"):
         if (
             recipe.get("version") == "automatic-hypotheses-v16"
             and recipe.get("validation_mode") == "exploratory_only"
-            and availability.get("version") == "research-available-history-v1"
+            and (
+                availability.get("version") == "research-available-history-v1"
+                or (
+                    availability.get("version") == "research-available-history-v2"
+                    and recipe.get("automatic_design", {}).get("policy") == "automatic_design_v1"
+                )
+            )
             and availability.get("mode") == "exploratory_only"
         ):
             if prepare_period == "evaluation":

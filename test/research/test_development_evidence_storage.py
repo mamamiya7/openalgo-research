@@ -35,6 +35,77 @@ def setup(store):
     return evidence, binding, writer, report, context
 
 
+def test_native_immutable_rows_reconcile_once_but_mutable_and_restored_rows_recheck(
+    store, monkeypatch
+):
+    from research.canonical_json import bounded_canonical_snapshot
+    from research.owned_entry_features import _capture
+    from services import research_development_evidence as module
+
+    evidence, binding, writer, report, context = setup(store)
+    condition = {"hypothesis": context["hypothesis"], "gate_id": "b" * 64}
+    report["automatic_stock_condition"] = condition
+    descriptor = writer.retain(report, search_identity=binding["search_identity"], **context)
+    plain = {
+        "development_evidence": descriptor,
+        "evaluation_basis": report["evaluation_basis"],
+        "automatic_stock_condition": condition,
+    }
+    row = _capture(plain)
+    original, calls = module.fingerprint, []
+
+    def counted(value):
+        calls.append(value)
+        return original(value)
+
+    monkeypatch.setattr(module, "fingerprint", counted)
+    for _ in range(6):
+        # Only the private native capture keeps immutable row capabilities.
+        state, _ = bounded_canonical_snapshot(
+            {"evaluations": {context["evaluation_id"]: row}}, _preserve_owned=True
+        )
+        assert state["evaluations"][context["evaluation_id"]] is row
+        writer.reconcile(state["evaluations"])
+    assert len(calls) == 3
+    mutable, _ = bounded_canonical_snapshot(row)
+    writer.reconcile({context["evaluation_id"]: mutable})
+    assert len(calls) == 6
+    mutable["automatic_stock_condition"]["gate_id"] = "changed"
+    with pytest.raises(ValueError, match="condition disagree"):
+        writer.reconcile({context["evaluation_id"]: mutable})
+    restored = DevelopmentEvidenceWriter(
+        store, evidence, binding=binding, max_evaluations=2, saved=writer.snapshot()
+    )
+    before = len(calls)
+    restored.reconcile({context["evaluation_id"]: row})
+    assert len(calls) - before == 3
+
+
+def test_pending_canonical_shard_avoids_root_reencoding_and_keeps_shared_writer(store, monkeypatch):
+    evidence, binding, _, report, context = setup(store)
+    writer = DevelopmentEvidenceWriter(
+        store, evidence, binding=binding, max_evaluations=2, stage_publication=True
+    )
+    descriptor = writer.retain(report, search_identity=binding["search_identity"], **context)
+    pending = writer._pending[context["evaluation_id"]]
+    original, calls = artifacts.encoded, []
+
+    def counted(value):
+        result = original(value)
+        calls.append(result)
+        return result
+
+    monkeypatch.setattr(artifacts, "encoded", counted)
+    monkeypatch.setattr(artifacts, "CHUNK_ARTIFACT_BYTES", 128)
+    with pytest.raises(ValueError, match="active artifact scope"):
+        writer.publish_pending()
+    with artifacts.artifact_publication(store):
+        writer.publish_pending()
+    assert pending not in calls
+    assert artifacts.read_artifact(store, descriptor["inputs_artifact"])["id"] == descriptor["id"]
+    assert not writer._pending
+
+
 def test_immutable_shard_restores_and_remains_in_backup_prune_closure(store):
     evidence, binding, writer, report, context = setup(store)
     original = deepcopy(report)

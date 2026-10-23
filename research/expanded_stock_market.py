@@ -15,6 +15,7 @@ from research import stock_features as finite
 from research import stock_indicators as indicators
 from research import stock_relative_strength as stock
 from research.canonical_json import bounded_canonical_snapshot
+from research.market_series import fingerprint as receipt_fingerprint
 from research.portfolio import fingerprint
 
 FEATURE_VERSION = "research-expanded-stock-market-features-v1"
@@ -192,7 +193,7 @@ def _combine(evidence, bundle_id, selected, feature_recipe, stock_receipt, marke
     )
 
     def causal_receipt(receipt):
-        identity = fingerprint(
+        identity = receipt_fingerprint(
             {
                 "version": CAUSAL_RECEIPT_VERSION,
                 "causal_inputs_id": causal_source,
@@ -217,7 +218,7 @@ def _combine(evidence, bundle_id, selected, feature_recipe, stock_receipt, marke
     )
     receipt.pop("id")
     receipt["causal_inputs_id"] = causal_source
-    return rows, {**receipt, "id": fingerprint(receipt)}
+    return rows, {**receipt, "id": receipt_fingerprint(receipt)}
 
 
 def apply(evidence, bundle, hypothesis):
@@ -243,14 +244,57 @@ def apply(evidence, bundle, hypothesis):
     )
 
 
+def _component_providers():
+    """A replaced native calculation must never inherit previous membership."""
+    from openalgo import ta
+
+    from research import condition_replay, regimes
+    from research.connectors.vectorbt_portfolio import _schedule
+    from research.prepared_stock_catalogue import _providers
+
+    return (
+        *_providers(),
+        _schedule,
+        _apply_stock,
+        finite._apply,
+        finite._feature,
+        indicators._feature,
+        indicators._window,
+        indicators._compare,
+        stock._feature,
+        stock._apply_with_validator,
+        condition_replay._apply,
+        regimes._classify,
+        regimes._decisions,
+        regimes._features,
+        regimes._PreparedClassifier.classify,
+        ta.rsi,
+        ta.atr,
+        ta.bbands,
+        ta.ema,
+    )
+
+
 class PreparedJointContext(joint.PreparedJointContext):
     """Reuse the same one-owner detached projection and explicit close lifetime."""
 
-    __slots__ = ("__catalogue", "__recipe", "__expected", "__thread", "__scope")
+    __slots__ = (
+        "__catalogue",
+        "__recipe",
+        "__expected",
+        "__thread",
+        "__scope",
+        "__components",
+        "__component_providers",
+    )
 
     def __init__(self, bundle):
+        from research.causal_gate_components import DailyComponents
+
         self.__catalogue = self.__recipe = self.__expected = self.__scope = None
         self.__thread = get_ident()
+        self.__components = DailyComponents()
+        self.__component_providers = _component_providers()
         super().__init__(bundle)
         try:
             captured = bounded_canonical_snapshot(
@@ -299,6 +343,9 @@ class PreparedJointContext(joint.PreparedJointContext):
         scope = ExitStack()
         try:
             scope.enter_context(indicators._pinned_runtime())
+            from research.prepared_stock_catalogue import prepared_catalogues
+
+            scope.enter_context(prepared_catalogues())
             token = _prepared_catalogue.set(self)
             scope.callback(_prepared_catalogue.reset, token)
             self.__scope = scope
@@ -316,16 +363,30 @@ class PreparedJointContext(joint.PreparedJointContext):
                 scope, self.__scope = self.__scope, None
                 scope.close()
         finally:
+            self.__components.close()
             self.__catalogue = self.__recipe = self.__expected = None
             super().close()
 
+    def _component_receipt(self, kind, evidence, descriptor, producer):
+        if not self._active() or self.__component_providers != _component_providers():
+            return producer()
+        key = self.__components.key(evidence, kind, descriptor)
+        cached = self.__components.get(key, evidence)
+        if cached is not None:
+            return cached
+        receipt = producer()
+        return self.__components.put(key, evidence, receipt)
+
     def apply(self, evidence, bundle, hypothesis):
-        return self._apply_with(
-            evidence,
-            bundle,
-            hypothesis,
-            normalizer=normalize_hypothesis,
-            recipe_fn=recipe,
-            stock_gate=_apply_stock,
-            combine_fn=_combine,
-        )
+        from research.causal_gate_components import causal_components_only
+
+        with causal_components_only():
+            return self._apply_with(
+                evidence,
+                bundle,
+                hypothesis,
+                normalizer=normalize_hypothesis,
+                recipe_fn=recipe,
+                stock_gate=_apply_stock,
+                combine_fn=_combine,
+            )

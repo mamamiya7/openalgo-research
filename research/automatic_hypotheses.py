@@ -36,6 +36,7 @@ from research.connectors.optuna_portfolio import (
 )
 from research.entry_conditions import enrich
 from research.evaluation_basis import build_evaluation_basis
+from research.gate_input_binding import execution_inputs_id
 from research.portfolio import fingerprint
 from research.report_contract import settings_identity
 from research.stock_features import apply, catalog, markers
@@ -164,7 +165,14 @@ def policy_for_version(version):
     raise ValueError("Choose a supported automatic hypothesis version")
 
 
-def _gate(
+def _gate(current, stock, hypothesis, cache, period, **kwargs):
+    from research.gate_input_binding import prepared_gate_inputs
+
+    with prepared_gate_inputs(current) as admitted:
+        return _gate_with_inputs(admitted, stock, hypothesis, cache, period, **kwargs)
+
+
+def _gate_with_inputs(
     current,
     stock,
     hypothesis,
@@ -230,9 +238,7 @@ def _gate(
     )
     receipt = {
         **{k: v for k, v in previous_receipt.items() if k != "id"},
-        "execution_inputs_id": fingerprint(
-            {k: current[k] for k in ("portfolio", "strategies", "signals", "snapshot", "versions")}
-        ),
+        "execution_inputs_id": execution_inputs_id(current),
         "conditioned_strategies_id": fingerprint(rows),
     }
     return rows, {**receipt, "id": fingerprint(receipt)}

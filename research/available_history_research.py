@@ -37,12 +37,18 @@ def run(
     window,
     prepared_portfolio,
     defer_study_analysis,
+    design_assessment,
 ):
     availability = recipe.get("history_availability", {})
     if (
         recipe.get("version") != ALLOCATION_VERSION
         or recipe.get("validation_mode") != "exploratory_only"
-        or availability.get("version") != "research-available-history-v1"
+        or availability.get("version")
+        != (
+            "research-available-history-v2"
+            if "automatic_design" in recipe
+            else "research-available-history-v1"
+        )
         or availability.get("mode") != "exploratory_only"
         or tuple(fit_names) != FIT_NAMES
         or recipe["budget"]["proposals"] != 408
@@ -90,6 +96,13 @@ def run(
         or report.get("evaluation_basis") != row["evaluation_basis"]
         or report.get("automatic_stock_condition") != row["automatic_stock_condition"]
         or report.get("automatic_recipe") != recipe
+        or (
+            "automatic_design" in recipe
+            and (
+                report.get("automatic_design") != row.get("automatic_design")
+                or design_assessment(report, "search") != row.get("automatic_design")
+            )
+        )
     ):
         raise ValueError("The saved available-history report changed its recorded account evidence")
     audit = prepared_portfolio.assess(report, evidence["portfolio_execution_features"])
@@ -108,7 +121,11 @@ def run(
         for domain in axes.values()
     )
     current = state["fits"]["search"]
-    headline = "Research completed on available history"
+    headline = (
+        "No reliable improvement found"
+        if "automatic_design" in recipe and selected["is_baseline"]
+        else "Research completed on available history"
+    )
     result["experiment"] = {
         "kind": "portfolio_optimize",
         "experiment_version": recipe["version"],
@@ -191,6 +208,21 @@ def run(
         "selected_condition": selected["condition_label"],
         "selection_basis": f"The primary seed-{optimizer['seed']} full-history training choice remains fixed. Prefix fits and same-history seed repeats are diagnostics; they never select a later or better-looking seed.",
         "baseline": deepcopy(baseline_summary),
+        **(
+            {
+                "automatic_design": {
+                    "policy": deepcopy(recipe["automatic_design"]),
+                    "selected": deepcopy(row["automatic_design"]),
+                    "candidates_passing_design": sum(
+                        candidate["automatic_design"]["qualified"] for candidate in rows
+                    ),
+                    "candidates_checked": len(rows),
+                    "is_baseline_reference": selected["is_baseline"],
+                }
+            }
+            if "automatic_design" in recipe
+            else {}
+        ),
         "checks": [],
         "final": None,
         "independently_validated": False,

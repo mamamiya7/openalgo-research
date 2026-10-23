@@ -191,6 +191,13 @@ def reconstruct_study(experiment):
         "automatic-hypotheses-v12": "research-execution-search-v3",
         "automatic-hypotheses-v16": "research-execution-search-v5",
     }.get(experiment.get("experiment_version"))
+    execution_descriptor = experiment.get("execution_research")
+    if (
+        experiment.get("experiment_version") == "automatic-hypotheses-v16"
+        and isinstance(execution_descriptor, dict)
+        and execution_descriptor.get("design_policy") == "automatic_design_v1"
+    ):
+        expected_execution = "research-execution-search-v6"
     if expected_execution and (
         not isinstance(experiment.get("execution_research"), dict)
         or experiment["execution_research"].get("version") != expected_execution

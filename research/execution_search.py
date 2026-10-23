@@ -16,6 +16,7 @@ PRIORITY_SEARCH_VERSION = "research-execution-search-v2"
 TURNOVER_SEARCH_VERSION = "research-execution-search-v3"
 CAPACITY_SEARCH_VERSION = "research-execution-search-v4"
 ALLOCATION_SEARCH_VERSION = "research-execution-search-v5"
+CAPITAL_SEARCH_VERSION = "research-execution-search-v6"
 ALLOCATION_AXIS = "portfolio.allocation_mode"
 ALLOCATION_MODES = ("original", "prior60_cluster_inverse_vol")
 ALLOCATION_POLICY = "One account-wide entry-only cluster inverse-volatility policy from exactly60 prior aligned returns, covariance shrunk10% to diagonal, positive regularized correlation>=0.8 connected components; equal gross-cap cluster budgets and inverse-volatility weights within each cluster. No matrix inversion, held-position rebalance or future inputs; unavailable inputs fail closed."
@@ -60,12 +61,31 @@ PORTFOLIO_CHOICES = (
     {"id": "stop_risk", "fraction": 1.0, "sizing": "stop_risk", "risk_budget_fraction": 0.5},
     {"id": "stop_risk_50", "fraction": 0.5, "sizing": "stop_risk", "risk_budget_fraction": 0.5},
 )
+CAPITAL_CHOICES = (
+    {"id": "original", "fraction": 1.0, "sizing": "allocation"},
+    {"id": "allocation_75", "fraction": 0.75, "sizing": "allocation"},
+    {"id": "allocation_50", "fraction": 0.5, "sizing": "allocation"},
+    {"id": "stop_risk", "fraction": 1.0, "sizing": "stop_risk", "risk_budget_fraction": 0.5},
+    {"id": "stop_risk_50", "fraction": 1.0, "sizing": "stop_risk", "risk_budget_fraction": 0.25},
+)
+CAPITAL_CEILINGS = "Original strategy allocation and fixed account, symbol, position, turnover, volume, correlation and stop-risk limits remain hard ceilings; original order size is the reference, not an automatic risk-sizing ceiling"
+CAPITAL_TARGET = "Registered stop-risk targets use one half or one quarter of the fixed trade-risk ceiling, constrained by original strategy allocation and every hard account limit; never a loss guarantee"
+
+
+def _capital_design(portfolio):
+    request = portfolio.get("automatic_research", {})
+    return (
+        request.get("version") == "automatic-hypotheses-v16"
+        and request.get("history_policy") == "available_history"
+        and request.get("design_policy") == "automatic_design_v1"
+    )
 
 
 def descriptor(evidence):
     from research.execution_policy import normalize_limits, normalize_policy
 
     portfolio = evidence["portfolio"]
+    capital_design = _capital_design(portfolio)
     allocation = (
         portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v16"
     )
@@ -134,13 +154,17 @@ def descriptor(evidence):
                     "execution_policy": deepcopy(policy),
                 },
                 "execution_choices": deepcopy(list(EXECUTION_CHOICES)),
-                "portfolio_choices": deepcopy(list(PORTFOLIO_CHOICES)),
+                "portfolio_choices": deepcopy(
+                    list(CAPITAL_CHOICES if capital_design else PORTFOLIO_CHOICES)
+                ),
             }
         )
     if not 1 <= len(originals) <= 8 or len({row["id"] for row in originals}) != len(originals):
         raise ValueError("Execution research requires one to eight distinct strategies")
     value = {
-        "version": ALLOCATION_SEARCH_VERSION
+        "version": CAPITAL_SEARCH_VERSION
+        if capital_design
+        else ALLOCATION_SEARCH_VERSION
         if allocation
         else CAPACITY_SEARCH_VERSION
         if capacity
@@ -158,6 +182,12 @@ def descriptor(evidence):
         "sizing_control": "For each training-fit winner, retain filters and exits but restore original allocation, order size and allocation sizing under the same hard limits; development only",
         "screening": "Four registered ATR probes and four registered portfolio probes per independent fit, then joint refinement",
     }
+    if capital_design:
+        value.update(
+            design_policy="automatic_design_v1",
+            ceilings=CAPITAL_CEILINGS,
+            stop_risk_target=CAPITAL_TARGET,
+        )
     if allocation:
         value.update(allocation_modes=list(ALLOCATION_MODES), allocation_policy=ALLOCATION_POLICY)
     if priority:
@@ -185,6 +215,7 @@ def _validate(specification):
             TURNOVER_SEARCH_VERSION,
             CAPACITY_SEARCH_VERSION,
             ALLOCATION_SEARCH_VERSION,
+            CAPITAL_SEARCH_VERSION,
         )
         or specification.get("id")
         != fingerprint({key: value for key, value in specification.items() if key != "id"})
@@ -194,29 +225,49 @@ def _validate(specification):
             not isinstance(row, dict)
             or not isinstance(row.get("id"), str)
             or row.get("execution_choices") != list(EXECUTION_CHOICES)
-            or row.get("portfolio_choices") != list(PORTFOLIO_CHOICES)
+            or row.get("portfolio_choices")
+            != list(
+                CAPITAL_CHOICES
+                if specification.get("version") == CAPITAL_SEARCH_VERSION
+                else PORTFOLIO_CHOICES
+            )
             for row in specification["strategies"]
         )
     ):
         raise ValueError("The frozen execution choices changed")
+    if specification["version"] == CAPITAL_SEARCH_VERSION:
+        if (
+            specification.get("design_policy") != "automatic_design_v1"
+            or specification.get("ceilings") != CAPITAL_CEILINGS
+            or specification.get("stop_risk_target") != CAPITAL_TARGET
+        ):
+            raise ValueError("The frozen automatic capital design changed")
+    elif "design_policy" in specification:
+        raise ValueError("Automatic capital design needs its frozen execution version")
     rows = specification["strategies"]
-    if specification["version"] == ALLOCATION_SEARCH_VERSION and (
+    if specification["version"] in (ALLOCATION_SEARCH_VERSION, CAPITAL_SEARCH_VERSION) and (
         specification.get("allocation_modes") != list(ALLOCATION_MODES)
         or specification.get("allocation_policy") != ALLOCATION_POLICY
     ):
         raise ValueError("The frozen account allocation choices changed")
-    allocation = specification["version"] == ALLOCATION_SEARCH_VERSION
-    capacity = specification["version"] in (CAPACITY_SEARCH_VERSION, ALLOCATION_SEARCH_VERSION)
+    allocation = specification["version"] in (ALLOCATION_SEARCH_VERSION, CAPITAL_SEARCH_VERSION)
+    capacity = specification["version"] in (
+        CAPACITY_SEARCH_VERSION,
+        ALLOCATION_SEARCH_VERSION,
+        CAPITAL_SEARCH_VERSION,
+    )
     turnover = specification["version"] in (
         TURNOVER_SEARCH_VERSION,
         CAPACITY_SEARCH_VERSION,
         ALLOCATION_SEARCH_VERSION,
+        CAPITAL_SEARCH_VERSION,
     )
     priority = specification["version"] in (
         PRIORITY_SEARCH_VERSION,
         TURNOVER_SEARCH_VERSION,
         CAPACITY_SEARCH_VERSION,
         ALLOCATION_SEARCH_VERSION,
+        CAPITAL_SEARCH_VERSION,
     )
     if priority and (
         specification.get("entry_priorities") != list(ENTRY_PRIORITIES)
@@ -277,6 +328,33 @@ def _validate(specification):
             or (not priority and policy["version"] != "research-execution-aware-v1")
         ):
             raise ValueError("The frozen execution reference policy changed")
+    if specification["version"] == CAPITAL_SEARCH_VERSION:
+        expected = descriptor(
+            {
+                "portfolio": {
+                    "automatic_research": {
+                        "version": "automatic-hypotheses-v16",
+                        "history_policy": "available_history",
+                        "design_policy": "automatic_design_v1",
+                    },
+                    "risk_limits": specification["risk_limits"],
+                },
+                "strategies": [
+                    {
+                        "id": row["id"],
+                        "allocation_pct": row["original"]["allocation_pct"],
+                        "config": {
+                            key: row["original"][key]
+                            for key in ("order_size_pct", "target_pct", "stop_pct")
+                        },
+                        "execution_policy": row["original"]["execution_policy"],
+                    }
+                    for row in rows
+                ],
+            }
+        )
+        if specification != expected:
+            raise ValueError("The frozen automatic capital descriptor changed")
 
 
 def axes(specification):
@@ -294,9 +372,10 @@ def axes(specification):
         TURNOVER_SEARCH_VERSION,
         CAPACITY_SEARCH_VERSION,
         ALLOCATION_SEARCH_VERSION,
+        CAPITAL_SEARCH_VERSION,
     ):
         result[PRIORITY_AXIS] = {"type": "categorical", "choices": list(ENTRY_PRIORITIES)}
-    if specification["version"] == ALLOCATION_SEARCH_VERSION:
+    if specification["version"] in (ALLOCATION_SEARCH_VERSION, CAPITAL_SEARCH_VERSION):
         result[ALLOCATION_AXIS] = {"type": "categorical", "choices": list(ALLOCATION_MODES)}
     return result
 
@@ -305,18 +384,24 @@ def apply_choices(strategies, params, specification):
     from research.execution_policy import normalize_policy
 
     _validate(specification)
-    allocation = specification["version"] == ALLOCATION_SEARCH_VERSION
-    capacity = specification["version"] in (CAPACITY_SEARCH_VERSION, ALLOCATION_SEARCH_VERSION)
+    allocation = specification["version"] in (ALLOCATION_SEARCH_VERSION, CAPITAL_SEARCH_VERSION)
+    capacity = specification["version"] in (
+        CAPACITY_SEARCH_VERSION,
+        ALLOCATION_SEARCH_VERSION,
+        CAPITAL_SEARCH_VERSION,
+    )
     turnover = specification["version"] in (
         TURNOVER_SEARCH_VERSION,
         CAPACITY_SEARCH_VERSION,
         ALLOCATION_SEARCH_VERSION,
+        CAPITAL_SEARCH_VERSION,
     )
     priority = specification["version"] in (
         PRIORITY_SEARCH_VERSION,
         TURNOVER_SEARCH_VERSION,
         CAPACITY_SEARCH_VERSION,
         ALLOCATION_SEARCH_VERSION,
+        CAPITAL_SEARCH_VERSION,
     )
     chosen_allocation = params.get(ALLOCATION_AXIS)
     if allocation and chosen_allocation not in ALLOCATION_MODES:
@@ -350,9 +435,17 @@ def apply_choices(strategies, params, specification):
             raise ValueError("Execution and portfolio states must belong to their frozen choices")
         original = definition["original"]
         fraction = Decimal(str(sizing["fraction"]))
-        row["allocation_pct"] = float(Decimal(str(original["allocation_pct"])) * fraction)
+        capital_design = specification["version"] == CAPITAL_SEARCH_VERSION
+        row["allocation_pct"] = (
+            original["allocation_pct"]
+            if capital_design
+            else float(Decimal(str(original["allocation_pct"])) * fraction)
+        )
         row["config"]["order_size_pct"] = max(
-            0.01, float(Decimal(str(original["order_size_pct"])) * fraction)
+            0.01,
+            100.0
+            if capital_design and sizing["sizing"] == "stop_risk"
+            else float(Decimal(str(original["order_size_pct"])) * fraction),
         )
         row["execution_policy"] = normalize_policy(
             {
@@ -423,7 +516,8 @@ def original_sizing(settings, specification):
                 "sizing": "allocation",
                 **(
                     {"allocation_mode": "original"}
-                    if specification["version"] == ALLOCATION_SEARCH_VERSION
+                    if specification["version"]
+                    in (ALLOCATION_SEARCH_VERSION, CAPITAL_SEARCH_VERSION)
                     else {}
                 ),
             }
@@ -433,13 +527,14 @@ def original_sizing(settings, specification):
         TURNOVER_SEARCH_VERSION,
         CAPACITY_SEARCH_VERSION,
         ALLOCATION_SEARCH_VERSION,
+        CAPITAL_SEARCH_VERSION,
     ) and (
         len({row["execution_policy"].get("entry_priority") for row in result}) != 1
         or any(
             row["execution_policy"].get("version")
             != (
                 "research-execution-aware-v5"
-                if specification["version"] == ALLOCATION_SEARCH_VERSION
+                if specification["version"] in (ALLOCATION_SEARCH_VERSION, CAPITAL_SEARCH_VERSION)
                 else "research-execution-aware-v4"
                 if specification["version"] == CAPACITY_SEARCH_VERSION
                 else "research-execution-aware-v3"
@@ -465,9 +560,10 @@ def probes(midpoint, specification):
         TURNOVER_SEARCH_VERSION,
         CAPACITY_SEARCH_VERSION,
         ALLOCATION_SEARCH_VERSION,
+        CAPITAL_SEARCH_VERSION,
     ):
         base[PRIORITY_AXIS] = "source"
-    if specification["version"] == ALLOCATION_SEARCH_VERSION:
+    if specification["version"] in (ALLOCATION_SEARCH_VERSION, CAPITAL_SEARCH_VERSION):
         base[ALLOCATION_AXIS] = "original"
     result = [
         {**base, **{f"{row['id']}.{axis}": choice["id"] for row in specification["strategies"]}}
@@ -482,9 +578,10 @@ def probes(midpoint, specification):
         TURNOVER_SEARCH_VERSION,
         CAPACITY_SEARCH_VERSION,
         ALLOCATION_SEARCH_VERSION,
+        CAPITAL_SEARCH_VERSION,
     ):
         result.extend({**base, PRIORITY_AXIS: value} for value in ENTRY_PRIORITIES[1:])
-    if specification["version"] == ALLOCATION_SEARCH_VERSION:
+    if specification["version"] in (ALLOCATION_SEARCH_VERSION, CAPITAL_SEARCH_VERSION):
         # Replace a redundant reduced-allocation screen; total search work is unchanged.
         replaced = next(
             i

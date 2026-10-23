@@ -68,7 +68,7 @@ def assess(report, features):
     return _assess(report, features, _sealed_identity)
 
 
-def _assess(report, features, identity_check):
+def _assess(report, features, identity_check, *, _owned_report=None):
     """Private capability seam; every native report check is shared with assess."""
     counts = {"filled_entries": 0, "unavailable_entries": 0, "capacity_days": 0}
     feature_id = features.get("id") if isinstance(features, dict) else None
@@ -121,10 +121,26 @@ def _assess(report, features, identity_check):
             "execution": execution,
             "orders": orders,
         }
-        captured = (
-            bounded_canonical_snapshot(subset, max_bytes=MAX_BYTES, allow_native_float64=True)
-            if type(report) is dict
+        from research.canonical_json import _exclusive_canonical_bytes
+        from research.native_report_ownership import checked_native_projection
+
+        checked_projection = checked_native_projection(_owned_report, report, subset)
+
+        native_raw = (
+            _exclusive_canonical_bytes(
+                subset, max_bytes=MAX_BYTES, _checked_projection=checked_projection
+            )
+            if checked_projection is not None
             else None
+        )
+        captured = (
+            (subset, native_raw)
+            if native_raw is not None
+            else (
+                bounded_canonical_snapshot(subset, max_bytes=MAX_BYTES, allow_native_float64=True)
+                if type(report) is dict
+                else None
+            )
         )
         if captured is None:
             # Preserve the original admission and error precedence for custom,
@@ -134,8 +150,8 @@ def _assess(report, features, identity_check):
         else:
             subset, subset_raw = captured
             del captured
-            # Validate the same owned projection whose bytes establish the
-            # successful receipt. No caller can change it during reconciliation.
+            # Generic callers use the detached projection; a consumed native
+            # lease instead retains exclusive original types through this audit.
             ledger, strategies, execution, orders = (
                 subset[key] for key in ("ledger", "strategies", "execution", "orders")
             )

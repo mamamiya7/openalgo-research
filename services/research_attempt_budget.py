@@ -15,7 +15,12 @@ MAX_ATTEMPTS = 512
 MAX_LOST_ATTEMPTS = 64
 MAX_COUNTS_BYTES = 4 * 1024 * 1024
 FIELDS = {
-    "version", "identity", "policy", "limit", "attempts", "checkpoint_attempts",
+    "version",
+    "identity",
+    "policy",
+    "limit",
+    "attempts",
+    "checkpoint_attempts",
     "checkpoint_simulations",
 }
 
@@ -73,7 +78,10 @@ def merge_counts(existing, replacement, *, checkpoint_state=None):
     if KEY in result and result[KEY] != counter:
         raise ValueError("Research progress cannot replace its durable attempt budget")
     if checkpoint_state is not None:
-        attempts, simulations = checkpoint_state.get("attempts"), checkpoint_state.get("simulations")
+        attempts, simulations = (
+            checkpoint_state.get("attempts"),
+            checkpoint_state.get("simulations"),
+        )
         if (
             not _integer(attempts, counter["attempts"])
             or not _integer(simulations, attempts)
@@ -87,8 +95,16 @@ def merge_counts(existing, replacement, *, checkpoint_state=None):
 
 
 def attempt_reserver(
-    store, owner, job_id, token, identity, policy, *,
-    checkpoint_attempts=0, checkpoint_simulations=0, limit=MAX_ATTEMPTS,
+    store,
+    owner,
+    job_id,
+    token,
+    identity,
+    policy,
+    *,
+    checkpoint_attempts=0,
+    checkpoint_simulations=0,
+    limit=MAX_ATTEMPTS,
 ):
     """Return ``reserve(expected_attempts, simulations, reserve, limit)``.
 
@@ -99,8 +115,12 @@ def attempt_reserver(
     baseline. Once initialized, missing or decreasing counters are rejected.
     """
     baseline = {
-        "version": VERSION, "identity": identity, "policy": policy, "limit": limit,
-        "attempts": checkpoint_attempts, "checkpoint_attempts": checkpoint_attempts,
+        "version": VERSION,
+        "identity": identity,
+        "policy": policy,
+        "limit": limit,
+        "attempts": checkpoint_attempts,
+        "checkpoint_attempts": checkpoint_attempts,
         "checkpoint_simulations": checkpoint_simulations,
     }
     _counter(baseline)
@@ -117,8 +137,13 @@ def attempt_reserver(
             or not _integer(simulations, expected_attempts)
             or simulations < last_simulations
             or (first and simulations != checkpoint_simulations)
-            or type(requested_limit) is not int or requested_limit != limit
-            or type(reserve) is not int or reserve not in (0, 2)
+            or type(requested_limit) is not int
+            or requested_limit != limit
+            # Hold back the recorded final pair and/or three/four capital
+            # planning accounts. A larger reserve only restricts admission;
+            # the immutable total and lost-attempt bounds remain unchanged.
+            or type(reserve) is not int
+            or reserve not in (0, 2, 3, 4, 5)
         ):
             raise ValueError("Research attempt admission changed its recorded accounting")
         with store.sessions.begin() as db:
@@ -126,8 +151,11 @@ def attempt_reserver(
             db.execute(update(ResearchWorker).where(ResearchWorker.id == 1).values(id=1))
             lease, job = db.get(ResearchWorker, 1), db.get(ResearchJob, job_id)
             if (
-                lease is None or job is None or lease.token != token
-                or job.owner != owner or job.worker != token
+                lease is None
+                or job is None
+                or lease.token != token
+                or job.owner != owner
+                or job.worker != token
                 or job.status not in ("running", "pausing")
             ):
                 raise AttemptLeaseLost("Cancellation requested or worker lease lost")
@@ -154,10 +182,14 @@ def attempt_reserver(
             ):
                 raise ValueError("Durable research attempt accounting rolled back or changed")
             if attempts >= limit - reserve or attempts - simulations >= MAX_LOST_ATTEMPTS:
-                raise ValueError("Walk-forward research reached its recorded calculation limit; saved progress is retained")
+                raise ValueError(
+                    "Walk-forward research reached its recorded calculation limit; saved progress is retained"
+                )
             counter["attempts"] = attempts + 1
             counts[KEY] = counter
-            receipt.counts = json.dumps(counts, sort_keys=True, separators=(",", ":"), allow_nan=False)
+            receipt.counts = json.dumps(
+                counts, sort_keys=True, separators=(",", ":"), allow_nan=False
+            )
         # Advance local state only after the durable transaction commits.
         first = False
         last_attempts, last_simulations = attempts + 1, simulations

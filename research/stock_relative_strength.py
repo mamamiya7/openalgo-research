@@ -56,6 +56,13 @@ def catalog():
 
 
 def normalize_hypothesis(value):
+    from research.prepared_stock_catalogue import normalize_if_owned
+
+    admitted, selected = normalize_if_owned("relative", value)
+    if admitted:
+        if selected is not None:
+            return selected
+        raise ValueError("The relative-strength hypothesis is not in the recorded catalog")
     if isinstance(value, dict):
         for expected in catalog():
             if value.get("id") == expected["id"] and fingerprint(value) == fingerprint(expected):
@@ -172,10 +179,16 @@ def _observations(series, required):
 
 def _feature(stock, benchmark, decision, hypothesis):
     if hypothesis["id"] == "ema20_and_relative20_gt0":
-        registered = {row["id"]: row for row in catalog()}
+        from research.prepared_stock_catalogue import component_if_owned
+
+        registered = None
         parts = []
         for identifier in hypothesis["components"]:
-            component = registered[identifier]
+            component = component_if_owned("relative", identifier)
+            if component is None:
+                if registered is None:
+                    registered = {row["id"]: row for row in catalog()}
+                component = registered[identifier]
             feature, reason = _feature(stock, benchmark, decision, component)
             if feature is None:
                 return None, f"{component['label']}: {reason}"
@@ -247,21 +260,38 @@ def _feature(stock, benchmark, decision, hypothesis):
         "benchmark_return_pct": benchmark_return,
         "value": value,
     }
-    feature["basis_id"] = fingerprint(
-        {
-            "version": FEATURE_VERSION,
-            "dependency_version": indicators.TESTED_SDK_VERSION,
-            "hypothesis": hypothesis,
-            "stock": {
-                "descriptor": series["descriptor"],
-                "observations": _observations(series, required),
-            },
-            "benchmark": {
-                "descriptor": other["descriptor"],
-                "observations": _observations(other, required),
-            },
-        }
-    )
+    stock_basis = legacy._prepared_basis_record(stock, decision, required)
+    market_basis = legacy._prepared_basis_record(benchmark, decision, required)
+    if stock_basis is not None and market_basis is not None:
+        import json
+
+        feature["basis_id"] = legacy._basis_members(
+            {
+                "version": json.dumps(FEATURE_VERSION).encode(),
+                "dependency_version": json.dumps(indicators.TESTED_SDK_VERSION).encode(),
+                "hypothesis": json.dumps(
+                    hypothesis, sort_keys=True, separators=(",", ":"), allow_nan=False
+                ).encode(),
+                "stock": stock_basis,
+                "benchmark": market_basis,
+            }
+        )
+    else:
+        feature["basis_id"] = fingerprint(
+            {
+                "version": FEATURE_VERSION,
+                "dependency_version": indicators.TESTED_SDK_VERSION,
+                "hypothesis": hypothesis,
+                "stock": {
+                    "descriptor": series["descriptor"],
+                    "observations": _observations(series, required),
+                },
+                "benchmark": {
+                    "descriptor": other["descriptor"],
+                    "observations": _observations(other, required),
+                },
+            }
+        )
     return feature, None
 
 

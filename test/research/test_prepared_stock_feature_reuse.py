@@ -147,9 +147,16 @@ def fake_cache(saved, monkeypatch):
     day = record["calendar"]["sessions"][-1]
     at = datetime.fromisoformat(day + "T09:15:00+05:30")
 
-    def resolve(*, when=at, rule=None, bundle=projected, selected_record=record):
+    def resolve(*, when=at, rule=None, bundle=projected, selected_record=record, _immutable=False):
         return cache.resolve(
-            bundle, symbol, selected_record, when, rule or hypothesis(), feature, "v1"
+            bundle,
+            symbol,
+            selected_record,
+            when,
+            rule or hypothesis(),
+            feature,
+            "v1",
+            _immutable=_immutable,
         )
 
     return owner, cache, resolve, calls, at, projected, record
@@ -245,3 +252,38 @@ def test_scope_error_expired_context_and_owner_thread_cleanup(saved, monkeypatch
     with pytest.raises(ValueError, match="released"):
         owner.apply_stock(saved[1], hypothesis())
     assert cache._PreparedFeatureCache__bundle is None
+
+
+def test_private_feature_results_share_only_checked_immutable_values(saved, monkeypatch):
+    from research.owned_entry_features import _capture, is_immutable_json
+
+    owner, cache, resolve, calls, at, _, _ = fake_cache(saved, monkeypatch)
+    rule = _capture(hypothesis())
+    encoded, original = [], stock.bounded_canonical_bytes
+
+    def encode(value, **kwargs):
+        if value is rule:
+            encoded.append(value)
+        return original(value, **kwargs)
+
+    monkeypatch.setattr(stock, "bounded_canonical_bytes", encode)
+    try:
+        first = resolve(rule=rule, _immutable=True)
+        second = resolve(rule=rule, _immutable=True)
+        assert first[0] is second[0] and is_immutable_json(first[0])
+        assert len(calls) == 1 and len(encoded) == 1
+        resolve(rule=rule, when=at + timedelta(minutes=1), _immutable=True)
+        assert len(calls) == 2 and len(encoded) == 1
+        with pytest.raises(TypeError, match="immutable"):
+            first[0]["nested"]["items"].append("edit")
+        public = resolve(rule=rule)
+        public[0]["nested"]["items"].append("edit")
+        assert resolve(rule=rule)[0]["nested"]["items"] == []
+        mutable = deepcopy(hypothesis())
+        before = resolve(rule=mutable)[0]["value"]
+        mutable["threshold"] += 1
+        assert resolve(rule=mutable)[0]["value"] != before
+    finally:
+        owner.close()
+    assert cache._PreparedFeatureCache__signature is None
+    assert not cache._PreparedFeatureCache__entries

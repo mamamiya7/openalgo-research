@@ -415,6 +415,7 @@ export interface PortfolioRequest {
         version: 'automatic-hypotheses-v16'
         validation_mode?: 'historical_only'
         history_policy?: 'available_history'
+        design_policy?: 'automatic_design_v1'
       }
   )
   entry_conditions?: EntryConditions
@@ -618,7 +619,7 @@ export interface WalkForwardFindings {
   selection_policy: string
 }
 export interface ResearchHistoryAvailability {
-  version: 'research-available-history-v1'
+  version: 'research-available-history-v1' | 'research-available-history-v2'
   mode: 'exploratory_only' | 'historical_only'
   session_count: number
   holding: {
@@ -630,8 +631,42 @@ export interface ResearchHistoryAvailability {
   reason_code: string
   minimum_session_lower_bound?: number
   fit_prefixes?: unknown
+  usable_entry_session_count?: number
 }
 export interface AutomaticResearchFindings {
+  capital_planning?: {
+    version: 'research-capital-planning-v1'
+    status: 'verified_sufficient' | 'no_verified_amount'
+    estimated_capital: number
+    verified_capital: number | null
+    original_capital: number
+    reference_tickets: Array<{ strategy_id: string; initial_ticket: number }>
+    tested_range: [number, number] | null
+    accounts: Array<{
+      capital: number
+      admitted_requests: number
+      clipped_requests: number
+      blockers: Record<string, number>
+      verified_sufficient: boolean
+    }>
+  }
+  automatic_design?: {
+    selected: {
+      qualified: boolean
+      reasons: string[]
+      closed_trades: number
+      entry_dates: number
+      active_bins: number
+      largest_symbol_positive_profit_fraction: number | null
+      capital_use: {
+        mean_invested_pct: number | null
+        maximum_invested_pct: number | null
+      }
+    }
+    candidates_passing_design: number
+    candidates_checked: number
+    is_baseline_reference: boolean
+  }
   market_suitability?: MarketSuitabilityFindings
   recommendation_checks?: {
     version: string

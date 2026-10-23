@@ -139,7 +139,11 @@ function availableHistoryResearch(
   recipe: NonNullable<PortfolioRequest['automatic_research']>
 ): NonNullable<PortfolioRequest['automatic_research']> {
   return recipe.version === 'automatic-hypotheses-v16'
-    ? { version: recipe.version, history_policy: 'available_history' }
+    ? {
+        version: recipe.version,
+        history_policy: 'available_history',
+        design_policy: 'automatic_design_v1',
+      }
     : recipe
 }
 // Keep saved recipe versions, custom ranges and chosen entry conditions.
@@ -1105,8 +1109,9 @@ export function PortfolioBuilder({
               </p>
               {portfolio.automatic_research?.version === 'automatic-hypotheses-v16' && (
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Using all available signal history. The full search keeps your trading rules;
-                  findings show which historical checks the available dates support.
+                  Using all available signal history. Sizes trades within your risk limits and
+                  estimates starting capital from your initial order amount. Findings show which
+                  historical checks the available dates support.
                 </p>
               )}
               <details className="mt-3 text-sm">

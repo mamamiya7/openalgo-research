@@ -3,6 +3,7 @@
 # ruff: noqa: F811 -- shared isolated fixtures
 import hashlib
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 from copy import deepcopy
 
 import pytest
@@ -88,6 +89,29 @@ def test_large_middle_prefix_uses_original_fallback():
     payload.close()
 
 
+def test_owned_ceiling_accepts_prior_four_mib_boundary_and_exact_wrap_limit(monkeypatch):
+    # Real admission above the former ceiling, without a 32MiB test allocation.
+    value = {"padding": "x" * (4 * 1024**2 + 1)}
+    captured = bounded_canonical_snapshot(value, max_bytes=transfer.MAX_OWNED_BYTES)
+    assert captured is not None
+    payload = transfer._OwnedCanonicalJSON(*captured)
+    wrapped = payload.wrap("state", {})
+    assert wrapped is not None
+    actual, raw = wrapped.take()
+    assert raw == service.encoded(actual)
+    assert transfer.MAX_OWNED_BYTES == 32 * 1024**2
+    assert service.MAX_COMPACT_CHECKPOINT_BYTES == 4 * 1024**2
+    small = {"a": 1}
+    payload = owned(small)
+    exact = len(service.encoded({"state": small}))
+    monkeypatch.setattr(transfer, "MAX_OWNED_BYTES", exact - 1)
+    assert payload.wrap("state", {}) is None
+    monkeypatch.setattr(transfer, "MAX_OWNED_BYTES", exact)
+    wrapped = payload.wrap("state", {})
+    assert wrapped is not None
+    assert len(wrapped.take()[1]) == exact
+
+
 def test_expired_and_foreign_thread_payloads_cannot_publish():
     payload = owned({"a": 1})
     with ThreadPoolExecutor(max_workers=1) as pool:
@@ -121,7 +145,10 @@ def test_sink_is_explicit_and_releases_payload_on_error():
         _ = payload.value
 
 
-def test_owned_artifact_reuses_only_root_encoding_with_full_shadow_checks(store, monkeypatch):
+@pytest.mark.parametrize("compact", [False, True])
+def test_owned_artifact_reuses_only_root_encoding_with_full_shadow_checks(
+    store, monkeypatch, compact
+):
     monkeypatch.setattr(service, "CHUNK_ARTIFACT_BYTES", 128)
     value = {"state": [{"account": i, "values": list(range(i, i + 20))} for i in range(25)]}
     payload = owned(value)
@@ -133,15 +160,43 @@ def test_owned_artifact_reuses_only_root_encoding_with_full_shadow_checks(store,
         return original(item)
 
     monkeypatch.setattr(service, "encoded", encoded)
-    with service.compact_checkpoint_publication():
+    with service.compact_checkpoint_publication() if compact else nullcontext():
         identity = service._save_owned_artifact(store, payload)
     assert identity == hashlib.sha256(original(value)).hexdigest()
-    assert service.read_artifact(store, identity) == value
     assert original(value) not in calls
     assert calls, "all shadow child/manifest encoding must remain"
-    assert service.artifact_dependencies(store, identity) == set()
+    assert service.read_artifact(store, identity) == value
+    dependencies = service.artifact_dependencies(store, identity)
+    assert (dependencies == set()) if compact else bool(dependencies)
     with pytest.raises(ValueError):
         payload.take()
+
+
+def test_owned_noncompact_manifest_and_children_match_original_writer(store, tmp_path, monkeypatch):
+    from database.research_db import ResearchStore
+
+    monkeypatch.setattr(service, "CHUNK_ARTIFACT_BYTES", 128)
+    other = ResearchStore(tmp_path / "ordinary")
+    other.initialize()
+    value = {"state": [{"account": i, "values": list(range(20))} for i in range(25)]}
+    try:
+        original = service.save_artifact(other, value)
+        actual = service._save_owned_artifact(store, owned(value))
+        assert actual == original
+        assert service.artifact_dependencies(store, actual) == service.artifact_dependencies(
+            other, original
+        )
+        actual_files = {p.name: p.read_bytes() for p in (store.root / "artifacts").iterdir()}
+        expected_files = {p.name: p.read_bytes() for p in (other.root / "artifacts").iterdir()}
+        assert actual_files == expected_files
+        changed = deepcopy(value)
+        changed["state"][0]["values"][0] = 99
+        changed_id = service._save_owned_artifact(store, owned(changed))
+        assert changed_id != actual
+        assert service.read_artifact(store, changed_id) == changed
+        assert service.read_artifact(store, actual) == value
+    finally:
+        other.close()
 
 
 @pytest.mark.parametrize("guard", ["nodes", "bytes", "quota"])

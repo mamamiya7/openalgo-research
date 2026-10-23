@@ -264,6 +264,7 @@ describe('native portfolio consumer journey', () => {
     expect(optimized.portfolio.automatic_research).toEqual({
       version: 'automatic-hypotheses-v16',
       history_policy: 'available_history',
+      design_policy: 'automatic_design_v1',
     })
     expect(optimized.portfolio.strategies).toEqual(original.portfolio.strategies)
     expect(optimized.portfolio.capital).toBe(original.portfolio.capital)
@@ -599,6 +600,7 @@ describe('native portfolio consumer journey', () => {
     expect(sent.automatic_research).toEqual({
       version: 'automatic-hypotheses-v16',
       history_policy: 'available_history',
+      design_policy: 'automatic_design_v1',
     })
     expect(sent.capital).toBe(original.portfolio.capital)
     expect(sent.strategies[0].config).toEqual(original.portfolio.strategies[0].config)
@@ -2481,6 +2483,7 @@ it('uses all available history automatically without an extra option or changing
   expect(sent.automatic_research).toEqual({
     version: 'automatic-hypotheses-v16',
     history_policy: 'available_history',
+    design_policy: 'automatic_design_v1',
   })
   expect(sent.capital).toBe(original.portfolio.capital)
   expect(sent.strategies[0].config).toEqual(original.portfolio.strategies[0].config)
@@ -2488,6 +2491,7 @@ it('uses all available history automatically without an extra option or changing
   expect(original.portfolio.automatic_research).toEqual({
     version: 'automatic-hypotheses-v16',
     history_policy: 'available_history',
+    design_policy: 'automatic_design_v1',
   })
 })
 
@@ -2503,6 +2507,7 @@ it('opts an existing strict v16 draft into available history on a new run withou
   expect(vi.mocked(portfolioResearch.submit).mock.calls[0][0].automatic_research).toEqual({
     version: 'automatic-hypotheses-v16',
     history_policy: 'available_history',
+    design_policy: 'automatic_design_v1',
   })
   expect(original).toEqual(before)
 })
@@ -2641,9 +2646,11 @@ it.each([
 })
 
 it.each([
-  false,
-  true,
-])('loads the frozen parent history scope for a reopened child report (frozen %s)', async (freezeAnalysis) => {
+  [false, 'candidate'],
+  [true, 'candidate'],
+  [false, 'different-candidate'],
+  [true, 'different-candidate'],
+] as const)('loads matching frozen parent history and capital scope (frozen %s, setup %s)', async (freezeAnalysis, configId) => {
   const parentId = 'available-history-parent'
   const parent = {
     ...finished,
@@ -2652,6 +2659,25 @@ it.each([
       ...result,
       automatic_research: {
         version: 'automatic-hypotheses-v16',
+        selected_config_id: 'candidate',
+        capital_planning: {
+          version: 'research-capital-planning-v1',
+          status: 'verified_sufficient',
+          estimated_capital: 60000,
+          verified_capital: 75000,
+          original_capital: 100000,
+          reference_tickets: [{ strategy_id: 'one', initial_ticket: 3000 }],
+          tested_range: [60000, 75000],
+          accounts: [
+            {
+              capital: 75000,
+              admitted_requests: 30,
+              clipped_requests: 0,
+              blockers: {},
+              verified_sufficient: true,
+            },
+          ],
+        },
         recipe: {
           version: 'automatic-hypotheses-v16',
           validation_mode: 'exploratory_only',
@@ -2672,8 +2698,10 @@ it.each([
     automatic_research: undefined,
     report_context: {
       ...result.report_context,
+      config_id: configId,
+      period: 'selection',
       parent_job_id: parentId,
-      candidate: { study_job_id: parentId, config_id: 'candidate', is_objective_winner: false },
+      candidate: { study_job_id: parentId, config_id: configId, is_objective_winner: false },
     },
   } as PortfolioResult
   const original = structuredClone(child)
@@ -2693,6 +2721,12 @@ it.each([
   )
   expect(await screen.findByText(/Using all available signal history · 160 sessions/)).toBeVisible()
   expect(screen.getByText('Historical research · no independent later-period check')).toBeVisible()
+  if (configId === 'candidate')
+    expect(screen.getByText('Capital verified for this history: ₹75,000')).toBeVisible()
+  else
+    expect(
+      screen.queryByRole('region', { name: 'Starting capital estimate' })
+    ).not.toBeInTheDocument()
   expect(portfolioResearch.job).toHaveBeenCalledWith(parentId, expect.any(AbortSignal))
   expect(child).toEqual(original)
 })

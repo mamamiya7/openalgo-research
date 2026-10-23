@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuthStore } from '@/stores/authStore'
 import {
   AutomaticResearchFindings,
+  CapitalPlanning,
   ResearchHistoryScope,
   recordedHistoryAvailability,
 } from './AutomaticResearchFindings'
@@ -223,15 +224,31 @@ interface ResultProps {
   freezeAnalysis?: boolean
   hideStudyBack?: boolean
 }
-function ParentResearchHistoryScope({ parentId, owner }: { parentId: string; owner: string }) {
+function ParentResearchHistoryScope({
+  parentId,
+  owner,
+  selectionConfigId,
+}: {
+  parentId: string
+  owner: string
+  selectionConfigId?: string | null
+}) {
   const parent = useQuery({
     queryKey: ['portfolio-job', owner, parentId],
     queryFn: ({ signal }) => portfolioResearch.job(parentId, signal),
     staleTime: Infinity,
     retry: false,
   })
-  const availability = recordedHistoryAvailability(parent.data?.result?.automatic_research)
-  return availability ? <ResearchHistoryScope availability={availability} /> : null
+  const findings = parent.data?.result?.automatic_research
+  const availability = recordedHistoryAvailability(findings)
+  return (
+    <>
+      {availability && <ResearchHistoryScope availability={availability} />}
+      {selectionConfigId === findings?.selected_config_id && findings?.capital_planning && (
+        <CapitalPlanning planning={findings.capital_planning} />
+      )}
+    </>
+  )
 }
 
 export function PortfolioResults(props: ResultProps) {
@@ -262,11 +279,25 @@ export function PortfolioResults(props: ResultProps) {
   const parentStudyId =
     props.result.report_context?.candidate?.study_job_id ??
     props.result.report_context?.parent_job_id
+  const selectionConfigId =
+    props.result.report_context?.period === 'selection'
+      ? props.result.report_context.config_id
+      : undefined
   const inheritedHistoryScope =
     historyAvailability && !props.result.automatic_research ? (
-      <ResearchHistoryScope availability={historyAvailability} />
+      <>
+        <ResearchHistoryScope availability={historyAvailability} />
+        {selectionConfigId === parentAutomatic?.selected_config_id &&
+          parentAutomatic?.capital_planning && (
+            <CapitalPlanning planning={parentAutomatic.capital_planning} />
+          )}
+      </>
     ) : !parentAutomatic && parentStudyId && parentStudyId !== props.job.id ? (
-      <ParentResearchHistoryScope parentId={parentStudyId} owner={owner} />
+      <ParentResearchHistoryScope
+        parentId={parentStudyId}
+        owner={owner}
+        selectionConfigId={selectionConfigId}
+      />
     ) : null
   const historical =
     parentAutomatic?.version === 'automatic-hypotheses-v16' &&

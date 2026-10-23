@@ -339,7 +339,11 @@ def portfolio_payload(draft):
             # Editable launches use the data the trader supplied. Retained job
             # evidence/exact replay bypass this builder and keep their original
             # frozen research policy and recipe.
-            automatic = {"version": automatic["version"], "history_policy": "available_history"}
+            automatic = {
+                "version": automatic["version"],
+                "history_policy": "available_history",
+                "design_policy": "automatic_design_v1",
+            }
         portfolio["automatic_research"] = automatic
         for strategy in portfolio["strategies"]:
             strategy["search"] = {}

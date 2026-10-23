@@ -6,6 +6,22 @@ Each release adds a stanza here summarising what changed and who contributed.
 The full notes for a release, with commit SHAs and the reasoning behind each
 fix, live in [docs/releases](releases/).
 
+## [Research 0.1.0-preview.27] - 2026-10-23
+
+### Automatic sizing, historical support and capital planning
+
+New editable runs record an explicit automatic-design policy. Risk sizing can
+exceed the original order-size reference while retaining every hard account
+limit. Historical selection checks sample size, actual entry-date spread and
+stock-profit concentration; no qualifying improvement retains the baseline.
+A separate bounded native-account diagnostic estimates starting capital for the
+original initial rupee ticket. It never reranks the chosen setup, hides added
+capital in returns, or claims that money resolves position or liquidity limits.
+Old saved recipes and exact replay preserve their original semantics.
+
+See the [research release notes](research/releases/0.1.0-preview.27.md) for
+qualification and limitations. No dependencies or platform version changed.
+
 ## [Research 0.1.0-preview.26] - 2026-10-23
 
 ### Research on available signal history

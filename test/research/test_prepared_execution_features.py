@@ -17,18 +17,23 @@ def evidence(request):
     return prepared(minute=minute, no_hours=no_hours)[0]
 
 
-def test_owned_and_public_attachments_are_exact_with_one_whole_receipt_validation(evidence, monkeypatch):
+def test_owned_and_public_attachments_are_exact_with_one_whole_receipt_validation(
+    evidence, monkeypatch
+):
     expected = features.attach(evidence)
     original = features._intact
     intact_calls, entry_calls = [], []
     entry_check = features.validate_entry_feature
+
     def intact(receipt):
         intact_calls.append(receipt)
         assert receipt is not evidence["execution_features"]
         return original(receipt)
+
     def entry(*args, **kwargs):
         entry_calls.append(kwargs)
         return entry_check(*args, **kwargs)
+
     monkeypatch.setattr(features, "_intact", intact)
     with features._PreparedExecutionFeatures(evidence["execution_features"]) as owner:
         assert len(intact_calls) == 1
@@ -38,7 +43,10 @@ def test_owned_and_public_attachments_are_exact_with_one_whole_receipt_validatio
             assert attached == expected
             assert attached["execution_features"] is evidence["execution_features"]
         assert len(intact_calls) == 1
-        assert len(entry_calls) == 3
+        # One full validation admits the immutable entry copy; each of the
+        # three candidate attachments still checks its own causal bindings.
+        assert len(entry_calls) == 4
+        assert entry_calls[0]["decision_at"].endswith("23:59:00+05:30")
 
 
 def test_source_and_returned_feature_mutations_cannot_change_private_receipt(evidence):
@@ -48,7 +56,8 @@ def test_source_and_returned_feature_mutations_cannot_change_private_receipt(evi
     with features._PreparedExecutionFeatures(receipt) as owner:
         attached = owner.attach(current)
         next(iter(receipt["features"].values()))["feature"]["value"] += 123
-        attached["strategies"][0]["signals"][0]["execution_atr"]["value"] += 456
+        with pytest.raises(TypeError, match="immutable"):
+            attached["strategies"][0]["signals"][0]["execution_atr"]["value"] += 456
         assert owner.attach(current)["strategies"] == expected
         with pytest.raises(ValueError, match="original source object"):
             owner.attach({**current, "execution_features": deepcopy(receipt)})
@@ -64,7 +73,9 @@ def test_candidate_specific_source_and_schedule_checks_remain_fresh(evidence, pr
     with features._PreparedExecutionFeatures(current["execution_features"]) as owner:
         if problem == "interval":
             snapshot = current["snapshot"]
-            snapshot["provenance"]["interval"] = "D" if snapshot["provenance"]["interval"] == "1m" else "1m"
+            snapshot["provenance"]["interval"] = (
+                "D" if snapshot["provenance"]["interval"] == "1m" else "1m"
+            )
         elif problem == "context":
             current["automatic_stock_market_context"]["id"] = "0" * 64
         elif problem == "calendar":
@@ -81,8 +92,10 @@ def test_candidate_specific_source_and_schedule_checks_remain_fresh(evidence, pr
 
 def test_each_actual_entry_still_runs_causal_feature_validation(evidence, monkeypatch):
     with features._PreparedExecutionFeatures(evidence["execution_features"]) as owner:
+
         def reject(*args, **kwargs):
             raise ValueError("fresh causal entry check")
+
         monkeypatch.setattr(features, "validate_entry_feature", reject)
         with pytest.raises(ValueError, match="fresh causal entry check"):
             owner.attach(evidence)
@@ -96,7 +109,9 @@ def test_untrusted_receipts_are_checked_before_ownership(evidence, problem, monk
     elif problem == "version":
         receipt["version"] = "unsupported"
     elif problem == "mask":
-        next(iter(next(iter(receipt["opportunities"].values())).values()))["common_exclusion"] = "fake mask"
+        next(iter(next(iter(receipt["opportunities"].values())).values()))["common_exclusion"] = (
+            "fake mask"
+        )
     elif problem == "counts":
         receipt["counts"]["opportunities"] += 1
     elif problem == "nonfinite":
@@ -111,10 +126,12 @@ def test_stream_fallback_is_exact_and_always_closes_capture(evidence, monkeypatc
     expected = features.attach(evidence)
     captures = []
     original = features.StringIO
+
     def stream():
         value = original()
         captures.append(value)
         return value
+
     monkeypatch.setattr(features, "bounded_canonical_snapshot", lambda *a, **kw: None)
     monkeypatch.setattr(features, "StringIO", stream)
     with features._PreparedExecutionFeatures(evidence["execution_features"]) as owner:
@@ -132,10 +149,12 @@ def test_validation_uses_the_same_owned_capture_even_if_caller_changes(evidence,
     expected = features.attach(current)["strategies"]
     receipt = current["execution_features"]
     original = features._intact
+
     def during_validation(owned):
         assert owned is not receipt
         next(iter(receipt["features"].values()))["feature"]["value"] += 999
         return original(owned)
+
     monkeypatch.setattr(features, "_intact", during_validation)
     with features._PreparedExecutionFeatures(receipt) as owner:
         assert owner.attach(current)["strategies"] == expected
@@ -146,9 +165,11 @@ def test_fallback_does_not_normalize_invalid_schema_into_valid_owned_json(eviden
     class RejectedList(list):
         def __ne__(self, other):
             return True
+
     class RejectedMapping(dict):
         def __ne__(self, other):
             return True
+
     current = deepcopy(evidence)
     receipt = current["execution_features"]
     opportunity = next(iter(next(iter(receipt["opportunities"].values())).values()))
@@ -182,20 +203,26 @@ def test_nested_original_exclusion_never_exposes_the_private_receipt(evidence):
         assert owner.attach(current)["strategies"] == expected
 
 
-def test_owned_projection_never_escapes_even_for_nested_untrusted_feature_values(evidence, monkeypatch):
+def test_owned_projection_never_escapes_even_for_nested_untrusted_feature_values(
+    evidence, monkeypatch
+):
     # No relaxed validation is used: inject a nested returned value only after
     # construction to exercise the defensive copy at the ownership boundary.
     original = features.validate_entry_feature
     nested = {"items": []}
     with features._PreparedExecutionFeatures(evidence["execution_features"]) as owner:
+
         def decorated(value, **kwargs):
             original(value, **kwargs)
             return {**value, "test_nested": nested}
+
         monkeypatch.setattr(features, "validate_entry_feature", decorated)
         first = owner.attach(evidence)
         first["strategies"][0]["signals"][0]["execution_atr"]["test_nested"]["items"].append(1)
         assert nested == {"items": []}
-        assert owner.attach(evidence)["strategies"][0]["signals"][0]["execution_atr"]["test_nested"] == {"items": []}
+        assert owner.attach(evidence)["strategies"][0]["signals"][0]["execution_atr"][
+            "test_nested"
+        ] == {"items": []}
 
 
 def test_repeated_owners_release_references_on_success_and_exception(evidence):

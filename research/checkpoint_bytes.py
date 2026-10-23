@@ -1,8 +1,8 @@
 """Private synchronous transfer of already encoded, owned checkpoint trees.
 
 Only native checkpoint sinks opt in. Generic callbacks never receive a byte
-capability. Each canonical root is at most four MiB; composition briefly owns
-the old and new roots, at most eight MiB, without retaining a cross-save cache.
+capability. Each canonical root is at most 32 MiB; composition briefly owns
+the old and new roots, at most 64 MiB, without retaining a cross-save cache.
 """
 
 import json
@@ -11,7 +11,7 @@ from threading import get_ident
 
 from research.canonical_json import bounded_canonical_bytes, bounded_canonical_snapshot
 
-MAX_OWNED_BYTES = 4 * 1024**2
+MAX_OWNED_BYTES = 32 * 1024**2
 
 
 def _encoded(value):

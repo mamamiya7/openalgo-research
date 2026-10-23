@@ -5,9 +5,11 @@ import json
 from copy import deepcopy
 
 from research import development_evidence as contract
+from research.owned_entry_features import owned_json_bounds
 from research.report_contract import fingerprint
 from services.scanner_research_service import (
     _artifact_publication,
+    _save_owned_artifact,
     encoded,
     read_artifact,
     save_artifact,
@@ -29,6 +31,7 @@ class DevelopmentEvidenceWriter:
         self.stage_publication = stage_publication
         self._pending = {}
         self._pending_bytes = 0
+        self._verified_rows = {}
         self.binding = deepcopy(binding)
         self.plan = contract.plan(evidence, max_evaluations)
         self.entries = {}
@@ -180,9 +183,8 @@ class DevelopmentEvidenceWriter:
                     raise ValueError("A recorded development evaluation changed")
                 pending_bytes = self._pending_bytes - len(self._pending.get(key, b"")) + size
                 if (
-                    (key not in self._pending and len(self._pending) >= MAX_PENDING_SHARDS)
-                    or pending_bytes > MAX_PENDING_BYTES
-                ):
+                    key not in self._pending and len(self._pending) >= MAX_PENDING_SHARDS
+                ) or pending_bytes > MAX_PENDING_BYTES:
                     raise ValueError(
                         "Pending development evidence must be published before continuing"
                     )
@@ -219,7 +221,16 @@ class DevelopmentEvidenceWriter:
             expected = descriptor["inputs_artifact"]
             if hashlib.sha256(raw).hexdigest() != expected:
                 raise ValueError("Pending development evidence identity changed")
-            actual = save_artifact(self.store, json.loads(raw))
+            # The bytes were produced and retained privately by retain(); the
+            # shared artifact writer still checks identity, quotas and durable
+            # publication. Avoid encoding the complete shard a second time.
+            from research.checkpoint_bytes import _OwnedCanonicalJSON
+
+            owned = _OwnedCanonicalJSON(json.loads(raw), raw)
+            try:
+                actual = _save_owned_artifact(self.store, owned)
+            finally:
+                owned.close()
             if actual != expected:
                 raise ValueError("Published development evidence identity changed")
         self._pending.clear()
@@ -248,6 +259,9 @@ class DevelopmentEvidenceWriter:
             if row.get("evaluation_basis", {}).get("period", {}).get("kind") == "evaluation":
                 continue
             descriptor = row.get("development_evidence")
+            if self._verified_rows.get(key) is row and owned_json_bounds(row) is not None:
+                expected[key] = descriptor
+                continue
             if not isinstance(descriptor, dict) or descriptor.get("basis_id") != fingerprint(
                 row.get("evaluation_basis")
             ):
@@ -261,6 +275,13 @@ class DevelopmentEvidenceWriter:
                 ):
                     raise ValueError("Development evidence and calculation condition disagree")
             expected[key] = descriptor
+            # Only exact, privately detached immutable rows can reuse their
+            # completed checks. Restored/public/mutable rows are always fresh.
+            # Entry count is the existing admitted evaluation storage bound.
+            if key in self.entries and owned_json_bounds(row) is not None:
+                self._verified_rows[key] = row
+        for key in self._verified_rows.keys() - evaluations.keys():
+            del self._verified_rows[key]
         if expected != self.entries:
             raise ValueError("Development evidence and calculation checkpoint disagree")
 

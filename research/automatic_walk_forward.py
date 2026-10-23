@@ -47,11 +47,32 @@ from research.entry_conditions import enrich
 from research.evaluation_basis import build_evaluation_basis
 from research.execution_features import _PreparedExecutionFeatures
 from research.joint_stock_market import PreparedJointContext
+from research.native_report_ownership import capture_native_report
 from research.portfolio_execution_features import _PreparedPortfolioFeatures
+from research.prepared_calculation import PreparedCalculationWindows
 from research.report_contract import fingerprint, settings_identity
 
 FITS = ("fit1", "fit2", "fit3", "search")
 SEED_FITS = (*FITS, "search_seed1", "search_seed2")
+
+
+def _account_reserve(recipe, period, *, planning=False):
+    """Hold back only accounts still ahead of this calculation phase."""
+    if planning:
+        if "capital_planning" not in recipe:
+            raise ValueError("Capital planning needs its recorded account reservation")
+        # Planning follows the selected/final report and spends its own already
+        # reserved slots. The final comparison pair has already completed.
+        return 0
+    reserve = (
+        2
+        if period != "final"
+        and recipe.get("history_availability", {}).get("mode") != "exploratory_only"
+        else 0
+    )
+    if "capital_planning" in recipe:
+        reserve += recipe["budget"]["max_capital_planning_accounts"]
+    return reserve
 
 
 def fit_names(version):
@@ -428,6 +449,13 @@ def run(
         boundary()
     version = evidence.get("portfolio", {}).get("automatic_research", {}).get("version")
     context = _context(version)
+    from research.connectors.vectorbt_portfolio import evaluate as native_evaluate
+
+    # Custom evaluators retain their ordinary JSON contract. Only the actual
+    # native connector understands the immutable market admission capability.
+    native_inputs = evaluate is native_evaluate and getattr(evaluate, "__module__", None) == (
+        "research.connectors.vectorbt_portfolio"
+    )
     prepare = (
         prepare_method_gate
         if version
@@ -444,6 +472,7 @@ def run(
         else prepare_gate
     )
     with (
+        PreparedCalculationWindows() if native_inputs else nullcontext() as prepared_calculations,
         prepare(evidence.get("automatic_stock_market_context")) as prepared,
         (
             _PreparedPortfolioFeatures(evidence.get("portfolio_execution_features"))
@@ -486,6 +515,7 @@ def run(
             read_evaluation=read_evaluation,
             calibration_seed_plan=calibration_seed_plan,
             reserve_attempt=reserve_attempt,
+            prepared_calculations=prepared_calculations,
         )
 
 
@@ -511,6 +541,7 @@ def _run(
     read_evaluation,
     calibration_seed_plan=None,
     reserve_attempt=None,
+    prepared_calculations=None,
 ):
     import optuna
 
@@ -568,6 +599,19 @@ def _run(
             upper += recipe["budget"]["max_sensitivity_accounts"]
         if version in (SEED_VERSION, ALLOCATION_VERSION):
             upper += recipe["budget"]["max_seed_accounts"]
+        if "capital_planning" in recipe:
+            upper += recipe["budget"]["max_capital_planning_accounts"]
+            if recipe.get("history_availability", {}).get("mode") == "exploratory_only":
+                # Six complete fits, their references, four sizing controls,
+                # report reconstruction, planning and all 64 lost attempts.
+                # This branch has no later-window/sensitivity/final accounts.
+                upper = (
+                    6 * (proposals_per_fit + 1)
+                    + 4
+                    + 1
+                    + 64
+                    + recipe["budget"]["max_capital_planning_accounts"]
+                )
         if upper > max_simulations or proposals_per_fit - 50 < 16:
             raise ValueError("Priority research exceeded its accounting or refinement reserve")
     base, numeric_axes = _prepare(evidence["strategies"])
@@ -661,7 +705,10 @@ def _run(
                 return
         state.pop("checkpoint_id", None)
         captured = bounded_canonical_snapshot(
-            state, max_bytes=MAX_CHECKPOINT_BYTES, allow_native_float64=True
+            state,
+            max_bytes=MAX_CHECKPOINT_BYTES,
+            allow_native_float64=True,
+            _preserve_owned=type(checkpoint) is _OwnedCheckpointSink,
         )
         if captured is None:
             state["checkpoint_id"] = _fingerprint(state, max_bytes=MAX_CHECKPOINT_BYTES)
@@ -700,16 +747,42 @@ def _run(
 
     def window(period):
         if period not in windows:
-            windows[period] = (
+            current_window = (
                 sensitivity_window(evidence, period)
                 if version in (SENSITIVITY_VERSION, SEED_VERSION, ALLOCATION_VERSION)
                 and period
                 in {row["name"] for row in recipe["recommendation_sensitivity"]["scenarios"]}
                 else slice_period(evidence, period)
             )
-            if len(windows) > 2:
+            if len(windows) >= 2:
                 evicted, _ = windows.popitem(last=False)
                 opportunity_bases.pop(evicted, None)
+                if prepared_calculations is not None:
+                    prepared_calculations.evict(evicted)
+            windows[period] = current_window
+            if prepared_calculations is not None:
+                market = prepared_calculations.admit(period, current_window["snapshot"])
+                if market is not None:
+                    # This private period view shares an immutable, admitted
+                    # JSON subtree through gates and native calculation. Source
+                    # evidence and persistent artifacts keep their own trees.
+                    current_window["snapshot"] = market.snapshot
+                    from research.owned_entry_features import _capture
+
+                    # Original opportunities and runtime versions are invariant
+                    # within this private period. Candidate settings still get
+                    # their own fresh admission and binding below.
+                    for field in ("signals", "versions"):
+                        try:
+                            current_window[field] = _capture(current_window[field])
+                        except ValueError:
+                            # Unusual legacy values retain their ordinary path.
+                            pass
+                    for strategy in current_window["strategies"]:
+                        try:
+                            strategy["signals"] = _capture(strategy["signals"])
+                        except ValueError:
+                            pass
         windows.move_to_end(period)
         return windows[period]
 
@@ -739,14 +812,24 @@ def _run(
         except (KeyError, TypeError, IndexError) as error:
             raise ValueError("The completed walk-forward fold history is incomplete") from error
 
-    def simulate(settings, hypothesis, period, stress=False, *, report_analysis=True):
+    design_calendars = {}
+
+    def design_assessment(report, period):
+        from research.automatic_design import assess
+        from research.available_history_protocol import entry_bins, opportunity_calendar
+
+        if period not in design_calendars:
+            dates = opportunity_calendar(window(period))
+            design_calendars[period] = (dates, entry_bins(dates))
+        dates, bins = design_calendars[period]
+        return assess(report, bins, recipe["automatic_design"], opportunity_dates=dates)
+
+    @capture_native_report(prepared_calculations is not None)
+    def simulate(
+        settings, hypothesis, period, stress=False, *, report_analysis=True, account_capital=None
+    ):
         control()
-        reserve = (
-            2
-            if period != "final"
-            and recipe.get("history_availability", {}).get("mode") != "exploratory_only"
-            else 0
-        )
+        reserve = _account_reserve(recipe, period, planning=account_capital is not None)
         if (
             state["attempts"] >= max_simulations - reserve
             or state["attempts"] - state["simulations"] >= 64
@@ -759,6 +842,9 @@ def _run(
         current["strategies"] = [
             {**row, **deepcopy(chosen[row["id"]]), "search": {}} for row in current["strategies"]
         ]
+        native_capital = capital if account_capital is None else account_capital
+        if account_capital is not None:
+            current["portfolio"] = {**current["portfolio"], "capital": account_capital}
         if stress:
             for row in current["strategies"]:
                 cost = row["config"]["cost_bps"]
@@ -783,17 +869,19 @@ def _run(
                     "hypothesis": hypothesis,
                 },
             }
-        current["strategies"], receipt = _gate(
-            current,
-            stock,
-            hypothesis,
-            gates,
-            period,
-            apply_fn=prepared_gate.apply,
-            markers_fn=context.markers,
-            calculation_version=policy_for_version(version)["calculation_version"],
-            trailing_activation=True,
-        )
+        market = prepared_calculations.get(period) if prepared_calculations is not None else None
+        with market.activate() if market is not None else nullcontext():
+            current["strategies"], receipt = _gate(
+                current,
+                stock,
+                hypothesis,
+                gates,
+                period,
+                apply_fn=prepared_gate.apply,
+                markers_fn=context.markers,
+                calculation_version=policy_for_version(version)["calculation_version"],
+                trailing_activation=True,
+            )
         current["entry_condition_gates"] = [receipt]
         if reserve_attempt is None:
             state["attempts"] += 1
@@ -809,11 +897,15 @@ def _run(
         # Development accounts retain their full scientific evidence below.
         # Only unused display charts/native tear sheets are omitted; chosen
         # and final reports still receive the original complete analysis.
-        with nullcontext() if report_analysis else discard_trial_analysis():
+        market = prepared_calculations.get(period) if prepared_calculations is not None else None
+        with (
+            nullcontext() if report_analysis else discard_trial_analysis(),
+            market.activate() if market is not None else nullcontext(),
+        ):
             report = evaluate(
                 current["strategies"],
-                current["snapshot"],
-                capital,
+                market.snapshot if market is not None else current["snapshot"],
+                native_capital,
                 progress=lambda done, total: (
                     # Keep the live cancellation/lease read on every engine tick.
                     # Pause acknowledgement belongs to completed-calculation
@@ -835,9 +927,11 @@ def _run(
         ):
             raise ValueError("The native calculation returned different walk-forward settings")
         _score(report["summary"])
-        report["evaluation_basis"] = build_evaluation_basis(
-            current, period="evaluation" if period == "final" else "selection"
-        )
+        with market.activate() if market is not None else nullcontext():
+            report["evaluation_basis"] = build_evaluation_basis(
+                {**current, "snapshot": market.snapshot} if market is not None else current,
+                period="evaluation" if period == "final" else "selection",
+            )
         if (
             version
             in (
@@ -854,9 +948,13 @@ def _run(
             # frozen period window is resident, and detach every report copy.
             original_window = window(period)
             if period not in opportunity_bases:
-                opportunity_bases[period] = build_evaluation_basis(
-                    original_window, period="selection"
-                )
+                with market.activate() if market is not None else nullcontext():
+                    opportunity_bases[period] = build_evaluation_basis(
+                        {**original_window, "snapshot": market.snapshot}
+                        if market is not None
+                        else original_window,
+                        period="selection",
+                    )
             report["research_opportunity_basis"] = deepcopy(opportunity_bases[period])
         report["automatic_stock_condition"] = {
             "hypothesis": deepcopy(hypothesis),
@@ -908,6 +1006,10 @@ def _run(
             from research.recommendation_seeds import account_facts
 
             report["search_seed_evidence"] = account_facts(report, recipe["search_seeds"])
+        if "automatic_design" in recipe:
+            # This calendar belongs to the unchanged common cohort, before
+            # candidate gates, sizing decisions or profits are inspected.
+            report["automatic_design"] = design_assessment(report, period)
         state["simulations"] += 1
         return report
 
@@ -948,6 +1050,11 @@ def _run(
                 "automatic_stock_condition": deepcopy(report["automatic_stock_condition"]),
                 "evaluation_basis": deepcopy(report["evaluation_basis"]),
                 **(
+                    {"automatic_design": deepcopy(report["automatic_design"])}
+                    if "automatic_design" in report
+                    else {}
+                ),
+                **(
                     {"search_seed_evidence": deepcopy(report["search_seed_evidence"])}
                     if "search_seed_evidence" in report
                     else {}
@@ -973,6 +1080,16 @@ def _run(
                 raise ValueError(
                     "The selected walk-forward account did not reproduce its recorded evidence"
                 )
+            if prepared_calculations is not None:
+                # Completed rows are append-only native evidence. Keep their
+                # immutable capability through the private checkpoint sink so
+                # reconciliation need not rehash the entire prior history.
+                from research.owned_entry_features import _capture
+
+                try:
+                    row = _capture(row)
+                except (TypeError, ValueError, RecursionError):
+                    pass  # Unsupported custom evidence retains full admission.
             state["evaluations"][key] = row
             if report_slot:
                 state[report_slot] = report
@@ -1162,12 +1279,17 @@ def _run(
         rows = sorted(
             current["candidates"].values(), key=lambda row: (-row["score"], row["config_id"])
         )
+
+        def admission_reasons(row):
+            failures = _support(row["summary"], reference["summary"], dates=row["entry_dates"])
+            if "automatic_design" in recipe:
+                from research.automatic_design import reasons
+
+                failures.extend(reasons(row, recipe["automatic_design"]))
+            return failures
+
         winner = next(
-            (
-                row
-                for row in rows
-                if not _support(row["summary"], reference["summary"], dates=row["entry_dates"])
-            ),
+            (row for row in rows if not admission_reasons(row)),
             None,
         )
         if winner is None:
@@ -1226,10 +1348,79 @@ def _run(
                 persist()
         return winner, rows
 
+    def with_capital_planning(result):
+        if "capital_planning" not in recipe:
+            return result
+        from research.capital_planning import (
+            account_receipt,
+            descriptor,
+            finish,
+            plan,
+            settings_for,
+        )
+
+        if recipe["capital_planning"] != descriptor():
+            raise ValueError("The recorded capital-planning policy changed")
+        selected = state["selection"]
+        planned = plan(
+            baseline,
+            selected["strategies"],
+            capital,
+            risk_limits=recipe["execution_research"]["risk_limits"],
+            max_accounts=recipe["budget"]["max_capital_planning_accounts"],
+        )
+        retained = state.get("capital_planning")
+        if retained is None:
+            retained = {"plan": planned, "accounts": []}
+            state["capital_planning"] = retained
+            persist()
+        if retained.get("plan") != planned or not isinstance(retained.get("accounts"), list):
+            raise ValueError("The saved capital-planning programme changed")
+        if len(retained["accounts"]) > len(planned["candidate_capitals"]):
+            raise ValueError("The saved capital-planning accounts exceeded their bound")
+        receipts = []
+        for index, amount in enumerate(planned["candidate_capitals"]):
+            control()
+            settings = settings_for(
+                amount, baseline, selected["strategies"], original_capital=capital
+            )
+            if index < len(retained["accounts"]):
+                item = retained["accounts"][index]
+                report = item["report"]
+                if numerical_settings(report.get("strategies")) != numerical_settings(settings):
+                    raise ValueError("Saved capital-planning settings changed")
+                audit = prepared_portfolio.assess(report, evidence["portfolio_execution_features"])
+                if audit != report.get("portfolio_constraint_evidence"):
+                    raise ValueError("Saved capital-planning native constraints changed")
+                receipt = account_receipt(report, planned, amount)
+                if receipt != item["receipt"]:
+                    raise ValueError("Saved capital-planning account evidence changed")
+            else:
+                report = simulate(
+                    settings,
+                    selected["hypothesis"],
+                    "search",
+                    report_analysis=False,
+                    account_capital=amount,
+                )
+                receipt = account_receipt(report, planned, amount)
+                retained["accounts"].append({"report": report, "receipt": receipt})
+                persist()
+            receipts.append(receipt)
+            if receipt["verified_sufficient"]:
+                if len(retained["accounts"]) != index + 1:
+                    raise ValueError("Saved capital planning continued after its verified amount")
+                break
+        result["automatic_research"]["capital_planning"] = finish(planned, receipts)
+        result["automatic_research"]["counts"].update(
+            simulations=state["simulations"], attempts_reserved=state["attempts"]
+        )
+        return result
+
     if recipe.get("history_availability", {}).get("mode") == "exploratory_only":
         from research.available_history_research import run as available_history_run
 
-        return available_history_run(
+        result = available_history_run(
             evidence,
             recipe=recipe,
             state=state,
@@ -1248,7 +1439,9 @@ def _run(
             window=window,
             prepared_portfolio=prepared_portfolio,
             defer_study_analysis=defer_study_analysis,
+            design_assessment=design_assessment,
         )
+        return with_capital_planning(result)
 
     for fold in recipe["walk_forward"]["folds"]:
         winner, _ = fit(fold["fit_period"])
@@ -1559,6 +1752,13 @@ def _run(
             or report.get("evaluation_basis") != row["evaluation_basis"]
             or report.get("automatic_stock_condition") != row["automatic_stock_condition"]
             or report.get("automatic_recipe") != recipe
+            or (
+                "automatic_design" in recipe
+                and (
+                    report.get("automatic_design") != row.get("automatic_design")
+                    or design_assessment(report, period) != row.get("automatic_design")
+                )
+            )
         ):
             raise ValueError(
                 "A saved walk-forward report differs from its recorded account evidence"
@@ -1704,6 +1904,21 @@ def _run(
         "selected_condition": selected["condition_label"],
         "selection_basis": "Training-only expanding refits; all three next-window and higher-cost checks must pass before settings from the final development fit are eligible. Final outcomes never choose settings.",
         "baseline": measured(baseline, none, "search")["summary"],
+        **(
+            {
+                "automatic_design": {
+                    "policy": deepcopy(recipe["automatic_design"]),
+                    "selected": deepcopy(state["selected_report"]["automatic_design"]),
+                    "candidates_passing_design": sum(
+                        candidate["automatic_design"]["qualified"] for candidate in rows
+                    ),
+                    "candidates_checked": len(rows),
+                    "is_baseline_reference": selected["is_baseline"],
+                }
+            }
+            if "automatic_design" in recipe
+            else {}
+        ),
         "checks": [],
         "final": final_info,
         "condition_candidates": deepcopy(rows),
@@ -1865,6 +2080,7 @@ def _run(
             report["analysis"] = add_price_charts(
                 report["analysis"], report, window(period)["snapshot"]
             )
-    return (
+    result = (
         _historical_result(result) if recipe.get("validation_mode") == "historical_only" else result
     )
+    return with_capital_planning(result)

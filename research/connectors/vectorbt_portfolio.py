@@ -28,6 +28,17 @@ MAX_SIGNALS = 25_000
 MAX_STRATEGIES = 20
 
 _DISCARD_TRIAL_ANALYSIS = ContextVar("discard_vectorbt_trial_analysis", default=False)
+_PYTHON_REFERENCE = ContextVar("vectorbt_python_reference", default=False)
+
+
+@contextmanager
+def python_reference():
+    """Retain the original callbacks for differential qualification/replay."""
+    token = _PYTHON_REFERENCE.set(True)
+    try:
+        yield
+    finally:
+        _PYTHON_REFERENCE.reset(token)
 
 
 @contextmanager
@@ -188,7 +199,14 @@ def validate(strategies, snapshot, capital):
         for s in normalized
     ):
         raise ValueError("Timestamped or intraday strategies require one-minute prices")
-    coverage = validate_snapshot(snapshot, [signal for _, signal in lots])
+    from research.prepared_calculation import prepared_market
+
+    market = prepared_market(snapshot)
+    coverage = (
+        market.coverage([signal for _, signal in lots])
+        if market is not None
+        else validate_snapshot(snapshot, [signal for _, signal in lots])
+    )
     index = {key: i for i, key in enumerate(timeline)}
     scheduled = []
     for strategy_i, signal in lots:
@@ -210,6 +228,20 @@ def validate(strategies, snapshot, capital):
 
 def evaluate(strategies, snapshot, capital, *, progress=None):
     strategies, lots, scheduled, coverage = validate(strategies, snapshot, capital)
+    from vectorbt.portfolio import nb as native_kernels
+
+    if not _PYTHON_REFERENCE.get() and all(
+        hasattr(kernel, "py_func")
+        for kernel in (
+            native_kernels.order_nb,
+            native_kernels.close_position_nb,
+            native_kernels.get_stop_price_nb,
+            native_kernels.get_group_value_nb,
+        )
+    ):
+        return _evaluate_compiled(
+            strategies, lots, scheduled, coverage, snapshot, capital, progress
+        )
     execution_aware = "execution_policy" in strategies[0]
     priority_aware = execution_aware and "entry_priority" in strategies[0]["execution_policy"]
     priority = strategies[0]["execution_policy"]["entry_priority"] if priority_aware else None
@@ -534,7 +566,7 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
             execution_details[col].update(
                 allocation_feature_id=allocation_feature["id"],
                 allocation_weight=weight,
-                allocation_cluster=cluster,
+                allocation_cluster=list(cluster),
                 allocation_cluster_before=cluster_before,
                 allocation_symbol_capacity_shares=capacities["portfolio_symbol_allocation"],
                 allocation_cluster_capacity_shares=capacities["portfolio_cluster_allocation"],
@@ -796,6 +828,83 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
     )
 
 
+def _evaluate_compiled(strategies, lots, scheduled, coverage, snapshot, capital, progress):
+    import pandas as pd
+    import vectorbt as vbt
+    from vectorbt.portfolio.enums import TradeStatus
+
+    from research.connectors import vectorbt_compiled as compiled
+
+    minute = snapshot["provenance"]["interval"] == "1m"
+    timeline = snapshot["timeline" if minute else "sessions"]
+    if progress:
+        progress(0, len(timeline))
+    p, state, metadata = compiled.prepare(strategies, lots, scheduled, snapshot, progress)
+    close = p.bars[:, p.symbols, 3]
+    with compiled.progress_checks(progress):
+        portfolio = vbt.Portfolio.from_order_func(
+            pd.DataFrame(close, index=pd.to_datetime(timeline), columns=list(range(len(lots)))),
+            compiled.order,
+            p,
+            state,
+            init_cash=float(capital),
+            cash_sharing=True,
+            group_by=True,
+            flexible=True,
+            row_wise=True,
+            use_numba=True,
+            update_value=True,
+            pre_segment_func_nb=compiled.before_bar,
+            pre_segment_args=(p, state),
+            post_order_func_nb=compiled.after_order,
+            post_order_args=(p, state),
+            post_segment_func_nb=compiled.after_bar,
+            post_segment_args=(p, state),
+            max_orders=len(lots) * 2,
+            max_logs=len(lots) * 2,
+            freq="1min" if minute else "1D",
+            fillna_close=False,
+        )
+    if progress:
+        progress(len(timeline), len(timeline))
+    (
+        budget,
+        rejected,
+        native,
+        raw_in,
+        raw_out,
+        outcomes,
+        timings,
+        details,
+        turnover,
+        participation,
+    ) = compiled.receipts(p, state, metadata, strategies, lots, timeline)
+    return _report(
+        portfolio,
+        strategies,
+        lots,
+        scheduled,
+        snapshot,
+        capital,
+        coverage,
+        budget,
+        rejected,
+        native,
+        raw_in,
+        raw_out,
+        outcomes,
+        timings,
+        vbt.__version__,
+        TradeStatus,
+        execution_details=details,
+        turnover_days=turnover,
+        participation=participation,
+        native_arrays=compiled.native_report_arrays(portfolio, capital)
+        if _DISCARD_TRIAL_ANALYSIS.get()
+        else None,
+    )
+
+
 def _summary(ledger, initial, values, curve):
     closed = [row for row in ledger if row["status"] == "closed"]
     wins = sum(max(0, row["pnl"]) for row in closed)
@@ -868,6 +977,7 @@ def _report(
     execution_details=None,
     turnover_days=None,
     participation=None,
+    native_arrays=None,
 ):
     import numpy as np
 
@@ -949,11 +1059,14 @@ def _report(
         ledger.append(row)
         if execution_details is not None:
             row["execution_details"] = execution_details[col]
-    values = pf.value().to_numpy().reshape(-1)
-    cash = pf.cash().to_numpy().reshape(-1)
-    assets = pf.assets().to_numpy()
-    native_asset_values = pf.asset_value(group_by=False).to_numpy()
-    native_cashflows = pf.cash_flow(group_by=False).to_numpy()
+    if native_arrays is None:
+        values = pf.value().to_numpy().reshape(-1)
+        cash = pf.cash().to_numpy().reshape(-1)
+        assets = pf.assets().to_numpy()
+        native_asset_values = pf.asset_value(group_by=False).to_numpy()
+        native_cashflows = pf.cash_flow(group_by=False).to_numpy()
+    else:
+        values, cash, assets, native_asset_values, native_cashflows = native_arrays
     # Native flows + native marked assets give additive PnL per lot. Never split
     # shared initial cash through VectorBT's hypothetical ungrouped cash accounts.
     lot_pnl = np.cumsum(native_cashflows, axis=0) + native_asset_values
@@ -1158,4 +1271,6 @@ def _report(
                 "basis": "Prior60 aligned completed returns; 10% diagonal covariance shrinkage; positive regularized rho>=0.8 connected clusters; equal cluster budgets and inverse-volatility symbol weights. Fixed source universe, unavailable series excluded explicitly. Entry caps only; no forced rebalancing or negative-correlation credit.",
             },
         )
-    return report
+    from research.native_report_ownership import publish_native_report
+
+    return publish_native_report(report)

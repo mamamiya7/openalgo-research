@@ -954,6 +954,82 @@ function availableHistoryFindings(mode: 'exploratory_only' | 'historical_only'):
   return data
 }
 
+it('shows automatic sample checks and a separate unverified capital estimate honestly', async () => {
+  const data = availableHistoryFindings('exploratory_only')
+  data.selected_is_baseline = true
+  data.headline = 'No reliable improvement found'
+  data.recipe.automatic_design = { policy: 'automatic_design_v1' }
+  data.recipe.history_availability!.version = 'research-available-history-v2'
+  data.recipe.history_availability!.usable_entry_session_count = 72
+  data.automatic_design = {
+    selected: {
+      qualified: false,
+      reasons: ['Fewer than 30 closed trades'],
+      closed_trades: 14,
+      entry_dates: 7,
+      active_bins: 1,
+      largest_symbol_positive_profit_fraction: 0.6,
+      capital_use: { mean_invested_pct: 3.66, maximum_invested_pct: 19.5 },
+    },
+    candidates_passing_design: 0,
+    candidates_checked: 60,
+    is_baseline_reference: true,
+  }
+  data.capital_planning = {
+    version: 'research-capital-planning-v1',
+    status: 'no_verified_amount',
+    estimated_capital: 271000,
+    verified_capital: null,
+    original_capital: 100000,
+    reference_tickets: [{ strategy_id: 'one', initial_ticket: 3000 }],
+    tested_range: [271000, 542000],
+    accounts: [
+      {
+        capital: 542000,
+        admitted_requests: 14,
+        clipped_requests: 0,
+        blockers: { position_count: 5 },
+        verified_sufficient: false,
+      },
+    ],
+  }
+  render(<AutomaticResearchFindings findings={JSON.parse(JSON.stringify(data))} />)
+  expect(screen.getByRole('heading', { name: 'No reliable improvement found' })).toBeVisible()
+  expect(screen.getByText(/72 entry sessions have complete holding windows/)).toBeVisible()
+  expect(screen.getByText(/0 of 60 candidates passed/)).toBeVisible()
+  expect(screen.getByText(/Starting capital estimate: ₹2,71,000/)).toBeVisible()
+  expect(screen.getByText(/No tested amount funded every eligible request/)).toBeVisible()
+  expect(screen.queryByText(/Capital verified for this history:/)).not.toBeInTheDocument()
+  await userEvent.click(screen.getByText(/1 capital checks/))
+  expect(screen.getByText(/Maximum open positions: 5 requests/)).toBeVisible()
+})
+
+it('labels a verified capital account without changing the selected result capital', () => {
+  const data = availableHistoryFindings('exploratory_only')
+  data.capital_planning = {
+    version: 'research-capital-planning-v1',
+    status: 'verified_sufficient',
+    estimated_capital: 60000,
+    verified_capital: 75000,
+    original_capital: 100000,
+    reference_tickets: [{ strategy_id: 'one', initial_ticket: 3000 }],
+    tested_range: [60000, 75000],
+    accounts: [
+      {
+        capital: 75000,
+        admitted_requests: 30,
+        clipped_requests: 0,
+        blockers: {},
+        verified_sufficient: true,
+      },
+    ],
+  }
+  render(<AutomaticResearchFindings findings={data} />)
+  expect(screen.getByText('Capital verified for this history: ₹75,000')).toBeVisible()
+  expect(screen.getByText(/the search result above keeps its recorded capital/)).toBeVisible()
+  expect(data.capital_planning.original_capital).toBe(100000)
+})
+
 it('shows all-history findings without inventing independent checks or requesting more data', async () => {
   const data = availableHistoryFindings('exploratory_only')
   const original = structuredClone(data)

@@ -9,6 +9,15 @@ retains one bounded private snapshot for the lifetime of its calculation job.
 from copy import deepcopy
 
 from research import stock_relative_strength as stock
+from research.gate_input_binding import (
+    _BINDING,
+    FIELDS,
+    copy_gate_signal,
+    execution_inputs_id,
+    freeze_gate_signals,
+)
+from research.market_series import fingerprint as receipt_fingerprint
+from research.owned_entry_features import is_immutable_json
 from research.portfolio import fingerprint
 from research.regimes import recipe as market_recipe
 
@@ -120,6 +129,10 @@ def _combine(
     markers_fn=markers,
 ):
     """Identical joint membership and receipt construction for both input paths."""
+    binding = _BINDING.get()
+    share_owned_rows = binding is not None and all(
+        evidence[field] is binding[0][field] for field in FIELDS
+    )
     membership = {
         (row["strategy_id"], row["signal_index"]): row for row in stock_receipt["membership"]
     }
@@ -153,7 +166,17 @@ def _combine(
                 state = "allowed"
             else:
                 raise ValueError("The joint condition returned an unsupported membership state")
-            retained = deepcopy(signal)
+            # The private native binding owns immutable input rows. If the
+            # gate adds no exclusion, retaining that row avoids copying and
+            # then freezing an identical entry-feature tree. Public mutable
+            # inputs and rows receiving an exclusion still detach normally.
+            retained = (
+                signal
+                if share_owned_rows
+                and state not in ("unknown", "filtered")
+                and is_immutable_json(signal)
+                else copy_gate_signal(signal)
+            )
             if state == "unknown":
                 retained["research_exclusion"] = (
                     first.get("reason")
@@ -180,19 +203,19 @@ def _combine(
                 }
             )
             signals.append(retained)
-        rows.append({**deepcopy(original), "signals": signals})
+        rows.append(
+            {
+                **deepcopy({key: value for key, value in original.items() if key != "signals"}),
+                "signals": freeze_gate_signals(signals),
+            }
+        )
     rows = markers_fn(rows, selected)
     receipt = {
         "version": calculation_version,
         "calculation_version": calculation_version,
         "hypothesis": selected,
         "bundle_id": bundle_id,
-        "execution_inputs_id": fingerprint(
-            {
-                key: evidence[key]
-                for key in ("portfolio", "strategies", "signals", "snapshot", "versions")
-            }
-        ),
+        "execution_inputs_id": execution_inputs_id(evidence),
         "conditioned_strategies_id": fingerprint(rows),
         "counts": counts,
         "membership": combined,
@@ -202,7 +225,9 @@ def _combine(
         "timing": feature_recipe["availability"],
         "unknown_policy": feature_recipe["unknown"],
     }
-    return rows, {**receipt, "id": fingerprint(receipt)}
+    # This fresh bounded scientific receipt contains membership and descriptors,
+    # while account/strategy bindings above retain their separate checked path.
+    return rows, {**receipt, "id": receipt_fingerprint(receipt)}
 
 
 class PreparedJointContext:
@@ -244,14 +269,23 @@ class PreparedJointContext:
             raise ValueError("Prepared stock-market gates require the original source object")
         selected = normalizer(hypothesis)
         feature_recipe = recipe_fn()
-        _, stock_receipt = self.__views.apply_stock(
-            evidence, selected["stock_hypothesis"], _gate=stock_gate
+        stock_receipt = self._component_receipt(
+            "stock",
+            evidence,
+            selected["stock_hypothesis"],
+            lambda: self.__views.apply_stock(
+                evidence, selected["stock_hypothesis"], _gate=stock_gate
+            )[1],
         )
         market_receipts = []
         if selected["market"] is not None:
             for strategy in evidence["strategies"]:
-                _, receipt = self.__views.apply_market(
-                    evidence, {"strategy_id": strategy["id"], **selected["market"]}
+                condition = {"strategy_id": strategy["id"], **selected["market"]}
+                receipt = self._component_receipt(
+                    "market",
+                    evidence,
+                    condition,
+                    lambda condition=condition: self.__views.apply_market(evidence, condition)[1],
                 )
                 market_receipts.append(receipt)
         return combine_fn(
@@ -262,6 +296,9 @@ class PreparedJointContext:
             stock_receipt,
             market_receipts,
         )
+
+    def _component_receipt(self, kind, evidence, descriptor, producer):
+        return producer()
 
     def close(self):
         if self.__views is not None:

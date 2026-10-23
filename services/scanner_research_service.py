@@ -304,7 +304,7 @@ def _save_artifact(store, value, *, _owned_raw=None):
         and type(value) in (dict, list)
         and decoded_bytes <= MAX_COMPACT_CHECKPOINT_BYTES
     )
-    if not compact:
+    if not compact and _owned_raw is None:
         del raw
     nodes = 0
 
@@ -366,10 +366,10 @@ def _save_artifact(store, value, *, _owned_raw=None):
             "format": CHUNK_FORMAT,
             "logical_sha256": digest,
             "decoded_bytes": decoded_bytes,
-            # Compact checkpoints already retain the exact root bytes used for
-            # their identity and final physical write. Reuse only that root;
-            # every child still takes the ordinary encoding/admission path.
-            "tree": node(value, 1, part=raw if compact else None),
+            # Compact checkpoints and private owned payloads retain the exact
+            # identity bytes. Reuse only that bounded root; every child still
+            # takes the ordinary encoding/admission path in either format.
+            "tree": node(value, 1, part=raw if compact or _owned_raw is not None else None),
         }
     )
     if compact:

@@ -116,7 +116,7 @@ def normalize_auto(raw, strategies=None, engine="vectorbt"):
     if (
         not isinstance(raw, dict)
         or "version" not in raw
-        or set(raw) - {"version", "validation_mode", "history_policy"}
+        or set(raw) - {"version", "validation_mode", "history_policy", "design_policy"}
         or raw["version"]
         not in (VERSION, CONDITION_VERSION, STABILITY_VERSION, *HYPOTHESIS_VERSIONS)
     ):
@@ -130,6 +130,14 @@ def normalize_auto(raw, strategies=None, engine="vectorbt"):
         if raw["version"] != ALLOCATION_VERSION or raw["history_policy"] != "available_history":
             raise ValueError("Choose the current available-history research policy")
         result["history_policy"] = "available_history"
+    if "design_policy" in raw:
+        if (
+            raw["version"] != ALLOCATION_VERSION
+            or raw.get("history_policy") != "available_history"
+            or raw["design_policy"] != "automatic_design_v1"
+        ):
+            raise ValueError("Choose the current automatic design policy")
+        result["design_policy"] = "automatic_design_v1"
     if "validation_mode" in raw:
         if raw["version"] != ALLOCATION_VERSION or raw["validation_mode"] != "historical_only":
             raise ValueError(
@@ -708,6 +716,22 @@ def compile_recipe(evidence):
             "Historical later-period comparison only; dates may have been used before. "
             "No independent final test or validated recommendation is claimed. "
             "Later-period results never rerank the development selection."
+        )
+    from research.automatic_design import descriptor
+    from research.automatic_design import enabled as design_enabled
+
+    if design_enabled(portfolio):
+        payload["automatic_design"] = descriptor()
+        from research.capital_planning import descriptor as capital_descriptor
+
+        payload["capital_planning"] = capital_descriptor()
+        payload["budget"]["max_capital_planning_accounts"] = (
+            4 if validation_mode == "exploratory_only" else 3
+        )
+        payload["policies"]["selection"] += (
+            " Automatic design admission additionally requires adequate trade/date support, "
+            "participation across the predeclared complete-entry calendar and bounded "
+            "symbol-profit concentration. Failure retains the unchanged baseline."
         )
     return {**payload, "id": fingerprint(payload)}
 

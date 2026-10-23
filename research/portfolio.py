@@ -13,7 +13,11 @@ import re
 from copy import deepcopy
 from datetime import date, timedelta
 
-from research.canonical_json import bounded_canonical_bytes, bounded_canonical_fragments
+from research.canonical_json import (
+    bounded_canonical_bytes,
+    bounded_canonical_fragments,
+    prepared_canonical_fragments,
+)
 from research.data import MAX_BARS
 from research.engine import validate_config
 from research.requirements import select_interval
@@ -24,6 +28,12 @@ KINDS = {"portfolio_backtest", "portfolio_optimize"}
 
 
 def fingerprint(value):
+    owned = prepared_canonical_fragments(value, max_bytes=64 * 1024**2, allow_native_float64=True)
+    if owned is not None:
+        digest = hashlib.sha256()
+        for part in owned:
+            digest.update(part)
+        return digest.hexdigest()
     # The medium encoder has the same detached copier and representation.
     # Trying the small bound first repeats its whole prefix on larger receipts.
     encoded = bounded_canonical_bytes(value, allow_native_float64=True)

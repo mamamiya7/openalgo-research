@@ -2,7 +2,8 @@
 
 ``verified`` means the descriptor was built from this evaluation's retained inputs.
 It does not certify broker prices, cross-engine parity or an untouched holdout.
-All state is per-call; hashing streams bounded, already-admitted research inputs.
+Account identities are per-call. An active immutable calculation owner may reuse
+its bounded market identities; ordinary mutable inputs always hash afresh.
 """
 
 from __future__ import annotations
@@ -40,6 +41,64 @@ def _digest(value):
 
 def _fields(value, keys):
     return {key: value[key] for key in keys if key in value}
+
+
+def _snapshot_identities(snapshot, symbols):
+    """Canonical market identities, independent of account or admission choices."""
+    provenance = snapshot["provenance"]
+    interval = provenance["interval"]
+    timeline = snapshot["timeline" if interval == "1m" else "sessions"]
+    observation_slots = set(timeline)
+    sessions = snapshot["sessions"]
+    prices = {
+        symbol: {
+            key: bar
+            for key, bar in snapshot["bars"].get(symbol, {}).items()
+            if key in observation_slots
+        }
+        for symbol in sorted(symbols)
+    }
+    return {
+        "observations_id": _digest({"interval": interval, "timeline": timeline}),
+        "prices_id": _digest(
+            {
+                "bars": prices,
+                "basis": _fields(
+                    provenance,
+                    (
+                        "exchange",
+                        "interval",
+                        "native_price_policy",
+                        "adjustment_basis",
+                        "synthetic",
+                    ),
+                ),
+            }
+        ),
+        "calendar_id": _digest(
+            {
+                "sessions": sessions,
+                "session_hours": {
+                    day: snapshot.get("session_hours", {}).get(day) for day in sessions
+                },
+                "basis": _fields(
+                    provenance,
+                    ("exchange", "calendar_basis", "calendar_admission", "temporal_version"),
+                ),
+            }
+        ),
+        "instruments_id": _digest(
+            {
+                "instruments": {
+                    symbol: snapshot.get("instruments", {}).get(symbol)
+                    for symbol in sorted(symbols)
+                },
+                "eligibility_policy": snapshot.get("instrument_eligibility", {}).get(
+                    "policy_version"
+                ),
+            }
+        ),
+    }
 
 
 def build_evaluation_basis(evidence, *, period):
@@ -84,18 +143,14 @@ def build_evaluation_basis(evidence, *, period):
         cohort.append({"strategy_id": strategy["id"], "admission": admission})
 
     source_id = _digest(sources)
-    observation_slots = set(timeline)
-    sessions = snapshot["sessions"]
-    # Exclude other periods and diagnostic/acquisition timestamps. Retain every
-    # frozen bar on the actual evaluation timeline, including absence via its keys.
-    prices = {
-        symbol: {
-            key: bar
-            for key, bar in snapshot["bars"].get(symbol, {}).items()
-            if key in observation_slots
-        }
-        for symbol in sorted(symbols)
-    }
+    from research.prepared_calculation import prepared_market
+
+    market = prepared_market(snapshot)
+    snapshot_ids = (
+        market.evaluation_identities(symbols)
+        if market is not None
+        else _snapshot_identities(snapshot, symbols)
+    )
     identities = {
         "source_id": source_id,
         "cohort_id": _digest(
@@ -105,45 +160,7 @@ def build_evaluation_basis(evidence, *, period):
                 "cohort": cohort,
             }
         ),
-        "observations_id": _digest({"interval": interval, "timeline": timeline}),
-        "prices_id": _digest(
-            {
-                "bars": prices,
-                "basis": _fields(
-                    provenance,
-                    (
-                        "exchange",
-                        "interval",
-                        "native_price_policy",
-                        "adjustment_basis",
-                        "synthetic",
-                    ),
-                ),
-            }
-        ),
-        "calendar_id": _digest(
-            {
-                "sessions": sessions,
-                "session_hours": {
-                    day: snapshot.get("session_hours", {}).get(day) for day in sessions
-                },
-                "basis": _fields(
-                    provenance,
-                    ("exchange", "calendar_basis", "calendar_admission", "temporal_version"),
-                ),
-            }
-        ),
-        "instruments_id": _digest(
-            {
-                "instruments": {
-                    symbol: snapshot.get("instruments", {}).get(symbol)
-                    for symbol in sorted(symbols)
-                },
-                "eligibility_policy": snapshot.get("instrument_eligibility", {}).get(
-                    "policy_version"
-                ),
-            }
-        ),
+        **snapshot_ids,
     }
     period_info = {
         "kind": period,

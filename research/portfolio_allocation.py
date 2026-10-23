@@ -77,37 +77,46 @@ def validate(value, *, symbol, entry_session, decision_at, required_symbols=()):
     from datetime import date, datetime
     from re import fullmatch
 
+    from research.owned_entry_features import is_owned_entry
     from research.stock_features import _json_size
 
-    _json_size(value, 64 * 1024)
+    admitted = is_owned_entry(value, VERSION)
+
+    if not admitted:
+        _json_size(value, 64 * 1024)
 
     if not isinstance(value, dict) or value.get("version") != VERSION:
         raise ValueError("allocation_unavailable: prior aligned prices are required")
-    if value.get("id") != fingerprint({k: v for k, v in value.items() if k != "id"}):
+    if not admitted and value.get("id") != fingerprint(
+        {k: v for k, v in value.items() if k != "id"}
+    ):
         raise ValueError("Allocation evidence identity changed")
     if (
-        set(value)
-        != {
-            "version",
-            "entry_session",
-            "from",
-            "to",
-            "observations",
-            "available_at",
-            "source_id",
-            "weights",
-            "clusters",
-            "unavailable",
-            "shrinkage",
-            "id",
-        }
+        (
+            not admitted
+            and set(value)
+            != {
+                "version",
+                "entry_session",
+                "from",
+                "to",
+                "observations",
+                "available_at",
+                "source_id",
+                "weights",
+                "clusters",
+                "unavailable",
+                "shrinkage",
+                "id",
+            }
+        )
         or value.get("entry_session") != entry_session
         or not isinstance(value.get("source_id"), str)
         or not fullmatch(r"[a-f0-9]{64}", value["source_id"])
     ):
         raise ValueError("Allocation evidence belongs to another entry or source")
     weights, clusters = value.get("weights"), value.get("clusters")
-    if (
+    if not admitted and (
         not isinstance(weights, dict)
         or not 1 <= len(weights) <= 200
         or any(

@@ -7,7 +7,9 @@ survive; VectorBT must calculate the account again after the gate is applied.
 from copy import deepcopy
 from datetime import datetime
 
+from research.gate_input_binding import copy_gate_signal, execution_inputs_id, freeze_gate_signals
 from research.market_conditions import LABELS
+from research.market_series import fingerprint as receipt_fingerprint
 from research.portfolio import fingerprint
 
 VERSION = "research-condition-replay-v1"
@@ -81,11 +83,14 @@ def _apply(evidence, market, condition, *, classify_fn=None):
     counts = dict.fromkeys(
         ("allowed", "filtered", "unknown", "original_excluded", "pending", "unaffected"), 0
     )
+    from research.causal_gate_components import components_only
+
+    causal_only = components_only()
     strategies, membership = [], []
     for strategy in evidence["strategies"]:
         signals = []
         for i, original in enumerate(strategy["signals"]):
-            signal = deepcopy(original)
+            signal = None if causal_only else copy_gate_signal(original)
             item = {
                 "strategy_id": strategy["id"],
                 "signal_index": i,
@@ -110,33 +115,43 @@ def _apply(evidence, market, condition, *, classify_fn=None):
                     state = "pending"
                 elif row is None or row[selected["dimension"]] == "unknown":
                     state = "unknown"
-                    signal["research_exclusion"] = (
-                        "Entry condition unavailable in saved market history"
-                    )
+                    if not causal_only:
+                        signal["research_exclusion"] = (
+                            "Entry condition unavailable in saved market history"
+                        )
                 elif row[selected["dimension"]] != selected["regime"]:
                     state = "filtered"
-                    signal["research_exclusion"] = f"Entry condition not met: {selected['label']}"
+                    if not causal_only:
+                        signal["research_exclusion"] = (
+                            f"Entry condition not met: {selected['label']}"
+                        )
                 else:
                     state = "allowed"
             counts[state] += 1
             membership.append({**item, "state": state})
-            signals.append(signal)
-        strategies.append({**deepcopy(strategy), "signals": signals})
+            if not causal_only:
+                signals.append(signal)
+        if not causal_only:
+            strategies.append(
+                {
+                    **deepcopy({key: value for key, value in strategy.items() if key != "signals"}),
+                    "signals": freeze_gate_signals(signals),
+                }
+            )
     receipt = {
         "version": VERSION,
         "condition": selected,
         "recipe_id": recipe()["id"],
         "market_evidence_id": market["evidence"]["id"],
-        "execution_inputs_id": fingerprint(
-            {
-                key: evidence[key]
-                for key in ("portfolio", "strategies", "signals", "snapshot", "versions")
-            }
-        ),
         "counts": counts,
         "membership": membership,
-        "conditioned_strategies_id": fingerprint(strategies),
         "timing": "Entry gate from index closes available before the recorded session opening",
         "unknown_policy": "exclude; preserve original price exclusions and pending entries",
     }
-    return strategies, {**receipt, "id": fingerprint(receipt)}
+    if causal_only:
+        return [], receipt
+    receipt.update(
+        execution_inputs_id=execution_inputs_id(evidence),
+        conditioned_strategies_id=fingerprint(strategies),
+    )
+    return strategies, {**receipt, "id": receipt_fingerprint(receipt)}

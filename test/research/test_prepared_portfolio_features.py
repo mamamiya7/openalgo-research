@@ -95,7 +95,8 @@ def test_caller_and_returned_signal_mutation_cannot_change_owned_projection(evid
     with features._PreparedPortfolioFeatures(receipt) as owner:
         first = owner.attach(current)
         next(iter(receipt["capacity"].values()))["feature"]["mean_daily_shares"] = 1
-        first["strategies"][0]["signals"][0]["entry_capacity"]["mean_daily_shares"] = 2
+        with pytest.raises(TypeError, match="immutable"):
+            first["strategies"][0]["signals"][0]["entry_capacity"]["mean_daily_shares"] = 2
         assert owner.attach(current)["strategies"] == expected
         with pytest.raises(ValueError, match="original source object"):
             owner.attach({**current, "portfolio_execution_features": deepcopy(receipt)})

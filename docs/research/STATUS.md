@@ -1,5 +1,41 @@
 # OpenAlgo Research status
 
+## Immediate production execution plan — 23 October 2026
+
+The [production implementation plan](PRODUCTION_IMPLEMENTATION_20261023.md)
+has an implemented local preview.27 runtime batch: complete compiled execution,
+immutable preparation and exact canonical-byte reuse, preserved financial
+validation, and bounded ownership/cleanup. The final installed 146-stock search
+completed all 408 proposals and 328 native accounts in **126.506 worker seconds**.
+Its complete scientific result matches earlier candidates exactly.
+
+The one-minute full-journey target is **not met**. Encoding/canonical processing
+still costs 57.955 seconds; simulation costs 11.371 seconds including initial
+compilation. The [candidate notes](releases/0.1.0-preview.27.md) record all buckets,
+test coverage and host-suite limitations. The plan explicitly records remaining
+structural canonical/receipt work. Public release is not qualified by this batch.
+
+## Automatic design and capital planning - candidate 23 October 2026
+
+Preview.27 records a new automatic-design policy for editable runs. It permits
+risk sizing above the original order-size reference within unchanged hard
+limits, requires adequate historical sample/date spread and bounded stock-profit
+concentration, and retains the baseline when no changed setup qualifies. Actual
+complete-entry dates determine calendar thirds before outcomes are examined.
+The complete 408-proposal programme and 512-account ceiling remain fixed.
+
+Separate capital planning preserves the original initial rupee order amount and
+checks a bounded set of account sizes using the same native engine and hard
+limits. The estimate and verified sufficiency are distinct; position, liquidity,
+whole-share and missing-evidence blockers remain visible. Capital planning never
+reranks the primary selection or changes its reported capital/returns. Saved
+receipts retain their numerical policy and are checked on recovery. Focused
+qualification and a 5.092-second, three-calculation capital/save/reopen smoke
+test pass. A separate three-stock CSV test also completed through saved report
+and browser reload/reopen. An earlier full candidate search was cancelled at the user's
+request; later completed runtime acceptance is recorded above. Details are recorded in the
+[candidate notes](releases/0.1.0-preview.27.md).
+
 ## Available-history automatic research - 23 October 2026
 
 Preview.26 treats the CSV or Chartink history supplied by the trader as the

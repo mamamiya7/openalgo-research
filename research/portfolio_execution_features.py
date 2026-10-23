@@ -106,7 +106,10 @@ def _sealed_identity(value, maximum, *, _capture=None):
 
 
 def _base(value, version, symbol, entry_session, decision_at):
-    intact = _bounded_sealed_identity(value, 64 * 1024)
+    from research.owned_entry_features import is_owned_entry
+
+    admitted = is_owned_entry(value, version)
+    intact = True if admitted else _bounded_sealed_identity(value, 64 * 1024)
     if intact is None:
         _json_size(value, 64 * 1024)
     if (
@@ -138,8 +141,10 @@ def _base(value, version, symbol, entry_session, decision_at):
 
 
 def validate_capacity_entry(value, *, symbol, entry_session, decision_at):
+    from research.owned_entry_features import is_owned_entry
+
     _base(value, CAPACITY_VERSION, symbol, entry_session, decision_at)
-    if (
+    if not is_owned_entry(value, CAPACITY_VERSION) and (
         set(value)
         != {
             "version",
@@ -165,9 +170,11 @@ def validate_capacity_entry(value, *, symbol, entry_session, decision_at):
 
 
 def validate_correlation_entry(value, *, symbol, entry_session, decision_at, required_symbols):
+    from research.owned_entry_features import is_owned_entry
+
     _base(value, CORRELATION_VERSION, symbol, entry_session, decision_at)
     correlations = value.get("correlations")
-    if (
+    if not is_owned_entry(value, CORRELATION_VERSION) and (
         set(value)
         != {
             "version",
@@ -364,6 +371,67 @@ def _correlation(symbol, day, series, prepared, *, _inputs=None, _pairs=None):
     )
 
 
+def _batched_correlation_pairs(prepared, inputs, requested):
+    """Batch independent 2-by-60 NumPy covariances, retaining ordered bits.
+
+    A single universe-wide corrcoef changes BLAS reduction shapes and can change
+    saved values. Each batch member instead uses the same two-row covariance,
+    scaling and two ordered divisions as NumPy 2.4's corrcoef/cov. Both directed
+    elements are retained, just like the existing day-local pair cache. Temporary
+    arrays hold at most 128 pairs; results live only for the current entry date.
+    """
+    import numpy as np
+
+    arrays, varying, _, _ = inputs
+    if len(prepared) * len(requested) > MAX_PAIRS:
+        raise ValueError("Correlation batch exceeds the bounded symbol/date allowance")
+    pairs, pending = {}, []
+
+    def flush():
+        if not pending:
+            return
+        values = np.array([[arrays[a], arrays[b]] for a, b in pending], dtype=np.float64)
+        values -= np.average(values, axis=2)[:, :, None]
+        covariance = np.matmul(values, values.swapaxes(1, 2))
+        covariance *= np.true_divide(1, values.shape[2] - 1)
+        deviation = np.sqrt(np.diagonal(covariance, axis1=1, axis2=2))
+        covariance /= deviation[:, :, None]
+        covariance /= deviation[:, None, :]
+        np.clip(covariance, -1, 1, out=covariance)
+        for (a, b), pair in zip(pending, covariance, strict=True):
+            pairs[a, b], pairs[b, a] = float(pair[0, 1]), float(pair[1, 0])
+        pending.clear()
+
+    for symbol in requested:
+        own = prepared.get(symbol)
+        if own is None or not varying[symbol]:
+            continue
+        for other, candidate in prepared.items():
+            if (
+                other == symbol
+                or candidate is None
+                or not varying[other]
+                or candidate["dates"] != own["dates"]
+                or (symbol, other) in pairs
+            ):
+                continue
+            # Nonstandard standalone callers retain NumPy's original promotion.
+            if any(
+                arrays[key].dtype.kind not in "iuf" or arrays[key].dtype.itemsize > 8
+                for key in (symbol, other)
+            ):
+                pair = np.corrcoef(arrays[symbol], arrays[other])
+                pairs[symbol, other] = float(np.clip(pair[0, 1], -1, 1))
+                pairs[other, symbol] = float(np.clip(pair[1, 0], -1, 1))
+                continue
+            pairs[symbol, other] = pairs[other, symbol] = None
+            pending.append((symbol, other))
+            if len(pending) == 128:
+                flush()
+    flush()
+    return pairs
+
+
 def prepare(evidence, bundle, volume_records=None):
     """Prepare once for every admitted clock; reuse the exact frozen receipt."""
     from research.stock_market_context import validate_bundle
@@ -423,12 +491,18 @@ def prepare(evidence, bundle, volume_records=None):
     day_cache = {}
     correlation_inputs = None
     pairs = {}
+    required_symbols = {}
+    for key in required:
+        symbol, day = key.rsplit("|", 1)
+        required_symbols.setdefault(day, []).append(symbol)
     for key in required:
         symbol, day = key.rsplit("|", 1)
         if day not in day_cache:
             day_cache = {day: {symbol: value.window(day) for symbol, value in windows.items()}}
             correlation_inputs = _correlation_inputs(day_cache[day])
-            pairs = {}
+            pairs = _batched_correlation_pairs(
+                day_cache[day], correlation_inputs, required_symbols[day]
+            )
         if allocation_on and day not in allocations:
             from research.portfolio_allocation import build
 
@@ -554,8 +628,8 @@ def attach(evidence):
     return _attach(evidence, receipt)
 
 
-def _attach(evidence, receipt):
-    """Apply an admitted receipt; candidate schedules and entry checks remain fresh."""
+def _attach(evidence, receipt, *, own_entries=False, identities=None, daily=None):
+    """Check current bindings and effective modes before immutable daily reuse."""
     from research.connectors.vectorbt_portfolio import _schedule
     from research.execution_features import _identity, _opportunity_keys
     from research.intraday import bounds
@@ -572,10 +646,19 @@ def _attach(evidence, receipt):
     timeline = snapshot["timeline" if minute else "sessions"]
     index = {key: i for i, key in enumerate(timeline)}
     strategies = []
+    decisions = {}
     for strategy in evidence["strategies"]:
         signals = []
         policy = strategy.get("execution_policy", {})
-        for opportunity, original in _opportunity_keys(strategy["signals"]):
+        modes = tuple(
+            policy.get(key) for key in ("capacity_mode", "correlation_mode", "allocation_mode")
+        )
+        cache_key = daily.key(snapshot, strategy, _schedule, modes) if daily is not None else None
+        reused = daily.get(cache_key, snapshot, strategy["signals"]) if daily is not None else None
+        if reused is not None:
+            strategies.append({**strategy, "signals": reused})
+            continue
+        for opportunity, original in _opportunity_keys(strategy["signals"], identities):
             signal = {
                 k: v
                 for k, v in original.items()
@@ -590,7 +673,9 @@ def _attach(evidence, receipt):
             if entry >= 0 and not reason and not signal.get("research_exclusion"):
                 day = timeline[entry][:10]
                 key = f"{signal['symbol']}|{day}"
-                decision = timeline[entry] if minute else bounds(snapshot, day)[0].isoformat()
+                if not minute and day not in decisions:
+                    decisions[day] = bounds(snapshot, day)[0].isoformat()
+                decision = timeline[entry] if minute else decisions[day]
                 if policy.get("capacity_mode") == "prior20_broker_reported":
                     feature = receipt["capacity"].get(key, {}).get("feature")
                     if feature is None:
@@ -598,6 +683,11 @@ def _attach(evidence, receipt):
                             "capacity_unavailable: 20 completed broker-volume sessions required"
                         )
                     else:
+                        if own_entries:
+                            from research.owned_entry_features import admit_entry
+
+                            feature = admit_entry(feature, CAPACITY_VERSION)
+                            receipt["capacity"][key]["feature"] = feature
                         signal["entry_capacity"] = deepcopy(
                             validate_capacity_entry(
                                 feature,
@@ -613,6 +703,11 @@ def _attach(evidence, receipt):
                             "correlation_unavailable: 60 aligned completed daily returns required"
                         )
                     else:
+                        if own_entries:
+                            from research.owned_entry_features import admit_entry
+
+                            feature = admit_entry(feature, CORRELATION_VERSION)
+                            receipt["correlation"][key] = feature
                         signal["entry_correlation"] = deepcopy(
                             validate_correlation_entry(
                                 feature,
@@ -631,6 +726,12 @@ def _attach(evidence, receipt):
                             "allocation_unavailable: 60 aligned completed daily returns required"
                         )
                     else:
+                        if own_entries:
+                            from research.owned_entry_features import admit_entry
+                            from research.portfolio_allocation import VERSION as ALLOCATION_VERSION
+
+                            feature = admit_entry(feature, ALLOCATION_VERSION)
+                            receipt["allocation"][day] = feature
                         signal["entry_allocation"] = deepcopy(
                             validate(
                                 feature,
@@ -640,6 +741,8 @@ def _attach(evidence, receipt):
                             )
                         )
             signals.append(signal)
+        if daily is not None:
+            signals = daily.put(cache_key, snapshot, strategy["signals"], signals)
         strategies.append({**strategy, "signals": signals})
     return {**evidence, "strategies": strategies}
 
@@ -648,16 +751,21 @@ class _PreparedPortfolioFeatures:
     """One bounded, detached sealed receipt owned by one automatic run.
 
     The caller's receipt is an identity capability, never a cache key. Only the
-    full immutable-source seal is reused: schedules, availability, entry feature
-    identities and actual native fill/portfolio constraints still run for every
-    account. The privately owned JSON projection is never returned to callers.
+    full immutable-source seal is reused. Identical immutable daily lists may
+    share checked entry attachments for the same effective modes. Actual native
+    schedules, fills and portfolio constraints still run for every account.
+    The privately owned JSON projection is never returned to callers.
     Closing the owner releases both source and projection, including on errors.
     """
 
-    __slots__ = ("__source", "__receipt", "__weakref__")
+    __slots__ = ("__source", "__receipt", "__identities", "__daily", "__weakref__")
 
     def __init__(self, receipt):
         self.__source = self.__receipt = None
+        self.__identities = {}
+        from research.prepared_daily_signals import DailySignals
+
+        self.__daily = DailySignals()
         if (
             type(receipt) is not dict
             or receipt.get("version") != VERSION
@@ -695,15 +803,29 @@ class _PreparedPortfolioFeatures:
         return True
 
     def attach(self, evidence):
-        return _attach(evidence, self.__receipt_for(evidence.get("portfolio_execution_features")))
+        return _attach(
+            evidence,
+            self.__receipt_for(evidence.get("portfolio_execution_features")),
+            own_entries=True,
+            identities=self.__identities,
+            daily=self.__daily,
+        )
 
     def assess(self, report, source):
+        from research.native_report_ownership import take_native_report
         from research.portfolio_constraint_evidence import _assess
 
-        return _assess(report, self.__receipt_for(source), self.__identity)
+        return _assess(
+            report,
+            self.__receipt_for(source),
+            self.__identity,
+            _owned_report=take_native_report(report),
+        )
 
     def close(self):
         self.__source = self.__receipt = None
+        self.__identities.clear()
+        self.__daily.close()
 
     def __enter__(self):
         if self.__receipt is None:

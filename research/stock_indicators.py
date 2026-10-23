@@ -128,6 +128,15 @@ def catalog():
 def normalize_hypothesis(value):
     if not isinstance(value, dict):
         raise ValueError("Choose a recorded stock-indicator hypothesis")
+    from research.prepared_stock_catalogue import normalize_if_owned
+
+    admitted, selected = normalize_if_owned("indicator", value)
+    if admitted:
+        if selected is not None:
+            return selected
+        raise ValueError("The stock-indicator hypothesis is not in the recorded catalog")
+    if not isinstance(value, dict):
+        raise ValueError("Choose a recorded stock-indicator hypothesis")
     for expected in catalog():
         if value.get("id") == expected["id"] and fingerprint(value) == fingerprint(expected):
             return expected
@@ -192,6 +201,11 @@ def _compare(feature, hypothesis):
 
 
 def _window(record, decision, count):
+    prepared = legacy._prepared_window(record, decision, count)
+    if prepared is not None:
+        if prepared["problem"] is not None:
+            return None, legacy._window_problem(prepared, "indicator")
+        return list(prepared["required"]), None
     series, calendar = record["evidence"], record["calendar"]
     day = decision.date().isoformat()
     dates = calendar["sessions"]
@@ -214,10 +228,16 @@ def _feature(record, decision, hypothesis):
     if family in ("ema_trend", "momentum"):
         return legacy._feature(record, decision, hypothesis)
     if family == "conjunction":
-        registered = {row["id"]: row for row in catalog()}
+        from research.prepared_stock_catalogue import component_if_owned
+
+        registered = None
         parts = []
         for identifier in hypothesis["components"]:
-            component = registered[identifier]
+            component = component_if_owned("indicator", identifier)
+            if component is None:
+                if registered is None:
+                    registered = {row["id"]: row for row in catalog()}
+                component = registered[identifier]
             feature, reason = _feature(record, decision, component)
             if feature is None:
                 return None, f"{component['label']}: {reason}"
@@ -256,8 +276,14 @@ def _feature(record, decision, hypothesis):
     from openalgo import ta
 
     series = record["evidence"]
-    bars = [series["bars"][day] for day in required]
-    closes = [bar["close"] for bar in bars]
+    prepared = legacy._prepared_window(record, decision, count)
+    if prepared is not None:
+        closes = list(prepared["closes"])
+        highs, lows = prepared["highs"], prepared["lows"]
+    else:
+        bars = [series["bars"][day] for day in required]
+        closes = [bar["close"] for bar in bars]
+        highs, lows = (tuple(bar[field] for bar in bars) for field in ("high", "low"))
     result = {
         "lookback": hypothesis["lookback"],
         "threshold": hypothesis["threshold"],
@@ -273,8 +299,8 @@ def _feature(record, decision, hypothesis):
     elif family == "atr":
         atr = float(
             ta.atr(
-                [bar["high"] for bar in bars],
-                [bar["low"] for bar in bars],
+                list(highs),
+                list(lows),
                 closes,
                 period=hypothesis["lookback"],
             )[-1]
@@ -295,21 +321,8 @@ def _feature(record, decision, hypothesis):
         result.update(upper=upper, middle=middle, lower=lower, value=closes[-1] - band)
     if not isfinite(result["value"]):
         return None, "Native stock indicator is outside finite calculation bounds"
-    result["basis_id"] = fingerprint(
-        {
-            "version": FEATURE_VERSION,
-            "dependency_version": TESTED_SDK_VERSION,
-            "hypothesis": hypothesis,
-            "descriptor": series["descriptor"],
-            "observations": [
-                {
-                    "date": day,
-                    "bar": series["bars"][day],
-                    "available_at": series["available_at"][day],
-                }
-                for day in required
-            ],
-        }
+    result["basis_id"] = legacy._basis_id(
+        record, decision, required, hypothesis, FEATURE_VERSION, TESTED_SDK_VERSION
     )
     return result, None
 

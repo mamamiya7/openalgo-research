@@ -10,6 +10,7 @@ import sys
 from bisect import bisect_left
 from collections import OrderedDict
 from contextlib import contextmanager
+from contextvars import ContextVar
 from copy import deepcopy
 from datetime import datetime
 from hashlib import sha256
@@ -21,7 +22,9 @@ from research.canonical_json import (
     bounded_canonical_fragments,
     bounded_canonical_snapshot,
 )
+from research.gate_input_binding import copy_gate_signal, execution_inputs_id, freeze_gate_signals
 from research.market_series import IST, _planned_series, fingerprint, validate_series
+from research.portfolio import fingerprint as account_fingerprint
 
 VERSION = "research-stock-features-v1"
 ENTRY_VERSION = "research-stock-entry-conditions-v1"
@@ -31,12 +34,19 @@ MAX_FEATURE_BARS = 200_000
 MAX_SIGNALS = 25_000
 MAX_BUNDLE_BYTES = 64 * 1024**2
 MAX_RECEIPT_BYTES = 32 * 1024**2
-MAX_PREPARED_FEATURES = 4096
-MAX_PREPARED_FEATURE_BYTES = 32 * 1024**2
+MAX_PREPARED_FEATURES = 50_000
+MAX_PREPARED_FEATURE_BYTES = 128 * 1024**2
+MAX_PREPARED_WINDOWS = 4096
+MAX_PREPARED_WINDOW_BYTES = 64 * 1024**2
+MAX_PREPARED_RECORD_BUFFERS = MAX_SYMBOLS + 1
+MAX_PREPARED_RECORD_BUFFER_BYTES = 64 * 1024**2
+_observation_cache = ContextVar("prepared_stock_observations", default=None)
 
 
 def _heap_bytes(value):
     """Conservatively charge every object in an admitted small plain tree."""
+    from research.owned_entry_features import owned_json_bounds
+
     pending, seen, total = [value], set(), 0
     while pending:
         item = pending.pop()
@@ -44,18 +54,95 @@ def _heap_bytes(value):
             continue
         seen.add(id(item))
         total += sys.getsizeof(item)
-        if type(item) is dict:
+        bounds = owned_json_bounds(item)
+        if bounds is not None:
+            total += sys.getsizeof(bounds) + sum(sys.getsizeof(part) for part in bounds)
+        if isinstance(item, dict):
             pending.extend(item.keys())
             pending.extend(item.values())
-        elif type(item) in (tuple, list):
+        elif isinstance(item, (tuple, list)):
             pending.extend(item)
     return total
+
+
+def _record_observation_buffer(record):
+    """Encode a private record's daily observations once, with bounded fallback.
+
+    A gap remains a gap. A malformed/unusual future row declines this optional
+    buffer so the original requested-window path keeps its error precedence.
+    No indicator or return is calculated here.
+    """
+    series = record["evidence"]
+    dates = tuple(record["calendar"]["sessions"])
+    maximum = MAX_PREPARED_RECORD_BUFFER_BYTES
+    if len(dates) > MAX_FEATURE_BARS or len(dates) * 256 > maximum:
+        return None
+    descriptor = bounded_canonical_bytes(
+        series["descriptor"], max_bytes=maximum, json_types_only=True
+    )
+    if descriptor is None:
+        return None
+    members, available, closes, highs, lows = [], [], [], [], []
+    allowance = len(descriptor) + 512
+    try:
+        for day in dates:
+            bar = series["bars"].get(day)
+            if bar is None:
+                member = at = close = high = low = None
+            else:
+                member = bounded_canonical_bytes(
+                    {"date": day, "bar": bar, "available_at": series["available_at"][day]},
+                    max_bytes=maximum - allowance,
+                    json_types_only=True,
+                )
+                if member is None:
+                    return None
+                at = datetime.fromisoformat(series["available_at"][day])
+                close, high, low = (bar[field] for field in ("close", "high", "low"))
+            # Include tuple/list slots, date/numeric references and the parsed
+            # datetime's separately allocated timezone in the construction cap.
+            allowance += 512 + (len(member) if member is not None else 0) + len(day) * 4
+            if allowance > maximum:
+                return None
+            members.append(member)
+            available.append(at)
+            closes.append(close)
+            highs.append(high)
+            lows.append(low)
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return None
+    result = {
+        "dates": dates,
+        "descriptor": descriptor,
+        "members": tuple(members),
+        "available": tuple(available),
+        "closes": tuple(closes),
+        "highs": tuple(highs),
+        "lows": tuple(lows),
+    }
+    # _heap_bytes counts datetime objects; the timezone/timedelta payload is
+    # additionally charged per timestamp rather than assuming shared offsets.
+    charge = _heap_bytes(result) + 128 * sum(at is not None for at in available) + 256
+    return (result, charge) if charge <= maximum else None
 
 
 class _PreparedFeatureCache:
     """Bounded results for one exact detached and validated stock projection."""
 
-    __slots__ = ("__bundle", "__entries", "__bytes", "__owner", "__providers", "__enabled")
+    __slots__ = (
+        "__bundle",
+        "__entries",
+        "__bytes",
+        "__owner",
+        "__providers",
+        "__enabled",
+        "__records",
+        "__windows",
+        "__window_bytes",
+        "__buffers",
+        "__buffer_bytes",
+        "__signature",
+    )
 
     def __init__(self, bundle):
         from research import stock_indicators, stock_relative_strength
@@ -63,18 +150,27 @@ class _PreparedFeatureCache:
         self.__bundle, self.__entries, self.__bytes = bundle, OrderedDict(), 0
         self.__owner = get_ident()
         self.__enabled = True
+        self.__records = {id(record): record for record in bundle["series"].values()}
+        if "benchmark" in bundle:
+            self.__records[id(bundle["benchmark"])] = bundle["benchmark"]
+        self.__windows, self.__window_bytes = OrderedDict(), 0
+        self.__buffers, self.__buffer_bytes = OrderedDict(), 0
+        self.__signature = None
         self.__providers = (
             _feature,
             stock_relative_strength._feature,
             stock_indicators._feature,
             stock_indicators._window,
+            _record_observation_buffer,
         )
 
     def check(self):
         if self.__bundle is None or self.__owner != get_ident():
             raise ValueError("Prepared stock features require their synchronous live owner")
 
-    def resolve(self, bundle, symbol, record, decision, hypothesis, feature_fn, version):
+    def resolve(
+        self, bundle, symbol, record, decision, hypothesis, feature_fn, version, *, _immutable=False
+    ):
         from research import stock_indicators, stock_relative_strength
 
         self.check()
@@ -83,6 +179,7 @@ class _PreparedFeatureCache:
             stock_relative_strength._feature,
             stock_indicators._feature,
             stock_indicators._window,
+            _record_observation_buffer,
         )
         if (
             not self.__enabled
@@ -93,18 +190,37 @@ class _PreparedFeatureCache:
             or len(version) > 256
         ):
             return feature_fn(record, decision, hypothesis)
-        signature = bounded_canonical_bytes(
-            hypothesis, max_bytes=4096, json_types_only=True, allow_native_float64=True
-        )
+        from research.owned_entry_features import _capture, owned_json_bounds
+        from research.prepared_calculation import _thaw
+
+        bounds = owned_json_bounds(hypothesis)
+        retained = self.__signature
+        signature = retained[1] if retained is not None and retained[0] is hypothesis else None
+        if signature is None:
+            signature = bounded_canonical_bytes(
+                hypothesis, max_bytes=4096, json_types_only=True, allow_native_float64=True
+            )
+            # One exact immutable rule at a time; its full node/ASCII allowance
+            # bounds retained heap conservatively. Mutable rules always re-encode.
+            if (
+                signature is not None
+                and bounds is not None
+                and bounds[2] + 64 * bounds[0] <= 64 * 1024
+            ):
+                self.__signature = (hypothesis, signature)
         if signature is None:
             return feature_fn(record, decision, hypothesis)
         key = (symbol, decision.isoformat(), signature, version)
         previous = self.__entries.get(key)
         if previous is not None:
             self.__entries.move_to_end(key)
-            copied = deepcopy(previous[0])
+            copied = previous[0] if _immutable else _thaw(previous[0])
             return copied["feature"], copied["reason"]
-        feature, reason = feature_fn(record, decision, hypothesis)
+        token = _observation_cache.set(self)
+        try:
+            feature, reason = feature_fn(record, decision, hypothesis)
+        finally:
+            _observation_cache.reset(token)
         captured = bounded_canonical_snapshot(
             {"feature": feature, "reason": reason},
             max_bytes=64 * 1024,
@@ -114,6 +230,10 @@ class _PreparedFeatureCache:
             return feature, reason
         result, raw = captured
         del captured, raw
+        try:
+            result = _capture(result)
+        except (TypeError, ValueError, RecursionError):
+            pass  # Unusual accepted native scalars retain their ordinary detached path.
         charge = _heap_bytes(key) + _heap_bytes(result) + 256
         if charge <= MAX_PREPARED_FEATURE_BYTES:
             while self.__entries and (
@@ -125,12 +245,118 @@ class _PreparedFeatureCache:
             if MAX_PREPARED_FEATURES > 0:
                 self.__entries[key] = result, charge
                 self.__bytes += charge
-        copied = deepcopy(result)
+        copied = result if _immutable else _thaw(result)
         return copied["feature"], copied["reason"]
 
     def clear(self):
+        self.__signature = None
         self.__entries.clear()
         self.__bytes = 0
+        self.__windows.clear()
+        self.__window_bytes = 0
+        self.__buffers.clear()
+        self.__buffer_bytes = 0
+
+    def _record_buffer(self, record):
+        identity = id(record)
+        previous = self.__buffers.get(identity)
+        if previous is not None:
+            self.__buffers.move_to_end(identity)
+            return previous[0]
+        captured = _record_observation_buffer(record)
+        value, charge = captured if captured is not None else (None, 256)
+        while self.__buffers and (
+            len(self.__buffers) >= MAX_PREPARED_RECORD_BUFFERS
+            or self.__buffer_bytes + charge > MAX_PREPARED_RECORD_BUFFER_BYTES
+        ):
+            _, (_, removed) = self.__buffers.popitem(last=False)
+            self.__buffer_bytes -= removed
+        if MAX_PREPARED_RECORD_BUFFERS > 0 and charge <= MAX_PREPARED_RECORD_BUFFER_BYTES:
+            self.__buffers[identity] = value, charge
+            self.__buffer_bytes += charge
+        return value
+
+    def observation(self, record, decision, count):
+        """Reuse only this synchronous owner's private validated records."""
+        self.check()
+        if not self.__enabled or self.__records.get(id(record)) is not record:
+            return None
+        key = (id(record), decision.isoformat(), count)
+        previous = self.__windows.get(key)
+        if previous is not None:
+            self.__windows.move_to_end(key)
+            return previous[0]
+        series, calendar = record["evidence"], record["calendar"]
+        day, dates = decision.date().isoformat(), calendar["sessions"]
+        problem, required = None, ()
+        buffered = None
+        end = bisect_left(dates, day)
+        if day not in calendar["session_hours"] or day not in dates:
+            problem = ("calendar", None)
+        elif end < count:
+            problem = ("count", count)
+        else:
+            required = tuple(dates[end - count : end])
+            buffered = self._record_buffer(record)
+            for offset, prior in enumerate(required, end - count):
+                if (
+                    buffered["members"][offset] is None
+                    if buffered is not None
+                    else prior not in series["bars"]
+                ):
+                    problem = ("missing", prior)
+                    break
+                available_at = (
+                    buffered["available"][offset]
+                    if buffered is not None
+                    else datetime.fromisoformat(series["available_at"][prior])
+                )
+                if available_at > decision:
+                    problem = ("late", prior)
+                    break
+        window = {"required": required, "problem": problem}
+        if problem is None and buffered is not None:
+            start = end - count
+            window.update(
+                closes=buffered["closes"][start:end],
+                highs=buffered["highs"][start:end],
+                lows=buffered["lows"][start:end],
+                descriptor=buffered["descriptor"],
+                observations=b"[" + b",".join(buffered["members"][start:end]) + b"]",
+            )
+        elif problem is None:
+            window.update(
+                closes=tuple(series["bars"][day]["close"] for day in required),
+                highs=tuple(series["bars"][day]["high"] for day in required),
+                lows=tuple(series["bars"][day]["low"] for day in required),
+                descriptor=json.dumps(
+                    series["descriptor"], sort_keys=True, separators=(",", ":"), allow_nan=False
+                ).encode(),
+                observations=json.dumps(
+                    [
+                        {
+                            "date": day,
+                            "bar": series["bars"][day],
+                            "available_at": series["available_at"][day],
+                        }
+                        for day in required
+                    ],
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    allow_nan=False,
+                ).encode(),
+            )
+        charge = _heap_bytes(key) + _heap_bytes(window) + 256
+        while self.__windows and (
+            len(self.__windows) >= MAX_PREPARED_WINDOWS
+            or self.__window_bytes + charge > MAX_PREPARED_WINDOW_BYTES
+        ):
+            _, (_, removed) = self.__windows.popitem(last=False)
+            self.__window_bytes -= removed
+        if MAX_PREPARED_WINDOWS > 0 and charge <= MAX_PREPARED_WINDOW_BYTES:
+            self.__windows[key] = window, charge
+            self.__window_bytes += charge
+        return window
 
     def disable(self):
         self.clear()
@@ -139,6 +365,7 @@ class _PreparedFeatureCache:
     def close(self):
         self.clear()
         self.__bundle = self.__providers = None
+        self.__records.clear()
 
 
 class _PreparedFeatureCall:
@@ -146,6 +373,82 @@ class _PreparedFeatureCall:
 
     def __init__(self, cache):
         self.cache, self.owner, self.closed = cache, get_ident(), False
+
+
+def _prepared_window(record, decision, count):
+    owner = _observation_cache.get()
+    return owner.observation(record, decision, count) if owner is not None else None
+
+
+def _window_problem(window, label):
+    code, value = window["problem"]
+    if code == "calendar":
+        return "Entry session is absent from the saved stock calendar"
+    if code == "count":
+        return f"Stock {label} needs {value} earlier consecutive session closes"
+    if code == "missing":
+        return f"Stock {label} is missing the {value} session close"
+    return f"The {value} stock close was not available before entry"
+
+
+def _prepared_basis_record(record, decision, required):
+    window = _prepared_window(record, decision, len(required))
+    if window is None or window["problem"] is not None or window["required"] != tuple(required):
+        return None
+    return (
+        b'{"descriptor":',
+        window["descriptor"],
+        b',"observations":',
+        window["observations"],
+        b"}",
+    )
+
+
+def _basis_members(members):
+    """Hash the exact existing sorted JSON members; never hashes of hashes."""
+    digest = sha256()
+    digest.update(b"{")
+    for i, key in enumerate(sorted(members)):
+        if i:
+            digest.update(b",")
+        digest.update(json.dumps(key).encode())
+        digest.update(b":")
+        value = members[key]
+        if isinstance(value, tuple):
+            for part in value:
+                digest.update(part)
+        else:
+            digest.update(value)
+    digest.update(b"}")
+    return digest.hexdigest()
+
+
+def _basis_id(record, decision, required, hypothesis, version, dependency=None):
+    window = _prepared_window(record, decision, len(required))
+    payload = {
+        "version": version,
+        "hypothesis": hypothesis,
+        "descriptor": record["evidence"]["descriptor"],
+    }
+    if dependency is not None:
+        payload["dependency_version"] = dependency
+    if window is not None and window["problem"] is None and window["required"] == tuple(required):
+        members = {
+            key: json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+            for key, value in payload.items()
+            if key != "descriptor"
+        }
+        members["descriptor"], members["observations"] = (
+            window["descriptor"],
+            window["observations"],
+        )
+        return _basis_members(members)
+    series = record["evidence"]
+    payload["observations"] = [
+        {"date": day, "bar": series["bars"][day], "available_at": series["available_at"][day]}
+        for day in required
+    ]
+    return fingerprint(payload)
 
 
 @contextmanager
@@ -197,6 +500,13 @@ def catalog():
 
 
 def normalize_hypothesis(value):
+    from research.prepared_stock_catalogue import normalize_if_owned
+
+    admitted, selected = normalize_if_owned("legacy", value)
+    if admitted:
+        if selected is not None:
+            return selected
+        raise ValueError("The stock-feature hypothesis is not in the recorded catalog")
     if not isinstance(value, dict):
         raise ValueError("Choose a recorded stock-feature hypothesis")
     for expected in catalog():
@@ -325,8 +635,36 @@ def validate_bundle(bundle):
         count += len(record["evidence"]["required_dates"])
         if count > MAX_FEATURE_BARS:
             raise ValueError("Stock-feature history exceeds its total session-bar limit")
-    _json_size(bundle, MAX_BUNDLE_BYTES)
-    if bundle["id"] != fingerprint({key: value for key, value in bundle.items() if key != "id"}):
+    identifier = bundle["id"]
+    # A canonical nonempty object adds exactly72 bytes for its SHA256 id
+    # member. Reuse one detached encoding for both the whole-object byte bound
+    # and payload digest; each record's schema/price/receipt checks above stay
+    # unchanged. Unsupported/custom trees retain the original strict path.
+    pieces = None
+    if (
+        type(bundle) is dict
+        and type(identifier) is str
+        and len(identifier) == 64
+        and all(character in "0123456789abcdef" for character in identifier)
+    ):
+        payload = {key: value for key, value in bundle.items() if key != "id"}
+        raw = bounded_canonical_bytes(
+            payload, max_bytes=max(0, MAX_BUNDLE_BYTES - 72), json_types_only=True
+        )
+        pieces = (
+            (raw,)
+            if raw is not None
+            else bounded_canonical_fragments(payload, max_bytes=max(0, MAX_BUNDLE_BYTES - 72))
+        )
+    if pieces is None:
+        _json_size(bundle, MAX_BUNDLE_BYTES)
+        expected = fingerprint({key: value for key, value in bundle.items() if key != "id"})
+    else:
+        digest = sha256()
+        for piece in pieces:
+            digest.update(piece)
+        expected = digest.hexdigest()
+    if bundle["id"] != expected:
         raise ValueError("Saved stock-feature bundle changed")
     return bundle
 
@@ -344,22 +682,28 @@ def markers(settings, hypothesis, bundle_id=None):
 
 def _feature(record, decision, hypothesis):
     series, calendar = record["evidence"], record["calendar"]
-    day = decision.date().isoformat()
-    dates = calendar["sessions"]
-    if day not in calendar["session_hours"] or day not in dates:
-        return None, "Entry session is absent from the saved stock calendar"
-    end = bisect_left(dates, day)
     lookback = hypothesis["lookback"]
     count = 5 * lookback if hypothesis["family"] == "ema_trend" else lookback + 1
-    if end < count:
-        return None, f"Stock feature needs {count} earlier consecutive session closes"
-    required = dates[end - count : end]
-    for prior in required:
-        if prior not in series["bars"]:
-            return None, f"Stock feature is missing the {prior} session close"
-        if datetime.fromisoformat(series["available_at"][prior]) > decision:
-            return None, f"The {prior} stock close was not available before entry"
-    closes = [series["bars"][prior]["close"] for prior in required]
+    window = _prepared_window(record, decision, count)
+    if window is not None:
+        if window["problem"] is not None:
+            return None, _window_problem(window, "feature")
+        required, closes = window["required"], list(window["closes"])
+    else:
+        day = decision.date().isoformat()
+        dates = calendar["sessions"]
+        if day not in calendar["session_hours"] or day not in dates:
+            return None, "Entry session is absent from the saved stock calendar"
+        end = bisect_left(dates, day)
+        if end < count:
+            return None, f"Stock feature needs {count} earlier consecutive session closes"
+        required = dates[end - count : end]
+        for prior in required:
+            if prior not in series["bars"]:
+                return None, f"Stock feature is missing the {prior} session close"
+            if datetime.fromisoformat(series["available_at"][prior]) > decision:
+                return None, f"The {prior} stock close was not available before entry"
+        closes = [series["bars"][prior]["close"] for prior in required]
     result = {
         "lookback": lookback,
         "threshold": hypothesis["threshold"],
@@ -379,21 +723,7 @@ def _feature(record, decision, hypothesis):
         result["value"] = 100 * (closes[-1] / closes[0] - 1)
     if not isfinite(result["value"]):
         return None, "Stock feature is outside finite calculation bounds"
-    result["basis_id"] = fingerprint(
-        {
-            "version": VERSION,
-            "hypothesis": hypothesis,
-            "descriptor": series["descriptor"],
-            "observations": [
-                {
-                    "date": prior,
-                    "bar": series["bars"][prior],
-                    "available_at": series["available_at"][prior],
-                }
-                for prior in required
-            ],
-        }
-    )
+    result["basis_id"] = _basis_id(record, decision, required, hypothesis, VERSION)
     return result, None
 
 
@@ -441,11 +771,18 @@ def _apply(
     timeline = snapshot["timeline" if minute else "sessions"]
     index = {key: i for i, key in enumerate(timeline)}
     counts = dict.fromkeys(("allowed", "filtered", "unknown", "original_excluded", "pending"), 0)
+    from research.causal_gate_components import components_only
+
+    causal_only = components_only()
+    if causal_only:
+        from research.owned_entry_features import _capture
+
+        selected = _capture(selected)
     strategies, membership, cached = [], [], {}
     for strategy in evidence["strategies"]:
         signals = []
         for i, original in enumerate(strategy["signals"]):
-            signal = deepcopy(original)
+            signal = None if causal_only else copy_gate_signal(original)
             entry, reason = _schedule(
                 original, snapshot, strategy["config"], timeline, index, minute
             )
@@ -486,13 +823,15 @@ def _apply(
                                 selected,
                                 feature_fn,
                                 calculation_version,
+                                _immutable=causal_only,
                             )
                         else:
                             cached[key] = feature_fn(record, decision, selected)
                     feature, reason = cached[key]
                 if feature is None:
                     state = "unknown"
-                    signal["research_exclusion"] = reason
+                    if not causal_only:
+                        signal["research_exclusion"] = reason
                 elif not (
                     compare_fn(feature, selected)
                     if compare_fn
@@ -502,7 +841,10 @@ def _apply(
                     )
                 ):
                     state = "filtered"
-                    signal["research_exclusion"] = f"Stock condition not met: {selected['label']}"
+                    if not causal_only:
+                        signal["research_exclusion"] = (
+                            f"Stock condition not met: {selected['label']}"
+                        )
                 else:
                     state = "allowed"
             counts[state] += 1
@@ -520,26 +862,35 @@ def _apply(
                     "reason": reason,
                 }
             )
-            signals.append(signal)
-        strategies.append({**deepcopy(strategy), "signals": signals})
-    strategies = markers_fn(strategies, selected)
+            if not causal_only:
+                signals.append(signal)
+        # Signal rows above are already detached; do not copy and discard a
+        # second complete signal/entry-feature tree when replacing this field.
+        if not causal_only:
+            strategies.append(
+                {
+                    **deepcopy({key: value for key, value in strategy.items() if key != "signals"}),
+                    "signals": freeze_gate_signals(signals),
+                }
+            )
+    if not causal_only:
+        strategies = markers_fn(strategies, selected)
     receipt = {
         "version": VERSION,
         "hypothesis": selected,
         "bundle_id": bundle["id"],
-        "execution_inputs_id": fingerprint(
-            {
-                key: evidence[key]
-                for key in ("portfolio", "strategies", "signals", "snapshot", "versions")
-            }
-        ),
         "counts": counts,
         "membership": membership,
-        "conditioned_strategies_id": fingerprint(strategies),
         "feature_recipe": recipe() if feature_recipe is None else feature_recipe,
         "timing": "Only completed daily observations from sessions before the actual entry decision",
         "unknown_policy": "Exclude unknown features; preserve original exclusions and pending entries",
     }
     if calculation_version != VERSION:
         receipt["calculation_version"] = calculation_version
+    if causal_only:
+        return [], receipt
+    receipt.update(
+        execution_inputs_id=execution_inputs_id(evidence),
+        conditioned_strategies_id=account_fingerprint(strategies),
+    )
     return strategies, {**receipt, "id": fingerprint(receipt)}

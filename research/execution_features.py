@@ -47,10 +47,30 @@ def _identity(signal):
     return {key: signal[key] for key in ("symbol", "date", "timestamp", "row") if key in signal}
 
 
-def _opportunity_keys(signals):
+def _opportunity_keys(signals, identities=None):
     seen = Counter()
     for signal in signals:
-        identity = fingerprint(_identity(signal))
+        source = _identity(signal)
+        # Re-read the complete current identity on every candidate. Only small
+        # immutable primitive values qualify; caller objects are never keys.
+        cache_key = (
+            tuple(source.items())
+            if identities is not None
+            and all(
+                value is None
+                or type(value) is str
+                and len(value) <= 300
+                or type(value) is int
+                and value.bit_length() <= 64
+                for value in source.values()
+            )
+            else None
+        )
+        identity = identities.get(cache_key) if cache_key is not None else None
+        if identity is None:
+            identity = fingerprint(source)
+            if cache_key is not None and len(identities) < MAX_SIGNALS:
+                identities[cache_key] = identity
         key = f"{identity}:{seen[identity]}"
         seen[identity] += 1
         yield key, signal
@@ -72,7 +92,10 @@ def _schedule_days(snapshot):
 
 
 def validate_entry_feature(value, *, symbol, entry_session, decision_at):
-    if (
+    from research.owned_entry_features import is_owned_entry
+
+    admitted = is_owned_entry(value, ENTRY_VERSION)
+    if not admitted and (
         not isinstance(value, dict)
         or set(value)
         != {
@@ -91,8 +114,6 @@ def validate_entry_feature(value, *, symbol, entry_session, decision_at):
         }
         or value.get("version") != ENTRY_VERSION
         or value.get("id") != fingerprint({key: item for key, item in value.items() if key != "id"})
-        or value.get("symbol") != symbol
-        or value.get("entry_session") != entry_session
         or value.get("atr_period") != 14
         or value.get("observations") != 100
         or isinstance(value.get("value"), bool)
@@ -104,6 +125,8 @@ def validate_entry_feature(value, *, symbol, entry_session, decision_at):
             for key in ("basis_id", "recipe_id")
         )
     ):
+        raise ValueError("Execution ATR needs an intact positive causal observation")
+    if value.get("symbol") != symbol or value.get("entry_session") != entry_session:
         raise ValueError("Execution ATR needs an intact positive causal observation")
     try:
         available, decision = (
@@ -323,8 +346,10 @@ def attach(evidence):
     return _attach(evidence, _intact(evidence.get("execution_features")))
 
 
-def _attach(evidence, receipt):
-    """Apply admitted features; all candidate bindings and entry checks remain fresh."""
+def _attach(
+    evidence, receipt, *, own_entries=False, identities=None, checked_calendar=False, daily=None
+):
+    """Check candidate bindings; reuse only identical immutable daily attachments."""
     from research.connectors.vectorbt_portfolio import _schedule
     from research.intraday import bounds
 
@@ -334,7 +359,7 @@ def _attach(evidence, receipt):
     context = evidence.get("automatic_stock_market_context")
     if context is not None and context.get("id") != source["context_id"]:
         raise ValueError("Execution ATR belongs to another recorded context")
-    if any(
+    if not checked_calendar and any(
         source["schedule_days"].get(day) != value for day, value in _schedule_days(snapshot).items()
     ):
         raise ValueError("Execution ATR calendar/timeline differs from its frozen source")
@@ -342,12 +367,18 @@ def _attach(evidence, receipt):
     timeline = snapshot["timeline" if minute else "sessions"]
     index = {key: i for i, key in enumerate(timeline)}
     strategies = []
+    decisions = {}
     for strategy in evidence["strategies"]:
         original = receipt["opportunities"].get(strategy["id"])
         if original is None:
             raise ValueError("Execution ATR source strategy changed")
+        cache_key = daily.key(snapshot, strategy, _schedule) if daily is not None else None
+        reused = daily.get(cache_key, snapshot, strategy["signals"]) if daily is not None else None
+        if reused is not None:
+            strategies.append({**strategy, "signals": reused})
+            continue
         signals = []
-        for key, raw in _opportunity_keys(strategy["signals"]):
+        for key, raw in _opportunity_keys(strategy["signals"], identities):
             saved = original.get(key)
             if saved is None or saved["signal"] != _identity(raw):
                 raise ValueError("Execution ATR source opportunity changed")
@@ -372,11 +403,16 @@ def _attach(evidence, receipt):
                     feature = receipt["features"][feature_key]["feature"]
                     if feature is None:
                         raise ValueError("Execution ATR common mask is incomplete")
+                    if own_entries:
+                        from research.owned_entry_features import admit_entry
+
+                        feature = admit_entry(feature, ENTRY_VERSION)
+                        receipt["features"][feature_key]["feature"] = feature
                     # Match the native daily adapter's long-standing bounds()
                     # convention when older daily snapshots omit clock metadata.
-                    decision_at = (
-                        timeline[entry] if minute else bounds(snapshot, day)[0].isoformat()
-                    )
+                    if not minute and day not in decisions:
+                        decisions[day] = bounds(snapshot, day)[0].isoformat()
+                    decision_at = timeline[entry] if minute else decisions[day]
                     signal["execution_atr"] = deepcopy(
                         validate_entry_feature(
                             feature,
@@ -386,6 +422,8 @@ def _attach(evidence, receipt):
                         )
                     )
             signals.append(signal)
+        if daily is not None:
+            signals = daily.put(cache_key, snapshot, strategy["signals"], signals)
         strategies.append({**strategy, "signals": signals})
     return {**evidence, "strategies": strategies}
 
@@ -395,14 +433,20 @@ class _PreparedExecutionFeatures:
 
     The original source object is an identity capability, never a mutable hash
     cache. Construction captures a detached bounded JSON tree before validating
-    that same owned tree. Only whole-receipt checks are reused; candidate source,
-    timing, opportunity and causal entry checks still run on every attachment.
+    that same owned tree. Candidate receipt/context checks remain fresh. Daily
+    lists may reuse entry admission only for exact immutable source/calendar
+    inputs; minute schedules and all ordinary mutable lists are checked afresh.
     """
 
-    __slots__ = ("__source", "__receipt", "__weakref__")
+    __slots__ = ("__source", "__receipt", "__identities", "__calendars", "__daily", "__weakref__")
 
     def __init__(self, receipt):
         self.__source = self.__receipt = None
+        self.__identities = {}
+        self.__calendars = {}
+        from research.prepared_daily_signals import DailySignals
+
+        self.__daily = DailySignals()
         captured = bounded_canonical_snapshot(receipt, max_bytes=MAX_BYTES)
         if captured is not None:
             owned, raw = captured
@@ -419,11 +463,16 @@ class _PreparedExecutionFeatures:
             with StringIO() as stream:
                 size = 0
                 for part in json.JSONEncoder(
-                    sort_keys=True, separators=(",", ":"), allow_nan=False, ensure_ascii=True,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    allow_nan=False,
+                    ensure_ascii=True,
                 ).iterencode(receipt):
                     size += len(part)
                     if size > MAX_BYTES:
-                        raise ValueError("Stock-feature evidence exceeds its bounded byte allowance")
+                        raise ValueError(
+                            "Stock-feature evidence exceeds its bounded byte allowance"
+                        )
                     stream.write(part)
                 owned = json.loads(stream.getvalue())
         _intact(owned)
@@ -434,10 +483,30 @@ class _PreparedExecutionFeatures:
             raise ValueError("The prepared execution features have been released")
         if evidence.get("execution_features") is not self.__source:
             raise ValueError("Prepared execution features require the original source object")
-        return _attach(evidence, self.__receipt)
+        from research.owned_entry_features import is_immutable_json
+
+        snapshot = evidence["snapshot"]
+        immutable = is_immutable_json(snapshot)
+        checked = immutable and self.__calendars.get(id(snapshot)) is snapshot
+        result = _attach(
+            evidence,
+            self.__receipt,
+            own_entries=True,
+            identities=self.__identities,
+            checked_calendar=checked,
+            daily=self.__daily,
+        )
+        if immutable and not checked:
+            if len(self.__calendars) >= 2:
+                self.__calendars.pop(next(iter(self.__calendars)))
+            self.__calendars[id(snapshot)] = snapshot
+        return result
 
     def close(self):
         self.__source = self.__receipt = None
+        self.__identities.clear()
+        self.__calendars.clear()
+        self.__daily.close()
 
     def __enter__(self):
         if self.__receipt is None:

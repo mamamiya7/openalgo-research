@@ -14,17 +14,17 @@ The aim is to connect broker data, backtesting and optimization in one open-sour
 workflow. Start directly from a Chartink scanner with the Chrome extension, upload
 a CSV export, or reuse saved signals.
 
-**Current preview: `0.1.0-preview.26` · OpenAlgo 2.0.2.9 · Windows and Linux**
+**Current preview: `0.1.0-preview.27` · OpenAlgo 2.0.2.9 · Windows and Linux**
 
-[**Download OpenAlgo Research**](https://github.com/mamamiya7/openalgo-research/releases/download/research-v0.1.0-preview.26/openalgo-research-0.1.0-preview.26.zip)
+[**Download OpenAlgo Research**](https://github.com/mamamiya7/openalgo-research/releases/download/research-v0.1.0-preview.27/openalgo-research-0.1.0-preview.27.zip)
 · [Install and start](docs/research/RUNTIME.md)
-· [Release notes](docs/research/releases/0.1.0-preview.26.md)
+· [Release notes](docs/research/releases/0.1.0-preview.27.md)
 · [Architecture](docs/research/SYSTEM_MAP.md)
 · [Released source](https://github.com/mamamiya7/openalgo-research/tree/main)
 
-## What’s in preview.26
+## What’s in preview.27
 
-- **Research the history you have.** New automatic runs use the supplied CSV or Chartink history. They retain the full search and original trading rules, using historical research when separate later-period checks are unavailable. Saved findings retain that evidence scope.
+- **Automatic sizing and capital estimates.** New automatic runs explore sizing within fixed risk limits, reject sparse or concentrated historical improvements, and check estimated starting capital against the selected rules. The full 408-proposal search and saved evidence remain intact. Historical findings do not imply independent validation.
 
 Upload a signal CSV or send a Chartink history, review your capital and trading
 rules, then choose **Backtest** or **Optimize → Automatic research**. The app
@@ -94,8 +94,8 @@ qualified volume provenance; other brokers can use supported methods without
 that assumption. Optional Nautilus fixed/custom calculations have their own
 supported contract and Linux/WSL runtime.
 
-[Release notes](docs/research/releases/0.1.0-preview.26.md) ·
-[Patch qualification and limits](docs/research/releases/0.1.0-preview.26.md#qualification) ·
+[Release notes](docs/research/releases/0.1.0-preview.27.md) ·
+[Patch qualification and limits](docs/research/releases/0.1.0-preview.27.md#qualification) ·
 [Future roadmap](docs/research/DELIVERY_PLAN.md).
 Preview.14 combines completed fit-account/proposal saves and speeds up bounded
 evidence serialisation, alongside the preceding cache and calculation corrections.
@@ -257,7 +257,7 @@ to preserve their accounts, broker settings and saved research.
 To develop from a Git checkout instead, first run `npm ci` and `npm run build` in
 `frontend`, then run the setup script from the repository root. GitHub's automatic
 **Source code** archives do not contain the built interface; use the named
-`openalgo-research-0.1.0-preview.26.zip` asset for the easy installation.
+`openalgo-research-0.1.0-preview.27.zip` asset for the easy installation.
 
 Use the [Chartink extension](extensions/chartink/README.md), or open **Tools →
 Backtest & Optimize** to upload a CSV or reuse saved signals. Review the settings

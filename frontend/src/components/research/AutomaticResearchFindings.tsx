@@ -23,12 +23,71 @@ const periods = [
   ['final', 'Final check'],
 ] as const
 
+const capitalBlockerLabels: Record<string, string> = {
+  position_count: 'Maximum open positions',
+  liquidity: 'Trading-volume limit',
+  unavailable_evidence: 'Missing price or capacity evidence',
+  unavailable_execution_evidence: 'Missing execution evidence',
+  unavailable_entry_period: 'Incomplete entry period',
+  fixed_ticket_cannot_fund_share: 'Order too small for one whole share',
+  funding_or_percentage_limit: 'Cash or account risk limit',
+  other_execution_limit: 'Other execution limit',
+}
+
+export function CapitalPlanning({
+  planning,
+}: {
+  planning: NonNullable<Findings['capital_planning']>
+}) {
+  const last = planning.accounts.at(-1)
+  return (
+    <section aria-label="Starting capital estimate" className="space-y-1 pt-3 text-sm">
+      <p className="font-medium">
+        {planning.status === 'verified_sufficient'
+          ? `Capital verified for this history: ₹${number(planning.verified_capital)}`
+          : `Starting capital estimate: ₹${number(planning.estimated_capital)}`}
+      </p>
+      <p className="text-muted-foreground">
+        Initial order reference:{' '}
+        {planning.reference_tickets
+          .map((ticket) => `₹${number(ticket.initial_ticket)}`)
+          .join(' / ')}
+        . Later order amounts vary with account equity.
+      </p>
+      {planning.status === 'no_verified_amount' && (
+        <p>
+          No tested amount funded every eligible request. Extra money cannot resolve every limit.
+        </p>
+      )}
+      <p className="text-muted-foreground">
+        Separate funding check for the chosen rules; the search result above keeps its recorded
+        capital. This is a historical estimate, not a minimum or a future funding guarantee.
+      </p>
+      <details className="pt-1">
+        <summary className="cursor-pointer text-muted-foreground">
+          {planning.accounts.length} capital checks
+          {planning.tested_range &&
+            ` · ₹${number(planning.tested_range[0])}–₹${number(planning.tested_range[1])}`}
+        </summary>
+        {last &&
+          Object.entries(last.blockers).map(([name, count]) => (
+            <p key={name} className="pt-1 text-muted-foreground">
+              {capitalBlockerLabels[name] ?? 'Execution limit'}: {number(count)} requests
+            </p>
+          ))}
+      </details>
+    </section>
+  )
+}
+
 export function recordedHistoryAvailability(
   findings: Findings | undefined
 ): ResearchHistoryAvailability | undefined {
   const receipt = findings?.recipe.history_availability
   return findings?.version === 'automatic-hypotheses-v16' &&
-    receipt?.version === 'research-available-history-v1' &&
+    (receipt?.version === 'research-available-history-v1' ||
+      (receipt?.version === 'research-available-history-v2' &&
+        findings.recipe.automatic_design !== undefined)) &&
     ['exploratory_only', 'historical_only'].includes(receipt.mode) &&
     receipt.mode === findings.recipe.validation_mode &&
     Number.isInteger(receipt.session_count) &&
@@ -45,6 +104,12 @@ export function ResearchHistoryScope({
   return (
     <section aria-label="Research history scope" className="space-y-1 pt-1 text-sm">
       <p>Using all available signal history · {number(availability.session_count)} sessions</p>
+      {availability.usable_entry_session_count !== undefined && (
+        <p className="text-muted-foreground">
+          {number(availability.usable_entry_session_count)} entry sessions have complete holding
+          windows
+        </p>
+      )}
       <p className="font-medium text-muted-foreground">
         {availability.mode === 'exploratory_only'
           ? 'Historical research · no independent later-period check'
@@ -445,6 +510,32 @@ export function AutomaticResearchFindings({
                       : 'Best settings found on the available research dates.'}
           </p>
           {historyAvailability && <ResearchHistoryScope availability={historyAvailability} />}
+          {findings.automatic_design && (
+            <section className="space-y-1 pt-2 text-sm" aria-label="Automatic design checks">
+              <p>
+                {findings.automatic_design.candidates_passing_design} of{' '}
+                {findings.automatic_design.candidates_checked} candidates passed the sample,
+                date-spread and stock-concentration checks.
+              </p>
+              <p className="text-muted-foreground">
+                Average funds invested:{' '}
+                {number(findings.automatic_design.selected.capital_use.mean_invested_pct, '%')} ·
+                Maximum:{' '}
+                {number(findings.automatic_design.selected.capital_use.maximum_invested_pct, '%')}
+              </p>
+              {findings.automatic_design.is_baseline_reference && (
+                <p>
+                  The original setup is shown as a reference; it has not passed as an improvement.
+                </p>
+              )}
+              {findings.automatic_design.selected.reasons.length > 0 && (
+                <p className="text-muted-foreground">
+                  {findings.automatic_design.selected.reasons.join('. ')}.
+                </p>
+              )}
+            </section>
+          )}
+          {findings.capital_planning && <CapitalPlanning planning={findings.capital_planning} />}
           {walkForward && (
             <p className="text-sm text-muted-foreground">Refit and checked on 3 later windows.</p>
           )}
