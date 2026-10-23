@@ -714,3 +714,41 @@ def test_expanding_fit_checkpoint_rejects_changed_local_trial_numbers(app):
             observer.checkpoint(db, state)
     assert not activity.read(store, OWNER, job_id)["rows"][0]["checkpointed"]
     finalize(store, job_id, observer)
+
+
+@pytest.mark.parametrize("version", ["automatic-hypotheses-v15", "automatic-hypotheses-v16"])
+@pytest.mark.parametrize("offset,name", [(4, "search_seed1"), (5, "search_seed2")])
+def test_seed_repeat_checkpoint_preserves_global_observation_coverage(app, version, offset, name):
+    store, job_id, observer = claimed(app, budget=408, replayed=offset * 68)
+    started, finished = start(observer, offset * 68), complete(observer, offset * 68)
+    row = checkpoint(started, finished)["calculation"]["trials"][0]
+    row["number"] = 0
+    state = {"calculation": {"version": version, "fits": {name: {"trials": [row]}}}}
+    original = copy.deepcopy(state)
+    with store.sessions.begin() as db:
+        observer.checkpoint(db, state)
+    assert state == original
+    rows = activity.read(store, OWNER, job_id)["rows"]
+    assert len(rows) == 1 and rows[0]["checkpointed"]
+    assert rows[0]["number"] == offset * 68
+    finalize(store, job_id, observer)
+
+
+@pytest.mark.parametrize(
+    "version,name",
+    [("automatic-hypotheses-v14", "search_seed1"), ("automatic-hypotheses-v16", "search_seed3")],
+)
+def test_seed_repeat_checkpoint_still_rejects_unregistered_fits(app, version, name):
+    store, job_id, observer = claimed(app, budget=408)
+    started, finished = start(observer), complete(observer)
+    state = {
+        "calculation": {
+            "version": version,
+            "fits": {name: {"trials": checkpoint(started, finished)["calculation"]["trials"]}},
+        }
+    }
+    with pytest.raises(activity.ObservationFailed):
+        with store.sessions.begin() as db:
+            observer.checkpoint(db, state)
+    assert not activity.read(store, OWNER, job_id)["rows"][0]["checkpointed"]
+    finalize(store, job_id, observer)

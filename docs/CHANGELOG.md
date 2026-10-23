@@ -6,6 +6,24 @@ Each release adds a stanza here summarising what changed and who contributed.
 The full notes for a release, with commit SHAs and the reasoning behind each
 fix, live in [docs/releases](releases/).
 
+## [Research 0.1.0-preview.26] - 2026-10-23
+
+### Research on available signal history
+
+New automatic research uses the CSV or Chartink history supplied by the trader.
+Short files complete the full bounded historical search without requesting a
+longer export. Findings record which later-period checks are unavailable; a
+historical choice is not presented as independently validated. Trading rules,
+search ranges, data-integrity checks and risk constraints are preserved. Old
+frozen studies and exact replays keep their original interpretation.
+
+See the [research release notes](research/releases/0.1.0-preview.26.md) for
+qualification and runtime limits. No dependencies or platform version changed.
+
+### Contributors
+
+- **@mamamiya7** - research workflow, available-history protocol and qualification.
+
 ## [Unreleased]
 
 ### Dependencies

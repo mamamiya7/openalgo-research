@@ -927,3 +927,72 @@ it('keeps saved strict v16 findings unchanged when no historical mode was record
   expect(screen.getByText('Checked on later dates and with higher trading costs.')).toBeVisible()
   expect(data).toEqual(original)
 })
+
+function availableHistoryFindings(mode: 'exploratory_only' | 'historical_only'): Findings {
+  const data = mode === 'historical_only' ? walkForwardFindings() : findings()
+  data.version = 'automatic-hypotheses-v16'
+  data.status = mode === 'historical_only' ? 'historical' : 'inconclusive'
+  data.independently_validated = false
+  data.headline = 'Historical search completed on the available signal dates'
+  data.selection_basis = 'Settings selected using the recorded history and original limits.'
+  data.recipe.validation_mode = mode
+  data.recipe.history_policy = 'available_history'
+  data.recipe.history_availability = {
+    version: 'research-available-history-v1',
+    mode,
+    session_count: mode === 'historical_only' ? 220 : 35,
+    holding: { max_sessions: 45, min_window_sessions: 46 },
+    reason: 'Research uses all available scanner history.',
+    reason_code: mode === 'historical_only' ? 'historical_checks_available' : 'no_separate_windows',
+  }
+  data.counts = { proposals: 408, simulations: 410, finalists: 1 }
+  if (mode === 'exploratory_only') {
+    data.final = null
+    data.checks = []
+    data.walk_forward = undefined
+  }
+  return data
+}
+
+it('shows all-history findings without inventing independent checks or requesting more data', async () => {
+  const data = availableHistoryFindings('exploratory_only')
+  const original = structuredClone(data)
+  const { container } = render(<AutomaticResearchFindings findings={data} />)
+  expect(screen.getByText(/Using all available signal history · 35 sessions/)).toBeVisible()
+  expect(screen.getByText('Historical research · no independent later-period check')).toBeVisible()
+  expect(screen.getByRole('heading', { name: data.headline })).toBeVisible()
+  expect(screen.queryByRole('table', { name: 'Final period comparison' })).not.toBeInTheDocument()
+  expect(screen.queryByText('Refit and checked on 3 later windows.')).not.toBeInTheDocument()
+  expect(container.querySelector('svg.lucide-check')).not.toBeInTheDocument()
+  await userEvent.click(screen.getByText('Research details'))
+  expect(screen.getByText(/408 proposals · 410 simulations/)).toBeVisible()
+  expect(screen.getByText(/An independent later-period check is unavailable/)).toBeVisible()
+  expect(
+    screen.queryByText(/Later evidence is needed|longer signal history|shorten the holding/i)
+  ).not.toBeInTheDocument()
+  expect(data).toEqual(original)
+})
+
+it('preserves recorded available-history qualification after saving and reopening', async () => {
+  const saved = availableHistoryFindings('historical_only')
+  const reopened: Findings = JSON.parse(JSON.stringify(saved))
+  render(<AutomaticResearchFindings findings={reopened} />)
+  expect(screen.getByText(/Using all available signal history · 220 sessions/)).toBeVisible()
+  expect(screen.getByText('Historical research · not independently validated')).toBeVisible()
+  expect(screen.getByRole('table', { name: 'Historical later-period comparison' })).toBeVisible()
+  expect(screen.queryByRole('table', { name: 'Final period comparison' })).not.toBeInTheDocument()
+  await userEvent.click(screen.getByText('Research details'))
+  expect(screen.getByText(/reused dates do not independently validate them/)).toBeVisible()
+  expect(reopened).toEqual(saved)
+})
+
+it('does not present a supported status as independently validated when the receipt says otherwise', () => {
+  const data = findings()
+  data.independently_validated = false
+  const { container } = render(<AutomaticResearchFindings findings={data} />)
+  expect(container.querySelector('svg.lucide-check')).not.toBeInTheDocument()
+  expect(screen.getByText(/Historical settings comparison on recorded dates/)).toBeVisible()
+  expect(
+    screen.queryByText('Checked on later dates and with higher trading costs.')
+  ).not.toBeInTheDocument()
+})

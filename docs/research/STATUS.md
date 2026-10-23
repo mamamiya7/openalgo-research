@@ -1,5 +1,27 @@
 # OpenAlgo Research status
 
+## Available-history automatic research - 23 October 2026
+
+Preview.26 treats the CSV or Chartink history supplied by the trader as the
+available research dataset. New editable v16 runs record an explicit
+available-history policy. Complete chronological comparisons are retained when
+the dates support them and are labelled historical. Shorter histories use the
+same six fits and 408 proposals over expanding prefixes and full-history seed
+repeats. The primary full-history choice is frozen; diagnostics cannot select a
+better-looking seed. No independent later-period test or recommendation is
+invented. Trading rules, search ranges, 512-account ceiling, causal features,
+holding boundaries, coverage and risk checks remain intact. Old frozen studies
+and exact replay keep their original contracts.
+
+257 backend and 210 frontend checks pass. The installed acceptance and runtime
+limits are recorded in the [release qualification](releases/0.1.0-preview.26.md).
+The actual 146-stock scanner completed all 408 proposals and retained 325
+recorded account simulations. Its tested setup was saved, reloaded and reopened
+with the historical scope visible. The full automatic one-minute target is not
+met; the acceptance includes interruption and exact checkpoint recovery.
+The Linux host-suite retains pre-existing launcher/annotation failures described
+there; complete Linux host qualification is not claimed.
+
 ## Large-scanner preparation correction - 23 October 2026
 
 Preview.25 removes repeated causal window serialization, volume seal checks,

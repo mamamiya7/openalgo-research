@@ -263,6 +263,7 @@ describe('native portfolio consumer journey', () => {
     expect(optimized.optimizing).toBe(true)
     expect(optimized.portfolio.automatic_research).toEqual({
       version: 'automatic-hypotheses-v16',
+      history_policy: 'available_history',
     })
     expect(optimized.portfolio.strategies).toEqual(original.portfolio.strategies)
     expect(optimized.portfolio.capital).toBe(original.portfolio.capital)
@@ -597,6 +598,7 @@ describe('native portfolio consumer journey', () => {
     const sent = vi.mocked(portfolioResearch.submit).mock.calls[0][0]
     expect(sent.automatic_research).toEqual({
       version: 'automatic-hypotheses-v16',
+      history_policy: 'available_history',
     })
     expect(sent.capital).toBe(original.portfolio.capital)
     expect(sent.strategies[0].config).toEqual(original.portfolio.strategies[0].config)
@@ -2464,43 +2466,45 @@ describe('portfolio result reading', () => {
   })
 })
 
-it('sends historical-only v16 research only after explicitly checking the option', async () => {
+it('uses all available history automatically without an extra option or changing trading rules', async () => {
   const original = selectPortfolioRun(draft(), true)
   savedDraft(original)
   mount()
   await userEvent.click(await screen.findByText('Advanced research options'))
-  const option = screen.getByRole('checkbox', { name: 'Historical optimisation' })
-  expect(option).not.toBeChecked()
-  expect(option).toHaveAccessibleDescription(
-    'Reuse previously tested dates. Results are not independently validated.'
-  )
-  await userEvent.click(option)
+  expect(
+    screen.queryByRole('checkbox', { name: 'Historical optimisation' })
+  ).not.toBeInTheDocument()
+  expect(screen.getByText(/Using all available signal history/)).toBeVisible()
   await userEvent.click(screen.getByRole('button', { name: 'Optimize automatically' }))
   await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
   const sent = vi.mocked(portfolioResearch.submit).mock.calls[0][0]
   expect(sent.automatic_research).toEqual({
     version: 'automatic-hypotheses-v16',
-    validation_mode: 'historical_only',
+    history_policy: 'available_history',
   })
   expect(sent.capital).toBe(original.portfolio.capital)
   expect(sent.strategies[0].config).toEqual(original.portfolio.strategies[0].config)
   expect(sent.strategies[0].allocation_pct).toBe(original.portfolio.strategies[0].allocation_pct)
-  expect(original.portfolio.automatic_research).toEqual({ version: 'automatic-hypotheses-v16' })
+  expect(original.portfolio.automatic_research).toEqual({
+    version: 'automatic-hypotheses-v16',
+    history_policy: 'available_history',
+  })
 })
 
-it('removes the historical flag completely when the user unchecks it', async () => {
-  savedDraft(selectPortfolioRun(draft(), true))
+it('opts an existing strict v16 draft into available history on a new run without rewriting it', async () => {
+  const original = draft()
+  original.optimizing = true
+  original.portfolio.automatic_research = { version: 'automatic-hypotheses-v16' }
+  const before = structuredClone(original)
+  savedDraft(original)
   mount()
-  await userEvent.click(await screen.findByText('Advanced research options'))
-  const option = screen.getByRole('checkbox', { name: 'Historical optimisation' })
-  await userEvent.click(option)
-  await userEvent.click(option)
-  expect(option).not.toBeChecked()
-  await userEvent.click(screen.getByRole('button', { name: 'Optimize automatically' }))
+  await userEvent.click(await screen.findByRole('button', { name: 'Optimize automatically' }))
   await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
   expect(vi.mocked(portfolioResearch.submit).mock.calls[0][0].automatic_research).toEqual({
     version: 'automatic-hypotheses-v16',
+    history_policy: 'available_history',
   })
+  expect(original).toEqual(before)
 })
 
 it('does not carry historical-only mode into a previous automatic recipe', async () => {
@@ -2512,7 +2516,9 @@ it('does not carry historical-only mode into a previous automatic recipe', async
   savedDraft(historical)
   mount()
   await userEvent.click(await screen.findByText('Advanced research options'))
-  expect(screen.getByRole('checkbox', { name: 'Historical optimisation' })).toBeChecked()
+  expect(
+    screen.queryByRole('checkbox', { name: 'Historical optimisation' })
+  ).not.toBeInTheDocument()
   await userEvent.selectOptions(screen.getByLabelText('Research scope'), 'automatic-hypotheses-v15')
   expect(
     screen.queryByRole('checkbox', { name: 'Historical optimisation' })
@@ -2524,7 +2530,10 @@ it('does not carry historical-only mode into a previous automatic recipe', async
   })
 })
 
-it('retains historical qualification when switching to the separate later-period report', async () => {
+it.each([
+  false,
+  true,
+])('retains historical qualification on a reopened later-period report (available history %s)', async (availableHistory) => {
   const later: PortfolioResult = {
     ...result,
     summary: { ...result.summary, final_equity: 99800, net_pnl: -200 },
@@ -2543,6 +2552,19 @@ it('retains historical qualification when switching to the separate later-period
       recipe: {
         version: 'automatic-hypotheses-v16',
         validation_mode: 'historical_only',
+        ...(availableHistory
+          ? {
+              history_policy: 'available_history' as const,
+              history_availability: {
+                version: 'research-available-history-v1' as const,
+                mode: 'historical_only' as const,
+                session_count: 220,
+                holding: { max_sessions: 45, min_window_sessions: 46 },
+                reason: 'All available signal history is used for historical comparisons.',
+                reason_code: 'available_history',
+              },
+            }
+          : {}),
         periods: {
           search: { from: '2026-01-05', to: '2026-01-20' },
           check1: { from: '2026-01-21', to: '2026-01-22' },
@@ -2574,7 +2596,7 @@ it('retains historical qualification when switching to the separate later-period
     },
   }
   const original = structuredClone(combined)
-  render(
+  const view = render(
     <PortfolioResults
       job={{ ...finished, result: combined }}
       result={combined}
@@ -2585,7 +2607,13 @@ it('retains historical qualification when switching to the separate later-period
   )
   expect(screen.queryByRole('button', { name: 'Final check', exact: true })).not.toBeInTheDocument()
   await userEvent.click(screen.getByRole('button', { name: 'Historical comparison', exact: true }))
-  expect(screen.getByText('Historical optimisation — not independently validated')).toBeVisible()
+  expect(
+    screen.getByText(
+      availableHistory
+        ? 'Historical research · not independently validated'
+        : 'Historical optimisation — not independently validated'
+    )
+  ).toBeVisible()
   expect(
     screen.queryByRole('region', { name: 'Automatic research findings' })
   ).not.toBeInTheDocument()
@@ -2594,4 +2622,77 @@ it('retains historical qualification when switching to the separate later-period
   ).toHaveTextContent('₹99,800')
   expect(later.automatic_research).toBeUndefined()
   expect(combined).toEqual(original)
+  if (availableHistory) {
+    view.unmount()
+    render(
+      <PortfolioResults
+        job={{ ...finished, result: combined }}
+        result={JSON.parse(JSON.stringify(later))}
+        freezeAnalysis
+        onRerun={vi.fn()}
+        rerunning={false}
+        exportUrl="/export"
+      />
+    )
+    expect(screen.getByText(/Using all available signal history · 220 sessions/)).toBeVisible()
+    expect(screen.getByText('Historical research · not independently validated')).toBeVisible()
+    expect(combined).toEqual(original)
+  }
+})
+
+it.each([
+  false,
+  true,
+])('loads the frozen parent history scope for a reopened child report (frozen %s)', async (freezeAnalysis) => {
+  const parentId = 'available-history-parent'
+  const parent = {
+    ...finished,
+    id: parentId,
+    result: {
+      ...result,
+      automatic_research: {
+        version: 'automatic-hypotheses-v16',
+        recipe: {
+          version: 'automatic-hypotheses-v16',
+          validation_mode: 'exploratory_only',
+          history_availability: {
+            version: 'research-available-history-v1',
+            mode: 'exploratory_only',
+            session_count: 160,
+            holding: { max_sessions: 82, min_window_sessions: 88 },
+            reason: 'The supplied history is the complete dataset.',
+            reason_code: 'short_history',
+          },
+        },
+      },
+    },
+  } as PortfolioJob
+  const child = {
+    ...result,
+    automatic_research: undefined,
+    report_context: {
+      ...result.report_context,
+      parent_job_id: parentId,
+      candidate: { study_job_id: parentId, config_id: 'candidate', is_objective_winner: false },
+    },
+  } as PortfolioResult
+  const original = structuredClone(child)
+  vi.mocked(portfolioResearch.job).mockResolvedValue(parent)
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={queryClient}>
+      <PortfolioResults
+        job={{ ...finished, id: 'saved-child', result: child }}
+        result={JSON.parse(JSON.stringify(child))}
+        freezeAnalysis={freezeAnalysis}
+        onRerun={vi.fn()}
+        rerunning={false}
+        exportUrl="/export"
+      />
+    </QueryClientProvider>
+  )
+  expect(await screen.findByText(/Using all available signal history · 160 sessions/)).toBeVisible()
+  expect(screen.getByText('Historical research · no independent later-period check')).toBeVisible()
+  expect(portfolioResearch.job).toHaveBeenCalledWith(parentId, expect.any(AbortSignal))
+  expect(child).toEqual(original)
 })

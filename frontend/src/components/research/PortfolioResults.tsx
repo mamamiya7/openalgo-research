@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query'
 import { MoreHorizontal } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import {
@@ -16,7 +17,11 @@ import {
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuthStore } from '@/stores/authStore'
-import { AutomaticResearchFindings } from './AutomaticResearchFindings'
+import {
+  AutomaticResearchFindings,
+  ResearchHistoryScope,
+  recordedHistoryAvailability,
+} from './AutomaticResearchFindings'
 import { entryConditionRegimeName } from './ChosenEntryConditions'
 import { PortfolioStudyAnalysis } from './PortfolioAnalysis'
 import { PortfolioContinuousReport } from './PortfolioContinuousReport'
@@ -218,6 +223,17 @@ interface ResultProps {
   freezeAnalysis?: boolean
   hideStudyBack?: boolean
 }
+function ParentResearchHistoryScope({ parentId, owner }: { parentId: string; owner: string }) {
+  const parent = useQuery({
+    queryKey: ['portfolio-job', owner, parentId],
+    queryFn: ({ signal }) => portfolioResearch.job(parentId, signal),
+    staleTime: Infinity,
+    retry: false,
+  })
+  const availability = recordedHistoryAvailability(parent.data?.result?.automatic_research)
+  return availability ? <ResearchHistoryScope availability={availability} /> : null
+}
+
 export function PortfolioResults(props: ResultProps) {
   const owner = useAuthStore((state) => state.user?.username ?? 'account')
   const identity = studyWorkspaceIdentity(
@@ -242,28 +258,42 @@ export function PortfolioResults(props: ResultProps) {
   const connectedStudy = Boolean(props.result.experiment && props.onOpenReport)
   const validation = props.result.validation
   const parentAutomatic = props.result.automatic_research ?? props.job.result?.automatic_research
+  const historyAvailability = recordedHistoryAvailability(parentAutomatic)
+  const parentStudyId =
+    props.result.report_context?.candidate?.study_job_id ??
+    props.result.report_context?.parent_job_id
+  const inheritedHistoryScope =
+    historyAvailability && !props.result.automatic_research ? (
+      <ResearchHistoryScope availability={historyAvailability} />
+    ) : !parentAutomatic && parentStudyId && parentStudyId !== props.job.id ? (
+      <ParentResearchHistoryScope parentId={parentStudyId} owner={owner} />
+    ) : null
   const historical =
     parentAutomatic?.version === 'automatic-hypotheses-v16' &&
     (parentAutomatic.status === 'historical' ||
-      parentAutomatic.recipe.validation_mode === 'historical_only')
+      parentAutomatic.recipe.validation_mode === 'historical_only' ||
+      Boolean(historyAvailability))
   if (props.freezeAnalysis)
     return (
-      <PortfolioReport
-        {...props}
-        result={{
-          ...props.result,
-          experiment: undefined,
-          validation: undefined,
-          reserved_evaluation: undefined,
-        }}
-        readOnly
-        hideStudyTabs
-        freezeAnalysis
-        onAdjust={undefined}
-        onOptimize={undefined}
-        onEvaluate={undefined}
-        experimentId={undefined}
-      />
+      <>
+        {inheritedHistoryScope}
+        <PortfolioReport
+          {...props}
+          result={{
+            ...props.result,
+            experiment: undefined,
+            validation: undefined,
+            reserved_evaluation: undefined,
+          }}
+          readOnly
+          hideStudyTabs
+          freezeAnalysis
+          onAdjust={undefined}
+          onOptimize={undefined}
+          onEvaluate={undefined}
+          experimentId={undefined}
+        />
+      </>
     )
   if (connectedStudy && !showReport)
     return (
@@ -285,6 +315,7 @@ export function PortfolioResults(props: ResultProps) {
     return (
       <div>
         {back}
+        {inheritedHistoryScope}
         <PortfolioReport {...props} hideStudyTabs={connectedStudy} />
       </div>
     )
@@ -300,7 +331,11 @@ export function PortfolioResults(props: ResultProps) {
     <div className="space-y-5">
       {back}
       {historical && period === 'later' && (
-        <p className="text-sm font-medium">Historical optimisation — not independently validated</p>
+        <p className="text-sm font-medium">
+          {historyAvailability
+            ? 'Historical research · not independently validated'
+            : 'Historical optimisation — not independently validated'}
+        </p>
       )}
       <fieldset className="inline-flex rounded-lg bg-muted p-1" aria-label="Evaluation period">
         {(['earlier', 'later'] as const).map((value) => (

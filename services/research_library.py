@@ -335,6 +335,11 @@ def portfolio_payload(draft):
             search.pop("trailing_pct", None)
         strategy["search"] = search
     if draft["optimizing"] and automatic:
+        if automatic.get("version") == "automatic-hypotheses-v16":
+            # Editable launches use the data the trader supplied. Retained job
+            # evidence/exact replay bypass this builder and keep their original
+            # frozen research policy and recipe.
+            automatic = {"version": automatic["version"], "history_policy": "available_history"}
         portfolio["automatic_research"] = automatic
         for strategy in portfolio["strategies"]:
             strategy["search"] = {}

@@ -3,6 +3,7 @@ import type {
   DevelopmentEvidenceMetadata,
   AutomaticResearchFindings as Findings,
   PortfolioSettings,
+  ResearchHistoryAvailability,
   WalkForwardFindings,
 } from '@/api/portfolioResearch'
 import { AnalysisFigure } from './AnalysisCharts'
@@ -21,6 +22,37 @@ const periods = [
   ['check2', 'Second check'],
   ['final', 'Final check'],
 ] as const
+
+export function recordedHistoryAvailability(
+  findings: Findings | undefined
+): ResearchHistoryAvailability | undefined {
+  const receipt = findings?.recipe.history_availability
+  return findings?.version === 'automatic-hypotheses-v16' &&
+    receipt?.version === 'research-available-history-v1' &&
+    ['exploratory_only', 'historical_only'].includes(receipt.mode) &&
+    receipt.mode === findings.recipe.validation_mode &&
+    Number.isInteger(receipt.session_count) &&
+    receipt.session_count >= 0
+    ? receipt
+    : undefined
+}
+
+export function ResearchHistoryScope({
+  availability,
+}: {
+  availability: ResearchHistoryAvailability
+}) {
+  return (
+    <section aria-label="Research history scope" className="space-y-1 pt-1 text-sm">
+      <p>Using all available signal history · {number(availability.session_count)} sessions</p>
+      <p className="font-medium text-muted-foreground">
+        {availability.mode === 'exploratory_only'
+          ? 'Historical research · no independent later-period check'
+          : 'Historical research · not independently validated'}
+      </p>
+    </section>
+  )
+}
 
 // Saved receipts may come from an older server: never infer completed checks from a recipe name.
 function recordedWalkForward(findings: Findings): WalkForwardFindings | undefined {
@@ -324,6 +356,9 @@ export function AutomaticResearchFindings({
   developmentEvidence?: DevelopmentEvidenceMetadata
 }) {
   const final = findings.final
+  const historyAvailability = recordedHistoryAvailability(findings)
+  const independentUnavailable =
+    findings.independently_validated === false || Boolean(historyAvailability)
   const historical =
     findings.version === 'automatic-hypotheses-v16' &&
     (findings.status === 'historical' || findings.recipe.validation_mode === 'historical_only')
@@ -371,7 +406,7 @@ export function AutomaticResearchFindings({
     >
       <div className="flex items-start gap-3">
         <span className="mt-0.5 rounded-full border border-cyan-500/25 p-2" aria-hidden="true">
-          {findings.status === 'supported' && !historical ? (
+          {findings.status === 'supported' && !historical && !independentUnavailable ? (
             <Check className="size-4" />
           ) : (
             <FlaskConical className="size-4" />
@@ -379,28 +414,37 @@ export function AutomaticResearchFindings({
         </span>
         <div className="min-w-0 space-y-1">
           <p className="text-xs font-medium tracking-wide text-muted-foreground">
-            {historical
-              ? 'Historical optimisation'
-              : final
-                ? 'Automatic research'
-                : 'Exploratory research'}
+            {historyAvailability
+              ? 'Historical research'
+              : historical
+                ? 'Historical optimisation'
+                : final
+                  ? 'Automatic research'
+                  : 'Exploratory research'}
           </p>
           <h3 className="text-lg font-semibold">
-            {historical
+            {historical && !historyAvailability
               ? 'Historical optimisation — not independently validated'
               : findings.headline}
           </h3>
           <p className="max-w-3xl text-sm text-muted-foreground">
-            {historical
+            {historyAvailability?.mode === 'exploratory_only'
               ? findings.selected_is_baseline
-                ? 'Historical checks did not support a reliable improvement. The original settings remain the reference, not a trading recommendation.'
-                : 'Settings compared on previously tested dates, including later periods and higher costs. These results are not independently validated.'
-              : findings.selected_is_baseline
-                ? 'No reliable improvement was found. The original settings remain the reference, not a trading recommendation.'
-                : final
-                  ? 'Checked on later dates and with higher trading costs.'
-                  : 'Best settings found on the available research dates.'}
+                ? 'The full search used the available signals. The original settings remain the reference; these dates do not support an independent later-period check.'
+                : 'Settings compared on all available research dates. These results describe this history and are not independently validated.'
+              : historical
+                ? findings.selected_is_baseline
+                  ? 'Historical checks did not support a reliable improvement. The original settings remain the reference, not a trading recommendation.'
+                  : 'Settings compared on previously tested dates, including later periods and higher costs. These results are not independently validated.'
+                : findings.selected_is_baseline
+                  ? 'No reliable improvement was found. The original settings remain the reference, not a trading recommendation.'
+                  : independentUnavailable
+                    ? 'Historical settings comparison on recorded dates; these results are not independently validated.'
+                    : final
+                      ? 'Checked on later dates and with higher trading costs.'
+                      : 'Best settings found on the available research dates.'}
           </p>
+          {historyAvailability && <ResearchHistoryScope availability={historyAvailability} />}
           {walkForward && (
             <p className="text-sm text-muted-foreground">Refit and checked on 3 later windows.</p>
           )}
@@ -550,9 +594,16 @@ export function AutomaticResearchFindings({
             </section>
           )}
           {walkForward ? (
-            <WalkForwardChecks receipt={walkForward} historical={historical} />
+            <WalkForwardChecks
+              receipt={walkForward}
+              historical={historical || independentUnavailable}
+            />
           ) : findings.recipe.validation_mode === 'exploratory_only' ? (
-            <p>No untouched later check: the signal history is too short for this holding range.</p>
+            <p>
+              {historyAvailability
+                ? 'All available signal dates were used for the historical search. An independent later-period check is unavailable for these holding rules.'
+                : 'No untouched later check: the signal history is too short for this holding range.'}
+            </p>
           ) : (
             <dl className="grid gap-4 sm:grid-cols-4">
               {periods.map(([key, label]) => (
@@ -658,13 +709,15 @@ export function AutomaticResearchFindings({
             </p>
           )}
           <p className="text-muted-foreground">
-            {historical
-              ? 'The detailed report covers development dates. The historical later-period comparison uses the same dates and starting cash for both settings; it is not independent confirmation.'
-              : final
-                ? walkForward
-                  ? 'The detailed report covers the final fit on development dates. Final-check values above use the same reserved dates and starting cash for both settings.'
-                  : 'The detailed report covers the search dates. Final-check values above use the same later dates and starting cash for both settings.'
-                : 'These settings were selected on the research dates. Later evidence is needed before calling them validated.'}
+            {historyAvailability?.mode === 'exploratory_only'
+              ? 'These settings were selected on the available historical dates. They are not independently validated.'
+              : historical
+                ? 'The detailed report covers development dates. The historical later-period comparison uses the same dates and starting cash for both settings; it is not independent confirmation.'
+                : final
+                  ? walkForward
+                    ? 'The detailed report covers the final fit on development dates. Final-check values above use the same reserved dates and starting cash for both settings.'
+                    : 'The detailed report covers the search dates. Final-check values above use the same later dates and starting cash for both settings.'
+                  : 'These settings were selected on the research dates. Later evidence is needed before calling them validated.'}
           </p>
           {findings.unsupported_families.length > 0 && (
             <p className="text-muted-foreground">

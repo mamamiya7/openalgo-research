@@ -410,8 +410,12 @@ export interface PortfolioRequest {
       | 'automatic-hypotheses-v15'
       | 'automatic-hypotheses-v16'
   } & (
-    | { validation_mode?: never }
-    | { version: 'automatic-hypotheses-v16'; validation_mode: 'historical_only' }
+    | { validation_mode?: never; history_policy?: never }
+    | {
+        version: 'automatic-hypotheses-v16'
+        validation_mode?: 'historical_only'
+        history_policy?: 'available_history'
+      }
   )
   entry_conditions?: EntryConditions
   optimization?: {
@@ -613,6 +617,20 @@ export interface WalkForwardFindings {
   final_fit: { from: string; to: string }
   selection_policy: string
 }
+export interface ResearchHistoryAvailability {
+  version: 'research-available-history-v1'
+  mode: 'exploratory_only' | 'historical_only'
+  session_count: number
+  holding: {
+    max_sessions: number
+    min_window_sessions: number
+    [key: string]: unknown
+  }
+  reason: string
+  reason_code: string
+  minimum_session_lower_bound?: number
+  fit_prefixes?: unknown
+}
 export interface AutomaticResearchFindings {
   market_suitability?: MarketSuitabilityFindings
   recommendation_checks?: {
@@ -709,6 +727,7 @@ export interface AutomaticResearchFindings {
   version: string
   status: 'supported' | 'not_supported' | 'inconclusive' | 'historical'
   independently_validated?: boolean
+  evidence_scope?: string
   historical_checks_passed?: boolean
   selected_config_id: string
   selected_is_baseline: boolean
@@ -718,6 +737,8 @@ export interface AutomaticResearchFindings {
   recipe: {
     version: string
     validation_mode?: 'chronological' | 'exploratory_only' | 'historical_only'
+    history_policy?: 'available_history'
+    history_availability?: ResearchHistoryAvailability
     periods: Record<'search' | 'check1' | 'check2' | 'final', { from: string; to: string }> &
       Partial<Record<'fit1' | 'fit2' | 'fit3' | 'check3', { from: string; to: string }>>
     walk_forward?: {
@@ -763,6 +784,7 @@ export interface AutomaticResearchFindings {
     baseline_summary: Record<string, number | string | null>
     score_delta: number | null
     supports: boolean
+    independently_validated?: boolean
     historical_checks_passed?: boolean
     reasons?: string[]
   } | null

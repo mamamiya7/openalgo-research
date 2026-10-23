@@ -85,6 +85,29 @@ def partition(evidence, *, prepare_period="both"):
     if evidence.get("portfolio", {}).get("automatic_research"):
         from research.automatic_protocol import slice_period
 
+        recipe = evidence["automatic_recipe"]
+        availability = recipe.get("history_availability", {})
+        if (
+            recipe.get("version") == "automatic-hypotheses-v16"
+            and recipe.get("validation_mode") == "exploratory_only"
+            and availability.get("version") == "research-available-history-v1"
+            and availability.get("mode") == "exploratory_only"
+        ):
+            if prepare_period == "evaluation":
+                raise ValueError("This available-history study has no independent later period")
+            search = recipe["periods"]["search"]
+            return (
+                slice_period(evidence, "search"),
+                None,
+                {
+                    "label": "Historical research on available signals",
+                    "train_from": search["from"],
+                    "train_to": search["to"],
+                    "selection_basis": "Primary full-history training choice",
+                    "independently_validated": False,
+                    "shared_positions_across_periods": False,
+                },
+            )
         # Automatic research reserves separate development checks between these
         # periods. Exact replay must not reintroduce them into the search sample.
         earlier = slice_period(evidence, "search") if prepare_period != "evaluation" else None

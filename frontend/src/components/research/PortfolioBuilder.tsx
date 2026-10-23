@@ -135,8 +135,15 @@ export function equalSplit(strategies: PortfolioStrategy[]): PortfolioStrategy[]
       index === strategies.length - 1 ? Number((100 - amount * index).toFixed(2)) : amount,
   }))
 }
-// Infer the supported recipe only for a new optimization. Saved automatic
-// recipes, custom ranges and chosen entry conditions retain their identity.
+function availableHistoryResearch(
+  recipe: NonNullable<PortfolioRequest['automatic_research']>
+): NonNullable<PortfolioRequest['automatic_research']> {
+  return recipe.version === 'automatic-hypotheses-v16'
+    ? { version: recipe.version, history_policy: 'available_history' }
+    : recipe
+}
+// Keep saved recipe versions, custom ranges and chosen entry conditions.
+// New v16 submissions use the available-history policy without changing rules.
 export function selectPortfolioRun(draft: PortfolioDraft, optimizing: boolean): PortfolioDraft {
   if (!optimizing) return { ...draft, optimizing }
   if (
@@ -172,12 +179,12 @@ export function selectPortfolioRun(draft: PortfolioDraft, optimizing: boolean): 
       optimizing: true,
       portfolio: {
         ...draft.portfolio,
-        automatic_research: {
+        automatic_research: availableHistoryResearch({
           version:
             draft.portfolio.engine === 'vectorbt'
               ? 'automatic-hypotheses-v16'
               : 'automatic-trade-management-v2',
-        },
+        }),
         ...(draft.portfolio.engine === 'vectorbt'
           ? {
               risk_limits: limitsForScope(draft.portfolio.risk_limits, 'automatic-hypotheses-v16'),
@@ -191,7 +198,14 @@ export function selectPortfolioRun(draft: PortfolioDraft, optimizing: boolean): 
     }
   }
   return draft.portfolio.automatic_research
-    ? { ...draft, optimizing }
+    ? {
+        ...draft,
+        optimizing,
+        portfolio: {
+          ...draft.portfolio,
+          automatic_research: availableHistoryResearch(draft.portfolio.automatic_research),
+        },
+      }
     : applySuggestedSearch({ ...draft, optimizing }, true)
 }
 
@@ -407,7 +421,7 @@ export function portfolioPayload(draft: PortfolioDraft): PortfolioRequest {
       search: draft.optimizing && !automatic ? activeSearch(strategy) : {},
     })),
     ...(automatic
-      ? { automatic_research }
+      ? { automatic_research: availableHistoryResearch(automatic_research!) }
       : draft.optimizing
         ? { optimization: draft.optimization }
         : {}),
@@ -910,12 +924,12 @@ export function PortfolioBuilder({
                       return
                     }
                     update({
-                      automatic_research: {
+                      automatic_research: availableHistoryResearch({
                         version:
                           portfolio.engine === 'vectorbt'
                             ? 'automatic-hypotheses-v16'
                             : 'automatic-trade-management-v2',
-                      },
+                      }),
                       ...(portfolio.engine === 'vectorbt'
                         ? {
                             risk_limits: limitsForScope(
@@ -1087,43 +1101,19 @@ export function PortfolioBuilder({
               </p>
               <p className="mt-3 text-xs text-muted-foreground">
                 {researchRecipeLabel(portfolio.automatic_research?.version)} · Price history, search
-                ranges and validation are selected automatically.
+                ranges and checks are selected automatically.
               </p>
+              {portfolio.automatic_research?.version === 'automatic-hypotheses-v16' && (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Using all available signal history. The full search keeps your trading rules;
+                  findings show which historical checks the available dates support.
+                </p>
+              )}
               <details className="mt-3 text-sm">
                 <summary className="w-fit cursor-pointer text-muted-foreground">
                   Advanced research options
                 </summary>
                 <div className="mt-3 space-y-2">
-                  {portfolio.automatic_research?.version === 'automatic-hypotheses-v16' && (
-                    <div className="space-y-1">
-                      <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={
-                            portfolio.automatic_research.validation_mode === 'historical_only'
-                          }
-                          onChange={(event) =>
-                            update({
-                              automatic_research: event.target.checked
-                                ? {
-                                    version: 'automatic-hypotheses-v16',
-                                    validation_mode: 'historical_only',
-                                  }
-                                : { version: 'automatic-hypotheses-v16' },
-                            })
-                          }
-                          aria-describedby="historical-optimisation-description"
-                        />
-                        Historical optimisation
-                      </label>
-                      <p
-                        id="historical-optimisation-description"
-                        className="text-xs text-muted-foreground"
-                      >
-                        Reuse previously tested dates. Results are not independently validated.
-                      </p>
-                    </div>
-                  )}
                   <Label htmlFor="automatic-research-scope">Research scope</Label>
                   <select
                     id="automatic-research-scope"
@@ -1131,11 +1121,11 @@ export function PortfolioBuilder({
                     value={portfolio.automatic_research?.version}
                     onChange={(event) =>
                       update({
-                        automatic_research: {
+                        automatic_research: availableHistoryResearch({
                           version: event.target.value as NonNullable<
                             PortfolioRequest['automatic_research']
                           >['version'],
-                        },
+                        }),
                         risk_limits: [
                           'automatic-hypotheses-v10',
                           'automatic-hypotheses-v11',
@@ -1342,8 +1332,11 @@ export function PortfolioBuilder({
                     'automatic-hypotheses-v16',
                   ].includes(portfolio.automatic_research?.version ?? '') && (
                     <p className="text-xs text-muted-foreground">
-                      Tests percentage and ATR exits, risk-based sizing and portfolio limits, with
-                      three later validation windows. Up to{' '}
+                      Tests percentage and ATR exits, risk-based sizing and portfolio limits.
+                      {portfolio.automatic_research?.version === 'automatic-hypotheses-v16'
+                        ? ' Uses all available history, with separate later checks when the dates and holding rules allow them.'
+                        : ' Includes three later validation windows.'}{' '}
+                      Up to{' '}
                       {['automatic-hypotheses-v15', 'automatic-hypotheses-v16'].includes(
                         portfolio.automatic_research?.version ?? ''
                       )

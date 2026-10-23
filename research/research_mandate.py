@@ -287,6 +287,13 @@ def build(evidence, *, inputs_artifact):
             "live_execution": False,
         },
     }
+    if "history_availability" in recipe:
+        mandate["validation"]["history_availability"] = deepcopy(recipe["history_availability"])
+        if validation_mode == "exploratory_only":
+            mandate["validation"].update(
+                reservation_owner="not_required_exploratory",
+                reservation_status="no_independent_period_available",
+            )
     if "walk_forward" in recipe:
         mandate["validation"]["walk_forward"] = deepcopy(recipe["walk_forward"])
     if "execution_research" in recipe:

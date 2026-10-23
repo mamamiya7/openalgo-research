@@ -65,11 +65,20 @@ def check_signal_span(portfolio, receipt, *, interval):
     This never invents an exchange calendar or certifies sufficient coverage.
     """
     version = portfolio.get("automatic_research", {}).get("version")
+    from research.available_history_protocol import enabled
+
     if version not in (STABILITY_VERSION, *HYPOTHESIS_VERSIONS):
         return
     span = (
         date.fromisoformat(receipt["date_to"]) - date.fromisoformat(receipt["date_from"])
     ).days + 1
+    if enabled(portfolio):
+        # Available-history research makes no claim that separate test windows
+        # exist. Keep source-date admission; the compiler checks its recorded
+        # calendar and unchanged holding deadlines after price validation.
+        if span < 1:
+            raise ValueError("Signal history dates must be ordered")
+        return
     minimum = (
         150
         if version
@@ -107,7 +116,7 @@ def normalize_auto(raw, strategies=None, engine="vectorbt"):
     if (
         not isinstance(raw, dict)
         or "version" not in raw
-        or set(raw) - {"version", "validation_mode"}
+        or set(raw) - {"version", "validation_mode", "history_policy"}
         or raw["version"]
         not in (VERSION, CONDITION_VERSION, STABILITY_VERSION, *HYPOTHESIS_VERSIONS)
     ):
@@ -117,9 +126,15 @@ def normalize_auto(raw, strategies=None, engine="vectorbt"):
     if raw["version"] in (CONDITION_VERSION, *HYPOTHESIS_VERSIONS) and engine != "vectorbt":
         raise ValueError("Automatic entry-condition research currently needs VectorBT")
     result = {"version": raw["version"]}
+    if "history_policy" in raw:
+        if raw["version"] != ALLOCATION_VERSION or raw["history_policy"] != "available_history":
+            raise ValueError("Choose the current available-history research policy")
+        result["history_policy"] = "available_history"
     if "validation_mode" in raw:
         if raw["version"] != ALLOCATION_VERSION or raw["validation_mode"] != "historical_only":
-            raise ValueError("Historical optimisation is available only for the current research recipe")
+            raise ValueError(
+                "Historical optimisation is available only for the current research recipe"
+            )
         result["validation_mode"] = "historical_only"
     return result
 
@@ -237,7 +252,11 @@ def compile_recipe(evidence):
     first, last = min(row["date"] for row in signals), max(row["date"] for row in signals)
     sessions = [day for day in snapshot["sessions"] if first <= day <= last]
     intelligent = portfolio["automatic_research"]["version"] in HYPOTHESIS_VERSIONS
-    minimum = 20 if intelligent else MIN_SESSIONS
+    from research.available_history_protocol import enabled
+    from research.available_history_protocol import plan as available_history_plan
+
+    available_history = enabled(portfolio)
+    minimum = 1 if available_history else 20 if intelligent else MIN_SESSIONS
     if sessions != sorted(set(sessions)) or len(sessions) < minimum:
         raise ValueError(
             f"Automatic research needs at least {minimum} trading sessions between the first "
@@ -246,52 +265,75 @@ def compile_recipe(evidence):
     count = len(sessions)
     validation_mode = "chronological"
     cuts = (0, count * 60 // 100, count * 70 // 100, count * 80 // 100, count)
-    if intelligent:
+    if intelligent and not available_history:
         from research.intelligent_plan import chronology
 
         cuts, validation_mode = chronology(
             portfolio, count, snapshot["provenance"]["interval"], snapshot
         )
-    periods = {
-        name: {
-            "from": sessions[cuts[i]],
-            "to": sessions[cuts[i + 1] - 1],
-            "sessions": cuts[i + 1] - cuts[i],
+    periods = (
+        {}
+        if available_history
+        else {
+            name: {
+                "from": sessions[cuts[i]],
+                "to": sessions[cuts[i + 1] - 1],
+                "sessions": cuts[i + 1] - cuts[i],
+            }
+            for i, name in enumerate(PERIODS)
         }
-        for i, name in enumerate(PERIODS)
-    }
+    )
     walk_forward = None
+    history_availability = None
     if portfolio["automatic_research"]["version"] in WALK_FORWARD_VERSIONS:
         from research.walk_forward_protocol import build
 
         walk_forward = build(evidence)
-        if walk_forward["status"] != "ready":
+        if walk_forward["status"] != "ready" and not available_history:
             raise ValueError(
                 "Walk-forward research needs more signal history for separate training, "
                 "later checks and final verification: " + walk_forward["reason"]
             )
         periods = deepcopy(walk_forward["periods"])
         validation_mode = "chronological"
-        if portfolio["automatic_research"]["version"] in (
-            TURNOVER_VERSION,
-            CAPACITY_VERSION,
-            SENSITIVITY_VERSION,
-            SEED_VERSION,
-            ALLOCATION_VERSION,
-        ) and (
-            periods["search"]["sessions"] < 60
-            or sum(fold["test"]["sessions"] for fold in walk_forward["folds"]) < 60
-            or any(fold["test"]["sessions"] < 10 for fold in walk_forward["folds"])
-        ):
-            raise ValueError(
-                "Automatic recommendation needs 60 later-window trading sessions across "
-                "three checks. Use a longer signal history, or run a backtest."
+        recommendation_reason = None
+        if (
+            portfolio["automatic_research"]["version"]
+            in (
+                TURNOVER_VERSION,
+                CAPACITY_VERSION,
+                SENSITIVITY_VERSION,
+                SEED_VERSION,
+                ALLOCATION_VERSION,
             )
-    if portfolio["automatic_research"].get("validation_mode") == "historical_only":
+            and walk_forward["status"] == "ready"
+            and (
+                periods["search"]["sessions"] < 60
+                or sum(fold["test"]["sessions"] for fold in walk_forward["folds"]) < 60
+                or any(fold["test"]["sessions"] < 10 for fold in walk_forward["folds"])
+            )
+        ):
+            recommendation_reason = "The supplied history does not contain 60 later-window sessions across three separate checks."
+            if not available_history:
+                raise ValueError(
+                    "Automatic recommendation needs 60 later-window trading sessions across "
+                    "three checks. Use a longer signal history, or run a backtest."
+                )
+        if available_history:
+            history_availability, periods = available_history_plan(
+                evidence, walk_forward, fallback_reason=recommendation_reason
+            )
+            validation_mode = history_availability["mode"]
+            if validation_mode == "exploratory_only":
+                walk_forward = None
+    if (
+        portfolio["automatic_research"].get("validation_mode") == "historical_only"
+        and validation_mode != "exploratory_only"
+    ):
         # Keep the same chronological fits, comparison periods and search.
         # Explicit historical research makes no unused-period certification.
         validation_mode = "historical_only"
-    if intelligent and validation_mode == "exploratory_only":
+    if intelligent and validation_mode == "exploratory_only" and history_availability is None:
         periods = {
             name: {"from": sessions[0], "to": sessions[-1], "sessions": count} for name in PERIODS
         }
@@ -644,6 +686,23 @@ def compile_recipe(evidence):
             payload["policies"]["final"] = (
                 "No untouched later period; exploratory ranking only, never a validated recommendation"
             )
+    if history_availability is not None:
+        payload["history_availability"] = history_availability
+        if validation_mode == "exploratory_only":
+            payload["selection"]["max_finalists"] = 1
+            payload["budget"].update(
+                max_finalists=1, max_neighbors=0, max_final_verification_evaluations=0
+            )
+            payload["policies"].update(
+                selection="Freeze the full-history primary search choice; expanding prefixes and seed repeats are historical diagnostics, not independent validation.",
+                final="No separate final period is available. Historical research only; no independent validation or validated recommendation is claimed.",
+            )
+            for method in payload.get("research_plan", {}).get("methods", []):
+                if method.get("id") == "walk_forward":
+                    method.update(status="unavailable", reason=history_availability["reason"])
+            plan = payload.get("research_plan")
+            if plan:
+                plan["id"] = fingerprint({key: value for key, value in plan.items() if key != "id"})
     if validation_mode == "historical_only":
         payload["policies"]["final"] = (
             "Historical later-period comparison only; dates may have been used before. "

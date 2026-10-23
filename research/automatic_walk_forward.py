@@ -78,8 +78,12 @@ def _historical_result(result):
     findings["status"] = "historical"
     findings["headline"] = "Historical optimisation — not independently validated"
     findings["independently_validated"] = False
+    available = findings.get("recipe", {}).get("history_availability") is not None
     findings["evidence_scope"] = (
-        "Historical research on recorded scanner signals; dates may have been used before. "
+        "Historical research on supplied signals; later-date comparisons use this recorded dataset. "
+        "No independent validation is claimed."
+        if available
+        else "Historical research on recorded scanner signals; dates may have been used before. "
         "New data is required for independent validation."
     )
     final = findings["final"]
@@ -91,7 +95,9 @@ def _historical_result(result):
     result["validation"]["independently_validated"] = False
     result["experiment"]["findings"][0] = findings["headline"]
     result["experiment"]["next_action"] = (
-        "Save the historical setup; use genuinely new data for independent validation"
+        "Review and save the historical setup"
+        if available
+        else "Save the historical setup; use genuinely new data for independent validation"
     )
     return result
 
@@ -735,7 +741,12 @@ def _run(
 
     def simulate(settings, hypothesis, period, stress=False, *, report_analysis=True):
         control()
-        reserve = 2 if period != "final" else 0
+        reserve = (
+            2
+            if period != "final"
+            and recipe.get("history_availability", {}).get("mode") != "exploratory_only"
+            else 0
+        )
         if (
             state["attempts"] >= max_simulations - reserve
             or state["attempts"] - state["simulations"] >= 64
@@ -1214,6 +1225,30 @@ def _run(
                 current["sizing_control"] = receipt
                 persist()
         return winner, rows
+
+    if recipe.get("history_availability", {}).get("mode") == "exploratory_only":
+        from research.available_history_research import run as available_history_run
+
+        return available_history_run(
+            evidence,
+            recipe=recipe,
+            state=state,
+            optimizer=optimizer,
+            baseline=baseline,
+            baseline_id=baseline_id,
+            none=none,
+            axes=axes,
+            entries=entries,
+            fit_names=fit_names(version),
+            fit=fit,
+            measured=measured,
+            key_for=key_for,
+            persist=persist,
+            control=control,
+            window=window,
+            prepared_portfolio=prepared_portfolio,
+            defer_study_analysis=defer_study_analysis,
+        )
 
     for fold in recipe["walk_forward"]["folds"]:
         winner, _ = fit(fold["fit_period"])

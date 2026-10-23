@@ -387,9 +387,14 @@ class StudyObserver:
                 "automatic-hypotheses-v15",
                 "automatic-hypotheses-v16",
             ):
-                # Independent fit objectives stay separate scientifically. Only
-                # observation ordinals are flattened into the job's 192 events.
+                # Fit objectives stay separate scientifically. Observation
+                # ordinals include the two registered seed repeats in v15/v16.
                 names = ("fit1", "fit2", "fit3", "search")
+                if calculation["version"] in (
+                    "automatic-hypotheses-v15",
+                    "automatic-hypotheses-v16",
+                ):
+                    names = (*names, "search_seed1", "search_seed2")
                 per_fit = (
                     68
                     if calculation.get("version")
