@@ -294,6 +294,57 @@ def test_launch_is_atomic_idempotent_and_uses_existing_worker_contract(app, clie
     )
 
 
+@pytest.mark.parametrize("version", range(10, 17))
+def test_fixed_library_launch_retains_implicit_automatic_reference_controls(app, client, version):
+    draft = draft_for(client)
+    draft["portfolio"]["automatic_research"] = {"version": f"automatic-hypotheses-v{version}"}
+    risk_version = 3 if version >= 13 else 2 if version == 12 else 1
+    from research.execution_policy import normalize_limits
+
+    draft["portfolio"]["risk_limits"] = normalize_limits(
+        {"version": f"research-risk-limits-v{risk_version}", "max_open_positions": 4}
+    )
+    for row in draft["portfolio"]["strategies"]:
+        row["config"].update(
+            target_pct=40, stop_pct=30, hold_sessions=45, trailing_enabled=True, trailing_pct=5
+        )
+        assert "execution_policy" not in row
+    before = copy.deepcopy(draft)
+    automatic_reference = normalize(draft["portfolio"])
+    fixed = normalize(library.portfolio_payload(draft))
+    assert "automatic_research" not in fixed
+    assert fixed["risk_limits"] == automatic_reference["risk_limits"]
+    for actual, expected in zip(
+        fixed["strategies"], automatic_reference["strategies"], strict=True
+    ):
+        assert actual["execution_policy"] == expected["execution_policy"]
+        assert actual["config"] == expected["config"]
+        assert actual["search"] == {}
+    assert draft == before
+
+    experiment = create(client, draft)
+    launched = run(client, experiment)
+    repeated = run(client, experiment)
+    assert repeated["job"]["id"] == launched["job"]["id"]
+    frozen = client.get(
+        f"{BASE}/experiments/{experiment['id']}/versions/{launched['version']['id']}"
+    ).json
+    assert frozen["portfolio"] == fixed
+    assert (
+        launched["experiment"]["draft"]["portfolio"]["automatic_research"]
+        == (draft["portfolio"]["automatic_research"])
+    )
+    assert all(
+        "execution_policy" not in row
+        for row in launched["experiment"]["draft"]["portfolio"]["strategies"]
+    )
+    store = app.extensions["research_store"]
+    with store.sessions() as db:
+        execution = db.get(ResearchExperiment, launched["job"]["id"])
+        assert execution.kind == "portfolio_backtest"
+        assert json.loads(execution.specification)["portfolio"] == fixed
+
+
 def test_launch_failure_rolls_back_source_job_version_and_links(app, client):
     experiment = create(client, draft_for(client))
     store = app.extensions["research_store"]

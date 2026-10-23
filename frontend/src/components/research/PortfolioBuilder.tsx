@@ -1,6 +1,7 @@
 import { FileSpreadsheet, Plus, Settings2, Sparkles, Trash2 } from 'lucide-react'
 import { useRef, useState } from 'react'
 import type {
+  ExecutionPolicy,
   PortfolioAxis,
   PortfolioCapabilities,
   PortfolioRequest,
@@ -348,7 +349,7 @@ export function addPortfolioSource(
 export function portfolioPayload(draft: PortfolioDraft): PortfolioRequest {
   const { optimization: _discarded, validation, automatic_research, ...portfolio } = draft.portfolio
   const automatic = draft.optimizing && Boolean(automatic_research)
-  const riskLimits = [
+  const executionScope = [
     'automatic-hypotheses-v10',
     'automatic-hypotheses-v11',
     'automatic-hypotheses-v12',
@@ -357,13 +358,51 @@ export function portfolioPayload(draft: PortfolioDraft): PortfolioRequest {
     'automatic-hypotheses-v15',
     'automatic-hypotheses-v16',
   ].includes(automatic_research?.version ?? '')
-    ? limitsForScope(portfolio.risk_limits, automatic_research!.version)
+    ? automatic_research!.version
+    : undefined
+  const riskLimits = executionScope
+    ? limitsForScope(portfolio.risk_limits, executionScope)
     : portfolio.risk_limits
+  // Automatic requests acquire their reference policy on the server. A fixed
+  // backtest omits that recipe, so carry its implicit controls explicitly.
+  const referencePolicy: ExecutionPolicy | undefined =
+    !automatic && executionScope && riskLimits
+      ? {
+          version:
+            executionScope === 'automatic-hypotheses-v16'
+              ? 'research-execution-aware-v5'
+              : riskLimits.version === 'research-risk-limits-v3'
+                ? 'research-execution-aware-v4'
+                : riskLimits.version === 'research-risk-limits-v2'
+                  ? 'research-execution-aware-v3'
+                  : executionScope === 'automatic-hypotheses-v11'
+                    ? 'research-execution-aware-v2'
+                    : 'research-execution-aware-v1',
+          exit_mode: 'percent',
+          sizing: 'allocation',
+          risk_limits: riskLimits,
+          ...(executionScope === 'automatic-hypotheses-v16'
+            ? { allocation_mode: 'original' as const }
+            : {}),
+          ...(riskLimits.version === 'research-risk-limits-v3'
+            ? {
+                capacity_mode: 'prior20_broker_reported' as const,
+                correlation_mode: 'prior60_positive_080' as const,
+              }
+            : {}),
+          ...(executionScope !== 'automatic-hypotheses-v10'
+            ? { entry_priority: 'source' as const }
+            : {}),
+        }
+      : undefined
   return {
     ...portfolio,
     ...(riskLimits ? { risk_limits: riskLimits } : {}),
     strategies: portfolio.strategies.map((strategy) => ({
       ...strategy,
+      ...(!strategy.execution_policy && referencePolicy
+        ? { execution_policy: referencePolicy }
+        : {}),
       config: { ...strategy.config, initial_capital: portfolio.capital },
       search: draft.optimizing && !automatic ? activeSearch(strategy) : {},
     })),

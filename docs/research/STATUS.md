@@ -1,5 +1,19 @@
 # OpenAlgo Research status
 
+## Chartink fixed-backtest journey correction - 23 October 2026
+
+Preview.23 corrects both frontend preview and saved-library launch when a fixed
+backtest retains an automatic recipe's versioned account limits. Matching implicit
+reference policies are carried explicitly; original rules, selected policies and
+backend validation remain unchanged. 109 frontend journey and 42 server library
+tests passed, including actual HTTP launch/version/idempotence regressions.
+
+Installed Chartink import, fixed backtest, tested setup save, reload and saved
+report reopen passed. A full cached repeat retained identical financial evidence.
+The larger Chartink case still exceeds one minute: preparation before engine
+initialization dominates. The earlier six-stock timing is not a universal result.
+[Correction and qualification](releases/0.1.0-preview.23.md).
+
 ## Hashing and processing correction - 23 October 2026
 
 Preview.22 removes repeated canonical encoding, unused trial recipe copies and

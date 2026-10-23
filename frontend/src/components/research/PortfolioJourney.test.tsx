@@ -835,6 +835,67 @@ describe('native portfolio consumer journey', () => {
   })
 
   it.each([
+    ['automatic-hypotheses-v10', 'research-execution-aware-v1'],
+    ['automatic-hypotheses-v11', 'research-execution-aware-v2'],
+    ['automatic-hypotheses-v12', 'research-execution-aware-v3'],
+    ['automatic-hypotheses-v13', 'research-execution-aware-v4'],
+    ['automatic-hypotheses-v14', 'research-execution-aware-v4'],
+    ['automatic-hypotheses-v15', 'research-execution-aware-v4'],
+    ['automatic-hypotheses-v16', 'research-execution-aware-v5'],
+  ] as const)('keeps the implicit %s controls when running its fixed reference', (scope, version) => {
+    const original = draft()
+    original.portfolio.automatic_research = { version: scope }
+    original.portfolio.risk_limits = {
+      ...limitsForScope(defaultRiskLimits, scope),
+      max_open_positions: 4,
+      max_symbol_exposure_pct: 17,
+    }
+    original.portfolio.strategies[0].config = {
+      ...original.portfolio.strategies[0].config,
+      target_pct: 40,
+      stop_pct: 30,
+      hold_sessions: 45,
+      trailing_enabled: true,
+      trailing_pct: 5,
+    }
+    const before = structuredClone(original)
+    const fixed = portfolioPayload({ ...original, optimizing: false })
+    expect(fixed.automatic_research).toBeUndefined()
+    expect(fixed.optimization).toBeUndefined()
+    expect(fixed.risk_limits).toEqual(original.portfolio.risk_limits)
+    expect(fixed.strategies[0].execution_policy).toEqual({
+      version,
+      exit_mode: 'percent',
+      sizing: 'allocation',
+      risk_limits: original.portfolio.risk_limits,
+      ...(scope !== 'automatic-hypotheses-v10' ? { entry_priority: 'source' } : {}),
+      ...([
+        'automatic-hypotheses-v13',
+        'automatic-hypotheses-v14',
+        'automatic-hypotheses-v15',
+        'automatic-hypotheses-v16',
+      ].includes(scope)
+        ? { capacity_mode: 'prior20_broker_reported', correlation_mode: 'prior60_positive_080' }
+        : {}),
+      ...(scope === 'automatic-hypotheses-v16' ? { allocation_mode: 'original' } : {}),
+    })
+    expect(fixed.strategies[0].config).toEqual(original.portfolio.strategies[0].config)
+    expect(fixed.strategies[0].search).toEqual({})
+    expect(original).toEqual(before)
+    // Explicit chosen policies continue to take precedence over implicit defaults.
+    original.portfolio.strategies[0].execution_policy = {
+      ...fixed.strategies[0].execution_policy!,
+      exit_mode: 'atr',
+      atr_period: 14,
+      atr_stop_multiple: 2,
+      atr_target_multiple: 3,
+    }
+    expect(
+      portfolioPayload({ ...original, optimizing: false }).strategies[0].execution_policy
+    ).toEqual(original.portfolio.strategies[0].execution_policy)
+  })
+
+  it.each([
     'running',
     'failed',
   ])('offers study activity on demand for a %s optimization', async (status) => {

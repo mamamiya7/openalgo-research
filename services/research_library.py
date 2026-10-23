@@ -306,6 +306,23 @@ def portfolio_payload(draft):
     portfolio.pop("optimization", None)
     validation = portfolio.pop("validation", None)
     automatic = portfolio.pop("automatic_research", None)
+    if (
+        not draft["optimizing"]
+        and (automatic or {}).get("version")
+        in {f"automatic-hypotheses-v{version}" for version in range(10, 17)}
+        and any("execution_policy" not in row for row in portfolio["strategies"])
+    ):
+        from research.portfolio import normalize
+
+        # The automatic recipe normally supplies these reference controls.
+        # Fixed runs omit the recipe, but must retain its exact account policy.
+        reference = normalize({**deepcopy(portfolio), "automatic_research": automatic})
+        portfolio["risk_limits"] = reference["risk_limits"]
+        for strategy, original in zip(
+            portfolio["strategies"], reference["strategies"], strict=True
+        ):
+            if "execution_policy" not in strategy:
+                strategy["execution_policy"] = original["execution_policy"]
     for strategy in portfolio["strategies"]:
         strategy["config"]["initial_capital"] = portfolio["capital"]
         search = strategy["search"] if draft["optimizing"] else {}
