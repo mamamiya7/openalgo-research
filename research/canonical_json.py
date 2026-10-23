@@ -42,6 +42,22 @@ def bounded_canonical_bytes(value, *, max_bytes=None, json_types_only=False):
     return _canonical_bytes(value, MAX_MEDIUM_NODES, maximum, allow_tuples=not json_types_only)
 
 
+def bounded_default_json_bytes(value, *, max_bytes):
+    """Optional bounded C encoding with JSONEncoder's default whitespace/order.
+
+    This keeps byte-limit validators' exact existing representation. Unusual,
+    oversized or concurrently changed inputs still use their original encoder.
+    """
+    if type(max_bytes) is not int or max_bytes < 0:
+        return None
+    return _canonical_bytes(
+        value,
+        MAX_MEDIUM_NODES,
+        min(max_bytes, MAX_MEDIUM_ASCII_BYTES),
+        _default_format=True,
+    )
+
+
 def bounded_canonical_snapshot(value, *, max_bytes=None):
     """Return an owned plain-JSON tree and its exact bytes, or ``None``.
 
@@ -61,7 +77,9 @@ def bounded_canonical_snapshot(value, *, max_bytes=None):
     return (captured[0], raw) if raw is not None else None
 
 
-def _canonical_bytes(value, maximum_nodes, maximum_bytes, *, allow_tuples=True, _capture=None):
+def _canonical_bytes(
+    value, maximum_nodes, maximum_bytes, *, allow_tuples=True, _capture=None, _default_format=False
+):
     remaining_nodes = maximum_nodes
     remaining_bytes = maximum_bytes
     active = set()
@@ -90,7 +108,8 @@ def _canonical_bytes(value, maximum_nodes, maximum_bytes, *, allow_tuples=True, 
             if identity in active:
                 raise ValueError
             # Punctuation and a lower bound on child nodes, before iteration.
-            allowance = 2 + len(item) * (2 if kind is dict else 1)
+            punctuation = (4 if kind is dict else 2) if _default_format else (2 if kind is dict else 1)
+            allowance = 2 + len(item) * punctuation
             if allowance > remaining_bytes or len(item) > remaining_nodes:
                 raise ValueError
             remaining_bytes -= allowance
@@ -101,8 +120,18 @@ def _canonical_bytes(value, maximum_nodes, maximum_bytes, *, allow_tuples=True, 
                     for key, child in item.items():
                         if type(key) is not str:
                             raise ValueError
-                        copied_key = copy(key, depth + 1)
-                        result[copied_key] = copy(child, depth + 1)
+                        # Keys are already exact immutable strings. Admit their
+                        # node/depth/byte cost directly instead of recursively
+                        # copying each key in every checkpoint and fingerprint.
+                        remaining_nodes -= 1
+                        remaining_bytes -= 12 * len(key) + 2
+                        if (
+                            remaining_nodes < 0
+                            or depth + 1 > MAX_DEPTH
+                            or remaining_bytes < 0
+                        ):
+                            raise ValueError
+                        result[key] = copy(child, depth + 1)
                     return result
                 return [copy(child, depth + 1) for child in item]
             finally:
@@ -117,7 +146,11 @@ def _canonical_bytes(value, maximum_nodes, maximum_bytes, *, allow_tuples=True, 
     try:
         bounded = copy(value, 0)
         raw = json.dumps(
-            bounded, sort_keys=True, separators=(",", ":"), allow_nan=False, ensure_ascii=True
+            bounded,
+            sort_keys=not _default_format,
+            separators=None if _default_format else (",", ":"),
+            allow_nan=False,
+            ensure_ascii=True,
         ).encode("ascii")
         if _capture is not None:
             _capture.append(bounded)

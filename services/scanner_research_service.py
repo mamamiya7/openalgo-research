@@ -58,12 +58,15 @@ def _managed_storage_snapshot(store):
                 count += 1
                 if count > MAX_MANAGED_ENTRIES:
                     raise ValueError("Research storage exceeds the 100000-entry management bound")
-                if entry.is_symlink():
-                    raise ValueError("Research storage must not contain symlinks")
-                if entry.is_dir(follow_symlinks=False):
-                    pending.append(entry.path)
-                elif entry.is_file(follow_symlinks=False):
+                # Immutable regular artifacts dominate this directory. With
+                # no-follow semantics a symlink cannot enter this file branch;
+                # keep the same strict rejection on the remaining entries.
+                if entry.is_file(follow_symlinks=False):
                     used += entry.stat(follow_symlinks=False).st_size
+                elif entry.is_symlink():
+                    raise ValueError("Research storage must not contain symlinks")
+                elif entry.is_dir(follow_symlinks=False):
+                    pending.append(entry.path)
     return used, count
 
 

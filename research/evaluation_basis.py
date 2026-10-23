@@ -25,6 +25,11 @@ IDENTITIES = (
 
 
 def _digest(value):
+    from research.canonical_json import bounded_canonical_bytes
+
+    raw = bounded_canonical_bytes(value)
+    if raw is not None:
+        return hashlib.sha256(raw).hexdigest()
     digest = hashlib.sha256()
     for part in json.JSONEncoder(sort_keys=True, separators=(",", ":"), allow_nan=False).iterencode(
         value

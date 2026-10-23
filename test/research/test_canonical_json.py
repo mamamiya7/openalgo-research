@@ -342,3 +342,34 @@ def test_medium_size_and_optuna_digest_preserve_exact_values_and_error_precedenc
         _json_size({"a": float("nan")}, 1024)
     with pytest.raises(ValueError, match="Out of range"):
         _fingerprint({"a": float("nan")}, max_bytes=1024)
+
+
+@pytest.mark.parametrize("value", [
+    {"z": [1, True, None, {"a": "unicode \u0905 \U0001f600"}], "a": -0.0},
+    [None] * 100,
+    {"": {"": 1, "later": (2, 3)}},
+])
+def test_default_format_keeps_exact_spacing_order_and_ownership(value, monkeypatch):
+    from research.canonical_json import bounded_default_json_bytes
+    expected = json.dumps(value, allow_nan=False).encode()
+    original = json.dumps
+    def encode(detached, **kwargs):
+        if isinstance(value, (dict, list)):
+            assert detached is not value
+        return original(detached, **kwargs)
+    monkeypatch.setattr(json, "dumps", encode)
+    assert bounded_default_json_bytes(value, max_bytes=64000) == expected
+
+
+def test_default_format_checks_whitespace_budget_before_encoding(monkeypatch):
+    from research.canonical_json import bounded_default_json_bytes
+    def forbidden(*args, **kwargs):
+        raise AssertionError("over-budget default JSON entered C encoder")
+    monkeypatch.setattr(json, "dumps", forbidden)
+    assert bounded_default_json_bytes([0] * 20, max_bytes=42) is None
+
+
+@pytest.mark.parametrize("value", [float("nan"), {1: "nonstring"}, Decimal("2"), object()])
+def test_default_format_unusual_inputs_still_fall_back(value):
+    from research.canonical_json import bounded_default_json_bytes
+    assert bounded_default_json_bytes(value, max_bytes=64000) is None

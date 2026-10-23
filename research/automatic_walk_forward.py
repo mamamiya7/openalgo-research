@@ -612,6 +612,7 @@ def _run(
         if state["binding"] != binding or state["optimizer"] != optimizer:
             raise ValueError("The walk-forward checkpoint belongs to different frozen inputs")
     windows, gates = OrderedDict(), OrderedDict()
+    opportunity_bases = {}
     capital = evidence["portfolio"]["capital"]
 
     def control():
@@ -648,7 +649,8 @@ def _run(
                 else slice_period(evidence, period)
             )
             if len(windows) > 2:
-                windows.popitem(last=False)
+                evicted, _ = windows.popitem(last=False)
+                opportunity_bases.pop(evicted, None)
         windows.move_to_end(period)
         return windows[period]
 
@@ -772,9 +774,15 @@ def _run(
             )
             and period != "final"
         ):
-            report["research_opportunity_basis"] = build_evaluation_basis(
-                window(period), period="selection"
-            )
+            # This describes the unchanged original opportunity set, not the
+            # evaluated settings/gates above. Keep it only while its owned
+            # frozen period window is resident, and detach every report copy.
+            original_window = window(period)
+            if period not in opportunity_bases:
+                opportunity_bases[period] = build_evaluation_basis(
+                    original_window, period="selection"
+                )
+            report["research_opportunity_basis"] = deepcopy(opportunity_bases[period])
         report["automatic_stock_condition"] = {
             "hypothesis": deepcopy(hypothesis),
             "bundle_id": stock["id"],

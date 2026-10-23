@@ -11,6 +11,8 @@ import math
 import re
 from datetime import datetime, timedelta, timezone
 
+from research.canonical_json import bounded_default_json_bytes
+
 VERSION = "research-native-volume-provenance-v1"
 MODEL_VERSION = "research-provider-observed-participation-v1"
 PROFILE = "fyers-nse-cash-equity-observed-shares-v1"
@@ -38,6 +40,8 @@ def fingerprint(value):
 
 
 def _bounded(value):
+    if bounded_default_json_bytes(value, max_bytes=MAX_BYTES) is not None:
+        return
     total = 0
     for part in json.JSONEncoder(allow_nan=False).iterencode(value):
         total += len(part.encode())

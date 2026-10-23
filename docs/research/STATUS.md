@@ -1,5 +1,24 @@
 # OpenAlgo Research status
 
+## Runtime patch and completed CSV journey - 23 October 2026
+
+Preview.20 removes repeated opportunity-receipt and bounded JSON work, with
+strict quota scans checking regular files first. The opportunity cache has at
+most two resident frozen periods; current-account evidence is always rebuilt.
+145 focused checks passed. Matched continuations retained exact checkpoint hashes;
+the noisy short timings do not establish a stable whole-run speedup percentage.
+
+Chrome completed the existing 83-signal / six-stock historical study after resume:
+272 proposals, 296 accounts and all 294 development histories verified. The
+configured 408/512 maximum is unchanged; conditional extra seeds were inapplicable
+after unsupported checks. Resumed execution took 15m21.218s, or 15m32.967s from click;
+including the initial pre-patch active segment gives about 18m10s, excluding the
+pause/investigation. All 362 required execution candles were cached, none downloaded.
+The 4.408s exact tested report was saved as a named setup, reloaded and reopened
+in Chrome. Original settings remain the reference; historical checks did not
+support a reliable improvement. No orders or mode changes.
+[Patch scope, timing limits and Windows setup policy limit](releases/0.1.0-preview.20.md).
+
 ## OpenAlgo host refresh — 22 October 2026
 
 Research preview.19 integrates official OpenAlgo main through f3e7de829
