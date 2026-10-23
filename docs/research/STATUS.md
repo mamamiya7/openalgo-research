@@ -1,5 +1,23 @@
 # OpenAlgo Research status
 
+## Measured bookkeeping correction - 23 October 2026
+
+Preview.21 reserves every account durably, groups completed evidence saves and
+reuses a private detached execution receipt after full validation. Per-account
+checks, strict storage admission, live fences and pause/restart checks remain.
+The same prepared real evidence completed all 272 applicable proposals and
+296 accounts in 91.347s, versus 552.340s before grouped publication. The final
+scientific checkpoint is identical. Cold native warm-up added 25.752s outside
+that clock. Initial price preparation/download, browser and human review are
+excluded. The one-minute target is not met. The configured 408/512 maximum and
+validation remain unchanged. The installed Windows app completed the same full
+cached-data job in 156.014s, with an identical final checkpoint and all 294
+histories independently verified. Exact tested report: 2.763s; analysis: 1.258s.
+A named setup was saved, reloaded and reopened in Chrome. 347 checks passed
+(three symlink-fixture checks skipped for Windows permissions).
+[Measured buckets and qualification](releases/0.1.0-preview.21.md).
+
+
 ## Runtime patch and completed CSV journey - 23 October 2026
 
 Preview.20 removes repeated opportunity-receipt and bounded JSON work, with

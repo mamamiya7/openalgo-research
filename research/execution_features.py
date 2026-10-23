@@ -5,12 +5,16 @@ bounded derived metadata, never downloads or recomputes an indicator. The source
 strategies and native timing contracts remain unchanged.
 """
 
+import json
 from collections import Counter
+from copy import deepcopy
 from datetime import datetime
+from io import StringIO
 from math import isfinite
 from re import fullmatch
 
 from research import stock_indicators as indicators
+from research.canonical_json import bounded_canonical_snapshot
 from research.portfolio import fingerprint
 from research.stock_features import _json_size
 
@@ -316,10 +320,14 @@ def prepare(evidence, bundle):
 
 
 def attach(evidence):
+    return _attach(evidence, _intact(evidence.get("execution_features")))
+
+
+def _attach(evidence, receipt):
+    """Apply admitted features; all candidate bindings and entry checks remain fresh."""
     from research.connectors.vectorbt_portfolio import _schedule
     from research.intraday import bounds
 
-    receipt = _intact(evidence.get("execution_features"))
     snapshot, source = evidence["snapshot"], receipt["source"]
     if source["interval"] != snapshot["provenance"]["interval"]:
         raise ValueError("Execution ATR interval differs from its frozen source")
@@ -351,7 +359,7 @@ def attach(evidence):
                 or saved["common_exclusion"]
             )
             if reason:
-                signal["research_exclusion"] = reason
+                signal["research_exclusion"] = deepcopy(reason)
             else:
                 entry, excluded = _schedule(
                     signal, snapshot, strategy["config"], timeline, index, minute
@@ -369,7 +377,7 @@ def attach(evidence):
                     decision_at = (
                         timeline[entry] if minute else bounds(snapshot, day)[0].isoformat()
                     )
-                    signal["execution_atr"] = dict(
+                    signal["execution_atr"] = deepcopy(
                         validate_entry_feature(
                             feature,
                             symbol=signal["symbol"],
@@ -380,3 +388,61 @@ def attach(evidence):
             signals.append(signal)
         strategies.append({**strategy, "signals": signals})
     return {**evidence, "strategies": strategies}
+
+
+class _PreparedExecutionFeatures:
+    """One private, fully validated receipt for one automatic research run.
+
+    The original source object is an identity capability, never a mutable hash
+    cache. Construction captures a detached bounded JSON tree before validating
+    that same owned tree. Only whole-receipt checks are reused; candidate source,
+    timing, opportunity and causal entry checks still run on every attachment.
+    """
+
+    __slots__ = ("__source", "__receipt", "__weakref__")
+
+    def __init__(self, receipt):
+        self.__source = self.__receipt = None
+        captured = bounded_canonical_snapshot(receipt, max_bytes=MAX_BYTES)
+        if captured is not None:
+            owned, raw = captured
+            del captured, raw
+        else:
+            # Optional conservative node/byte admission must not reject an
+            # otherwise supported receipt. Preserve the original exact byte
+            # limit while capturing its stream, then detach before validation.
+            # Validate unusual input before JSON projection: converting a tuple
+            # or custom container must never turn an invalid schema into an
+            # admitted plain list/dict. Validate the captured tree again below
+            # so a concurrent mutation cannot escape admission either.
+            _intact(receipt)
+            with StringIO() as stream:
+                size = 0
+                for part in json.JSONEncoder(
+                    sort_keys=True, separators=(",", ":"), allow_nan=False, ensure_ascii=True,
+                ).iterencode(receipt):
+                    size += len(part)
+                    if size > MAX_BYTES:
+                        raise ValueError("Stock-feature evidence exceeds its bounded byte allowance")
+                    stream.write(part)
+                owned = json.loads(stream.getvalue())
+        _intact(owned)
+        self.__source, self.__receipt = receipt, owned
+
+    def attach(self, evidence):
+        if self.__receipt is None:
+            raise ValueError("The prepared execution features have been released")
+        if evidence.get("execution_features") is not self.__source:
+            raise ValueError("Prepared execution features require the original source object")
+        return _attach(evidence, self.__receipt)
+
+    def close(self):
+        self.__source = self.__receipt = None
+
+    def __enter__(self):
+        if self.__receipt is None:
+            raise ValueError("The prepared execution features have been released")
+        return self
+
+    def __exit__(self, *error):
+        self.close()

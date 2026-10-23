@@ -110,6 +110,12 @@ def test_multi_file_reconciliation_rejects_new_unrelated_symlink_metadata(store,
         def is_symlink(self):
             return self.entry.name == "late-link" or self.entry.is_symlink()
 
+        def is_file(self, *, follow_symlinks=True):
+            # A real symlink is not a regular file in a no-follow scan.
+            if self.entry.name == "late-link" and not follow_symlinks:
+                return False
+            return self.entry.is_file(follow_symlinks=follow_symlinks)
+
     @contextmanager
     def entries(path):
         with scandir(path) as original:

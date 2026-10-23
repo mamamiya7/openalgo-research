@@ -96,7 +96,7 @@ def _canonical_bytes(
             allowance = 5
         elif kind is str:
             # One non-BMP code point becomes two six-byte surrogate escapes.
-            allowance = 12 * len(item) + 2
+            allowance = (6 if item.isascii() else 12) * len(item) + 2
         elif kind is int:
             allowance = item.bit_length() // 3 + 2
         elif kind is float:
@@ -124,7 +124,7 @@ def _canonical_bytes(
                         # node/depth/byte cost directly instead of recursively
                         # copying each key in every checkpoint and fingerprint.
                         remaining_nodes -= 1
-                        remaining_bytes -= 12 * len(key) + 2
+                        remaining_bytes -= (6 if key.isascii() else 12) * len(key) + 2
                         if (
                             remaining_nodes < 0
                             or depth + 1 > MAX_DEPTH
@@ -151,6 +151,9 @@ def _canonical_bytes(
             separators=None if _default_format else (",", ":"),
             allow_nan=False,
             ensure_ascii=True,
+            # The detached copier has already rejected every cycle. Its fresh
+            # containers cannot be changed through the caller's source tree.
+            check_circular=False,
         ).encode("ascii")
         if _capture is not None:
             _capture.append(bounded)

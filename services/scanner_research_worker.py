@@ -28,6 +28,8 @@ from database.research_db import (
 from services import research_study_activity as study_activity
 from services.research_sources import AcquisitionBatchPending
 from services.scanner_research_service import (
+    artifact_publication,
+    compact_checkpoint_publication,
     encoded,
     ensure_storage_capacity,
     get_job,
@@ -100,6 +102,7 @@ def network_lease(store, token, job_id, stop_requested=None):
     reasons = []
     owner_thread = threading.get_ident()
     read_connection = None
+    read_fence = None
     live_fence = (
         select(ResearchWorker.token, ResearchJob.worker, ResearchJob.status)
         .join(ResearchJob, ResearchJob.id == job_id)
@@ -114,8 +117,7 @@ def network_lease(store, token, job_id, stop_requested=None):
             # ORM loading two separate rows adds work and can mix observations
             # from opposite sides of a concurrent cancellation/worker takeover.
             if threading.get_ident() == owner_thread:
-                with read_connection.execute(live_fence) as result:
-                    fence = result.one_or_none()
+                fence = read_fence()
             else:
                 # Native acquisition helpers may call this callback too. Their
                 # connections stay independent of the owner's cursor/thread.
@@ -156,6 +158,9 @@ def network_lease(store, token, job_id, stop_requested=None):
         # between callbacks, so external commits are visible on the next check.
         read_connection = store.engine.connect()
         read_connection.execution_options(isolation_level="AUTOCOMMIT")
+        from services.research_worker_sessions import fence_reader
+
+        read_fence = fence_reader(read_connection, live_fence)
         helper.start()
         yield cancelled
         cancelled()
@@ -170,6 +175,13 @@ def network_lease(store, token, job_id, stop_requested=None):
 
 
 def run_one(store, token, stop_requested=None):
+    from services.research_worker_sessions import scoped_metadata_sessions
+
+    with scoped_metadata_sessions(store):
+        return _run_one(store, token, stop_requested)
+
+
+def _run_one(store, token, stop_requested=None):
     from research.connectors.registry import policy_for_request
     from research.connectors.registry import run as run_connector
     from research.engine import POLICY_VERSION, evaluate, policy_for_snapshot
@@ -353,6 +365,10 @@ def run_one(store, token, stop_requested=None):
                 raise Cancelled("Cancellation requested or worker lease lost")
             if fence[2] == "running":
                 return
+            if getattr(calculation_boundary, "checkpoint_pause", False):
+                # The controller first flushes all validated staged accounts;
+                # checkpoint publication then acknowledges pause atomically.
+                return True
         # Close the read transaction first. A pause still reserves the writer
         # and rereads the fences, so cancellation or a successor always wins
         # before this worker can acknowledge the pause.
@@ -367,14 +383,31 @@ def run_one(store, token, stop_requested=None):
         if paused:
             raise Paused()
 
-    def checkpoint(state, counts):
-        # New checkpoint bytes are admitted under the artifact publication lock
-        # below. Keep liveness/cancellation here without scanning storage twice.
-        progress(counts["completed"], counts["total"], force=True, check_storage=False)
-        artifact = save_artifact(
-            store,
-            {"identity": experiment.identity, "policy_version": policy, "state": state},
-        )
+    def checkpoint(state, counts, *, _publish=None):
+        nonlocal last_update
+        # Check the same live fences before artifact I/O, then publish progress
+        # with the checkpoint below. A separate progress-only commit repeated
+        # the same job/lease write before every checkpoint.
+        if stop_requested and stop_requested():
+            raise Interrupted("Worker shutdown requested")
+        with store.sessions() as db:
+            fence = db.execute(
+                select(ResearchWorker.token, ResearchJob.worker, ResearchJob.status)
+                .join(ResearchJob, ResearchJob.id == job.id)
+                .where(ResearchWorker.id == 1)
+            ).one_or_none()
+            if fence is None or fence[0] != token or fence[1] != token or fence[2] not in WORKING:
+                raise Cancelled("Cancellation requested before checkpoint artifacts")
+        # Small/medium checkpoints keep the same logical digest and complete
+        # chunk admission, but can use one bounded physical file.
+        with artifact_publication(store):
+            if _publish is not None:
+                _publish()
+            with compact_checkpoint_publication():
+                artifact = save_artifact(
+                    store,
+                    {"identity": experiment.identity, "policy_version": policy, "state": state},
+                )
         with store.sessions.begin() as db:
             db.execute(update(ResearchWorker).where(ResearchWorker.id == 1).values(id=1))
             current = db.get(ResearchJob, job.id)
@@ -385,8 +418,17 @@ def run_one(store, token, stop_requested=None):
                 study_observer.checkpoint(db, state)
             receipt = db.get(ResearchExperiment, job.id)
             display_counts = {**counts, **({"activity": activity_state} if activity_state else {})}
+            from services.research_attempt_budget import merge_counts
+
+            display_counts = merge_counts(
+                receipt.counts, display_counts,
+                checkpoint_state=state.get("calculation")
+                if isinstance(state.get("calculation"), dict) else None,
+            )
             receipt.checkpoint, receipt.counts = artifact, encoded(display_counts).decode()
             current.progress = min(99, int(100 * counts["completed"] / max(1, counts["total"])))
+            lease.heartbeat = current.updated_at = time.time()
+            last_update = time.monotonic()
             paused = (
                 acknowledge_pause(db, current)
                 if kind == "portfolio_optimize" and state.get("phase") == "calculation"
@@ -395,6 +437,28 @@ def run_one(store, token, stop_requested=None):
         # Unwind only after the checkpoint, coverage and terminal execution commit.
         if paused:
             raise Paused()
+
+    def publish_with_artifacts(state, counts, publish):
+        return checkpoint(state, counts, _publish=publish)
+
+    checkpoint.publish_with_artifacts = publish_with_artifacts
+    attempt_reservation = None
+
+    def reserve_attempt(expected, simulations, reserved_final, limit):
+        nonlocal attempt_reservation
+        from services.research_attempt_budget import AttemptLeaseLost, attempt_reserver
+
+        if attempt_reservation is None:
+            attempt_reservation = attempt_reserver(
+                store, job.owner, job.id, token, experiment.identity, policy,
+                checkpoint_attempts=expected, checkpoint_simulations=simulations, limit=limit,
+            )
+        try:
+            return attempt_reservation(expected, simulations, reserved_final, limit)
+        except AttemptLeaseLost as error:
+            raise Cancelled(str(error)) from error
+
+    checkpoint.reserve_attempt = reserve_attempt
 
     history_record = None
     parent_result_artifact = None

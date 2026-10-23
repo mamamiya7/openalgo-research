@@ -992,6 +992,7 @@ def run(
     if portfolio.get("automatic_research"):
         development_writer = None
         research_mandate = None
+        batch_runtime = False
         if portfolio["automatic_research"]["version"] in HYPOTHESIS_VERSIONS:
             from research.automatic_hypotheses import (
                 ALLOCATION_VERSION,
@@ -1081,6 +1082,11 @@ def run(
                     )
                     else "automatic_stock_features"
                 )
+                batch_runtime = (
+                    automatic_run.__module__ == "research.automatic_walk_forward"
+                    and callable(getattr(checkpoint, "publish_with_artifacts", None))
+                    and callable(getattr(checkpoint, "reserve_attempt", None))
+                )
                 development_writer = DevelopmentEvidenceWriter(
                     store,
                     evidence,
@@ -1092,6 +1098,7 @@ def run(
                     },
                     max_evaluations=policy_for_version(version)["max_simulations"],
                     saved=saved_development,
+                    **({"stage_publication": True} if batch_runtime else {}),
                 )
                 if saved_calculation:
                     development_writer.reconcile(saved_calculation["evaluations"])
@@ -1123,20 +1130,24 @@ def run(
                 development_writer.reconcile(state["evaluations"])
                 retained["development_evidence"] = development_writer.snapshot()
                 retained["research_mandate"] = research_mandate
-            checkpoint(
-                {
-                    "phase": "calculation",
-                    "inputs_artifact": inputs_id,
-                    "calculation": state,
-                    **retained,
-                },
-                {
-                    **counts,
-                    "completed": 60 + 40 * counts["completed"] / max(1, counts["total"]),
-                    "total": 100,
-                    "stage": "optimization",
-                },
-            )
+            payload = {
+                "phase": "calculation",
+                "inputs_artifact": inputs_id,
+                "calculation": state,
+                **retained,
+            }
+            display = {
+                **counts,
+                "completed": 60 + 40 * counts["completed"] / max(1, counts["total"]),
+                "total": 100,
+                "stage": "optimization",
+            }
+            if batch_runtime:
+                checkpoint.publish_with_artifacts(
+                    payload, display, development_writer.publish_pending
+                )
+            else:
+                checkpoint(payload, display)
 
         result = automatic_run(
             evidence,
@@ -1149,6 +1160,7 @@ def run(
             observe=observe,
             boundary=boundary,
             defer_study_analysis=defer_study_analysis,
+            **({"reserve_attempt": checkpoint.reserve_attempt} if batch_runtime else {}),
             **(
                 {
                     "retain_evaluation": development_writer.retain,

@@ -28,11 +28,38 @@ from database.research_db import (
 MAX_ARTIFACT_BYTES = 512 * 1024 * 1024
 MAX_COMPRESSED_BYTES = 32 * 1024 * 1024
 CHUNK_ARTIFACT_BYTES = 256 * 1024
+MAX_COMPACT_CHECKPOINT_BYTES = 4 * 1024 * 1024
 MAX_ARTIFACT_NODES = 100000
 MAX_MANAGED_ENTRIES = 100000
 CHUNK_FORMAT = "research-chunks-v1"
 ACTIVE = ("queued", "running", "pausing", "cancelling")
 _artifact_publication = ContextVar("research_artifact_publication", default=None)
+_compact_checkpoint_publication = ContextVar("research_compact_checkpoint_publication", default=None)
+_SCANDIR = os.scandir
+
+
+class _CompactCheckpointPublication:
+    __slots__ = ("owner", "closed")
+
+    def __init__(self):
+        self.owner, self.closed = get_ident(), False
+
+
+@contextmanager
+def compact_checkpoint_publication():
+    """Use one physical file for a bounded, fully validated checkpoint.
+
+    Only the owning synchronous thread may use this opt-in. The ordinary chunk
+    traversal still admits every structure, leaf and manifest before publication;
+    no settings, logical identities, reader limits or quota guards change.
+    """
+    scope = _CompactCheckpointPublication()
+    token = _compact_checkpoint_publication.set(scope)
+    try:
+        yield
+    finally:
+        scope.closed = True
+        _compact_checkpoint_publication.reset(token)
 
 
 def encoded(value):
@@ -49,6 +76,19 @@ def write_guard(db):
 
 
 def _managed_storage_snapshot(store):
+    # Custom/instrumented directory providers retain the portable walk. The
+    # optional native implementation always enumerates fresh metadata and falls
+    # back for unsupported platforms/filesystems, never for access failures.
+    if os.scandir is _SCANDIR:
+        from services.research_windows_inventory import managed_storage_snapshot
+
+        snapshot = managed_storage_snapshot(store.root, MAX_MANAGED_ENTRIES)
+        if snapshot is not None:
+            return snapshot
+    return _portable_managed_storage_snapshot(store)
+
+
+def _portable_managed_storage_snapshot(store):
     # DirEntry reuses directory metadata on Windows. Repeated Path.stat calls
     # made checkpoint admission increasingly expensive as saved work accumulated.
     pending, used, count = [store.root], 0, 0
@@ -241,20 +281,48 @@ def _save_artifact(store, value):
     if any(path.exists() for path in paths):
         return digest
     decoded_bytes = len(raw)
-    del raw
+    scope = _compact_checkpoint_publication.get()
+    compact = (
+        scope is not None
+        and not scope.closed
+        and scope.owner == get_ident()
+        and type(value) in (dict, list)
+        and decoded_bytes <= MAX_COMPACT_CHECKPOINT_BYTES
+    )
+    if not compact:
+        del raw
     nodes = 0
 
-    def node(item, depth=0):
+    def validate_unpublished_part(identifier, part):
+        # Match the ordinary writer's path/reuse/compressed-size admission even
+        # though this representation does not create physical chunk leaves.
+        _, candidates = _artifact_publication.get().paths(identifier)
+        if not any(path.exists() for path in candidates):
+            # gzip.compress(..., mtime=0) has no optional header fields. zlib's
+            # deflateBound worst cases add at most ~13% plus a small constant,
+            # and its gzip wrapper is 18 bytes. 2*n+64 is deliberately looser
+            # for every n >= 0, avoiding throwaway compression only when it
+            # proves the unchanged compressed limit cannot possibly be hit.
+            if 2 * len(part) + 64 <= MAX_COMPRESSED_BYTES:
+                return
+            if len(gzip.compress(part, compresslevel=3, mtime=0)) > MAX_COMPRESSED_BYTES:
+                raise ValueError("Evidence exceeds the 32 MiB compressed research limit")
+
+    def node(item, depth=0, *, part=None):
         nonlocal nodes
         nodes += 1
         if depth > 32 or nodes > MAX_ARTIFACT_NODES:
             raise ValueError("Research evidence exceeds the chunk structure limit")
-        part = encoded(item)
+        if part is None:
+            part = encoded(item)
         if len(part) <= min(4096, max(1, CHUNK_ARTIFACT_BYTES // 4)):
             return {"value": item}
         if len(part) <= CHUNK_ARTIFACT_BYTES or not isinstance(item, (dict, list)):
             child = hashlib.sha256(part).hexdigest()
-            _write_artifact_bytes(store, child, part)
+            if compact:
+                validate_unpublished_part(child, part)
+            else:
+                _write_artifact_bytes(store, child, part)
             return {"artifact": child}
         average = max(1, len(part) // max(1, len(item)))
         target_count = min(512, max(1, CHUNK_ARTIFACT_BYTES // average), len(item) - 1)
@@ -283,9 +351,15 @@ def _save_artifact(store, value):
             "format": CHUNK_FORMAT,
             "logical_sha256": digest,
             "decoded_bytes": decoded_bytes,
-            "tree": node(value, 1),
+            # Compact checkpoints already retain the exact root bytes used for
+            # their identity and final physical write. Reuse only that root;
+            # every child still takes the ordinary encoding/admission path.
+            "tree": node(value, 1, part=raw if compact else None),
         }
     )
+    if compact:
+        validate_unpublished_part(digest, manifest)
+        return _write_artifact_bytes(store, digest, raw)
     return _write_artifact_bytes(store, digest, manifest)
 
 

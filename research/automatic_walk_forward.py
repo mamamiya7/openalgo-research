@@ -44,6 +44,7 @@ from research.connectors.optuna_portfolio import (
 )
 from research.entry_conditions import enrich
 from research.evaluation_basis import build_evaluation_basis
+from research.execution_features import _PreparedExecutionFeatures
 from research.joint_stock_market import PreparedJointContext
 from research.portfolio_execution_features import _PreparedPortfolioFeatures
 from research.report_contract import fingerprint, settings_identity
@@ -413,6 +414,7 @@ def run(
     retain_evaluation=None,
     read_evaluation=None,
     calibration_seed_plan=None,
+    reserve_attempt=None,
 ):
     cancelled()
     if boundary:
@@ -441,11 +443,18 @@ def run(
             if version in (CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION, ALLOCATION_VERSION)
             else nullcontext()
         ) as prepared_portfolio,
+        (
+            _PreparedExecutionFeatures(evidence.get("execution_features"))
+            if version in (EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION,
+                           CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION, ALLOCATION_VERSION)
+            else nullcontext()
+        ) as prepared_execution,
     ):
         return _run(
             evidence,
             prepared_gate=prepared,
             prepared_portfolio=prepared_portfolio,
+            prepared_execution=prepared_execution,
             version=version,
             context=context,
             evaluate=evaluate,
@@ -461,6 +470,7 @@ def run(
             retain_evaluation=retain_evaluation,
             read_evaluation=read_evaluation,
             calibration_seed_plan=calibration_seed_plan,
+            reserve_attempt=reserve_attempt,
         )
 
 
@@ -469,6 +479,7 @@ def _run(
     *,
     prepared_gate,
     prepared_portfolio,
+    prepared_execution,
     version,
     context,
     evaluate,
@@ -484,6 +495,7 @@ def _run(
     retain_evaluation,
     read_evaluation,
     calibration_seed_plan=None,
+    reserve_attempt=None,
 ):
     import optuna
 
@@ -615,12 +627,23 @@ def _run(
     opportunity_bases = {}
     capital = evidence["portfolio"]["capital"]
 
+    if reserve_attempt is not None and boundary is not None:
+        # The native worker requests a flush before acknowledging a pause.
+        # Legacy/direct callers retain their original checkpoint cadence.
+        boundary.checkpoint_pause = True
+
     def control():
         cancelled()
         if boundary:
-            boundary()
+            flush_requested = boundary()
+            if reserve_attempt is not None and flush_requested is True:
+                persist()
 
-    def persist():
+    def persist(*, proposal=False):
+        if proposal and reserve_attempt is not None:
+            completed_proposals = sum(len(fit["trials"]) for fit in state["fits"].values())
+            if completed_proposals % 16:
+                return
         state.pop("checkpoint_id", None)
         captured = bounded_canonical_snapshot(state, max_bytes=MAX_CHECKPOINT_BYTES)
         if captured is None:
@@ -680,7 +703,7 @@ def _run(
         except (KeyError, TypeError, IndexError) as error:
             raise ValueError("The completed walk-forward fold history is incomplete") from error
 
-    def simulate(settings, hypothesis, period, stress=False):
+    def simulate(settings, hypothesis, period, stress=False, *, report_analysis=True):
         control()
         reserve = 2 if period != "final" else 0
         if (
@@ -708,9 +731,7 @@ def _run(
             SEED_VERSION,
             ALLOCATION_VERSION,
         ):
-            from research.execution_features import attach
-
-            current = attach(current)
+            current = prepared_execution.attach(current)
         if version in (CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION, ALLOCATION_VERSION):
             current = prepared_portfolio.attach(current)
         if hypothesis["id"] != "none":
@@ -733,20 +754,33 @@ def _run(
             trailing_activation=True,
         )
         current["entry_condition_gates"] = [receipt]
-        state["attempts"] += 1
-        persist()
-        report = evaluate(
-            current["strategies"],
-            current["snapshot"],
-            capital,
-            progress=lambda done, total: (
-                # Keep the live cancellation/lease read on every engine tick.
-                # Pause acknowledgement belongs to completed-calculation
-                # boundaries, not an extra writer transaction for every bar.
-                cancelled(),
-                progress(state["simulations"] + min(1, done / max(1, total)), max_simulations),
-            ),
-        )
+        if reserve_attempt is None:
+            state["attempts"] += 1
+            persist()
+        else:
+            # Reserve every actual calculation durably before the engine runs.
+            # Full evidence checkpoints can then group completed proposals.
+            state["attempts"] = reserve_attempt(
+                state["attempts"], state["simulations"], reserve, max_simulations
+            )
+        from research.connectors.vectorbt_portfolio import discard_trial_analysis
+
+        # Development accounts retain their full scientific evidence below.
+        # Only unused display charts/native tear sheets are omitted; chosen
+        # and final reports still receive the original complete analysis.
+        with nullcontext() if report_analysis else discard_trial_analysis():
+            report = evaluate(
+                current["strategies"],
+                current["snapshot"],
+                capital,
+                progress=lambda done, total: (
+                    # Keep the live cancellation/lease read on every engine tick.
+                    # Pause acknowledgement belongs to completed-calculation
+                    # boundaries, not an extra writer transaction for every bar.
+                    cancelled(),
+                    progress(state["simulations"] + min(1, done / max(1, total)), max_simulations),
+                ),
+            )
         returned = report.get("strategies")
         expected = _settings(current["strategies"])
         if (
@@ -843,7 +877,9 @@ def _run(
     ):
         key = key_for(settings, hypothesis, period, stress)
         if key not in state["evaluations"] or reconstruct:
-            report = simulate(settings, hypothesis, period, stress)
+            report = simulate(
+                settings, hypothesis, period, stress, report_analysis=report_slot is not None
+            )
             descriptor = None
             if retain_evaluation is not None and period != "final":
                 snapshot = window(period)["snapshot"]
@@ -1059,10 +1095,10 @@ def _run(
                     del current["trials"][trial_count:]
                     persist()
                     raise
-                # There is no engine work or external observation between the
-                # completed account and this proposal. Publish both together;
-                # the immutable account shard has already been retained above.
-                persist()
+                # All scientific checks and the durable attempt reservation
+                # precede this observation. Native workers group at most sixteen
+                # completed proposals; pause/check/selection boundaries flush.
+                persist(proposal=True)
                 if observe:
                     observe(
                         {
@@ -1118,7 +1154,10 @@ def _run(
             from research.execution_search import original_sizing
 
             control_settings = original_sizing(winner["strategies"], recipe["execution_research"])
-            control_account = measured(control_settings, winner["hypothesis"], period)
+            control_account = measured(
+                control_settings, winner["hypothesis"], period,
+                defer_checkpoint=reserve_attempt is not None,
+            )
             receipt = {
                 "version": "research-sizing-control-v1",
                 "role": "matched_original_sizing_development",
@@ -1151,10 +1190,20 @@ def _run(
                 }
             )
         period = fold["test_period"]
-        reference = measured(baseline, none, period)
-        tested = measured(winner["strategies"], winner["hypothesis"], period)
-        stress_base = measured(baseline, none, period, True)
-        stressed = measured(winner["strategies"], winner["hypothesis"], period, True)
+        reference = measured(
+            baseline, none, period, defer_checkpoint=reserve_attempt is not None
+        )
+        tested = measured(
+            winner["strategies"], winner["hypothesis"], period,
+            defer_checkpoint=reserve_attempt is not None,
+        )
+        stress_base = measured(
+            baseline, none, period, True, defer_checkpoint=reserve_attempt is not None
+        )
+        stressed = measured(
+            winner["strategies"], winner["hypothesis"], period, True,
+            defer_checkpoint=reserve_attempt is not None,
+        )
         state["folds"].append(
             _fold_record(
                 fold,

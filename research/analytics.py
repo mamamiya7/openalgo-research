@@ -389,13 +389,32 @@ def _vbt_stats(
     return stats
 
 
+def _validate_vectorbt_runtime():
+    import vectorbt as vbt
+
+    if vbt.__version__ != "0.28.5":
+        raise ValueError("Analysis requires the pinned VectorBT 0.28.5 runtime")
+
+
+def validate_analysis_evidence(report):
+    """Retain analysis input checks without building discarded presentation.
+
+    Development trial retention stores account evidence, not the derived native
+    statistics or charts. Validate the same dated finite chronological account
+    observations and engine pin before omitting those unused objects. Economic
+    reconciliation and portfolio constraints remain in their normal callers.
+    """
+    _daily(report)
+    if report.get("execution", {}).get("engine") == "vectorbt":
+        _validate_vectorbt_runtime()
+
+
 def _vectorbt(out, report, returns, portfolio):
     import numpy as np
     import pandas as pd
     import vectorbt as vbt
 
-    if vbt.__version__ != "0.28.5":
-        raise ValueError("Analysis requires the pinned VectorBT 0.28.5 runtime")
+    _validate_vectorbt_runtime()
     source = "VectorBT 0.28.5"
     ret = returns.vbt.returns(
         freq="1D", year_freq="252D", defaults={"risk_free": 0.0, "required_return": 0.0, "ddof": 1}

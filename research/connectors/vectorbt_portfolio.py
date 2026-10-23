@@ -5,6 +5,8 @@ to one bounded worker evaluation; no clients, threads, files or global caches.
 """
 
 import math
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import timedelta
 
 from research.data import validate_snapshot
@@ -24,6 +26,23 @@ CAPACITY_POLICY_VERSION = "vectorbt-joint-causal-bars-v5"
 MAX_MATRIX_CELLS = 500_000
 MAX_SIGNALS = 25_000
 MAX_STRATEGIES = 20
+
+_DISCARD_TRIAL_ANALYSIS = ContextVar("discard_vectorbt_trial_analysis", default=False)
+
+
+@contextmanager
+def discard_trial_analysis():
+    """Omit presentation objects only for reports the search will discard.
+
+    Scientific account evidence and all account checks are still constructed.
+    Context-local state prevents one worker's trial affecting another request;
+    selected/final reports must be calculated outside this scope.
+    """
+    token = _DISCARD_TRIAL_ANALYSIS.set(True)
+    try:
+        yield
+    finally:
+        _DISCARD_TRIAL_ANALYSIS.reset(token)
 
 
 def validate_config(config=None):
@@ -1012,9 +1031,14 @@ def _report(
             "Long cash equities only; no margin, shorts, derivatives or corporate-action cashflows.",
         ],
     }
-    from research.analytics import build_analysis
+    if _DISCARD_TRIAL_ANALYSIS.get():
+        from research.analytics import validate_analysis_evidence
 
-    report["analysis"] = build_analysis(report, portfolio=pf)
+        validate_analysis_evidence(report)
+    else:
+        from research.analytics import build_analysis
+
+        report["analysis"] = build_analysis(report, portfolio=pf)
     if execution_details is not None:
         from copy import deepcopy
 

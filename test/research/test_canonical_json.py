@@ -373,3 +373,26 @@ def test_default_format_checks_whitespace_budget_before_encoding(monkeypatch):
 def test_default_format_unusual_inputs_still_fall_back(value):
     from research.canonical_json import bounded_default_json_bytes
     assert bounded_default_json_bytes(value, max_bytes=64000) is None
+
+
+@pytest.mark.parametrize("character", ["a", "\x00", "\x1f", '"', "\\"])
+def test_ascii_worst_case_escape_bound(character):
+    # ASCII controls need at most six output bytes; non-BMP remains twelve.
+    value = character * ((MAX_ASCII_BYTES - 2) // 6)
+    assert small_canonical_bytes(value) == streamed(value)
+    assert len(small_canonical_bytes(value)) <= MAX_ASCII_BYTES
+    assert small_canonical_bytes(value + character) is None
+
+
+def test_circular_markers_are_only_omitted_after_detachment(monkeypatch):
+    original = json.dumps
+    source = {"x": [1, 2]}
+
+    def verify(owned, **options):
+        assert options["check_circular"] is False
+        assert owned is not source and owned["x"] is not source["x"]
+        source["x"].append(source)
+        return original(owned, **options)
+
+    monkeypatch.setattr(json, "dumps", verify)
+    assert small_canonical_bytes(source) == b'{"x":[1,2]}'

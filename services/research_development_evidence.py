@@ -1,18 +1,34 @@
 """Job-local immutable candidate histories; checkpoints contain references only."""
 
+import hashlib
+import json
 from copy import deepcopy
 
 from research import development_evidence as contract
 from research.report_contract import fingerprint
-from services.scanner_research_service import encoded, read_artifact, save_artifact
+from services.scanner_research_service import (
+    _artifact_publication,
+    encoded,
+    read_artifact,
+    save_artifact,
+)
 
 VERSION = "research-development-evidence-manifest-v1"
 MAX_INDEX_BYTES = 512 * 1024
+MAX_PENDING_SHARDS = 16
+MAX_PENDING_BYTES = MAX_PENDING_SHARDS * contract.MAX_SHARD_BYTES
 
 
 class DevelopmentEvidenceWriter:
-    def __init__(self, store, evidence, *, binding, max_evaluations, saved=None):
+    def __init__(
+        self, store, evidence, *, binding, max_evaluations, saved=None, stage_publication=False
+    ):
+        if type(stage_publication) is not bool:
+            raise ValueError("Development evidence staging must be a boolean")
         self.store = store
+        self.stage_publication = stage_publication
+        self._pending = {}
+        self._pending_bytes = 0
         self.binding = deepcopy(binding)
         self.plan = contract.plan(evidence, max_evaluations)
         self.entries = {}
@@ -141,7 +157,10 @@ class DevelopmentEvidenceWriter:
         else:
             descriptor.update(status="unavailable", reason=self.plan["reason"])
         if shard is not None:
-            marks, size = len(shard["timeline"]), len(encoded(shard))
+            raw = encoded(shard)
+            marks, size = len(shard["timeline"]), len(raw)
+            if not self.stage_publication:
+                del raw
             previous = self.entries.get(key, {})
             if (
                 self.marks - previous.get("marks", 0) + marks > contract.MAX_TOTAL_MARKS
@@ -154,10 +173,27 @@ class DevelopmentEvidenceWriter:
                 marks=marks,
                 bytes=size,
             )
-            # Publish completely before the checkpoint references this shard.
-            # Native artifact publication releases its lease/SQL connection
-            # before the caller persists the checkpoint.
-            descriptor["inputs_artifact"] = save_artifact(self.store, shard)
+            if self.stage_publication:
+                descriptor["inputs_artifact"] = hashlib.sha256(raw).hexdigest()
+                previous = self.entries.get(key)
+                if previous is not None and previous != descriptor:
+                    raise ValueError("A recorded development evaluation changed")
+                pending_bytes = self._pending_bytes - len(self._pending.get(key, b"")) + size
+                if (
+                    (key not in self._pending and len(self._pending) >= MAX_PENDING_SHARDS)
+                    or pending_bytes > MAX_PENDING_BYTES
+                ):
+                    raise ValueError(
+                        "Pending development evidence must be published before continuing"
+                    )
+                # Retain immutable canonical bytes only, not the caller's
+                # report or a mutable shard. One decode at flush/read is local.
+                self._pending[key] = raw
+                self._pending_bytes = pending_bytes
+            else:
+                # Publish completely before the checkpoint references this shard.
+                # Release the artifact writer before its metadata transaction.
+                descriptor["inputs_artifact"] = save_artifact(self.store, shard)
         previous = self.entries.get(key)
         if previous is not None and previous != descriptor:
             raise ValueError("A recorded development evaluation changed")
@@ -167,14 +203,42 @@ class DevelopmentEvidenceWriter:
             self.bytes += descriptor.get("bytes", 0)
         return deepcopy(descriptor)
 
+    def publish_pending(self):
+        """Flush bounded staged shards inside the caller's artifact-only scope.
+
+        Metadata must be published only after that outer scope has reconciled
+        and released its writer transaction. A failed flush retains the entire
+        pending set, including already-created immutable orphans, for retry.
+        """
+        publication = _artifact_publication.get()
+        if publication is None:
+            raise ValueError("Development evidence publication needs an active artifact scope")
+        publication.check_owner(self.store)
+        for key, raw in self._pending.items():
+            descriptor = self.entries[key]
+            expected = descriptor["inputs_artifact"]
+            if hashlib.sha256(raw).hexdigest() != expected:
+                raise ValueError("Pending development evidence identity changed")
+            actual = save_artifact(self.store, json.loads(raw))
+            if actual != expected:
+                raise ValueError("Published development evidence identity changed")
+        self._pending.clear()
+        self._pending_bytes = 0
+
     def read(self, evaluation_id):
         """Read one verified, owned development shard without retaining a cache."""
         descriptor = self.entries.get(evaluation_id)
         if not descriptor or descriptor.get("status") != "retained":
             return None
-        shard = read_artifact(
-            self.store, descriptor["inputs_artifact"], max_bytes=contract.MAX_SHARD_BYTES
-        )
+        if evaluation_id in self._pending:
+            raw = self._pending[evaluation_id]
+            if hashlib.sha256(raw).hexdigest() != descriptor["inputs_artifact"]:
+                raise ValueError("Pending development evidence identity changed")
+            shard = json.loads(raw)
+        else:
+            shard = read_artifact(
+                self.store, descriptor["inputs_artifact"], max_bytes=contract.MAX_SHARD_BYTES
+            )
         contract.verify_shard(shard, descriptor=descriptor)
         return shard
 
@@ -201,6 +265,8 @@ class DevelopmentEvidenceWriter:
             raise ValueError("Development evidence and calculation checkpoint disagree")
 
     def snapshot(self, *, complete=False):
+        if complete and self._pending:
+            raise ValueError("Complete development evidence must be published before its manifest")
         status = "complete" if complete else "collecting"
         if self.plan["status"] != "available":
             status = "unavailable"
