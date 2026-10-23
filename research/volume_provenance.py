@@ -11,7 +11,7 @@ import math
 import re
 from datetime import datetime, timedelta, timezone
 
-from research.canonical_json import bounded_default_json_bytes
+from research.canonical_json import bounded_canonical_snapshot, bounded_default_json_bytes
 
 VERSION = "research-native-volume-provenance-v1"
 MODEL_VERSION = "research-provider-observed-participation-v1"
@@ -185,6 +185,10 @@ def validate_observation(record, symbol, slot):
 
 
 def assess(records, calendar, entry_session, decision_at, *, symbol):
+    return _assess(records, calendar, entry_session, decision_at, symbol=symbol)
+
+
+def _assess(records, calendar, entry_session, decision_at, *, symbol, _observed=None):
     """Seal a causal twenty-session provider-observed participation assumption.
 
     No current bar is consulted. Capture time is an audit time, not historical
@@ -211,7 +215,8 @@ def assess(records, calendar, entry_session, decision_at, *, symbol):
 
         if not isinstance(records, dict) or len(records) > MAX_ROWS:
             return result("volume_source_oversized_or_missing")
-        _bounded(records)
+        if _observed is None or not _observed.bounded(records, symbol):
+            _bounded(records)
         sessions = calendar["sessions"]
         if (
             not isinstance(sessions, list)
@@ -232,7 +237,14 @@ def assess(records, calendar, entry_session, decision_at, *, symbol):
         observations = []
         for day in days:
             record = records.get(day)
-            if not isinstance(record, dict) or not matches(record, record.get("candle"), symbol):
+            if not isinstance(record, dict):
+                return result("prior_volume_missing_or_changed")
+            intact = (
+                _observed.matches(record, symbol, day)
+                if _observed is not None
+                else matches(record, record.get("candle"), symbol)
+            )
+            if not intact:
                 return result("prior_volume_missing_or_changed")
             if (
                 record.get("reviewed_profile") != PROFILE
@@ -284,13 +296,26 @@ def assess(records, calendar, entry_session, decision_at, *, symbol):
 
 
 def assess_observed(records_by_slot, calendar, symbol, entry_session, decision_at):
+    return _assess_observed(records_by_slot, calendar, symbol, entry_session, decision_at)
+
+
+def _assess_observed(
+    records_by_slot, calendar, symbol, entry_session, decision_at, *, _observed=None
+):
     """Stable application interface for the explicit provider-observed MODEL."""
     safe_symbol = (
         symbol
         if isinstance(symbol, str) and re.fullmatch(r"[A-Z0-9][A-Z0-9 &._-]{0,99}", symbol)
         else None
     )
-    assessed = assess(records_by_slot, calendar, entry_session, decision_at, symbol=safe_symbol)
+    assessed = _assess(
+        records_by_slot,
+        calendar,
+        entry_session,
+        decision_at,
+        symbol=safe_symbol,
+        _observed=_observed,
+    )
     payload = {key: value for key, value in assessed.items() if key != "id"}
     payload.update(
         status="available" if assessed["status"] == "modelled" else "unavailable",
@@ -299,3 +324,103 @@ def assess_observed(records_by_slot, calendar, symbol, entry_session, decision_a
         qualification="historical_simulation_assumption_only",
     )
     return {**payload, "id": fingerprint(payload)}
+
+
+class _ObservedVolume:
+    """A bounded detached source, admitted only for one preparation invocation.
+
+    Overlapping windows may reuse integrity and size checks for the exact private
+    observations. Window membership, OHLC alignment, calendars, completed-session
+    availability and reviewed provider-profile checks still run for every entry.
+    Caller-owned dictionaries never become identity capabilities.
+    """
+
+    __slots__ = ("__records", "__members", "__checks", "__sizes")
+
+    @classmethod
+    def admit(cls, records):
+        if (
+            type(records) is not dict
+            or len(records) > 200
+            or any(type(rows) is not dict for rows in records.values())
+            or sum(len(rows) for rows in records.values()) > 100_000
+        ):
+            return None
+        # A large scanner can exceed the encoder's per-tree node allowance even
+        # though every native symbol is small. Bound and detach one symbol at a
+        # time, retaining the same aggregate row limit and caller's byte check.
+        owned, size = {}, 2 + max(0, len(records) - 1)
+        for symbol, rows in records.items():
+            if type(symbol) is not str:
+                return None
+            size += len(json.dumps(symbol).encode()) + 1
+            captured = bounded_canonical_snapshot(rows, max_bytes=64 * 1024**2 - size)
+            if captured is None:
+                return None
+            owned[symbol] = captured[0]
+            size += len(captured[1])
+        return cls(owned)
+
+    def __init__(self, records):
+        self.__records = records
+        self.__members = {
+            (symbol, day): record
+            for symbol, rows in records.items()
+            for day, record in rows.items()
+        }
+        self.__checks, self.__sizes = {}, {}
+
+    def release(self):
+        # Only release the owned source after every assessment. No mutable source
+        # escapes while a remembered validation can still approve its contents.
+        records, self.__records = self.__records, None
+        self.__members.clear()
+        self.__checks.clear()
+        self.__sizes.clear()
+        return records
+
+    def matches(self, record, symbol, day):
+        if self.__members.get((symbol, day)) is not record:
+            return (
+                matches(record, record.get("candle"), symbol) if isinstance(record, dict) else False
+            )
+        key = (symbol, day)
+        if key not in self.__checks:
+            self.__checks[key] = (
+                matches(record, record.get("candle"), symbol) if isinstance(record, dict) else False
+            )
+        return self.__checks[key]
+
+    def bounded(self, records, symbol):
+        total = 2
+        for day, record in records.items():
+            key = (symbol, day)
+            if self.__members.get(key) is not record:
+                return False
+            if key not in self.__sizes:
+                self.__sizes[key] = len(json.dumps({day: record}, allow_nan=False).encode()) - 2
+            total += self.__sizes[key]
+        total += max(0, len(records) - 1) * 2
+        if total > MAX_BYTES:
+            raise ValueError("Native volume evidence exceeds its byte bound")
+        return True
+
+    def assess(self, prior, bars, calendar, symbol, entry_session, decision_at):
+        if self.__records is None:
+            raise ValueError("Prepared volume observations have been released")
+        observations = self.__records.get(symbol, {})
+        records = {
+            day: observations[day]
+            for day in prior
+            if day in observations
+            and day in bars
+            and isinstance(observations[day], dict)
+            and isinstance(observations[day].get("candle"), dict)
+            and all(
+                observations[day]["candle"].get(field) == bars[day][field]
+                for field in ("timestamp", "open", "high", "low", "close")
+            )
+        }
+        return _assess_observed(
+            records, calendar, symbol, entry_session, decision_at, _observed=self
+        )

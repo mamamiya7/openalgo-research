@@ -100,6 +100,87 @@ def bounded_canonical_snapshot(value, *, max_bytes=None, allow_native_float64=Fa
     return (captured[0], raw) if raw is not None else None
 
 
+def bounded_canonical_fragments(value, *, max_bytes, allow_native_float64=False):
+    """Exact compact JSON for large plain trees, in bounded detached pieces.
+
+    This optional path keeps the existing per-piece copier/node/type guards.
+    A large scanner may exceed those node counts in aggregate while each symbol
+    or entry is small. Aggregate bytes, fragment count, container length and
+    recursion are all bounded; unsupported content returns to the caller's
+    original streaming validation and its error precedence. No data is cached.
+    """
+    if (
+        type(max_bytes) is not int
+        or max_bytes < 0
+        or type(allow_native_float64) is not bool
+    ):
+        return None
+    maximum = min(max_bytes, 64 * 1024**2)
+    pieces, active, size = [], set(), 0
+
+    def append(raw):
+        nonlocal size
+        size += len(raw)
+        if size > maximum or len(pieces) >= 65_536:
+            raise ValueError
+        pieces.append(raw)
+
+    def visit(item, depth):
+        if depth > MAX_DEPTH:
+            raise ValueError
+        raw = _canonical_bytes(
+            item,
+            MAX_MEDIUM_NODES,
+            8 * 1024**2,
+            allow_tuples=False,
+            allow_native_float64=allow_native_float64,
+            _maximum_depth=MAX_DEPTH - depth,
+        )
+        if raw is not None:
+            append(raw)
+            return
+        kind = type(item)
+        if kind not in (dict, list) or len(item) > MAX_MEDIUM_NODES:
+            raise ValueError
+        identity = id(item)
+        if identity in active:
+            raise ValueError
+        active.add(identity)
+        try:
+            if kind is dict:
+                if any(type(key) is not str for key in item):
+                    raise ValueError
+                keys = sorted(item)
+                append(b"{")
+                for index, key in enumerate(keys):
+                    if index:
+                        append(b",")
+                    visit(key, depth + 1)
+                    append(b":")
+                    visit(item[key], depth + 1)
+                append(b"}")
+            else:
+                append(b"[")
+                for index, child in enumerate(item):
+                    if index:
+                        append(b",")
+                    visit(child, depth + 1)
+                append(b"]")
+        finally:
+            active.remove(identity)
+
+    try:
+        visit(value, 0)
+        return tuple(pieces)
+    except (KeyError, TypeError, ValueError, RuntimeError, OverflowError):
+        return None
+    finally:
+        # The recursive closure can survive until cyclic GC. Release its list
+        # immediately; only a successful caller's immutable tuple owns bytes.
+        pieces.clear()
+        active.clear()
+
+
 def _canonical_bytes(
     value,
     maximum_nodes,
@@ -109,6 +190,7 @@ def _canonical_bytes(
     _capture=None,
     _default_format=False,
     allow_native_float64=False,
+    _maximum_depth=MAX_DEPTH,
 ):
     remaining_nodes = maximum_nodes
     remaining_bytes = maximum_bytes
@@ -124,7 +206,7 @@ def _canonical_bytes(
     def copy(item, depth):
         nonlocal remaining_nodes, remaining_bytes
         remaining_nodes -= 1
-        if remaining_nodes < 0 or depth > MAX_DEPTH:
+        if remaining_nodes < 0 or depth > _maximum_depth:
             raise ValueError
         kind = type(item)
         if item is None:
@@ -164,7 +246,7 @@ def _canonical_bytes(
                         # copying each key in every checkpoint and fingerprint.
                         remaining_nodes -= 1
                         remaining_bytes -= (6 if key.isascii() else 12) * len(key) + 2
-                        if remaining_nodes < 0 or depth + 1 > MAX_DEPTH or remaining_bytes < 0:
+                        if remaining_nodes < 0 or depth + 1 > _maximum_depth or remaining_bytes < 0:
                             raise ValueError
                         result[key] = copy(child, depth + 1)
                     return result

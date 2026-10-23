@@ -11,7 +11,9 @@ from contextvars import ContextVar
 from copy import deepcopy
 from datetime import date
 from functools import wraps
+from hashlib import sha256
 
+from research import canonical_json
 from research import stock_features as stock
 from research import stock_relative_strength as relative
 from research.canonical_json import bounded_canonical_bytes
@@ -26,7 +28,8 @@ _RELATIVE_STOCK_GATE = relative._apply_with_validator
 class _BundleValidation:
     """One bounded successful content signature, released with its owning job.
 
-    This retains bytes, never caller dictionaries or an object-id approval. A
+    This retains canonical bytes and an immutable id, never caller dictionaries
+    or an object-id approval. A
     changed input must pass all validators again. Tuples and custom objects are
     ineligible: their JSON may match a list/plain value with different schema
     semantics. Inputs beyond the fast encoder's bounds use normal validation.
@@ -87,14 +90,102 @@ def _compatible_calendar(left, right, days):
 
     # Native calendars differ only in their explicitly requested warmup count.
     def metadata(calendar):
-        value = deepcopy(calendar)
-        value.pop("sessions", None)
-        value.pop("session_hours", None)
-        value.get("provenance", {}).pop("warmup_sessions", None)
+        value = {
+            key: item for key, item in calendar.items() if key not in {"sessions", "session_hours"}
+        }
+        if "provenance" in value:
+            value["provenance"] = {
+                key: item for key, item in value["provenance"].items() if key != "warmup_sessions"
+            }
         return value
 
     if metadata(left) != metadata(right):
         raise ValueError("Stock and market context calendar provenance changed")
+
+
+def _validation_encoding(bundle):
+    """Bind exact plain content once for size, identity and scoped admission.
+
+    A proper outer id contributes exactly 72 bytes to this nonempty canonical
+    object. Encoding its payload therefore supplies the same size and hash as
+    the separate full-object size and payload-fingerprint walks. The bounded
+    copier still excludes custom values, cycles and type aliases such as tuples;
+    those retain the original validators and streaming size/error behavior.
+    """
+    if type(bundle) is not dict:
+        return None
+    identifier = bundle["id"]
+    if (
+        type(identifier) is not str
+        or len(identifier) != 64
+        or any(character not in "0123456789abcdef" for character in identifier)
+    ):
+        return None
+    if type(bundle["series"]) is dict and len(bundle["series"]) > 32:
+        encoded = _large_validation_encoding(bundle)
+    else:
+        encoded = bounded_canonical_bytes(
+            {key: value for key, value in bundle.items() if key != "id"},
+            max_bytes=max(
+                0, min(stock.MAX_BUNDLE_BYTES, canonical_json.MAX_MEDIUM_ASCII_BYTES) - 72
+            ),
+            json_types_only=True,
+        )
+    return (encoded, identifier) if encoded is not None else None
+
+
+def _large_validation_encoding(bundle):
+    """Assemble exact JSON without copying a whole large scanner tree at once.
+
+    Each of at most MAX_SYMBOLS records retains the encoder's node, depth and
+    plain-type limits. The aggregate signature retains its original 32 MiB
+    ceiling and the full bundle byte allowance. Thus a large admissible native
+    history may reuse validation without raising any research work allowance.
+    """
+    series = bundle["series"]
+    if (
+        type(series) is not dict
+        or not 1 <= len(series) <= stock.MAX_SYMBOLS
+        or any(type(symbol) is not str for symbol in series)
+    ):
+        return None
+    maximum = min(stock.MAX_BUNDLE_BYTES, canonical_json.MAX_MEDIUM_ASCII_BYTES) - 72
+    if maximum < 2:
+        return None
+    members, size = [], 2
+    try:
+        for key in sorted(key for key in bundle if key != "id"):
+            if key == "series":
+                records, record_size = [], len(b'"series":{}')
+                for symbol in sorted(series):
+                    raw = bounded_canonical_bytes(
+                        {symbol: series[symbol]},
+                        max_bytes=max(0, maximum - size - record_size + 2),
+                        json_types_only=True,
+                    )
+                    if raw is None:
+                        return None
+                    record_size += len(raw) - 2 + (1 if records else 0)
+                    if size + record_size > maximum:
+                        return None
+                    records.append(raw[1:-1])
+                member = b'"series":{' + b",".join(records) + b"}"
+            else:
+                raw = bounded_canonical_bytes(
+                    {key: bundle[key]},
+                    max_bytes=max(0, maximum - size + 2),
+                    json_types_only=True,
+                )
+                if raw is None:
+                    return None
+                member = raw[1:-1]
+            size += len(member) + (1 if members else 0)
+            if size > maximum:
+                return None
+            members.append(member)
+        return b"{" + b",".join(members) + b"}"
+    except (KeyError, TypeError, RuntimeError):
+        return None
 
 
 def _receipt_scope(record):
@@ -148,11 +239,7 @@ def validate_bundle(bundle):
     ):
         raise ValueError("Stock-market context needs ordered execution sessions")
     owner = _bundle_validation.get()
-    encoded = (
-        bounded_canonical_bytes(bundle, max_bytes=stock.MAX_BUNDLE_BYTES, json_types_only=True)
-        if owner is not None
-        else None
-    )
+    encoded = _validation_encoding(bundle) if owner is not None else None
     if owner is not None and owner.matches(encoded):
         return bundle
     market = relative.validate_benchmark(bundle["market"])
@@ -175,15 +262,18 @@ def validate_bundle(bundle):
         count += len(expected_stock_days)
         if count > stock.MAX_FEATURE_BARS:
             raise ValueError("Stock-market history exceeds its total session-bar limit")
-    stock._json_size(bundle, stock.MAX_BUNDLE_BYTES)
-    if bundle["id"] != fingerprint({k: v for k, v in bundle.items() if k != "id"}):
+    admitted = _validation_encoding(bundle)
+    if admitted is None:
+        stock._json_size(bundle, stock.MAX_BUNDLE_BYTES)
+        identifier = fingerprint({k: v for k, v in bundle.items() if k != "id"})
+    else:
+        raw, _ = admitted
+        if len(raw) + 72 > stock.MAX_BUNDLE_BYTES:
+            raise ValueError("Stock-feature evidence exceeds its bounded byte allowance")
+        identifier = sha256(raw).hexdigest()
+    if bundle["id"] != identifier:
         raise ValueError("Saved stock-market context changed")
-    if (
-        owner is not None
-        and encoded is not None
-        and bounded_canonical_bytes(bundle, max_bytes=stock.MAX_BUNDLE_BYTES, json_types_only=True)
-        == encoded
-    ):
+    if owner is not None and encoded is not None and admitted == encoded:
         # Do not approve bytes observed before validation if the caller changed
         # its dictionary while admission was running.
         owner.remember(encoded)

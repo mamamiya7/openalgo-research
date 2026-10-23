@@ -51,6 +51,7 @@ def prepare(
     cancelled=None,
     warmup_sessions=1,
     scope=None,
+    _publish_completed=None,
 ):
     # Reporting callers still validate NSE index benchmarks. The acquisition core
     # also owns the already supported native NSE feature-warmup descriptor.
@@ -152,8 +153,15 @@ def prepare(
     if warmup_sessions != 1:
         recorded["calendar"] = calendar
     _validate_receipts(recorded["acquisition_receipts"])
-    artifact = service.save_artifact(store, recorded)
-    if checkpoint:
+    # The stock parent alone may retain an already validated all-cache leaf in
+    # its bounded private publication group. A deferred leaf has no standalone
+    # durable checkpoint until that parent flushes before its own checkpoint.
+    artifact = (
+        service.save_artifact(store, recorded)
+        if _publish_completed is None
+        else _publish_completed(recorded)
+    )
+    if checkpoint and artifact is not None:
         checkpoint(
             {
                 "phase": "benchmark",

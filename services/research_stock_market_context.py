@@ -114,6 +114,12 @@ def prepare_context(
     if (saved or {}).get("phase") == "calculation" and saved.get("calculation") is not None:
         if incoming is None:
             raise ValueError("Saved calculation needs the original stock-market context")
+    if incoming is not None and not recovering:
+        # Admission above checked the complete retained context and its execution
+        # binding. No caller code runs in between. Recovery alone needs a new
+        # binding and reference reads; ordinary saved calculation must not hash
+        # the same full execution input and validate the same context twice.
+        return evidence
     source_id = (
         saved.get("source_stock_bundle_id")
         if recovering

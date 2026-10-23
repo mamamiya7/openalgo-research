@@ -222,9 +222,14 @@ def start(store, owner, identifier, data):
 
 def _eligible(evidence, spec):
     portfolio = spec.get("portfolio", {})
+    automatic = portfolio.get("automatic_research")
     return (
-        not portfolio.get("automatic_research")
-        and not portfolio.get("optimization")
+        (
+            not portfolio.get("optimization")
+            and not automatic
+            or isinstance(automatic, dict)
+            and automatic.get("version") == "automatic-hypotheses-v16"
+        )
         and not any(
             evidence.get(key)
             for key in (

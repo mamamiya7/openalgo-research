@@ -62,6 +62,11 @@ def _dates(values):
 
 
 def plan_series(descriptor, required_dates, calendar):
+    return _planned_series(descriptor, required_dates, calendar)[0]
+
+
+def _planned_series(descriptor, required_dates, calendar):
+    """Admit a plan and retain the session closes already checked for that plan."""
     descriptor = normalize_descriptor(descriptor)
     required_dates = _dates(required_dates)
     if not isinstance(calendar, dict):
@@ -73,15 +78,16 @@ def plan_series(descriptor, required_dates, calendar):
         or set(required_dates) - set(sessions)
     ):
         raise ValueError("Market series requires matching recorded NSE calendar sessions")
-    for day in required_dates:
-        _close_at(day, calendar.get("session_hours", {}).get(day))
+    closes = {
+        day: _close_at(day, calendar.get("session_hours", {}).get(day)) for day in required_dates
+    }
     payload = {
         "version": VERSION,
         "descriptor": descriptor,
         "interval": "D",
         "required_dates": {descriptor["symbol"]: required_dates},
     }
-    return {**payload, "request_key": fingerprint(payload)}
+    return {**payload, "request_key": fingerprint(payload)}, closes
 
 
 def _close_at(day, hours):
@@ -106,7 +112,7 @@ def _coverage(required_dates, bars):
 
 
 def freeze_series(descriptor, required_dates, calendar, bars):
-    plan = plan_series(descriptor, required_dates, calendar)
+    plan, closes = _planned_series(descriptor, required_dates, calendar)
     descriptor = plan["descriptor"]
     dates = plan["required_dates"][descriptor["symbol"]]
     payload = {
@@ -114,7 +120,7 @@ def freeze_series(descriptor, required_dates, calendar, bars):
         "descriptor": descriptor,
         "required_dates": dates,
         "bars": copy.deepcopy(bars),
-        "available_at": {day: _close_at(day, calendar["session_hours"][day]) for day in dates},
+        "available_at": closes,
         "provenance": {
             "provider": "OpenAlgo Historify",
             "exchange": descriptor["exchange"],
@@ -232,7 +238,13 @@ def slice_series(value, first, last, *, warmup_sessions=0):
     if not selected or len(earlier) < warmup_sessions:
         raise ValueError("The recorded market series has insufficient window or warmup history")
     dates = earlier[-warmup_sessions:] + selected if warmup_sessions else selected
-    result = copy.deepcopy(value)
+    # The discarded full-history bars/availability dominated repeated period
+    # projections. Copy retained metadata and selected bars exactly once.
+    result = {
+        key: copy.deepcopy(item)
+        for key, item in value.items()
+        if key not in {"required_dates", "bars", "available_at", "coverage", "id"}
+    }
     result["required_dates"] = dates
     result["bars"] = {
         day: copy.deepcopy(value["bars"][day]) for day in dates if day in value["bars"]

@@ -6,13 +6,14 @@ prediction of future dependence. Native acquisition owns volume provenance.
 
 import hashlib
 import json
+from bisect import bisect_left
 from copy import deepcopy
 from datetime import datetime
 from io import StringIO
 from math import isfinite
 from re import fullmatch
 
-from research.canonical_json import bounded_canonical_bytes
+from research.canonical_json import bounded_canonical_bytes, bounded_canonical_fragments
 from research.portfolio import fingerprint
 from research.stock_features import _json_size
 
@@ -44,7 +45,17 @@ def _bounded_sealed_identity(value, maximum, *, _capture=None):
         payload, max_bytes=maximum - overhead, json_types_only=True, allow_native_float64=True
     )
     if raw is None:
-        return None
+        fragments = bounded_canonical_fragments(
+            payload, max_bytes=maximum - overhead, allow_native_float64=True
+        )
+        if fragments is None:
+            return None
+        digest = hashlib.sha256()
+        for fragment in fragments:
+            digest.update(fragment)
+            if _capture is not None:
+                _capture.write(fragment.decode("ascii"))
+        return digest.hexdigest() == value["id"]
     if _capture is not None:
         _capture.write(raw.decode("ascii"))
     return hashlib.sha256(raw).hexdigest() == value["id"]
@@ -215,8 +226,79 @@ def _returns(record, day):
     }
 
 
+class _ReturnWindows:
+    """One symbol's bounded overlapping windows, owned by one preparation.
+
+    Every close, availability timestamp and canonical bar is read once here.
+    Each window still has its own exact sixty returns, causal availability check
+    and complete 61-bar digest. Joining canonical object members reproduces the
+    original sorted JSON bytes; no cross-call identity or validation is cached.
+    Unusual non-plain JSON bars retain the original fingerprint path.
+    """
+
+    __slots__ = ("record", "sessions", "available", "closes", "returns", "members")
+
+    def __init__(self, record):
+        self.record = record
+        self.sessions = tuple(record["calendar"]["sessions"])
+        self.available, self.closes, self.returns, self.members = [], [], [], []
+        series = record["evidence"]
+        for day in self.sessions:
+            bar = series["bars"].get(day)
+            close = bar["close"] if bar is not None else None
+            valid = type(close) in (int, float) and isfinite(close) and close > 0
+            self.closes.append(close if valid else None)
+            self.available.append(
+                datetime.fromisoformat(series["available_at"][day]) if bar is not None else None
+            )
+            # One bounded object member, including the exact original escaped
+            # date key. A failed plain-JSON encoding keeps the legacy fallback.
+            encoded = (
+                bounded_canonical_bytes(
+                    {day: bar},
+                    max_bytes=MAX_BYTES,
+                    json_types_only=True,
+                    allow_native_float64=True,
+                )
+                if bar is not None
+                else None
+            )
+            self.members.append(encoded[1:-1] if encoded is not None else None)
+            previous = self.closes[-2] if len(self.closes) > 1 else None
+            value = close / previous - 1 if valid and previous is not None else None
+            self.returns.append(value if value is not None and isfinite(value) else None)
+
+    def window(self, day):
+        end = bisect_left(self.sessions, day)
+        if end < 61:
+            return None
+        start = end - 61
+        earlier = list(self.sessions[start:end])
+        hours = self.record["calendar"]["session_hours"].get(day)
+        if not hours or any(value is None for value in self.closes[start:end]):
+            return None
+        decision = datetime.fromisoformat(day + "T" + hours["open"] + ":00+05:30")
+        if any(value > decision for value in self.available[start:end]):
+            return None
+        values = self.returns[start + 1 : end]
+        if any(value is None for value in values):
+            return None
+        members = self.members[start:end]
+        identity = (
+            hashlib.sha256(b"{" + b",".join(members) + b"}").hexdigest()
+            if all(member is not None for member in members)
+            else fingerprint({d: self.record["evidence"]["bars"][d] for d in earlier})
+        )
+        return {
+            "dates": earlier,
+            "returns": values,
+            "available_at": max(self.record["evidence"]["available_at"][d] for d in earlier),
+            "source_id": identity,
+        }
+
+
 def _correlation_inputs(prepared):
-    """Share only identical day-local work; keep each ordered pair calculation."""
+    """Share identical day-local inputs without changing ordered pair values."""
     import numpy as np
 
     arrays = {
@@ -240,7 +322,7 @@ def _correlation_inputs(prepared):
     )
 
 
-def _correlation(symbol, day, series, prepared, *, _inputs=None):
+def _correlation(symbol, day, series, prepared, *, _inputs=None, _pairs=None):
     import numpy as np
 
     own = prepared.get(symbol)
@@ -256,7 +338,16 @@ def _correlation(symbol, day, series, prepared, *, _inputs=None):
             rho = 1.0  # Same-instrument exposure is always counted together.
         elif candidate is not None and candidate["dates"] == own["dates"]:
             if varying[symbol] and varying[other]:
-                rho = float(np.clip(np.corrcoef(arrays[symbol], arrays[other])[0, 1], -1, 1))
+                if _pairs is not None and (symbol, other) in _pairs:
+                    rho = _pairs[symbol, other]
+                else:
+                    pair = np.corrcoef(arrays[symbol], arrays[other])
+                    rho = float(np.clip(pair[0, 1], -1, 1))
+                    if _pairs is not None:
+                        _pairs[symbol, other] = rho
+                        # Retain the independently normalized reverse element;
+                        # correlation symmetry can differ by a floating bit.
+                        _pairs[other, symbol] = float(np.clip(pair[1, 0], -1, 1))
         values[other] = rho
     return _seal(
         {
@@ -276,7 +367,7 @@ def _correlation(symbol, day, series, prepared, *, _inputs=None):
 def prepare(evidence, bundle, volume_records=None):
     """Prepare once for every admitted clock; reuse the exact frozen receipt."""
     from research.stock_market_context import validate_bundle
-    from research.volume_provenance import assess_observed
+    from research.volume_provenance import _ObservedVolume, assess_observed
 
     validate_bundle(bundle)
     atr = evidence.get("execution_features")
@@ -317,45 +408,60 @@ def prepare(evidence, bundle, volume_records=None):
     if volume_records is None:
         volume_records = existing.get("volume_records", {}) if existing else {}
     _json_size(volume_records, MAX_BYTES)
+    observed = _ObservedVolume.admit(volume_records)
     allocation_on = any(
         row.get("execution_policy", {}).get("version") == "research-execution-aware-v5"
         for row in evidence["strategies"]
     )
     allocations = {}
     correlations, capacity = {}, {}
+    windows = (
+        {symbol: _ReturnWindows(record) for symbol, record in bundle["series"].items()}
+        if required
+        else {}
+    )
     day_cache = {}
     correlation_inputs = None
+    pairs = {}
     for key in required:
         symbol, day = key.rsplit("|", 1)
         if day not in day_cache:
-            day_cache = {day: {s: _returns(record, day) for s, record in bundle["series"].items()}}
+            day_cache = {day: {symbol: value.window(day) for symbol, value in windows.items()}}
             correlation_inputs = _correlation_inputs(day_cache[day])
+            pairs = {}
         if allocation_on and day not in allocations:
             from research.portfolio_allocation import build
 
             allocations[day] = build(day_cache[day], day)
         feature = _correlation(
-            symbol, day, bundle["series"], day_cache[day], _inputs=correlation_inputs
+            symbol, day, bundle["series"], day_cache[day], _inputs=correlation_inputs, _pairs=pairs
         )
         correlations[key] = feature
         record = bundle["series"][symbol]
         hours = record["calendar"]["session_hours"].get(day)
         decision = day + "T" + hours["open"] + ":00+05:30" if hours else day
-        prior = [d for d in record["calendar"]["sessions"] if d < day][-20:]
-        observations = volume_records.get(symbol, {})
-        aligned = {
-            d: observations[d]
-            for d in prior
-            if d in observations
-            and d in record["evidence"]["bars"]
-            and isinstance(observations[d], dict)
-            and isinstance(observations[d].get("candle"), dict)
-            and all(
-                observations[d]["candle"].get(field) == record["evidence"]["bars"][d][field]
-                for field in ("timestamp", "open", "high", "low", "close")
+        calendar = windows[symbol].sessions
+        end = bisect_left(calendar, day)
+        prior = calendar[max(0, end - 20) : end]
+        if observed is not None:
+            model = observed.assess(
+                prior, record["evidence"]["bars"], record["calendar"], symbol, day, decision
             )
-        }
-        model = assess_observed(aligned, record["calendar"], symbol, day, decision)
+        else:
+            observations = volume_records.get(symbol, {})
+            aligned = {
+                d: observations[d]
+                for d in prior
+                if d in observations
+                and d in record["evidence"]["bars"]
+                and isinstance(observations[d], dict)
+                and isinstance(observations[d].get("candle"), dict)
+                and all(
+                    observations[d]["candle"].get(field) == record["evidence"]["bars"][d][field]
+                    for field in ("timestamp", "open", "high", "low", "close")
+                )
+            }
+            model = assess_observed(aligned, record["calendar"], symbol, day, decision)
         cap = None
         if model.get("status") == "available" and model.get("mean_daily_shares", 0) > 0:
             window = model["window"]
@@ -411,6 +517,8 @@ def prepare(evidence, bundle, volume_records=None):
             if any(allocation_marks.get(key, {}) != retained_marks.get(key, {}) for key in keys):
                 raise ValueError("Saved allocation opening marks changed their source")
             allocation_marks = retained_marks
+    if observed is not None:
+        volume_records = observed.release()
     result = _seal(
         {
             **(

@@ -229,9 +229,11 @@ class _ArtifactPublication:
             # not take this SQL guard. Reconcile a longer, multi-file batch
             # before its caller can publish metadata. Any excess remains an
             # unreferenced, accounted orphan; immutable evidence is not deleted.
-            used, _ = _managed_storage_snapshot(self.store)
+            used, entries = _managed_storage_snapshot(self.store)
             if used > self.quota:
                 raise ValueError("Research storage is full. Your saved progress is safe.")
+            if entries > MAX_MANAGED_ENTRIES:
+                raise ValueError("Research storage exceeds the 100000-entry management bound")
 
 
 @contextmanager

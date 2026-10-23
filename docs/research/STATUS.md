@@ -1,5 +1,22 @@
 # OpenAlgo Research status
 
+## Large-scanner preparation correction - 23 October 2026
+
+Preview.25 removes repeated causal window serialization, volume seal checks,
+context encoding and discarded history copies while preserving all checks and
+exact financial receipts. Large contexts retain bounded validation reuse, and
+large scanner clocks fit the existing private feature owner with a bounded heap.
+Daily v16 can reuse fresh complete preparation through the guarded handoff;
+its complete recipe and evaluation-date reservation remain mandatory.
+Large receipts now use bounded canonical fragments for size, hashing and seal
+checks rather than Python token streaming. Cached leaves share bounded durable
+publication. 364 focused tests pass, with two Windows skips. The installed
+146-stock / 1,869-signal cached fixed-backtest journey took 58.859 seconds from
+opening through saved result (54.367 seconds from preparation creation), with
+exact financial equality. Save, reload and reopen passed. Full v16 correctly
+rejected this scan's insufficient history; budgets and validation stay unchanged.
+[Qualification](releases/0.1.0-preview.25.md).
+
 ## Early Chartink input preparation - 23 October 2026
 
 Preview.24 starts background data preparation when a saved Chartink setup opens

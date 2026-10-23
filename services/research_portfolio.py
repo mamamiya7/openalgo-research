@@ -745,16 +745,26 @@ def validate_prepared_inputs(store, prepared, spec):
     """
     from research.portfolio_coverage import prepare as prepare_coverage
 
-    validate_submission(prepared, "portfolio_backtest", spec)
     portfolio = prepared["portfolio"]
+    validate_submission(
+        prepared,
+        "portfolio_optimize" if portfolio.get("optimization") else "portfolio_backtest",
+        spec,
+    )
+    automatic = portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v16"
     if (
         prepared.get("frozen_prices") is not True
-        or portfolio.get("automatic_research")
-        or portfolio.get("optimization")
+        or (portfolio.get("automatic_research") or portfolio.get("optimization"))
+        and not automatic
         or prepared.get("replay_origin")
         or prepared.get("condition_replay")
     ):
-        raise ValueError("Early preparation needs complete fixed-backtest inputs")
+        raise ValueError("Early preparation needs complete supported research inputs")
+    if automatic:
+        from research.automatic_protocol import compile_recipe
+
+        if prepared.get("automatic_recipe") != compile_recipe(prepared):
+            raise ValueError("Prepared automatic programme does not match its complete inputs")
     if prepare_coverage(prepared) != prepared:
         raise ValueError("Prepared price coverage does not reproduce its saved inputs")
     receipts = prepared.get("acquisition_receipts")

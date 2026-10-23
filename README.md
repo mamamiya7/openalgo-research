@@ -14,15 +14,15 @@ The aim is to connect broker data, backtesting and optimization in one open-sour
 workflow. Start directly from a Chartink scanner with the Chrome extension, upload
 a CSV export, or reuse saved signals.
 
-**Current preview: `0.1.0-preview.24` · OpenAlgo 2.0.2.9 · Windows and Linux**
+**Current preview: `0.1.0-preview.25` · OpenAlgo 2.0.2.9 · Windows and Linux**
 
-[**Download OpenAlgo Research**](https://github.com/mamamiya7/openalgo-research/releases/download/research-v0.1.0-preview.24/openalgo-research-0.1.0-preview.24.zip)
+[**Download OpenAlgo Research**](https://github.com/mamamiya7/openalgo-research/releases/download/research-v0.1.0-preview.25/openalgo-research-0.1.0-preview.25.zip)
 · [Install and start](docs/research/RUNTIME.md)
-· [Release notes](docs/research/releases/0.1.0-preview.24.md)
+· [Release notes](docs/research/releases/0.1.0-preview.25.md)
 · [Architecture](docs/research/SYSTEM_MAP.md)
 · [Released source](https://github.com/mamamiya7/openalgo-research/tree/main)
 
-## What’s in preview.24
+## What’s in preview.25
 
 Upload a signal CSV or send a Chartink history, review your capital and trading
 rules, then choose **Backtest** or **Optimize → Automatic research**. The app
@@ -30,16 +30,20 @@ selects the required prices, applicable research methods and validation. Existin
 Historify prices are reused; only missing required coverage comes from your broker.
 Date-only daily strategies stay on daily candles.
 
-- **Start downloads while reviewing Chartink settings.** Opening the native setup starts background price and input preparation. A matching fixed daily run reuses checked prepared inputs; other modes use the warmed price cache. No backtest starts until Run.
+- **Start downloads while reviewing Chartink settings.** Opening the native setup starts background price and input preparation. Matching daily fixed and v16 automatic runs reuse checked prepared inputs. No backtest starts until Run.
+- **Faster preparation for large scanners.** Reuse overlapping return windows,
+  exact correlation calculations, checked volume observations and bounded stock
+  features. Fully cached stock records share bounded, durable disk publication;
+  every candle, source, calendar and saved recovery reference remains checked.
 - **Fixed backtests from saved automatic setups.** Both the data preview and
   saved-library launch retain the matching versioned execution policy and account
   limits when switching to Backtest. Original strategy rules stay unchanged.
-- **Less hashing and report overhead.** Reuse bounded, privately owned canonical
-  bytes and prepared stock/market views; avoid unnecessary report dispatch
-  compilation. The installed Windows app completed the full cached-data research
-  job in **45.089 seconds**, retaining all 272 applicable proposals, 296 accounts
-  and every validation. The configured maximum remains 408 proposals/512 accounts.
-  This measured six-stock case is not a universal fresh-download timing promise.
+- **146-stock acceptance under a minute.** The installed Windows app completed
+  the cached-price fixed-backtest journey from opening through saved result in
+  **58.859 seconds**, with identical financial evidence. Large receipt size,
+  hashing and seal checks now use bounded canonical pieces. Save, reload and
+  reopen were verified. Full automatic research still allows 408 proposals/512
+  accounts and requires adequate history; this timing is for the fixed backtest.
 - **Current native OpenAlgo.** Platform 2.0.2.9 with official updates through
   22 October, charts 2.6.7, custom intervals and dependency security fixes.
   Saved research keeps its frozen prices, markers and replay.
@@ -88,8 +92,8 @@ qualified volume provenance; other brokers can use supported methods without
 that assumption. Optional Nautilus fixed/custom calculations have their own
 supported contract and Linux/WSL runtime.
 
-[Release notes](docs/research/releases/0.1.0-preview.24.md) ·
-[Patch qualification and limits](docs/research/releases/0.1.0-preview.24.md#qualification) ·
+[Release notes](docs/research/releases/0.1.0-preview.25.md) ·
+[Patch qualification and limits](docs/research/releases/0.1.0-preview.25.md#qualification) ·
 [Future roadmap](docs/research/DELIVERY_PLAN.md).
 Preview.14 combines completed fit-account/proposal saves and speeds up bounded
 evidence serialisation, alongside the preceding cache and calculation corrections.
@@ -251,7 +255,7 @@ to preserve their accounts, broker settings and saved research.
 To develop from a Git checkout instead, first run `npm ci` and `npm run build` in
 `frontend`, then run the setup script from the repository root. GitHub's automatic
 **Source code** archives do not contain the built interface; use the named
-`openalgo-research-0.1.0-preview.24.zip` asset for the easy installation.
+`openalgo-research-0.1.0-preview.25.zip` asset for the easy installation.
 
 Use the [Chartink extension](extensions/chartink/README.md), or open **Tools →
 Backtest & Optimize** to upload a CSV or reuse saved signals. Review the settings

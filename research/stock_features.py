@@ -12,11 +12,16 @@ from collections import OrderedDict
 from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime
+from hashlib import sha256
 from math import isclose, isfinite
 from threading import get_ident
 
-from research.canonical_json import bounded_canonical_bytes, bounded_canonical_snapshot
-from research.market_series import IST, _close_at, fingerprint, plan_series, validate_series
+from research.canonical_json import (
+    bounded_canonical_bytes,
+    bounded_canonical_fragments,
+    bounded_canonical_snapshot,
+)
+from research.market_series import IST, _planned_series, fingerprint, validate_series
 
 VERSION = "research-stock-features-v1"
 ENTRY_VERSION = "research-stock-entry-conditions-v1"
@@ -26,8 +31,8 @@ MAX_FEATURE_BARS = 200_000
 MAX_SIGNALS = 25_000
 MAX_BUNDLE_BYTES = 64 * 1024**2
 MAX_RECEIPT_BYTES = 32 * 1024**2
-MAX_PREPARED_FEATURES = 512
-MAX_PREPARED_FEATURE_BYTES = 4 * 1024**2
+MAX_PREPARED_FEATURES = 4096
+MAX_PREPARED_FEATURE_BYTES = 32 * 1024**2
 
 
 def _heap_bytes(value):
@@ -228,6 +233,9 @@ def _json_size(value, maximum):
         if len(encoded) > maximum:
             raise ValueError("Stock-feature evidence exceeds its bounded byte allowance")
         return len(encoded)
+    fragments = bounded_canonical_fragments(value, max_bytes=maximum, allow_native_float64=True)
+    if fragments is not None:
+        return sum(map(len, fragments))
     size = 0
     for part in json.JSONEncoder(sort_keys=True, separators=(",", ":"), allow_nan=False).iterencode(
         value
@@ -236,6 +244,16 @@ def _json_size(value, maximum):
         if size > maximum:
             raise ValueError("Stock-feature evidence exceeds its bounded byte allowance")
     return size
+
+
+def _json_size_and_encoding(value, maximum):
+    """Retain a bounded size-check's exact bytes for the following integrity check."""
+    encoded = bounded_canonical_bytes(value, max_bytes=maximum, allow_native_float64=True)
+    if encoded is None:
+        return _json_size(value, maximum), None
+    if len(encoded) > maximum:
+        raise ValueError("Stock-feature evidence exceeds its bounded byte allowance")
+    return len(encoded), encoded
 
 
 def validate_record(symbol, record):
@@ -257,10 +275,9 @@ def validate_record(symbol, record):
         "role": "feature_warmup",
     }:
         raise ValueError("Stock features require the exact NSE stock warmup instrument")
-    plan_series(descriptor, series["required_dates"], calendar)
+    _, closing_times = _planned_series(descriptor, series["required_dates"], calendar)
     if series["required_dates"] != calendar["sessions"] or any(
-        series["available_at"][day] != _close_at(day, calendar["session_hours"][day])
-        for day in series["required_dates"]
+        series["available_at"][day] != closing_times[day] for day in series["required_dates"]
     ):
         raise ValueError("Stock-feature calendar or completed-close availability changed")
     receipts = record["acquisition_receipts"]
@@ -270,8 +287,17 @@ def validate_record(symbol, record):
     for item in receipts:
         if not isinstance(item, dict) or set(item) != {"sha256", "receipt"}:
             raise ValueError("Stock-feature acquisition receipt is invalid")
-        total += _json_size(item["receipt"], min(MAX_RECEIPT_BYTES, 16 * 1024**2))
-        if total > MAX_RECEIPT_BYTES or fingerprint(item["receipt"]) != item["sha256"]:
+        size, encoded = _json_size_and_encoding(
+            item["receipt"], min(MAX_RECEIPT_BYTES, 16 * 1024**2)
+        )
+        total += size
+        if (
+            total > MAX_RECEIPT_BYTES
+            or (
+                sha256(encoded).hexdigest() if encoded is not None else fingerprint(item["receipt"])
+            )
+            != item["sha256"]
+        ):
             raise ValueError("Stock-feature acquisition receipt integrity changed")
         if (
             item["receipt"].get("version") != "openalgo-market-series-receipt-v1"

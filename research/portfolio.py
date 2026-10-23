@@ -13,7 +13,7 @@ import re
 from copy import deepcopy
 from datetime import date, timedelta
 
-from research.canonical_json import bounded_canonical_bytes
+from research.canonical_json import bounded_canonical_bytes, bounded_canonical_fragments
 from research.data import MAX_BARS
 from research.engine import validate_config
 from research.requirements import select_interval
@@ -29,6 +29,14 @@ def fingerprint(value):
     encoded = bounded_canonical_bytes(value, allow_native_float64=True)
     if encoded is not None:
         return hashlib.sha256(encoded).hexdigest()
+    fragments = bounded_canonical_fragments(
+        value, max_bytes=64 * 1024**2, allow_native_float64=True
+    )
+    if fragments is not None:
+        digest = hashlib.sha256()
+        for part in fragments:
+            digest.update(part)
+        return digest.hexdigest()
     digest = hashlib.sha256()
     for part in json.JSONEncoder(sort_keys=True, separators=(",", ":"), allow_nan=False).iterencode(
         value

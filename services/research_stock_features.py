@@ -6,13 +6,17 @@ shared native acquisition layer owns and closes its archive/client resources.
 """
 
 from copy import deepcopy
+from hashlib import sha256
+from sys import getsizeof
 
+from research.canonical_json import bounded_canonical_snapshot
 from research.market_series import normalize_descriptor
 from research.stock_features import (
     MAX_FEATURE_BARS,
     MAX_SYMBOLS,
     VERSION,
     WARMUP_SESSIONS,
+    _heap_bytes,
     fingerprint,
     validate_bundle,
     validate_record,
@@ -20,6 +24,55 @@ from research.stock_features import (
 from services import scanner_research_service as service
 
 _CACHE_CHECKPOINT_BATCH_SIZE = 16
+_CACHE_RECORD_BATCH_BYTES = 4 * 1024**2
+
+
+class _CachedRecordPublications:
+    """Bounded detached leaves; no writer scope survives a flush call."""
+
+    __slots__ = ("store", "records", "size", "enabled")
+
+    def __init__(self, store):
+        self.store, self.records, self.size = store, {}, 0
+        # Non-native adapters still use their ordinary publication contract.
+        self.enabled = hasattr(store, "root") and callable(getattr(store, "sessions", None))
+
+    def flush(self):
+        if not self.records:
+            return
+        with service.artifact_publication(self.store):
+            for identifier, (record, raw) in self.records.items():
+                if service._save_artifact(self.store, record, _owned_raw=raw) != identifier:
+                    raise ValueError("Cached stock record changed during publication")
+        self.records.clear()
+        self.size = 0
+
+    def add(self, record):
+        """Return its exact id and whether publication remains private/deferred."""
+        captured = (
+            bounded_canonical_snapshot(record, max_bytes=_CACHE_RECORD_BATCH_BYTES)
+            if self.enabled
+            else None
+        )
+        if captured is None:
+            self.flush()
+            return service.save_artifact(self.store, record), False
+        owned, raw = captured
+        charge = _heap_bytes(owned) + getsizeof(raw) + 256
+        if charge > _CACHE_RECORD_BATCH_BYTES:
+            self.flush()
+            return service.save_artifact(self.store, record), False
+        identifier = sha256(raw).hexdigest()
+        if identifier in self.records:
+            return identifier, True
+        if (
+            len(self.records) >= min(16, _CACHE_CHECKPOINT_BATCH_SIZE)
+            or self.size + charge > _CACHE_RECORD_BATCH_BYTES
+        ):
+            self.flush()
+        self.records[identifier] = (owned, raw)
+        self.size += charge
+        return identifier, True
 
 
 def _cache_only_checkpoint(native_state, symbol):
@@ -195,6 +248,7 @@ def prepare_context(
             "summary": {"initial_capital": capital},
             "equity_curve": [{"date": day, "equity": capital} for day in sessions],
         }
+        publications = _CachedRecordPublications(store)
 
         def announce():
             if activity:
@@ -210,6 +264,7 @@ def prepare_context(
                 )
 
         def persist():
+            publications.flush()
             state.pop("state_id", None)
             state["state_id"] = fingerprint(state)
             announce()
@@ -231,6 +286,16 @@ def prepare_context(
 
             cache_only = False
             cache_identity = None
+            published_artifact = None
+
+            def publish_completed(record):
+                nonlocal published_artifact, cache_only
+                if cache_only:  # noqa: B023 -- synchronous native callback reads this symbol's admission
+                    published_artifact, deferred = publications.add(record)
+                    return None if deferred else published_artifact
+                publications.flush()
+                published_artifact = service.save_artifact(store, record)
+                return published_artifact
 
             def save_market(native_state, counts, *, _symbol=symbol):
                 nonlocal cache_only, cache_identity, cached_pending
@@ -253,8 +318,8 @@ def prepare_context(
                     and counts.get("completed") == 1
                     and counts.get("total") == 1
                 ):
-                    # Benchmark admission already validated and durably saved its
-                    # complete record. Keep this reference in the bounded group.
+                    # Non-native publishers may still return a durable cache
+                    # leaf. Its recovery reference belongs to the same group.
                     return
                 cache_only = False
                 cache_identity = None
@@ -277,6 +342,7 @@ def prepare_context(
                 cancelled=cancelled,
                 warmup_sessions=WARMUP_SESSIONS,
                 scope=scope,
+                _publish_completed=publish_completed,
             )
             validate_record(symbol, record)
             scope.finish(symbol)
@@ -284,7 +350,10 @@ def prepare_context(
             feature_bars += len(record["evidence"]["required_dates"])
             if feature_bars > MAX_FEATURE_BARS:
                 raise ValueError("Stock-feature history exceeds its total session-bar limit")
-            completed[symbol] = {"inputs_artifact": service.save_artifact(store, record)}
+            if published_artifact is None:
+                publications.flush()
+                published_artifact = service.save_artifact(store, record)
+            completed[symbol] = {"inputs_artifact": published_artifact}
             state["current_symbol"], state["market_checkpoint"] = None, None
             if cache_only:
                 cached_pending += 1
@@ -297,6 +366,7 @@ def prepare_context(
                 announce()
             progress(len(completed), len(symbols))
         cancelled()
+        publications.flush()
         payload = {
             "version": VERSION,
             "series": {

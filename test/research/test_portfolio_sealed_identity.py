@@ -43,24 +43,23 @@ def test_tampered_payload_or_digest_is_not_accepted():
     assert features._sealed_identity(receipt, 10000) is False
 
 
-def test_large_receipt_uses_one_streaming_traversal_without_small_object_shortcut(monkeypatch):
+def test_large_receipt_uses_bounded_c_encoding_without_python_token_streaming(monkeypatch):
     payload = {"observations": [{"symbol": f"S{i}", "close": i + 0.25} for i in range(5000)]}
     receipt = {**payload, "id": fingerprint(payload)}
     expected_size = _json_size(receipt, 1024**2)
     calls = []
     original = json.JSONEncoder.iterencode
 
-    def counted(self, value, *args, **kwargs):
+    def counted(self, value, _one_shot=False):
+        assert _one_shot, "native receipt fell back to Python token streaming"
         calls.append(value)
-        return original(self, value, *args, **kwargs)
+        return original(self, value, _one_shot=True)
 
     monkeypatch.setattr(json.JSONEncoder, "iterencode", counted)
     monkeypatch.setattr(features, "_json_size", lambda *a: pytest.fail("valid fast path rescanned"))
     monkeypatch.setattr(features, "fingerprint", lambda *a: pytest.fail("valid fast path rehashed"))
     assert features._sealed_identity(receipt, expected_size)
-    assert len(calls) == 1
-    assert "id" not in calls[0]
-    assert calls[0]["observations"] is payload["observations"]
+    assert calls
 
 
 @pytest.mark.parametrize("item", [float("nan"), float("inf"), -float("inf"), object()])

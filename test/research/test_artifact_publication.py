@@ -81,6 +81,25 @@ def test_one_file_scope_keeps_one_admission_scan(store, monkeypatch):
     assert scans == [1]
 
 
+def test_multi_file_reconciliation_retains_entry_limit_for_external_growth(store, monkeypatch):
+    original = service._managed_storage_snapshot
+    calls = 0
+
+    def inventory(selected):
+        nonlocal calls
+        calls += 1
+        used, entries = original(selected)
+        return used, service.MAX_MANAGED_ENTRIES + 1 if calls > 1 else entries
+
+    monkeypatch.setattr(service, "_managed_storage_snapshot", inventory)
+    with pytest.raises(ValueError, match="entry management bound"):
+        with service.artifact_publication(store):
+            service.save_artifact(store, {"one": True})
+            service.save_artifact(store, {"two": True})
+    assert calls == 2
+    assert service._artifact_publication.get() is None
+
+
 def test_multi_file_reconciliation_rejects_external_receipt_growth(store, monkeypatch):
     monkeypatch.setenv("RESEARCH_QUOTA_MB", "1")
     with pytest.raises(ValueError, match="storage is full"):
