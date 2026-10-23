@@ -11,6 +11,7 @@ from copy import deepcopy
 from time import monotonic
 
 from research import portfolio as contract
+from research.checkpoint_bytes import _OwnedCheckpointSink
 from research.stock_market_context import _with_bundle_validation
 from services import scanner_research_service as service
 
@@ -1124,7 +1125,7 @@ def run(
                     raise ValueError("Automatic stability research needs its durable job identity")
                 claim(store, owner, inputs_id, evidence, job_id)
 
-        def persist_automatic(state, counts):
+        def persist_automatic(state, counts, *, _owned=None):
             retained = {}
             if development_writer is not None:
                 development_writer.reconcile(state["evaluations"])
@@ -1143,17 +1144,35 @@ def run(
                 "stage": "optimization",
             }
             if batch_runtime:
+                if _owned is not None and type(checkpoint) is _OwnedCheckpointSink:
+                    wrapped = _owned.wrap(
+                        "calculation",
+                        {key: value for key, value in payload.items() if key != "calculation"},
+                    )
+                    if wrapped is not None:
+                        return checkpoint.publish_owned(
+                            wrapped, display, development_writer.publish_pending
+                        )
+                    _owned.close()
                 checkpoint.publish_with_artifacts(
                     payload, display, development_writer.publish_pending
                 )
             else:
                 checkpoint(payload, display)
 
+        automatic_checkpoint = persist_automatic
+        if batch_runtime and type(checkpoint) is _OwnedCheckpointSink:
+
+            def persist_owned(owned, counts, publish):
+                return persist_automatic(owned.value, counts, _owned=owned)
+
+            automatic_checkpoint = _OwnedCheckpointSink(persist_automatic, persist_owned)
+
         result = automatic_run(
             evidence,
             evaluate=evaluate,
             saved=(saved or {}).get("calculation"),
-            checkpoint=persist_automatic,
+            checkpoint=automatic_checkpoint,
             progress=lambda done, total: progress(60 + 40 * done / max(1, total), 100),
             cancelled=cancelled,
             activity=activity,

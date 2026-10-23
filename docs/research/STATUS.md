@@ -1,5 +1,21 @@
 # OpenAlgo Research status
 
+## Hashing and processing correction - 23 October 2026
+
+Preview.22 removes repeated canonical encoding, unused trial recipe copies and
+repeated stock/market preparation, with bounded private reuse and strict fallback.
+Native financial callbacks remain compiled; their outer report dispatch loops
+avoid first-use compilation. Features, financial semantics, full validation and
+configured 408-proposal/512-account maximum remain frozen.
+
+The installed Windows application completed a new full cached-data research job
+in **45.089s** from creation to completion (**46.014s** from click), including price
+preparation, all 272 applicable proposals, 296 accounts and saved evidence. All
+365 required execution candles were cached. The separate exact tested report was
+saved and its setup reopened after a browser reload. This is a measured six-stock
+case, not a guaranteed time for other inputs or new broker downloads.
+[Measurement and qualification](releases/0.1.0-preview.22.md).
+
 ## Measured bookkeeping correction - 23 October 2026
 
 Preview.21 reserves every account durably, groups completed evidence saves and

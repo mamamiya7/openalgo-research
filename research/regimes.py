@@ -5,11 +5,16 @@ Every classification uses a finite, contiguous window strictly before its as-of
 instant. Trend, volatility and stress are deliberately separate dimensions.
 """
 
+import json
 from bisect import bisect_left
+from collections import OrderedDict
 from copy import deepcopy
 from datetime import datetime
+from io import StringIO
 from math import isfinite
+from threading import get_ident
 
+from research.canonical_json import bounded_canonical_snapshot
 from research.market_series import IST, MAX_SESSIONS, fingerprint, validate_series
 
 VERSION = "research-regimes-v1"
@@ -173,8 +178,28 @@ def classify(evidence, decision_times):
     features = _features(evidence)
     days = evidence["required_dates"]
     available = [datetime.fromisoformat(evidence["available_at"][day]) for day in days]
+    return _classify(evidence, decisions, features, available)
+
+
+def _append_row(timeline, row, cache):
+    if cache is None:
+        timeline.append(row)
+    else:
+        if len(cache) >= MAX_SESSIONS:
+            cache.popitem(last=False)
+        cache[row["decision_at"]] = row
+        timeline.append(deepcopy(row))
+
+
+def _classify(evidence, decisions, features, available, *, cache=None):
+    descriptor, days = evidence["descriptor"], evidence["required_dates"]
     timeline = []
     for decision in decisions:
+        key = decision.isoformat()
+        if cache is not None and key in cache:
+            cache.move_to_end(key)
+            timeline.append(deepcopy(cache[key]))
+            continue
         index = bisect_left(available, decision) - 1
         selected = days[max(0, index + 1 - REQUIRED_SESSIONS) : index + 1]
         missing = [day for day in selected if day not in evidence["bars"]]
@@ -207,12 +232,12 @@ def classify(evidence, decision_times):
         if missing:
             row["reasons"].append(f"Missing prices for {len(missing)} required sessions.")
         if row["reasons"]:
-            timeline.append(row)
+            _append_row(timeline, row, cache)
             continue
         prior = features[index - RANK_OBSERVATIONS : index]
         if current is None or len(prior) != RANK_OBSERVATIONS or any(x is None for x in prior):
             row["reasons"].append("The required feature observations could not be calculated.")
-            timeline.append(row)
+            _append_row(timeline, row, cache)
             continue
         values = row["features"]
         values["volatility_percentile"] = _percentile(
@@ -244,7 +269,7 @@ def classify(evidence, decision_times):
             else "normal"
         )
         row["status"] = "available"
-        timeline.append(row)
+        _append_row(timeline, row, cache)
     result = {
         "version": VERSION,
         "descriptor": deepcopy(descriptor),
@@ -266,3 +291,70 @@ def classify(evidence, decision_times):
         ],
     }
     return {**result, "id": fingerprint(result)}
+
+
+class _PreparedClassifier:
+    """Detached bounded history; cache only immutable causal decision rows."""
+
+    __slots__ = ("__evidence", "__features", "__available", "__rows", "__owner", "__weakref__")
+    # Match the enclosing stock/market bundle's admitted serialized ceiling.
+    MAX_BYTES = 64 * 1024**2
+
+    def __init__(self, evidence):
+        self.__evidence = self.__features = self.__available = None
+        self.__rows, self.__owner = OrderedDict(), get_ident()
+        captured = bounded_canonical_snapshot(evidence, max_bytes=self.MAX_BYTES)
+        if captured is not None:
+            owned, raw = captured
+            del captured, raw
+        else:
+            # Preserve original type/schema rejection before JSON projection.
+            validate_series(evidence)
+            with StringIO() as stream:
+                size = 0
+                for part in json.JSONEncoder(
+                    sort_keys=True, separators=(",", ":"), allow_nan=False
+                ).iterencode(evidence):
+                    size += len(part)
+                    if size > self.MAX_BYTES:
+                        raise ValueError(
+                            "Prepared market classification exceeds its byte allowance"
+                        )
+                    stream.write(part)
+                owned = json.loads(stream.getvalue())
+        validate_series(owned)
+        if (
+            owned["descriptor"]["exchange"] != "NSE_INDEX"
+            or owned["descriptor"]["role"] != "benchmark"
+        ):
+            raise ValueError("Market regime context requires a named daily NSE index benchmark")
+        features = _features(owned)  # Includes the original pinned VectorBT check.
+        available = [
+            datetime.fromisoformat(owned["available_at"][day]) for day in owned["required_dates"]
+        ]
+        self.__evidence, self.__features, self.__available = owned, features, available
+
+    def classify(self, decision_times):
+        if self.__evidence is None:
+            raise ValueError("The prepared market classifier has been released")
+        if get_ident() != self.__owner:
+            raise ValueError("The prepared market classifier cannot leave its owning thread")
+        return _classify(
+            self.__evidence,
+            _decisions(decision_times),
+            self.__features,
+            self.__available,
+            cache=self.__rows,
+        )
+
+    def close(self):
+        self.__evidence = self.__features = self.__available = None
+        self.__rows.clear()
+
+    def __enter__(self):
+        if self.__evidence is None:
+            raise ValueError("The prepared market classifier has been released")
+        return self
+
+    def __exit__(self, *error):
+        self.close()

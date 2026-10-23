@@ -25,9 +25,11 @@ from database.research_db import (
     ResearchStore,
     ResearchWorker,
 )
+from research.checkpoint_bytes import _OwnedCheckpointSink
 from services import research_study_activity as study_activity
 from services.research_sources import AcquisitionBatchPending
 from services.scanner_research_service import (
+    _save_owned_artifact,
     artifact_publication,
     compact_checkpoint_publication,
     encoded,
@@ -41,6 +43,7 @@ from services.scanner_research_service import (
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
+_OWNED_SAVE_ARTIFACT = save_artifact
 LEASE_SECONDS = 120
 NETWORK_HEARTBEAT_SECONDS = 1
 STORAGE_CHECK_INTERVAL_SECONDS = 10
@@ -383,7 +386,7 @@ def _run_one(store, token, stop_requested=None):
         if paused:
             raise Paused()
 
-    def checkpoint(state, counts, *, _publish=None):
+    def checkpoint(state, counts, *, _publish=None, _owned=None):
         nonlocal last_update
         # Check the same live fences before artifact I/O, then publish progress
         # with the checkpoint below. A separate progress-only commit repeated
@@ -404,10 +407,25 @@ def _run_one(store, token, stop_requested=None):
             if _publish is not None:
                 _publish()
             with compact_checkpoint_publication():
-                artifact = save_artifact(
-                    store,
-                    {"identity": experiment.identity, "policy_version": policy, "state": state},
+                wrapped = (
+                    _owned.wrap(
+                        "state", {"identity": experiment.identity, "policy_version": policy}
+                    )
+                    if _owned is not None and save_artifact is _OWNED_SAVE_ARTIFACT
+                    else None
                 )
+                if wrapped is not None:
+                    try:
+                        artifact = _save_owned_artifact(store, wrapped)
+                    finally:
+                        wrapped.close()
+                else:
+                    if _owned is not None:
+                        _owned.close()
+                    artifact = save_artifact(
+                        store,
+                        {"identity": experiment.identity, "policy_version": policy, "state": state},
+                    )
         with store.sessions.begin() as db:
             db.execute(update(ResearchWorker).where(ResearchWorker.id == 1).values(id=1))
             current = db.get(ResearchJob, job.id)
@@ -421,9 +439,11 @@ def _run_one(store, token, stop_requested=None):
             from services.research_attempt_budget import merge_counts
 
             display_counts = merge_counts(
-                receipt.counts, display_counts,
+                receipt.counts,
+                display_counts,
                 checkpoint_state=state.get("calculation")
-                if isinstance(state.get("calculation"), dict) else None,
+                if isinstance(state.get("calculation"), dict)
+                else None,
             )
             receipt.checkpoint, receipt.counts = artifact, encoded(display_counts).decode()
             current.progress = min(99, int(100 * counts["completed"] / max(1, counts["total"])))
@@ -450,8 +470,15 @@ def _run_one(store, token, stop_requested=None):
 
         if attempt_reservation is None:
             attempt_reservation = attempt_reserver(
-                store, job.owner, job.id, token, experiment.identity, policy,
-                checkpoint_attempts=expected, checkpoint_simulations=simulations, limit=limit,
+                store,
+                job.owner,
+                job.id,
+                token,
+                experiment.identity,
+                policy,
+                checkpoint_attempts=expected,
+                checkpoint_simulations=simulations,
+                limit=limit,
             )
         try:
             return attempt_reservation(expected, simulations, reserved_final, limit)
@@ -459,6 +486,11 @@ def _run_one(store, token, stop_requested=None):
             raise Cancelled(str(error)) from error
 
     checkpoint.reserve_attempt = reserve_attempt
+
+    def checkpoint_owned(owned, counts, publish):
+        return checkpoint(owned.value, counts, _publish=publish, _owned=owned)
+
+    checkpoint = _OwnedCheckpointSink(checkpoint, checkpoint_owned)
 
     history_record = None
     parent_result_artifact = None

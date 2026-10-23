@@ -30,6 +30,10 @@ def normalize(value, strategies):
 
 
 def apply(evidence, market, condition):
+    return _apply(evidence, market, condition)
+
+
+def _apply(evidence, market, condition, *, classify_fn=None):
     from research.connectors.vectorbt_portfolio import _schedule
     from research.regimes import classify, recipe
 
@@ -70,7 +74,9 @@ def apply(evidence, market, condition):
                         decision = opening
                         decisions.add(decision)
             scheduled[i] = (entry, reason, decision, scheduled_at)
-    classified = classify(market["evidence"], sorted(decisions)) if decisions else None
+    classified = (
+        (classify_fn or classify)(market["evidence"], sorted(decisions)) if decisions else None
+    )
     by_time = {row["decision_at"]: row for row in classified["timeline"]} if classified else {}
     counts = dict.fromkeys(
         ("allowed", "filtered", "unknown", "original_excluded", "pending", "unaffected"), 0

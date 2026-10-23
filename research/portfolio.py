@@ -13,7 +13,7 @@ import re
 from copy import deepcopy
 from datetime import date, timedelta
 
-from research.canonical_json import bounded_canonical_bytes, small_canonical_bytes
+from research.canonical_json import bounded_canonical_bytes
 from research.data import MAX_BARS
 from research.engine import validate_config
 from research.requirements import select_interval
@@ -24,9 +24,9 @@ KINDS = {"portfolio_backtest", "portfolio_optimize"}
 
 
 def fingerprint(value):
-    encoded = small_canonical_bytes(value)
-    if encoded is None:
-        encoded = bounded_canonical_bytes(value)
+    # The medium encoder has the same detached copier and representation.
+    # Trying the small bound first repeats its whole prefix on larger receipts.
+    encoded = bounded_canonical_bytes(value, allow_native_float64=True)
     if encoded is not None:
         return hashlib.sha256(encoded).hexdigest()
     digest = hashlib.sha256()

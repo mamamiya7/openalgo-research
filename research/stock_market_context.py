@@ -20,6 +20,7 @@ from research.market_series import fingerprint, slice_series
 VERSION = "research-stock-market-context-v1"
 MARKET_WARMUP_SESSIONS = 160
 KEY = "automatic_stock_market_context"
+_RELATIVE_STOCK_GATE = relative._apply_with_validator
 
 
 class _BundleValidation:
@@ -232,12 +233,14 @@ class _PreparedViews:
     """One private detached owner; no raw projection is returned to callers.
 
     Projection records share this owner's validated dictionaries, never the
-    source dictionaries. No entry decision, feature result or account is cached.
+    source dictionaries. A bounded private feature cache reuses only identical
+    causal stock observations; every current account decision remains fresh.
     """
 
-    __slots__ = ("__stock", "__market", "__bundle_id")
+    __slots__ = ("__stock", "__market", "__bundle_id", "__classifier", "__features")
 
     def __init__(self, bundle):
+        self.__stock = self.__market = self.__classifier = self.__features = None
         # Enforce the serialized ceiling before allocating the detached copy.
         stock._json_size(bundle, stock.MAX_BUNDLE_BYTES)
         detached = deepcopy(bundle)
@@ -272,6 +275,7 @@ class _PreparedViews:
         relative.validate_bundle(projected)
         self.__stock = projected
         self.__market = {**market, "context": detached["market_context"]}
+        self.__features = stock._PreparedFeatureCache(projected)
 
     @property
     def bundle_id(self):
@@ -283,17 +287,50 @@ class _PreparedViews:
         return bundle
 
     def apply_stock(self, evidence, hypothesis, *, _gate=None):
-        return (_gate or relative._apply_with_validator)(
-            evidence, self.__stock, hypothesis, self.__validate_stock
-        )
+        if self.__features is None:
+            raise ValueError("The prepared stock-market context has been released")
+        self.__features.check()
+        gate = _gate or relative._apply_with_validator
+        native = gate is _RELATIVE_STOCK_GATE
+        if not native and _gate is not None:
+            from research.expanded_stock_market import _PREPARED_STOCK_GATE
+
+            native = gate is _PREPARED_STOCK_GATE
+        if native:
+            with stock._prepared_feature_scope(self.__features) as capability:
+                return gate(
+                    evidence,
+                    self.__stock,
+                    hypothesis,
+                    self.__validate_stock,
+                    _feature_cache=capability,
+                )
+        # An arbitrary callback sees the old mutable projection contract. It
+        # cannot leave an approval for later private observation reuse.
+        self.__features.disable()
+        return gate(evidence, self.__stock, hypothesis, self.__validate_stock)
 
     def apply_market(self, evidence, condition):
-        from research.condition_replay import apply
+        from research.condition_replay import _apply
+        from research.regimes import _PreparedClassifier
 
         if self.__market is None:
             raise ValueError("The prepared stock-market context has been released")
-        return apply(evidence, self.__market, condition)
+        if self.__classifier is None:
+            self.__classifier = _PreparedClassifier(self.__market["evidence"])
+        return _apply(evidence, self.__market, condition, classify_fn=self.__classify)
+
+    def __classify(self, evidence, decisions):
+        if self.__market is None or evidence is not self.__market["evidence"]:
+            raise ValueError("Prepared market gates require their exact privately owned projection")
+        return self.__classifier.classify(decisions)
 
     def close(self):
+        if self.__features is not None:
+            self.__features.close()
+            self.__features = None
+        if self.__classifier is not None:
+            self.__classifier.close()
+            self.__classifier = None
         self.__stock = None
         self.__market = None

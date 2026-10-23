@@ -4,11 +4,13 @@ The caller owns period admission. This module does not inspect performance,
 select settings, consume final-period outcomes or establish statistical edge.
 """
 
+import hashlib
 import math
 import re
 from datetime import date
 from numbers import Real
 
+from research.canonical_json import bounded_canonical_snapshot
 from research.execution_policy import CAPACITY_VERSION, normalize_policy
 from research.portfolio import fingerprint
 from research.portfolio_execution_features import (
@@ -119,15 +121,36 @@ def _assess(report, features, identity_check):
             "execution": execution,
             "orders": orders,
         }
-        _json_size(subset, MAX_BYTES)
+        captured = (
+            bounded_canonical_snapshot(subset, max_bytes=MAX_BYTES, allow_native_float64=True)
+            if type(report) is dict
+            else None
+        )
+        if captured is None:
+            # Preserve the original admission and error precedence for custom,
+            # non-JSON or conservatively oversized inputs.
+            _json_size(subset, MAX_BYTES)
+            subset_raw = None
+        else:
+            subset, subset_raw = captured
+            del captured
+            # Validate the same owned projection whose bytes establish the
+            # successful receipt. No caller can change it during reconciliation.
+            ledger, strategies, execution, orders = (
+                subset[key] for key in ("ledger", "strategies", "execution", "orders")
+            )
+
+        def policy_version():
+            return report.get("policy_version") if subset_raw is None else subset["policy_version"]
+
         if (
-            report.get("policy_version")
+            policy_version()
             not in ("vectorbt-joint-causal-bars-v5", "vectorbt-joint-causal-bars-v6")
             or execution.get("engine") != "vectorbt"
             or execution.get("adapter_version")
             != (
                 "vectorbt-portfolio-adapter-v6"
-                if report.get("policy_version") == "vectorbt-joint-causal-bars-v6"
+                if policy_version() == "vectorbt-joint-causal-bars-v6"
                 else "vectorbt-portfolio-adapter-v5"
             )
             or execution.get("shared_cash") is not True
@@ -145,7 +168,7 @@ def _assess(report, features, identity_check):
             policy = normalize_policy(strategy.get("execution_policy"))
             if policy != strategy.get("execution_policy") or policy["version"] != (
                 "research-execution-aware-v5"
-                if report.get("policy_version") == "vectorbt-joint-causal-bars-v6"
+                if policy_version() == "vectorbt-joint-causal-bars-v6"
                 else CAPACITY_VERSION
             ):
                 raise ValueError("constraint_strategy_policy_invalid")
@@ -473,7 +496,9 @@ def _assess(report, features, identity_check):
             if seen != set(daily):
                 raise ValueError("constraint_daily_capacity_receipt_missing")
         counts["capacity_days"] = len(daily)
-        report_id = fingerprint(subset)
+        report_id = (
+            fingerprint(subset) if subset_raw is None else hashlib.sha256(subset_raw).hexdigest()
+        )
         return result(
             "incomplete" if counts["unavailable_entries"] else "supported",
             ["constraint_observations_unavailable"] if counts["unavailable_entries"] else [],

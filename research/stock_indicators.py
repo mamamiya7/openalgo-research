@@ -6,10 +6,13 @@ the recorded finite window, never evaluated against future or filled prices.
 """
 
 from bisect import bisect_left
+from contextlib import contextmanager
+from contextvars import ContextVar
 from copy import deepcopy
 from datetime import datetime
 from importlib import metadata
 from math import isclose, isfinite
+from threading import get_ident
 
 from research import stock_features as legacy
 from research.market_series import fingerprint
@@ -18,10 +21,18 @@ FEATURE_VERSION = "research-stock-indicators-v1"
 ENTRY_VERSION = "research-stock-entry-conditions-v2"
 TESTED_SDK_VERSION = "2.0.5"
 SMOOTHING_OBSERVATIONS = 100
+_runtime_pin = ContextVar("research_owned_indicator_runtime", default=None)
 
 
 def runtime_version():
     """Fail closed before calculation when the recorded numerical API changed."""
+    pin = _runtime_pin.get()
+    if pin is not None and not pin["closed"] and pin["owner"] == get_ident():
+        return pin["version"]
+    return _installed_runtime_version()
+
+
+def _installed_runtime_version():
     try:
         installed = metadata.version("openalgo")
     except metadata.PackageNotFoundError as error:
@@ -29,6 +40,23 @@ def runtime_version():
     if installed != TESTED_SDK_VERSION:
         raise ValueError("Stock indicators require their recorded OpenAlgo SDK 2.0.5")
     return installed
+
+
+@contextmanager
+def _pinned_runtime():
+    """Verify one calculation's native SDK before entering its private scope.
+
+    Public calls and other threads still inspect their own installed runtime.
+    This capability is released on every exit, including copied contexts that
+    survive an interrupted calculation. No process-wide version cache exists.
+    """
+    pin = {"version": _installed_runtime_version(), "owner": get_ident(), "closed": False}
+    token = _runtime_pin.set(pin)
+    try:
+        yield
+    finally:
+        pin["closed"] = True
+        _runtime_pin.reset(token)
 
 
 def catalog():

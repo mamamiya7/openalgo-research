@@ -7,6 +7,7 @@ after the bound has been checked. No input or encoded output is retained.
 
 import json
 import math
+import sys
 
 MAX_NODES = 4096
 MAX_DEPTH = 64
@@ -25,7 +26,9 @@ def small_canonical_bytes(value):
     return _canonical_bytes(value, MAX_NODES, MAX_ASCII_BYTES)
 
 
-def bounded_canonical_bytes(value, *, max_bytes=None, json_types_only=False):
+def bounded_canonical_bytes(
+    value, *, max_bytes=None, json_types_only=False, allow_native_float64=False
+):
     """Optionally encode a detached medium tree within the caller's byte limit.
 
     Conservative pre-encoding bounds cap both the copy and C-encoder allocation.
@@ -33,13 +36,23 @@ def bounded_canonical_bytes(value, *, max_bytes=None, json_types_only=False):
     streaming path, which retains its early size/error precedence.
     ``json_types_only`` also excludes tuples when byte equality is used to
     recognize a previously validated JSON schema (a tuple encodes like a list).
+    ``allow_native_float64`` admits only the pinned runtime's exact immutable
+    NumPy float64 type, retaining its type in snapshots for strict validators.
     """
+    if type(allow_native_float64) is not bool:
+        return None
     if max_bytes is not None and (type(max_bytes) is not int or max_bytes < 0):
         return None
     maximum = (
         MAX_MEDIUM_ASCII_BYTES if max_bytes is None else min(max_bytes, MAX_MEDIUM_ASCII_BYTES)
     )
-    return _canonical_bytes(value, MAX_MEDIUM_NODES, maximum, allow_tuples=not json_types_only)
+    return _canonical_bytes(
+        value,
+        MAX_MEDIUM_NODES,
+        maximum,
+        allow_tuples=not json_types_only,
+        allow_native_float64=allow_native_float64,
+    )
 
 
 def bounded_default_json_bytes(value, *, max_bytes):
@@ -58,31 +71,55 @@ def bounded_default_json_bytes(value, *, max_bytes):
     )
 
 
-def bounded_canonical_snapshot(value, *, max_bytes=None):
+def bounded_canonical_snapshot(value, *, max_bytes=None, allow_native_float64=False):
     """Return an owned plain-JSON tree and its exact bytes, or ``None``.
 
     Checkpoint publishers can hash this same detached tree and then hand it to
     their callback without making another full copy. Bounds/fallback are the
-    same as medium encoding. Tuples and custom values remain the caller's
+    same as medium encoding, including the explicit native float64 opt-in.
+    Tuples and custom values remain the caller's
     responsibility, preserving their original deepcopy and encoding semantics.
     No input, snapshot or encoded bytes survive this call except its result.
     """
+    if type(allow_native_float64) is not bool:
+        return None
     if max_bytes is not None and (type(max_bytes) is not int or max_bytes < 0):
         return None
     maximum = (
         MAX_MEDIUM_ASCII_BYTES if max_bytes is None else min(max_bytes, MAX_MEDIUM_ASCII_BYTES)
     )
     captured = []
-    raw = _canonical_bytes(value, MAX_MEDIUM_NODES, maximum, allow_tuples=False, _capture=captured)
+    raw = _canonical_bytes(
+        value,
+        MAX_MEDIUM_NODES,
+        maximum,
+        allow_tuples=False,
+        _capture=captured,
+        allow_native_float64=allow_native_float64,
+    )
     return (captured[0], raw) if raw is not None else None
 
 
 def _canonical_bytes(
-    value, maximum_nodes, maximum_bytes, *, allow_tuples=True, _capture=None, _default_format=False
+    value,
+    maximum_nodes,
+    maximum_bytes,
+    *,
+    allow_tuples=True,
+    _capture=None,
+    _default_format=False,
+    allow_native_float64=False,
 ):
     remaining_nodes = maximum_nodes
     remaining_bytes = maximum_bytes
     active = set()
+    # No eager NumPy import. This exact immutable scalar is already a float
+    # subclass in the pinned runtime and is encoded by JSON as its native value.
+    # Retain its type in the detached tree so downstream strict schemas still
+    # see the original value; arbitrary float subclasses remain ineligible.
+    native_float64 = (
+        getattr(sys.modules.get("numpy"), "float64", None) if allow_native_float64 else None
+    )
 
     def copy(item, depth):
         nonlocal remaining_nodes, remaining_bytes
@@ -99,7 +136,7 @@ def _canonical_bytes(
             allowance = (6 if item.isascii() else 12) * len(item) + 2
         elif kind is int:
             allowance = item.bit_length() // 3 + 2
-        elif kind is float:
+        elif kind is float or (kind is native_float64 and isinstance(item, float)):
             if not math.isfinite(item):
                 raise ValueError
             allowance = 32
@@ -108,7 +145,9 @@ def _canonical_bytes(
             if identity in active:
                 raise ValueError
             # Punctuation and a lower bound on child nodes, before iteration.
-            punctuation = (4 if kind is dict else 2) if _default_format else (2 if kind is dict else 1)
+            punctuation = (
+                (4 if kind is dict else 2) if _default_format else (2 if kind is dict else 1)
+            )
             allowance = 2 + len(item) * punctuation
             if allowance > remaining_bytes or len(item) > remaining_nodes:
                 raise ValueError
@@ -125,11 +164,7 @@ def _canonical_bytes(
                         # copying each key in every checkpoint and fingerprint.
                         remaining_nodes -= 1
                         remaining_bytes -= (6 if key.isascii() else 12) * len(key) + 2
-                        if (
-                            remaining_nodes < 0
-                            or depth + 1 > MAX_DEPTH
-                            or remaining_bytes < 0
-                        ):
+                        if remaining_nodes < 0 or depth + 1 > MAX_DEPTH or remaining_bytes < 0:
                             raise ValueError
                         result[key] = copy(child, depth + 1)
                     return result

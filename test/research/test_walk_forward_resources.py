@@ -40,6 +40,7 @@ def test_prepared_owner_closes_on_success_cancellation_and_failure_100_times(
     monkeypatch, version, gate
 ):
     owners = []
+    execution_owners = []
 
     class Owner:
         def __enter__(self):
@@ -58,15 +59,45 @@ def test_prepared_owner_closes_on_success_cancellation_and_failure_100_times(
     # calculation double below. Exercise both legacy and current owner branches.
     evidence = {"portfolio": {"automatic_research": {"version": version}}}
     if version == worker.ALLOCATION_VERSION:
+        from research import execution_features
         from research.portfolio import fingerprint
 
         receipt = {"version": FEATURE_VERSION}
         evidence["portfolio_execution_features"] = {**receipt, "id": fingerprint(receipt)}
+        execution_receipt = {
+            "version": execution_features.VERSION,
+            "recipe": execution_features.recipe(),
+            "source": {
+                "context_id": "a" * 64, "timing_id": "b" * 64,
+                "interval": "D", "schedule_days": {"2026-01-05": []},
+            },
+            "features": {}, "opportunities": {},
+            "counts": {"opportunities": 0, "common_excluded": 0, "derived": 0, "available": 0},
+        }
+        evidence["execution_features"] = {
+            **execution_receipt, "id": fingerprint(execution_receipt),
+        }
+
+        class ExecutionOwner(execution_features._PreparedExecutionFeatures):
+            def __init__(self, receipt):
+                super().__init__(receipt)
+                self.closed = False
+                execution_owners.append(self)
+
+            def close(self):
+                assert not self.closed
+                super().close()
+                self.closed = True
+
+        monkeypatch.setattr(worker, "_PreparedExecutionFeatures", ExecutionOwner)
     outcome = None
 
     def calculate(*_args, **_kwargs):
         assert _kwargs["version"] == version
         assert _kwargs["prepared_gate"] is owners[-1] and not owners[-1].closed
+        if version == worker.ALLOCATION_VERSION:
+            assert _kwargs["prepared_execution"] is execution_owners[-1]
+            assert not execution_owners[-1].closed
         if outcome:
             raise outcome
         return {"finished": True}
@@ -86,7 +117,13 @@ def test_prepared_owner_closes_on_success_cancellation_and_failure_100_times(
                 with pytest.raises(type(outcome)):
                     worker.run(evidence, **arguments)
             assert owners[-1].closed
+            if version == worker.ALLOCATION_VERSION:
+                assert execution_owners[-1].closed
+                with pytest.raises(ValueError, match="released"):
+                    execution_owners[-1].attach(evidence)
     assert len(owners) == 300 and all(owner.closed for owner in owners)
+    if version == worker.ALLOCATION_VERSION:
+        assert len(execution_owners) == 300 and all(owner.closed for owner in execution_owners)
 
 
 def test_already_cancelled_job_does_not_copy_or_validate_history(monkeypatch):

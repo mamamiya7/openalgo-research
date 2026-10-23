@@ -12,6 +12,7 @@ from io import StringIO
 from math import isfinite
 from re import fullmatch
 
+from research.canonical_json import bounded_canonical_bytes
 from research.portfolio import fingerprint
 from research.stock_features import _json_size
 
@@ -27,6 +28,28 @@ def _seal(value):
     return {**value, "id": fingerprint(value)}
 
 
+def _bounded_sealed_identity(value, maximum, *, _capture=None):
+    """Optional exact plain-JSON seal check; ``None`` retains the old path."""
+    if (
+        type(maximum) is not int
+        or type(value) is not dict
+        or type(value.get("id")) is not str
+        or not fullmatch(r"[a-f0-9]{64}", value["id"])
+        or any(type(key) is not str for key in value)
+    ):
+        return None
+    payload = {key: item for key, item in value.items() if key != "id"}
+    overhead = 71 + bool(payload)
+    raw = bounded_canonical_bytes(
+        payload, max_bytes=maximum - overhead, json_types_only=True, allow_native_float64=True
+    )
+    if raw is None:
+        return None
+    if _capture is not None:
+        _capture.write(raw.decode("ascii"))
+    return hashlib.sha256(raw).hexdigest() == value["id"]
+
+
 def _sealed_identity(value, maximum, *, _capture=None):
     """Check a sealed receipt's exact byte bound and digest in one traversal.
 
@@ -35,6 +58,9 @@ def _sealed_identity(value, maximum, *, _capture=None):
     calls. Malformed/custom inputs and failures keep the original size-check
     path, including its error precedence and streaming early byte bound.
     """
+    intact = _bounded_sealed_identity(value, maximum, _capture=_capture)
+    if intact is not None:
+        return intact
     if (
         type(value) is not dict
         or type(value.get("id")) is not str
@@ -69,11 +95,17 @@ def _sealed_identity(value, maximum, *, _capture=None):
 
 
 def _base(value, version, symbol, entry_session, decision_at):
-    _json_size(value, 64 * 1024)
+    intact = _bounded_sealed_identity(value, 64 * 1024)
+    if intact is None:
+        _json_size(value, 64 * 1024)
     if (
         not isinstance(value, dict)
         or value.get("version") != version
-        or value.get("id") != fingerprint({k: v for k, v in value.items() if k != "id"})
+        or (
+            not intact
+            if intact is not None
+            else value.get("id") != fingerprint({k: v for k, v in value.items() if k != "id"})
+        )
         or value.get("symbol") != symbol
         or value.get("entry_session") != entry_session
         or not isinstance(value.get("source_id"), str)

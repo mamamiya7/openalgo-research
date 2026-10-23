@@ -33,6 +33,7 @@ from research.automatic_timing import probes
 from research.automatic_trailing import apply_choices as trailing_choices
 from research.automatic_trailing import axes as trailing_axes
 from research.canonical_json import bounded_canonical_snapshot
+from research.checkpoint_bytes import MAX_OWNED_BYTES, _OwnedCanonicalJSON, _OwnedCheckpointSink
 from research.connectors.optuna_portfolio import (
     MAX_CHECKPOINT_BYTES,
     TESTED_OPTUNA_VERSION,
@@ -445,8 +446,16 @@ def run(
         ) as prepared_portfolio,
         (
             _PreparedExecutionFeatures(evidence.get("execution_features"))
-            if version in (EXECUTION_VERSION, PRIORITY_VERSION, TURNOVER_VERSION,
-                           CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION, ALLOCATION_VERSION)
+            if version
+            in (
+                EXECUTION_VERSION,
+                PRIORITY_VERSION,
+                TURNOVER_VERSION,
+                CAPACITY_VERSION,
+                SENSITIVITY_VERSION,
+                SEED_VERSION,
+                ALLOCATION_VERSION,
+            )
             else nullcontext()
         ) as prepared_execution,
     ):
@@ -645,7 +654,9 @@ def _run(
             if completed_proposals % 16:
                 return
         state.pop("checkpoint_id", None)
-        captured = bounded_canonical_snapshot(state, max_bytes=MAX_CHECKPOINT_BYTES)
+        captured = bounded_canonical_snapshot(
+            state, max_bytes=MAX_CHECKPOINT_BYTES, allow_native_float64=True
+        )
         if captured is None:
             state["checkpoint_id"] = _fingerprint(state, max_bytes=MAX_CHECKPOINT_BYTES)
             snapshot = deepcopy(state)
@@ -653,9 +664,28 @@ def _run(
             snapshot, encoded = captured
             del captured
             state["checkpoint_id"] = hashlib.sha256(encoded).hexdigest()
+            if type(checkpoint) is _OwnedCheckpointSink and len(encoded) <= MAX_OWNED_BYTES:
+                owned = _OwnedCanonicalJSON(snapshot, encoded)
+                del encoded
+                try:
+                    complete = owned.with_checkpoint_id(state["checkpoint_id"])
+                    if complete is not None:
+                        checkpoint.publish_owned(
+                            complete,
+                            {
+                                "completed": state["simulations"],
+                                "total": max_simulations,
+                                "stage": "optimization",
+                            },
+                        )
+                        return
+                finally:
+                    owned.close()
+            else:
+                del encoded
             # The callback receives the same detached tree that was hashed.
-            # Release the bytes before the artifact encoder allocates its copy.
-            del encoded
+            # Generic callbacks retain their mutable-tree contract and receive
+            # no canonical byte capability that could become stale on mutation.
             snapshot["checkpoint_id"] = state["checkpoint_id"]
         checkpoint(
             snapshot,
@@ -823,7 +853,12 @@ def _run(
             "gate_id": receipt["id"],
             "counts": deepcopy(receipt["counts"]),
         }
-        report["automatic_recipe"] = deepcopy(recipe)
+        # Discarded native trial reports retain their scientific account fields;
+        # the full recipe already belongs to the frozen run and is not retained
+        # in development shards or evaluation rows. Public callbacks keep their
+        # complete report contract, as do every selected and final report.
+        if report_analysis or type(checkpoint) is not _OwnedCheckpointSink:
+            report["automatic_recipe"] = deepcopy(recipe)
         if hypothesis["id"] != "none":
             enrich(report, current)
         if version in (CAPACITY_VERSION, SENSITIVITY_VERSION, SEED_VERSION, ALLOCATION_VERSION):
@@ -1155,7 +1190,9 @@ def _run(
 
             control_settings = original_sizing(winner["strategies"], recipe["execution_research"])
             control_account = measured(
-                control_settings, winner["hypothesis"], period,
+                control_settings,
+                winner["hypothesis"],
+                period,
                 defer_checkpoint=reserve_attempt is not None,
             )
             receipt = {
@@ -1190,18 +1227,21 @@ def _run(
                 }
             )
         period = fold["test_period"]
-        reference = measured(
-            baseline, none, period, defer_checkpoint=reserve_attempt is not None
-        )
+        reference = measured(baseline, none, period, defer_checkpoint=reserve_attempt is not None)
         tested = measured(
-            winner["strategies"], winner["hypothesis"], period,
+            winner["strategies"],
+            winner["hypothesis"],
+            period,
             defer_checkpoint=reserve_attempt is not None,
         )
         stress_base = measured(
             baseline, none, period, True, defer_checkpoint=reserve_attempt is not None
         )
         stressed = measured(
-            winner["strategies"], winner["hypothesis"], period, True,
+            winner["strategies"],
+            winner["hypothesis"],
+            period,
+            True,
             defer_checkpoint=reserve_attempt is not None,
         )
         state["folds"].append(

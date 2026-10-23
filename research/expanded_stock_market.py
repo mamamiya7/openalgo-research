@@ -5,18 +5,23 @@ The v8 catalogue remains an unchanged prefix. Four explicit stock choices add
 download, price buffer or learned transform is introduced.
 """
 
+from contextlib import ExitStack
+from contextvars import ContextVar
 from copy import deepcopy
+from threading import get_ident
 
 from research import joint_stock_market as joint
 from research import stock_features as finite
 from research import stock_indicators as indicators
 from research import stock_relative_strength as stock
+from research.canonical_json import bounded_canonical_snapshot
 from research.portfolio import fingerprint
 
 FEATURE_VERSION = "research-expanded-stock-market-features-v1"
 ENTRY_VERSION = "research-joint-entry-conditions-v2"
 MARKETS = joint.MARKETS
 CAUSAL_RECEIPT_VERSION = "research-expanded-causal-membership-v1"
+_prepared_catalogue = ContextVar("research_expanded_owned_catalogue", default=None)
 _EXIT_ONLY = (
     "cost_bps",
     "hold_minutes",
@@ -55,12 +60,23 @@ def _joint_rule(rule, market):
 
 
 def catalog():
+    owner = _prepared_catalogue.get()
+    if owner is not None and owner._active():
+        return owner._catalogue_copy()
     return joint.catalog() + [
         _joint_rule(rule, market) for market in MARKETS for rule in additional_stock_hypotheses()
     ]
 
 
 def normalize_hypothesis(value):
+    owner = _prepared_catalogue.get()
+    if (
+        owner is not None
+        and owner._active()
+        and type(value) is dict
+        and type(value.get("id")) is str
+    ):
+        return owner._normalize(value)
     if isinstance(value, dict):
         for expected in catalog():
             if value.get("id") == expected["id"] and fingerprint(value) == fingerprint(expected):
@@ -69,6 +85,9 @@ def normalize_hypothesis(value):
 
 
 def recipe():
+    owner = _prepared_catalogue.get()
+    if owner is not None and owner._active():
+        return owner._recipe_copy()
     return {
         **joint.recipe(),
         "version": FEATURE_VERSION,
@@ -103,9 +122,11 @@ def markers(settings, hypothesis, bundle_id=None):
     return rows
 
 
-def _apply_stock(evidence, bundle, hypothesis, validator):
+def _apply_stock(evidence, bundle, hypothesis, validator, *, _feature_cache=None):
     if hypothesis["id"] not in {row["id"] for row in additional_stock_hypotheses()}:
-        return stock._apply_with_validator(evidence, bundle, hypothesis, validator)
+        return stock._apply_with_validator(
+            evidence, bundle, hypothesis, validator, _feature_cache=_feature_cache
+        )
     # The public joint normalizer already checks the exact registered stock
     # descriptor. Retain this check at the private seam as well.
     selected = next(
@@ -128,7 +149,11 @@ def _apply_stock(evidence, bundle, hypothesis, validator):
         calculation_version=FEATURE_VERSION,
         feature_recipe=recipe(),
         bundle_validator=validator,
+        _feature_cache=_feature_cache,
     )
+
+
+_PREPARED_STOCK_GATE = _apply_stock
 
 
 def _combine(evidence, bundle_id, selected, feature_recipe, stock_receipt, market_receipts):
@@ -221,7 +246,78 @@ def apply(evidence, bundle, hypothesis):
 class PreparedJointContext(joint.PreparedJointContext):
     """Reuse the same one-owner detached projection and explicit close lifetime."""
 
-    __slots__ = ()
+    __slots__ = ("__catalogue", "__recipe", "__expected", "__thread", "__scope")
+
+    def __init__(self, bundle):
+        self.__catalogue = self.__recipe = self.__expected = self.__scope = None
+        self.__thread = get_ident()
+        super().__init__(bundle)
+        try:
+            captured = bounded_canonical_snapshot(
+                {"catalogue": catalog(), "recipe": recipe()},
+                max_bytes=1024 * 1024,
+            )
+            if captured is None:
+                raise ValueError("The fixed research catalogue exceeds its owned byte allowance")
+            owned, raw = captured
+            del captured, raw
+            rows = owned["catalogue"]
+            if len(rows) > 256 or len({row["id"] for row in rows}) != len(rows):
+                raise ValueError("The fixed research catalogue changed its bounded identities")
+            self.__catalogue, self.__recipe = rows, owned["recipe"]
+            self.__expected = {row["id"]: (row, fingerprint(row)) for row in rows}
+        except BaseException:
+            super().close()
+            raise
+
+    def _active(self):
+        return (
+            self.__scope is not None
+            and self.__expected is not None
+            and get_ident() == self.__thread
+        )
+
+    def _catalogue_copy(self):
+        return deepcopy(self.__catalogue)
+
+    def _recipe_copy(self):
+        return deepcopy(self.__recipe)
+
+    def _normalize(self, value):
+        if isinstance(value, dict):
+            expected = (
+                self.__expected.get(value.get("id")) if isinstance(value.get("id"), str) else None
+            )
+            if expected is not None and fingerprint(value) == expected[1]:
+                return deepcopy(expected[0])
+        raise ValueError("Choose a supported expanded stock and market condition")
+
+    def __enter__(self):
+        super().__enter__()
+        if self.__scope is not None or get_ident() != self.__thread:
+            raise ValueError("The prepared catalogue cannot leave or overlap its owning scope")
+        scope = ExitStack()
+        try:
+            scope.enter_context(indicators._pinned_runtime())
+            token = _prepared_catalogue.set(self)
+            scope.callback(_prepared_catalogue.reset, token)
+            self.__scope = scope
+        except BaseException:
+            scope.close()
+            self.close()
+            raise
+        return self
+
+    def close(self):
+        if self.__scope is not None and get_ident() != self.__thread:
+            raise ValueError("The prepared catalogue cannot close outside its owning thread")
+        try:
+            if self.__scope is not None:
+                scope, self.__scope = self.__scope, None
+                scope.close()
+        finally:
+            self.__catalogue = self.__recipe = self.__expected = None
+            super().close()
 
     def apply(self, evidence, bundle, hypothesis):
         return self._apply_with(

@@ -269,7 +269,7 @@ def apply(evidence, bundle, hypothesis):
     return _apply_with_validator(evidence, bundle, hypothesis, validate_bundle)
 
 
-def _apply_with_validator(evidence, bundle, hypothesis, validator):
+def _apply_with_validator(evidence, bundle, hypothesis, validator, *, _feature_cache=None):
     """Private seam for a detached context's exact-identity validation capability.
 
     Public callers always use ``apply`` and full validation. The prepared joint
@@ -290,4 +290,5 @@ def _apply_with_validator(evidence, bundle, hypothesis, validator):
         calculation_version=FEATURE_VERSION,
         feature_recipe=feature_recipe,
         bundle_validator=validator,
+        _feature_cache=_feature_cache,
     )

@@ -755,6 +755,13 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
         flexible=True,
         row_wise=True,
         use_numba=False,
+        # The simulator and our callbacks run in Python. Use the exact native
+        # no-op bodies too, avoiding compilation and array/context boxing for
+        # empty hooks on every row. No simulation or financial kernel changes.
+        pre_sim_func_nb=getattr(nb.no_pre_func_nb, "py_func", nb.no_pre_func_nb),
+        post_sim_func_nb=getattr(nb.no_post_func_nb, "py_func", nb.no_post_func_nb),
+        pre_row_func_nb=getattr(nb.no_pre_func_nb, "py_func", nb.no_pre_func_nb),
+        post_row_func_nb=getattr(nb.no_post_func_nb, "py_func", nb.no_post_func_nb),
         update_value=True,
         pre_segment_func_nb=before_bar,
         post_order_func_nb=after_order,

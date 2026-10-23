@@ -6,12 +6,16 @@ explicit entry exclusions. Every feature window ends before its entry session.
 """
 
 import json
+import sys
 from bisect import bisect_left
+from collections import OrderedDict
+from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime
 from math import isclose, isfinite
+from threading import get_ident
 
-from research.canonical_json import bounded_canonical_bytes, small_canonical_bytes
+from research.canonical_json import bounded_canonical_bytes, bounded_canonical_snapshot
 from research.market_series import IST, _close_at, fingerprint, plan_series, validate_series
 
 VERSION = "research-stock-features-v1"
@@ -22,6 +26,135 @@ MAX_FEATURE_BARS = 200_000
 MAX_SIGNALS = 25_000
 MAX_BUNDLE_BYTES = 64 * 1024**2
 MAX_RECEIPT_BYTES = 32 * 1024**2
+MAX_PREPARED_FEATURES = 512
+MAX_PREPARED_FEATURE_BYTES = 4 * 1024**2
+
+
+def _heap_bytes(value):
+    """Conservatively charge every object in an admitted small plain tree."""
+    pending, seen, total = [value], set(), 0
+    while pending:
+        item = pending.pop()
+        if id(item) in seen:
+            continue
+        seen.add(id(item))
+        total += sys.getsizeof(item)
+        if type(item) is dict:
+            pending.extend(item.keys())
+            pending.extend(item.values())
+        elif type(item) in (tuple, list):
+            pending.extend(item)
+    return total
+
+
+class _PreparedFeatureCache:
+    """Bounded results for one exact detached and validated stock projection."""
+
+    __slots__ = ("__bundle", "__entries", "__bytes", "__owner", "__providers", "__enabled")
+
+    def __init__(self, bundle):
+        from research import stock_indicators, stock_relative_strength
+
+        self.__bundle, self.__entries, self.__bytes = bundle, OrderedDict(), 0
+        self.__owner = get_ident()
+        self.__enabled = True
+        self.__providers = (
+            _feature,
+            stock_relative_strength._feature,
+            stock_indicators._feature,
+            stock_indicators._window,
+        )
+
+    def check(self):
+        if self.__bundle is None or self.__owner != get_ident():
+            raise ValueError("Prepared stock features require their synchronous live owner")
+
+    def resolve(self, bundle, symbol, record, decision, hypothesis, feature_fn, version):
+        from research import stock_indicators, stock_relative_strength
+
+        self.check()
+        providers = (
+            _feature,
+            stock_relative_strength._feature,
+            stock_indicators._feature,
+            stock_indicators._window,
+        )
+        if (
+            not self.__enabled
+            or bundle is not self.__bundle
+            or record is not self.__bundle["series"].get(symbol)
+            or providers != self.__providers
+            or type(version) is not str
+            or len(version) > 256
+        ):
+            return feature_fn(record, decision, hypothesis)
+        signature = bounded_canonical_bytes(
+            hypothesis, max_bytes=4096, json_types_only=True, allow_native_float64=True
+        )
+        if signature is None:
+            return feature_fn(record, decision, hypothesis)
+        key = (symbol, decision.isoformat(), signature, version)
+        previous = self.__entries.get(key)
+        if previous is not None:
+            self.__entries.move_to_end(key)
+            copied = deepcopy(previous[0])
+            return copied["feature"], copied["reason"]
+        feature, reason = feature_fn(record, decision, hypothesis)
+        captured = bounded_canonical_snapshot(
+            {"feature": feature, "reason": reason},
+            max_bytes=64 * 1024,
+            allow_native_float64=True,
+        )
+        if captured is None:
+            return feature, reason
+        result, raw = captured
+        del captured, raw
+        charge = _heap_bytes(key) + _heap_bytes(result) + 256
+        if charge <= MAX_PREPARED_FEATURE_BYTES:
+            while self.__entries and (
+                len(self.__entries) >= MAX_PREPARED_FEATURES
+                or self.__bytes + charge > MAX_PREPARED_FEATURE_BYTES
+            ):
+                _, (_, removed) = self.__entries.popitem(last=False)
+                self.__bytes -= removed
+            if MAX_PREPARED_FEATURES > 0:
+                self.__entries[key] = result, charge
+                self.__bytes += charge
+        copied = deepcopy(result)
+        return copied["feature"], copied["reason"]
+
+    def clear(self):
+        self.__entries.clear()
+        self.__bytes = 0
+
+    def disable(self):
+        self.clear()
+        self.__enabled = False
+
+    def close(self):
+        self.clear()
+        self.__bundle = self.__providers = None
+
+
+class _PreparedFeatureCall:
+    __slots__ = ("cache", "owner", "closed")
+
+    def __init__(self, cache):
+        self.cache, self.owner, self.closed = cache, get_ident(), False
+
+
+@contextmanager
+def _prepared_feature_scope(cache):
+    cache.check()
+    call = _PreparedFeatureCall(cache)
+    try:
+        yield call
+    except BaseException:
+        cache.clear()
+        raise
+    finally:
+        call.closed = True
+        call.cache = None
 
 
 def catalog():
@@ -90,9 +223,7 @@ def recipe():
 
 
 def _json_size(value, maximum):
-    encoded = small_canonical_bytes(value)
-    if encoded is None:
-        encoded = bounded_canonical_bytes(value, max_bytes=maximum)
+    encoded = bounded_canonical_bytes(value, max_bytes=maximum, allow_native_float64=True)
     if encoded is not None:
         if len(encoded) > maximum:
             raise ValueError("Stock-feature evidence exceeds its bounded byte allowance")
@@ -260,6 +391,7 @@ def _apply(
     calculation_version=VERSION,
     feature_recipe=None,
     bundle_validator=None,
+    _feature_cache=None,
 ):
     """Shared native schedule and receipt contract for versioned stock features."""
     from research.connectors.vectorbt_portfolio import _schedule
@@ -314,7 +446,23 @@ def _apply(
                 else:
                     key = (original["symbol"], decision.isoformat())
                     if key not in cached:
-                        cached[key] = feature_fn(record, decision, selected)
+                        call = _feature_cache
+                        if type(call) is _PreparedFeatureCall:
+                            if call.closed or call.owner != get_ident():
+                                raise ValueError(
+                                    "Prepared stock feature call has expired or changed owner"
+                                )
+                            cached[key] = call.cache.resolve(
+                                bundle,
+                                original["symbol"],
+                                record,
+                                decision,
+                                selected,
+                                feature_fn,
+                                calculation_version,
+                            )
+                        else:
+                            cached[key] = feature_fn(record, decision, selected)
                     feature, reason = cached[key]
                 if feature is None:
                     state = "unknown"

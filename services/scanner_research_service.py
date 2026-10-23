@@ -34,7 +34,9 @@ MAX_MANAGED_ENTRIES = 100000
 CHUNK_FORMAT = "research-chunks-v1"
 ACTIVE = ("queued", "running", "pausing", "cancelling")
 _artifact_publication = ContextVar("research_artifact_publication", default=None)
-_compact_checkpoint_publication = ContextVar("research_compact_checkpoint_publication", default=None)
+_compact_checkpoint_publication = ContextVar(
+    "research_compact_checkpoint_publication", default=None
+)
 _SCANDIR = os.scandir
 
 
@@ -270,8 +272,19 @@ def save_artifact(store, value):
         return _save_artifact(store, value)
 
 
-def _save_artifact(store, value):
-    raw = encoded(value)
+def _save_owned_artifact(store, owned):
+    """Consume native owned root bytes; all artifact admission remains shared."""
+    from research.checkpoint_bytes import _OwnedCanonicalJSON
+
+    if type(owned) is not _OwnedCanonicalJSON:
+        raise ValueError("Owned artifact publication requires a native checkpoint payload")
+    value, raw = owned.take()
+    with artifact_publication(store):
+        return _save_artifact(store, value, _owned_raw=raw)
+
+
+def _save_artifact(store, value, *, _owned_raw=None):
+    raw = encoded(value) if _owned_raw is None else _owned_raw
     if len(raw) > MAX_ARTIFACT_BYTES:
         raise ValueError("Evidence exceeds the decoded research size limit")
     digest = hashlib.sha256(raw).hexdigest()

@@ -14,15 +14,15 @@ The aim is to connect broker data, backtesting and optimization in one open-sour
 workflow. Start directly from a Chartink scanner with the Chrome extension, upload
 a CSV export, or reuse saved signals.
 
-**Current preview: `0.1.0-preview.21` · OpenAlgo 2.0.2.9 · Windows and Linux**
+**Current preview: `0.1.0-preview.22` · OpenAlgo 2.0.2.9 · Windows and Linux**
 
-[**Download OpenAlgo Research**](https://github.com/mamamiya7/openalgo-research/releases/download/research-v0.1.0-preview.21/openalgo-research-0.1.0-preview.21.zip)
+[**Download OpenAlgo Research**](https://github.com/mamamiya7/openalgo-research/releases/download/research-v0.1.0-preview.22/openalgo-research-0.1.0-preview.22.zip)
 · [Install and start](docs/research/RUNTIME.md)
-· [Release notes](docs/research/releases/0.1.0-preview.21.md)
+· [Release notes](docs/research/releases/0.1.0-preview.22.md)
 · [Architecture](docs/research/SYSTEM_MAP.md)
 · [Released source](https://github.com/mamamiya7/openalgo-research/tree/main)
 
-## What’s in preview.21
+## What’s in preview.22
 
 Upload a signal CSV or send a Chartink history, review your capital and trading
 rules, then choose **Backtest** or **Optimize → Automatic research**. The app
@@ -30,11 +30,12 @@ selects the required prices, applicable research methods and validation. Existin
 Historify prices are reused; only missing required coverage comes from your broker.
 Date-only daily strategies stay on daily candles.
 
-- **Faster research bookkeeping.** Reserve every account durably, publish fully
-  validated histories in bounded groups, and reuse a private validated execution
-  receipt. Strict disk admission, live cancellation, pause and restart checks
-  remain intact. A matched prepared-input run took 9m12s →1m31s with identical
-  scientific evidence; the one-minute target is not yet met.
+- **Less hashing and report overhead.** Reuse bounded, privately owned canonical
+  bytes and prepared stock/market views; avoid unnecessary report dispatch
+  compilation. The installed Windows app completed the full cached-data research
+  job in **45.089 seconds**, retaining all 272 applicable proposals, 296 accounts
+  and every validation. The configured maximum remains 408 proposals/512 accounts.
+  This measured six-stock case is not a universal fresh-download timing promise.
 - **Current native OpenAlgo.** Platform 2.0.2.9 with official updates through
   22 October, charts 2.6.7, custom intervals and dependency security fixes.
   Saved research keeps its frozen prices, markers and replay.
@@ -83,8 +84,8 @@ qualified volume provenance; other brokers can use supported methods without
 that assumption. Optional Nautilus fixed/custom calculations have their own
 supported contract and Linux/WSL runtime.
 
-[Release notes](docs/research/releases/0.1.0-preview.21.md) ·
-[Patch qualification and limits](docs/research/releases/0.1.0-preview.21.md#qualification) ·
+[Release notes](docs/research/releases/0.1.0-preview.22.md) ·
+[Patch qualification and limits](docs/research/releases/0.1.0-preview.22.md#qualification) ·
 [Future roadmap](docs/research/DELIVERY_PLAN.md).
 Preview.14 combines completed fit-account/proposal saves and speeds up bounded
 evidence serialisation, alongside the preceding cache and calculation corrections.
@@ -246,7 +247,7 @@ to preserve their accounts, broker settings and saved research.
 To develop from a Git checkout instead, first run `npm ci` and `npm run build` in
 `frontend`, then run the setup script from the repository root. GitHub's automatic
 **Source code** archives do not contain the built interface; use the named
-`openalgo-research-0.1.0-preview.21.zip` asset for the easy installation.
+`openalgo-research-0.1.0-preview.22.zip` asset for the easy installation.
 
 Use the [Chartink extension](extensions/chartink/README.md), or open **Tools →
 Backtest & Optimize** to upload a CSV or reuse saved signals. Review the settings

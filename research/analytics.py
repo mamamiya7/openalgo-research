@@ -415,6 +415,9 @@ def _vectorbt(out, report, returns, portfolio):
     import vectorbt as vbt
 
     _validate_vectorbt_runtime()
+    from research.native_stats_cache import CachedDrawdowns, CachedTrades, portfolio_for_stats
+
+    portfolio = portfolio_for_stats(portfolio)
     source = "VectorBT 0.28.5"
     ret = returns.vbt.returns(
         freq="1D", year_freq="252D", defaults={"risk_free": 0.0, "required_return": 0.0, "ddof": 1}
@@ -490,7 +493,7 @@ def _vectorbt(out, report, returns, portfolio):
             arr["col"] = 0
             arr["id"] = np.arange(len(arr))
         wrapper = vbt.ArrayWrapper.from_obj(values, freq="1min" if interval == "1m" else "1D")
-        trades = vbt.Trades(wrapper, arr, close=values)
+        trades = CachedTrades(wrapper, arr, close=values)
     _vbt_stats(
         out,
         trades,
@@ -501,7 +504,9 @@ def _vectorbt(out, report, returns, portfolio):
         unit=unit,
     )
     dd = (
-        vbt.Drawdowns.from_ts(values, wrapper_kwargs={"freq": "1min" if interval == "1m" else "1D"})
+        CachedDrawdowns.from_ts(
+            values, wrapper_kwargs={"freq": "1min" if interval == "1m" else "1D"}
+        )
         if len(values)
         else None
     )
