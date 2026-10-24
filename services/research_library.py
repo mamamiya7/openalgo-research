@@ -343,6 +343,7 @@ def portfolio_payload(draft):
                 "version": automatic["version"],
                 "history_policy": "available_history",
                 "design_policy": "automatic_design_v1",
+                "decision_policy": "automatic_decision_v1",
             }
         portfolio["automatic_research"] = automatic
         for strategy in portfolio["strategies"]:

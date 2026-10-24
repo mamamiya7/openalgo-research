@@ -432,6 +432,54 @@ def test_saved_version_restore_preserves_displaced_draft_and_references(app, cli
     assert client.get(path + f"/versions/{original['version']['id']}").json["name"] == "Original"
 
 
+@pytest.mark.parametrize("saved_policy", ["current", "available_history", "strict"])
+def test_saved_setup_use_setup_launch_retains_current_automatic_decision(app, client, saved_policy):
+    automatic = {"version": "automatic-hypotheses-v16"}
+    if saved_policy != "strict":
+        automatic.update(history_policy="available_history", design_policy="automatic_design_v1")
+    if saved_policy == "current":
+        automatic["decision_policy"] = "automatic_decision_v1"
+    expected = {
+        "version": "automatic-hypotheses-v16",
+        "history_policy": "available_history",
+        "design_policy": "automatic_design_v1",
+        "decision_policy": "automatic_decision_v1",
+    }
+    draft = draft_for(client)
+    draft["optimizing"] = True
+    draft["portfolio"]["automatic_research"] = copy.deepcopy(automatic)
+    experiment = create(client, draft)
+    path = f"{BASE}/experiments/{experiment['id']}"
+
+    # Exercise the same persisted HTTP path as Save setup -> Use setup -> Optimize.
+    saved = client.post(path + "/versions", json={"revision": 1, "name": "Before run"})
+    assert saved.status_code == 201, saved.json
+    version_id = saved.json["version"]["id"]
+    frozen_before = client.get(path + f"/versions/{version_id}").json
+    assert frozen_before["draft"]["portfolio"]["automatic_research"] == automatic
+    assert frozen_before["portfolio"]["automatic_research"] == expected
+    restored = client.post(
+        path + f"/versions/{version_id}/restore",
+        json={"revision": saved.json["experiment"]["revision"]},
+    )
+    assert restored.status_code == 200, restored.json
+    assert restored.json["draft"]["portfolio"]["automatic_research"] == automatic
+    reopened = client.get(path).json
+    launched = run(client, reopened, token=f"saved-auto-{saved_policy}")
+    assert (
+        run(client, reopened, token=f"saved-auto-{saved_policy}")["job"]["id"]
+        == launched["job"]["id"]
+    )
+    launched_version = client.get(path + f"/versions/{launched['version']['id']}").json
+    assert launched_version["portfolio"]["automatic_research"] == expected
+    store = app.extensions["research_store"]
+    with store.sessions() as db:
+        execution = db.get(ResearchExperiment, launched["job"]["id"])
+        assert execution.kind == "portfolio_optimize"
+        assert json.loads(execution.specification)["portfolio"]["automatic_research"] == expected
+    assert client.get(path + f"/versions/{version_id}").json == frozen_before
+
+
 @pytest.mark.timeout(120)
 def test_real_search_to_selected_draft_keeps_parent_and_original_evidence(
     app, client, monkeypatch, tmp_path, tmp_path_factory
