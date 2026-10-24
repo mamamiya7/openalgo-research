@@ -97,6 +97,15 @@ every file can yield an independently supported strategy.
 
 ## Next production priorities and acceptance
 
+The installed acceptance exercise also exposed a saved-setup policy handoff
+defect: the server builder omitted the new decision flag. This was corrected
+with real HTTP save/use/reopen/launch regressions. It demonstrates why engine
+unit tests alone do not qualify the user's journey. Two further presentation
+issues remain: live progress can highlight an inadmissible raw-score leader,
+and generic progress copy can promise later-window checks in a short-history
+plan that has no independent later window. Final historical scope and admission
+remain enforced; progress should describe the actual frozen plan just as clearly.
+
 1. **Explain the complete opportunity funnel.** Separate rule-filtered and
    incomplete-horizon signals from unavailable prices, cash clipping, risk caps,
    position limits and allocation weights. Acceptance: overlapping constraint

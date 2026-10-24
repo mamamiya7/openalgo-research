@@ -10,9 +10,15 @@ proposals, automatic cost/neighbor challenges, honest historical conclusions,
 separate cash/noncash capital diagnosis and durable decision recovery. Existing
 studies keep their frozen behavior. The 512-account ceiling and hard validation
 rules are unchanged. The [installation acceptance](INSTALLED_DECISION28_ACCEPTANCE_20261024.md)
-records the installed candidate, preserved settings and records, platform checks
-and the Chartink handoff's pending user sign-in. The installed save/reopen journey
-is not claimed complete while that blocker remains.
+records the clean installed correction, preserved settings and records, platform
+checks and the completed installed Chartink journey: 147 stocks, 1,879 signals,
+408 proposals and 335 native accounts, followed by saving and reopening the exact
+tested report. A saved-setup policy handoff defect found during acceptance is
+fixed and covered by 59 affected library/history checks. The historical candidate
+passes cost and neighbor challenges but correctly retains insufficient independent
+evidence. The fresh philosophy review records remaining autonomous diagnosis,
+allocation and capital-planning gaps; Linux production-host qualification remains
+incomplete.
 
 ## Immediate production execution plan — 23 October 2026
 
