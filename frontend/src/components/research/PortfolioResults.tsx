@@ -113,9 +113,11 @@ export function StrategySettings({ strategy }: { strategy: PortfolioSettings }) 
       ? [
           [
             'Portfolio allocation',
-            policy.allocation_mode === 'prior60_cluster_inverse_vol'
-              ? 'Cluster inverse volatility · new entries'
-              : 'Original allocation',
+            policy.allocation_mode === 'active_prior60_cluster_inverse_vol'
+              ? 'Active opportunities · cluster inverse volatility'
+              : policy.allocation_mode === 'prior60_cluster_inverse_vol'
+                ? 'Cluster inverse volatility · new entries'
+                : 'Original allocation',
           ],
         ]
       : []),

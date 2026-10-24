@@ -199,10 +199,15 @@ def _assess(report, features, identity_check, *, _owned_report=None):
             execution.get(key) != value for key, value in modes.items()
         ):
             raise ValueError("constraint_declared_limits_mismatch")
-        allocation_on = modes.get("allocation_mode") == "prior60_cluster_inverse_vol"
-        if (
-            "allocation_mode" in modes
-            and execution.get("allocation", {}).get("version") != "research-cluster-allocation-v1"
+        allocation_on = modes.get("allocation_mode") in (
+            "prior60_cluster_inverse_vol",
+            "active_prior60_cluster_inverse_vol",
+        )
+        active_allocation = modes.get("allocation_mode") == "active_prior60_cluster_inverse_vol"
+        if "allocation_mode" in modes and execution.get("allocation", {}).get("version") != (
+            "research-active-cluster-allocation-v1"
+            if active_allocation
+            else "research-cluster-allocation-v1"
         ):
             raise ValueError("constraint_allocation_declaration_mismatch")
         capacity_on = modes["capacity_mode"] == "prior20_broker_reported"
@@ -307,7 +312,41 @@ def _assess(report, features, identity_check, *, _owned_report=None):
             if allocation_on
             else None
         )
+        active_candidates, active_opening_equities = {}, {}
+        if active_allocation:
+            # Rebuild causal entry clocks once, independent of claimed cohort.
+            from research.connectors.vectorbt_portfolio import _schedule
+
+            curve = report.get("equity_curve", [])
+            minute = report.get("metric_basis") == "minute_marked"
+            timeline = [item["timestamp"] if minute else item["date"] for item in curve]
+            calendar = {
+                "sessions": sorted({key[:10] for key in timeline}),
+                "session_hours": execution["allocation"].get("session_hours", {}),
+            }
+            index = {key: i for i, key in enumerate(timeline)}
+            for candidate in ledger:
+                if candidate.get("status") == "excluded":
+                    continue
+                strategy = by_strategy[candidate["strategy_id"]]
+                cfg = strategy["config"]
+                signal = {"date": candidate["signal_date"], "symbol": candidate["symbol"]}
+                if candidate.get("signal_timestamp"):
+                    signal["timestamp"] = candidate["signal_timestamp"]
+                slot, _ = _schedule(signal, calendar, cfg, timeline, index, minute)
+                if slot >= 0:
+                    active_candidates.setdefault(timeline[slot], []).append(
+                        (candidate, strategy, cfg)
+                    )
         for order in sorted(orders, key=lambda item: item["id"]):
+            if active_allocation and order["idx"] not in active_opening_equities:
+                opening = timeline[order["idx"]]
+                marks_at_open = features.get("allocation_marks", {}).get(opening)
+                if marks_at_open is not None:
+                    active_opening_equities[order["idx"]] = audit_cash + sum(
+                        size * _number(marks_at_open.get(entered[held][2]), positive=True)
+                        for held, size in positions.items()
+                    )
             col = order["col"]
             if order["side"] == 0:
                 held_by_order[order["id"]] = sorted({entered[held][2] for held in positions})
@@ -324,6 +363,43 @@ def _assess(report, features, identity_check, *, _owned_report=None):
                         required_symbols=held_by_order[order["id"]],
                     )
                     cluster = next(group for group in point["clusters"] if symbol in group)
+                    marks = features.get("allocation_marks", {}).get(
+                        row.get("entry_timestamp") or day, {}
+                    )
+                    if active_allocation:
+                        active = row["execution_details"].get("allocation_active_symbols")
+                        if (
+                            not isinstance(active, list)
+                            or active != sorted(set(active))
+                            or not set(held_by_order[order["id"]] + [symbol]).issubset(active)
+                        ):
+                            raise ValueError("constraint_active_allocation_cohort_invalid")
+                        expected_active = set(held_by_order[order["id"]])
+                        opening_equity = _number(
+                            row["execution_details"].get("allocation_opening_equity"), positive=True
+                        )
+                        opening = row.get("entry_timestamp") or day
+                        if not _same(opening_equity, active_opening_equities[order["idx"]]):
+                            raise ValueError("constraint_active_allocation_opening_equity_mismatch")
+                        for candidate, strategy, cfg in active_candidates.get(opening, []):
+                            raw = _number(marks.get(candidate["symbol"]), positive=True)
+                            cash_price = (
+                                raw
+                                * (1 + cfg["slippage_bps"] / 10000)
+                                * (1 + cfg["cost_bps"] / 10000)
+                            )
+                            budget = (
+                                opening_equity
+                                * strategy["allocation_pct"]
+                                / 100
+                                * cfg["order_size_pct"]
+                                / 100
+                            )
+                            if cash_price <= budget + 1e-9:
+                                expected_active.add(candidate["symbol"])
+                        if active != sorted(expected_active):
+                            raise ValueError("constraint_active_allocation_cohort_mismatch")
+                        cluster = [name for name in cluster if name in active]
                     marks = features.get("allocation_marks", {}).get(
                         row.get("entry_timestamp") or day, {}
                     )
@@ -447,8 +523,17 @@ def _assess(report, features, identity_check, *, _owned_report=None):
                     decision_at=decision,
                     required_symbols=held_by_order[order["id"]],
                 )
-                cluster = next(group for group in feature["clusters"] if symbol in group)
-                weight = feature["weights"][symbol]
+                weights, clusters = feature["weights"], feature["clusters"]
+                if active_allocation:
+                    from research.portfolio_allocation import active_weights
+
+                    weights, clusters = active_weights(
+                        feature, details["allocation_active_symbols"]
+                    )
+                    if details.get("allocation_cluster_count") != len(clusters):
+                        raise ValueError("constraint_active_allocation_cluster_count_invalid")
+                cluster = next(group for group in clusters if symbol in group)
+                weight = weights[symbol]
                 if (
                     details.get("allocation_feature_id") != feature["id"]
                     or details.get("allocation_cluster") != cluster
@@ -473,7 +558,7 @@ def _assess(report, features, identity_check, *, _owned_report=None):
                     ),
                     (
                         "cluster",
-                        limits["max_gross_exposure_pct"] / 100 / len(feature["clusters"]),
+                        limits["max_gross_exposure_pct"] / 100 / len(clusters),
                         _number(details.get("allocation_cluster_before")),
                     ),
                 ):

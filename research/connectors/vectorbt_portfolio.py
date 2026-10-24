@@ -250,7 +250,13 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
     account_policy = strategies[0].get("execution_policy", {})
     capacity_aware = account_policy.get("capacity_mode") == "prior20_broker_reported"
     correlation_aware = account_policy.get("correlation_mode") == "prior60_positive_080"
-    allocation_aware = account_policy.get("allocation_mode") == "prior60_cluster_inverse_vol"
+    allocation_aware = account_policy.get("allocation_mode") in (
+        "prior60_cluster_inverse_vol",
+        "active_prior60_cluster_inverse_vol",
+    )
+    active_allocation = (
+        account_policy.get("allocation_mode") == "active_prior60_cluster_inverse_vol"
+    )
     # At most one entry per signal: local fill accounting is bounded by MAX_SIGNALS.
     participation = {} if capacity_aware else None
     # Evaluation-local and bounded by snapshot dates; no retained account state.
@@ -377,6 +383,9 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
         strategy, signal = strategies[strategy_i], lots[col][1]
         fill, cash_per_share = raw * (1 + slip), raw * (1 + slip) * (1 + fee)
         requested = math.floor((budget + 1e-9) / cash_per_share)
+        if active_allocation and requested < 1:
+            rejected[col] = "Position budget cannot fund one whole share including costs"
+            return 0
         stop, target, feature = protection(col, fill)
         loss = cash_per_share - stop * (1 - slip) * (1 - fee)
         if not math.isfinite(loss) or loss <= 0:
@@ -491,17 +500,21 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
                 decision_at=decision_at,
                 required_symbols=sorted({lots[j][1]["symbol"] for j in held}),
             )
-            cluster = next(
-                group for group in allocation_feature["clusters"] if signal["symbol"] in group
-            )
+            weights, clusters = allocation_feature["weights"], allocation_feature["clusters"]
+            if active_allocation:
+                from research.portfolio_allocation import active_weights
+
+                active = set(state["active_symbols"]) | {lots[j][1]["symbol"] for j in held}
+                weights, clusters = active_weights(allocation_feature, active)
+            cluster = next(group for group in clusters if signal["symbol"] in group)
             cluster_before = sum(
                 c.last_position[j] * float(bar_at(j, c.i)["open"])
                 for j in held
                 if lots[j][1]["symbol"] in cluster
             )
             gross_fraction = limits["max_gross_exposure_pct"] / 100
-            weight = allocation_feature["weights"][signal["symbol"]]
-            cluster_fraction = gross_fraction / len(allocation_feature["clusters"])
+            weight = weights[signal["symbol"]]
+            cluster_fraction = gross_fraction / len(clusters)
             capacities["portfolio_symbol_allocation"] = exposure_capacity(
                 gross_fraction * weight, symbol
             )
@@ -564,6 +577,15 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
             )
         if allocation_aware:
             execution_details[col].update(
+                **(
+                    {
+                        "allocation_active_symbols": sorted(active),
+                        "allocation_cluster_count": len(clusters),
+                        "allocation_opening_equity": state["equity"],
+                    }
+                    if active_allocation
+                    else {}
+                ),
                 allocation_feature_id=allocation_feature["id"],
                 allocation_weight=weight,
                 allocation_cluster=list(cluster),
@@ -649,10 +671,25 @@ def evaluate(strategies, snapshot, capital, *, progress=None):
                     "entry_batch_size": len(entry_cols),
                     "stop_risk_fraction": scores[col],
                 }
+        active_symbols = set()
+        if active_allocation:
+            for col in entry_cols:
+                cfg = strategies[lots[col][0]]["config"]
+                raw = float(bar_at(col, c.i)["open"])
+                cash_price = raw * (1 + cfg["slippage_bps"] / 10000) * (1 + cfg["cost_bps"] / 10000)
+                budget = (
+                    equity
+                    * strategies[lots[col][0]]["allocation_pct"]
+                    / 100
+                    * cfg["order_size_pct"]
+                    / 100
+                )
+                if not rejected[col] and cash_price <= budget + 1e-9:
+                    active_symbols.add(lots[col][1]["symbol"])
         actions = [(col, proposal) for col, proposal in opening_exits]
         actions += [(col, "entry") for col in entry_cols]
         actions += [(col, "later") for col in sorted(set(held + entry_cols))]
-        return ({"actions": actions, "equity": equity},)
+        return ({"actions": actions, "equity": equity, "active_symbols": active_symbols},)
 
     def order(c, state):
         if c.call_idx >= len(state["actions"]):
@@ -1256,6 +1293,12 @@ def _report(
                     "max_correlated_exposure_pct": policy["risk_limits"][
                         "max_correlated_exposure_pct"
                     ],
+                    **(
+                        {"session_hours": snapshot.get("session_hours", {})}
+                        if strategies[0]["execution_policy"].get("allocation_mode")
+                        == "active_prior60_cluster_inverse_vol"
+                        else {}
+                    ),
                     "basis": "Prior60 completed aligned daily returns, fixed positive Pearson correlation >=0.8; existing same-symbol and directly related positions marked at the observed entry opening, including entry friction in prospective equity. No transitive grouping or negative-correlation credit.",
                 }
                 report["limits"].append(
@@ -1267,8 +1310,24 @@ def _report(
             adapter_version="vectorbt-portfolio-adapter-v6",
             allocation_mode=strategies[0]["execution_policy"]["allocation_mode"],
             allocation={
-                "version": "research-cluster-allocation-v1",
-                "basis": "Prior60 aligned completed returns; 10% diagonal covariance shrinkage; positive regularized rho>=0.8 connected clusters; equal cluster budgets and inverse-volatility symbol weights. Fixed source universe, unavailable series excluded explicitly. Entry caps only; no forced rebalancing or negative-correlation credit.",
+                "version": (
+                    "research-active-cluster-allocation-v1"
+                    if strategies[0]["execution_policy"]["allocation_mode"]
+                    == "active_prior60_cluster_inverse_vol"
+                    else "research-cluster-allocation-v1"
+                ),
+                **(
+                    {"session_hours": snapshot.get("session_hours", {})}
+                    if strategies[0]["execution_policy"]["allocation_mode"]
+                    == "active_prior60_cluster_inverse_vol"
+                    else {}
+                ),
+                "basis": (
+                    "Causal same-opening eligible whole-share opportunities plus current holdings; duplicate symbols counted once. Prior60 source clusters retained, equal occupied-cluster budgets and inverse-volatility weights renormalized within active clusters. No forced rebalance; all independent risk caps retained."
+                    if strategies[0]["execution_policy"]["allocation_mode"]
+                    == "active_prior60_cluster_inverse_vol"
+                    else "Prior60 aligned completed returns; 10% diagonal covariance shrinkage; positive regularized rho>=0.8 connected clusters; equal cluster budgets and inverse-volatility symbol weights. Fixed source universe, unavailable series excluded explicitly. Entry caps only; no forced rebalancing or negative-correlation credit."
+                ),
             },
         )
     from research.native_report_ownership import publish_native_report

@@ -117,7 +117,14 @@ def normalize_auto(raw, strategies=None, engine="vectorbt"):
         not isinstance(raw, dict)
         or "version" not in raw
         or set(raw)
-        - {"version", "validation_mode", "history_policy", "design_policy", "decision_policy"}
+        - {
+            "version",
+            "validation_mode",
+            "history_policy",
+            "design_policy",
+            "decision_policy",
+            "action_policy",
+        }
         or raw["version"]
         not in (VERSION, CONDITION_VERSION, STABILITY_VERSION, *HYPOTHESIS_VERSIONS)
     ):
@@ -148,6 +155,13 @@ def normalize_auto(raw, strategies=None, engine="vectorbt"):
         ):
             raise ValueError("Choose the current automatic decision policy with design admission")
         result["decision_policy"] = raw["decision_policy"]
+    if "action_policy" in raw:
+        if (
+            raw.get("decision_policy") != "automatic_decision_v1"
+            or raw["action_policy"] != "automatic_actions_v1"
+        ):
+            raise ValueError("Automatic actions require the current validated decision policy")
+        result["action_policy"] = raw["action_policy"]
     if "validation_mode" in raw:
         if raw["version"] != ALLOCATION_VERSION or raw["validation_mode"] != "historical_only":
             raise ValueError(
@@ -783,6 +797,17 @@ def compile_recipe(evidence):
         from research.automatic_decision import preflight
 
         payload["decision_preflight"] = preflight(evidence, payload)
+    if portfolio.get("automatic_research", {}).get("action_policy") == "automatic_actions_v1":
+        from research.automatic_actions import descriptor as actions_descriptor
+        from research.capital_planning import selected_account_descriptor
+
+        payload["automatic_actions"] = actions_descriptor()
+        payload["capital_planning"] = selected_account_descriptor()
+        payload["policies"]["capacity_actions"] = actions_descriptor()["scope"]
+        payload["decision_preflight"]["steps"].insert(-1, "automatic_capacity_actions")
+        payload["decision_preflight"]["id"] = fingerprint(
+            {key: value for key, value in payload["decision_preflight"].items() if key != "id"}
+        )
     return {**payload, "id": fingerprint(payload)}
 
 

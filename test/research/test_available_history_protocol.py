@@ -110,4 +110,5 @@ def test_new_editable_library_launch_uses_available_history_without_mutating_dra
         "history_policy": "available_history",
         "design_policy": "automatic_design_v1",
         "decision_policy": "automatic_decision_v1",
+        "action_policy": "automatic_actions_v1",
     }

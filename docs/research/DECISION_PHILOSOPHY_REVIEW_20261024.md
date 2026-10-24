@@ -5,6 +5,12 @@ This is a product and research-method review, not a claim that installation,
 the installed browser journey, or future financial performance has passed.
 No private dataset, account, scanner identity or financial result is reproduced.
 
+The assessment below records preview.28. The subsequent
+[automatic-actions batch](AUTOMATIC_ACTIONS_20261024.md) implements active-opportunity
+allocation and bounded capital/size remedies with an automatic capacity choice.
+It preserves the distinction between capacity feasibility and performance
+validation; changed accounts cannot inherit an earlier performance approval.
+
 ## What the user is asking the product to own
 
 Given the available CSV or Chartink signals and broker prices, the application

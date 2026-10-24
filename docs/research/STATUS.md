@@ -1,5 +1,36 @@
 # OpenAlgo Research status
 
+## Automatic capacity actions — 24 October 2026, preview.29
+
+The [industry research and implementation](AUTOMATIC_ACTIONS_20261024.md) adds
+active-opportunity allocation, bounded native diagnosis/action/retest and an
+automatically chosen capital/size operating point. Existing performance, cost,
+sample, concentration and chronological validation remain intact. The search
+still completes all 408 proposals within 512 attempts; capacity checks retain
+their original three/four-account reservation. Saved v1/v2 capital and older
+allocation contracts remain unchanged.
+
+The new operating point is a historical capacity result, not silent promotion of
+changed capital or size under a previous performance verdict. Native tests cover
+real affordability and risk-target remedies. The small three-signal native
+programme completes 408 proposals/322 accounts and saves/reopens exactly with
+zero new calculations. The [release scope](releases/0.1.0-preview.29.md) records
+the narrower dataset and preceding generic-harness checkpoint memory failure.
+Full scanner memory/production qualification is not claimed.
+
+Targeted policy checks pass (119), as do the corrected native/action/recovery
+group (59), saved-library/history/action integration (63), 44 distinct allocation
+cases, legacy capital checks and the affected UI groups. These suites overlap;
+their counts are not an additive total. The production frontend builds and source
+compatibility passes. Local preview.29 candidate installation verifies all 4,228
+manifest files and preserves application settings and research-record counts.
+
+The required Linux gthread host suite was rerun from an isolated Linux source
+snapshot: 1,449 passed, 8 failed, 3 errors and 3 skipped. The failures are the same
+inherited Docker-launcher, shell-attribute and concurrency-review-list problems
+recorded for preview.28. No host assertion or financial validation was weakened.
+The host suite is not green; production qualification remains incomplete.
+
 ## Automatic decision policy — 24 October 2026, preview.28
 
 The [decision-layer research and implementation](AUTOMATIC_DECISION_RESEARCH_20261024.md)

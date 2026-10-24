@@ -157,3 +157,27 @@ def validate(value, *, symbol, entry_session, decision_at, required_symbols=()):
     if any(s not in weights for s in (symbol, *required_symbols)):
         raise ValueError("allocation_unavailable: a new or held symbol lacks aligned prior returns")
     return value
+
+
+ACTIVE_MODE = "active_prior60_cluster_inverse_vol"
+ACTIVE_VERSION = "research-active-cluster-allocation-v1"
+
+
+def active_weights(feature, symbols):
+    """Restrict completed-return risk estimates to causal opportunities and holdings.
+
+    Do not re-cluster a subset: preserve the prior-price dependence graph, then
+    divide equally among occupied clusters and renormalize inverse volatility
+    inside each occupied cluster. Duplicate signals never duplicate a budget.
+    """
+    names = set(symbols)
+    if not names or not names.issubset(feature["weights"]):
+        raise ValueError("allocation_unavailable: active or held symbol lacks prior returns")
+    clusters = [[name for name in group if name in names] for group in feature["clusters"]]
+    clusters = [group for group in clusters if group]
+    weights = {}
+    for group in clusters:
+        total = sum(feature["weights"][name] for name in group)
+        for name in group:
+            weights[name] = feature["weights"][name] / total / len(clusters)
+    return weights, clusters

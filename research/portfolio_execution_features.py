@@ -717,7 +717,10 @@ def _attach(evidence, receipt, *, own_entries=False, identities=None, daily=None
                                 required_symbols=[signal["symbol"]],
                             )
                         )
-                if policy.get("allocation_mode") == "prior60_cluster_inverse_vol":
+                if policy.get("allocation_mode") in (
+                    "prior60_cluster_inverse_vol",
+                    "active_prior60_cluster_inverse_vol",
+                ):
                     from research.portfolio_allocation import validate
 
                     feature = receipt.get("allocation", {}).get(day)

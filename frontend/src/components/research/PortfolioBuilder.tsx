@@ -144,6 +144,7 @@ function availableHistoryResearch(
         history_policy: 'available_history',
         design_policy: 'automatic_design_v1',
         decision_policy: 'automatic_decision_v1',
+        action_policy: 'automatic_actions_v1',
       }
     : recipe
 }
@@ -1110,10 +1111,10 @@ export function PortfolioBuilder({
               </p>
               {portfolio.automatic_research?.version === 'automatic-hypotheses-v16' && (
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Using all available signal history. Sizes trades within your risk limits and
-                  estimates starting capital from your initial order amount. Findings show which
-                  historical checks the available dates support. The final decision explains whether
-                  the chosen rules survived higher costs and nearby settings.
+                  Uses available history, searches trade sizes and active-opportunity allocation
+                  within your risk limits, then automatically checks capital and smaller sizes when
+                  needed. The final decision shows the cost, nearby-setting and historical checks
+                  supported by your data.
                 </p>
               )}
               <details className="mt-3 text-sm">

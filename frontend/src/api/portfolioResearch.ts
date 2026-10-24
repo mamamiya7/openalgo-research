@@ -34,7 +34,10 @@ export interface ExecutionPolicy {
     | 'research-execution-aware-v3'
     | 'research-execution-aware-v4'
     | 'research-execution-aware-v5'
-  allocation_mode?: 'original' | 'prior60_cluster_inverse_vol'
+  allocation_mode?:
+    | 'original'
+    | 'prior60_cluster_inverse_vol'
+    | 'active_prior60_cluster_inverse_vol'
   capacity_mode?: 'disabled' | 'prior20_broker_reported'
   correlation_mode?: 'disabled' | 'prior60_positive_080'
   entry_priority?: 'source' | 'reversed_source' | 'lower_stop_risk'
@@ -417,6 +420,7 @@ export interface PortfolioRequest {
         history_policy?: 'available_history'
         design_policy?: 'automatic_design_v1'
         decision_policy?: 'automatic_decision_v1'
+        action_policy?: 'automatic_actions_v1'
       }
   )
   entry_conditions?: EntryConditions
@@ -654,7 +658,10 @@ export interface AutomaticResearchFindings {
     [key: string]: unknown
   }
   capital_planning?: {
-    version: 'research-capital-planning-v1' | 'research-capital-planning-v2'
+    version:
+      | 'research-capital-planning-v1'
+      | 'research-capital-planning-v2'
+      | 'research-capital-planning-v3'
     diagnosis?: {
       action:
         | 'funding_verified'
@@ -663,6 +670,8 @@ export interface AutomaticResearchFindings {
         | 'insufficient_funding_evidence'
         | 'account_budget_exhausted'
         | 'unsupported_capital_representation'
+        | 'bounded_actions_complete'
+        | 'retain_limits_and_exclude_unavailable'
       reason: string
     }
     status: 'verified_sufficient' | 'no_verified_amount'
@@ -670,6 +679,13 @@ export interface AutomaticResearchFindings {
     verified_capital: number | null
     original_capital: number
     reference_tickets: Array<{ strategy_id: string; initial_ticket: number }>
+    operating_point?: {
+      capital: number
+      settings: PortfolioSettings[]
+      option_index: number
+      remaining_exclusions: Record<string, number>
+      performance_validated: false
+    } | null
     tested_range: [number, number] | null
     accounts: Array<{
       capital: number
@@ -677,6 +693,9 @@ export interface AutomaticResearchFindings {
       clipped_requests: number
       blockers: Record<string, number>
       verified_sufficient: boolean
+      counts?: Record<string, number>
+      size_multiplier?: number
+      option_index?: number
     }>
   }
   automatic_design?: {

@@ -16,7 +16,7 @@ a CSV export, or reuse saved signals.
 
 **Published download: `0.1.0-preview.26` · OpenAlgo 2.0.2.9 · Windows and Linux**
 
-This branch packages [preview.28](docs/research/releases/0.1.0-preview.28.md), adding automatic decision feedback, cost and nearby-setting challenges, capital diagnosis and persistent verdicts. The download below remains the existing published release.
+This branch packages [preview.29](docs/research/releases/0.1.0-preview.29.md), adding active-opportunity allocation and bounded automatic capital and sizing actions while preserving decision validation. The download below remains the existing published release.
 
 [**Download OpenAlgo Research**](https://github.com/mamamiya7/openalgo-research/releases/download/research-v0.1.0-preview.26/openalgo-research-0.1.0-preview.26.zip)
 · [Install and start](docs/research/RUNTIME.md)
@@ -26,7 +26,7 @@ This branch packages [preview.28](docs/research/releases/0.1.0-preview.28.md), a
 
 ## What’s in this branch
 
-- **Recorded automatic decisions.** New runs learn feasibility constraints, challenge higher costs and nearby settings, diagnose capital blockers, and preserve the verdict when saving and reopening. See [preview.28](docs/research/releases/0.1.0-preview.28.md) for scope and qualification.
+- **Recorded automatic decisions.** New runs learn feasibility constraints, challenge higher costs and nearby settings, diagnose capital blockers, and preserve the verdict when saving and reopening. See [preview.29](docs/research/releases/0.1.0-preview.29.md) for scope and qualification.
 
 - **Automatic sizing and capital estimates.** New automatic runs explore sizing within fixed risk limits, reject sparse or concentrated historical improvements, and check estimated starting capital against the selected rules. The full 408-proposal search and saved evidence remain intact. Historical findings do not imply independent validation.
 
@@ -98,8 +98,8 @@ qualified volume provenance; other brokers can use supported methods without
 that assumption. Optional Nautilus fixed/custom calculations have their own
 supported contract and Linux/WSL runtime.
 
-[Branch notes](docs/research/releases/0.1.0-preview.28.md) ·
-[Patch qualification and limits](docs/research/releases/0.1.0-preview.28.md#qualification) ·
+[Branch notes](docs/research/releases/0.1.0-preview.29.md) ·
+[Patch qualification and limits](docs/research/releases/0.1.0-preview.29.md#qualification) ·
 [Future roadmap](docs/research/DELIVERY_PLAN.md).
 Preview.14 combines completed fit-account/proposal saves and speeds up bounded
 evidence serialisation, alongside the preceding cache and calculation corrections.

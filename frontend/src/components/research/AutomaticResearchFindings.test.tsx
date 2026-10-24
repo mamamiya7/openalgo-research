@@ -1141,6 +1141,39 @@ it.each([
   expect(within(conclusion).getByText('Recorded stop reason for this capital check')).toBeVisible()
 })
 
+it('shows an automatically chosen capacity account without claiming performance validation', () => {
+  render(
+    <CapitalPlanning
+      planning={{
+        version: 'research-capital-planning-v3',
+        status: 'no_verified_amount',
+        estimated_capital: 150000,
+        verified_capital: null,
+        original_capital: 100000,
+        reference_tickets: [],
+        tested_range: [100000, 150000],
+        accounts: [],
+        operating_point: {
+          capital: 150000,
+          settings: [],
+          option_index: 2,
+          remaining_exclusions: { position_limit: 3 },
+          performance_validated: false,
+        },
+        diagnosis: {
+          action: 'bounded_actions_complete',
+          reason: 'A smaller size was tested automatically; position limits remain.',
+        },
+      }}
+    />
+  )
+  const region = screen.getByRole('region', { name: 'Automatic capital and trade size' })
+  expect(within(region).getByText('Capacity-tested capital: ₹1,50,000')).toBeVisible()
+  expect(within(region).getByText('position limit: 3')).toBeVisible()
+  expect(within(region).getByText(/not a validated performance recommendation/)).toBeVisible()
+  expect(within(region).queryByText(/Capital verified/)).not.toBeInTheDocument()
+})
+
 it('does not show a success badge when a recorded decision rejects an otherwise supported result', () => {
   const data = findings()
   data.decision = {

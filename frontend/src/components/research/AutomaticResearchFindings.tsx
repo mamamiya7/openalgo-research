@@ -41,6 +41,8 @@ const capitalActions = {
   insufficient_funding_evidence: 'Insufficient funding evidence',
   account_budget_exhausted: 'Capital checks reached their recorded limit',
   unsupported_capital_representation: 'The fixed order amount cannot be represented',
+  bounded_actions_complete: 'Automatic capital and size checks completed',
+  retain_limits_and_exclude_unavailable: 'Limits retained; unavailable opportunities excluded',
 }
 
 function decisionTitle(decision: NonNullable<Findings['decision']>) {
@@ -62,6 +64,7 @@ const decisionSteps: Record<string, string> = {
   freeze_choice: 'Freeze the chosen settings',
   challenge_costs_and_neighbors: 'Challenge costs and nearby settings',
   diagnose_capital: 'Check funding',
+  automatic_capacity_actions: 'Automatically test capital and trade size',
   conclude: 'Record the final decision',
 }
 
@@ -120,6 +123,43 @@ export function CapitalPlanning({
   planning: NonNullable<Findings['capital_planning']>
 }) {
   const last = planning.accounts.at(-1)
+  if (planning.version === 'research-capital-planning-v3') {
+    const point = planning.operating_point
+    return (
+      <section aria-label="Automatic capital and trade size" className="space-y-2 pt-3 text-sm">
+        <p className="font-medium">Automatic capital and trade size</p>
+        {point ? (
+          <>
+            <p>Capacity-tested capital: ₹{number(point.capital)}</p>
+            {point.settings.map((row) => (
+              <p key={row.id}>
+                {row.name}: {strategyRuleSummary({ ...row, search: {} })}
+              </p>
+            ))}
+          </>
+        ) : (
+          <p>No usable account was established within the recorded limits.</p>
+        )}
+        <p>
+          {planning.accounts.length} automatic checks · selected by funding and fill constraints,
+          without ranking profits.
+        </p>
+        <p>{planning.diagnosis?.reason}</p>
+        {point &&
+          Object.entries(point.remaining_exclusions)
+            .filter(([, count]) => count > 0)
+            .map(([key, count]) => (
+              <p key={key} className="text-muted-foreground">
+                {key.replaceAll('_', ' ')}: {number(count)}
+              </p>
+            ))}
+        <p className="text-muted-foreground">
+          Separate capacity checks preserve every hard limit. Changed capital or sizes are not a
+          validated performance recommendation; the research verdict above remains unchanged.
+        </p>
+      </section>
+    )
+  }
   return (
     <section aria-label="Starting capital estimate" className="space-y-1 pt-3 text-sm">
       <p className="font-medium">
@@ -729,9 +769,12 @@ export function AutomaticResearchFindings({
             <p>
               Portfolio allocation:{' '}
               {findings.execution_research.selected_allocation_mode ===
-              'prior60_cluster_inverse_vol'
-                ? 'Cluster inverse volatility · new entries'
-                : 'Original allocation'}
+              'active_prior60_cluster_inverse_vol'
+                ? 'Active opportunities · cluster inverse volatility'
+                : findings.execution_research.selected_allocation_mode ===
+                    'prior60_cluster_inverse_vol'
+                  ? 'Cluster inverse volatility · new entries'
+                  : 'Original allocation'}
             </p>
           )}
           <MethodCoverage jobId={jobId} recipeVersion={findings.version} />

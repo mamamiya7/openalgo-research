@@ -38,13 +38,13 @@ def progress_checks(callback):
 Inputs = namedtuple(
     "Inputs",
     "bars owners symbols cfg entry open_due close_due flags limits features "
-    "correlations clusters correlation_symbols cluster_symbols capacity_key capacity_source feature_errors day",
+    "correlations clusters allocation_weights correlation_symbols cluster_symbols capacity_key capacity_source feature_errors day",
 )
 State = namedtuple(
     "State",
     "filled price high stops targets rejected native budget raw_in raw_out "
     "outcome timing details capacities ranks scores actions action_type "
-    "action_price action_outcome action_timing meta turnover participation",
+    "action_price action_outcome action_timing meta turnover participation active",
 )
 CAP_NAMES = (
     "requested_cash_budget",
@@ -248,6 +248,9 @@ def constrained_entry(c, p, s, col, budget):
     fee, slip = cfg[6], cfg[7]
     fill, cash_per_share = raw * (1 + slip), raw * (1 + slip) * (1 + fee)
     requested = math.floor((budget + 1e-9) / cash_per_share)
+    if p.flags[9] and requested < 1:
+        s.rejected[col] = 3
+        return 0
     stop, target = _protection(p, col, fill)
     error = p.feature_errors[col, 0]
     if not error and (
@@ -292,7 +295,12 @@ def constrained_entry(c, p, s, col, budget):
                 p.clusters, p.cluster_symbols, col, p.symbols[j], p.flags[8], -1.0
             )
             missing_allocation = missing_allocation or group < 0
-            if group == 1:
+            current_group = (
+                _feature_value(p.clusters, p.cluster_symbols, col, p.symbols[col], p.flags[8], -1.0)
+                if p.flags[9]
+                else 1
+            )
+            if group == current_group:
                 cluster_before += value
     equity = c.last_cash[c.group] + gross
     friction = cash_per_share - raw
@@ -341,11 +349,50 @@ def constrained_entry(c, p, s, col, budget):
         if error:
             s.rejected[col] = error
             return 0
-        capacities[11] = _capacity(
-            equity, p.limits[0] / 100 * p.features[col, 2], symbol, raw, friction
+        weight, cluster_count = p.features[col, 2], p.features[col, 3]
+        if p.flags[9]:
+            own_group = _feature_value(
+                p.clusters, p.cluster_symbols, col, p.symbols[col], p.flags[8], -1.0
+            )
+            for j in range(len(p.entry)):
+                active = c.last_position[j] > 0
+                if p.entry[j] == c.i:
+                    cost = p.bars[c.i, p.symbols[j], 0] * (1 + p.cfg[j, 7]) * (1 + p.cfg[j, 6])
+                    budget_j = s.meta[1] * p.cfg[j, 0] / 100 * p.cfg[j, 1] / 100
+                    active = active or (
+                        not p.feature_errors[j, 3] and np.isfinite(cost) and cost <= budget_j + 1e-9
+                    )
+                if active:
+                    if not p.flags[8]:
+                        s.active[col, p.symbols[j]] = True
+                    else:
+                        for k in range(p.clusters.shape[1]):
+                            if p.cluster_symbols[col, k] == p.symbols[j]:
+                                s.active[col, k] = True
+            groups = np.zeros(201, dtype=np.bool_)
+            total, own_weight = 0.0, 0.0
+            for k in range(p.clusters.shape[1]):
+                if s.active[col, k]:
+                    group = p.clusters[col, k]
+                    if group < 1:
+                        s.rejected[col] = 7
+                        return 0
+                    groups[group] = True
+                    if group == own_group:
+                        total += p.allocation_weights[col, k]
+                    symbol_k = p.cluster_symbols[col, k] if p.flags[8] else k
+                    if symbol_k == p.symbols[col]:
+                        own_weight = p.allocation_weights[col, k]
+            cluster_count = np.sum(groups)
+            weight = own_weight / total / cluster_count
+        s.details[col, 21], s.details[col, 22], s.details[col, 23] = (
+            weight,
+            cluster_count,
+            s.meta[1],
         )
+        capacities[11] = _capacity(equity, p.limits[0] / 100 * weight, symbol, raw, friction)
         capacities[12] = _capacity(
-            equity, p.limits[0] / 100 / p.features[col, 3], cluster_before, raw, friction
+            equity, p.limits[0] / 100 / cluster_count, cluster_before, raw, friction
         )
     risk_target = np.nan
     if cfg[10]:
@@ -511,16 +558,23 @@ def _correlation_row(feature, symbols, symbol_index, sparse):
     return values, indices, tuple(symbol for symbol in symbols if related.get(symbol) is None)
 
 
-def _cluster_row(feature, symbol, symbols, symbol_index, sparse):
+def _cluster_row(feature, symbol, symbols, symbol_index, sparse, active=False):
     cluster = next(group for group in feature["clusters"] if symbol in group)
     group, weights = set(cluster), feature["weights"]
+    labels = {name: i + 1 for i, cluster in enumerate(feature["clusters"]) for name in cluster}
     if sparse:
         names = [name for name in weights if name in symbol_index]
-        values = np.asarray([int(name in group) for name in names], dtype=np.int64)
+        values = np.asarray(
+            [(labels[name] if active else int(name in group)) for name in names], dtype=np.int64
+        )
         indices = np.asarray([symbol_index[name] for name in names], dtype=np.int64)
     else:
         values = np.asarray(
-            [int(name in group) if name in weights else -1 for name in symbols], dtype=np.int64
+            [
+                (labels[name] if active else int(name in group)) if name in weights else -1
+                for name in symbols
+            ],
+            dtype=np.int64,
         )
         indices = np.empty(0, dtype=np.int64)
     return values, indices, tuple(name for name in symbols if name not in weights)
@@ -568,6 +622,7 @@ def prepare(strategies, lots, scheduled, snapshot, progress):
     width = min(len(symbols), 200)
     correlations = np.full((n, width), np.nan)
     clusters = np.full((n, width), -1, dtype=np.int64)
+    allocation_weights = np.full((n, width), np.nan)
     sparse = len(symbols) > 200
     correlation_symbols = np.full((n, width) if sparse else (1, 1), -1, dtype=np.int64)
     cluster_symbols = np.full((n, width) if sparse else (1, 1), -1, dtype=np.int64)
@@ -594,10 +649,12 @@ def prepare(strategies, lots, scheduled, snapshot, progress):
             "max_daily_buy_turnover_pct" in risk_limits,
             policy.get("capacity_mode") == "prior20_broker_reported",
             policy.get("correlation_mode") == "prior60_positive_080",
-            policy.get("allocation_mode") == "prior60_cluster_inverse_vol",
+            policy.get("allocation_mode")
+            in ("prior60_cluster_inverse_vol", "active_prior60_cluster_inverse_vol"),
             minute,
             bool(progress),
             sparse,
+            policy.get("allocation_mode") == "active_prior60_cluster_inverse_vol",
         ],
         dtype=np.int64,
     )
@@ -771,10 +828,23 @@ def prepare(strategies, lots, scheduled, snapshot, progress):
                 features[col, 3] = len(feature["clusters"])
                 values, indices, absent = numeric_entry(
                     feature,
-                    ("allocation", signal["symbol"], symbol_key),
-                    partial(_cluster_row, feature, signal["symbol"], symbols, symbol_index, sparse),
+                    ("allocation", signal["symbol"], symbol_key, bool(flags[9])),
+                    partial(
+                        _cluster_row,
+                        feature,
+                        signal["symbol"],
+                        symbols,
+                        symbol_index,
+                        sparse,
+                        bool(flags[9]),
+                    ),
                 )
                 clusters[col, : len(values)] = values
+                if flags[9]:
+                    names = [symbols[int(index)] for index in indices] if sparse else symbols
+                    allocation_weights[col, : len(values)] = [
+                        feature["weights"].get(name, np.nan) for name in names
+                    ]
                 if sparse:
                     cluster_symbols[col, : len(indices)] = indices
                 feature_refs[col]["allocation"] = feature
@@ -805,6 +875,7 @@ def prepare(strategies, lots, scheduled, snapshot, progress):
         features,
         correlations,
         clusters,
+        allocation_weights,
         correlation_symbols,
         cluster_symbols,
         capacity_keys,
@@ -832,7 +903,7 @@ def prepare(strategies, lots, scheduled, snapshot, progress):
         f(),
         ints(),
         ints(),
-        np.full((n, 21), np.nan),
+        np.full((n, 24), np.nan),
         np.full((n, 14), np.nan),
         np.zeros((n, 2), dtype=np.int64),
         f(),
@@ -844,6 +915,7 @@ def prepare(strategies, lots, scheduled, snapshot, progress):
         np.zeros(2),
         np.full((len(days), 5), np.nan),
         np.zeros((max(1, len(keys)), 5)),
+        np.zeros((n, width), dtype=np.bool_),
     )
     return p, s, (errors, feature_refs, list(keys), days)
 
@@ -931,9 +1003,26 @@ def receipts(p, s, metadata, strategies, lots, timeline):
             if p.flags[5]:
                 feature = features[col]["allocation"]
                 cluster = next(group for group in feature["clusters"] if signal["symbol"] in group)
+                if p.flags[9]:
+                    active = sorted(
+                        {
+                            lots[j][1]["symbol"]
+                            for j in range(len(lots))
+                            for k in np.flatnonzero(s.active[col])
+                            if p.symbols[j] == (p.cluster_symbols[col, k] if p.flags[8] else k)
+                        }
+                    )
+                    cluster = [name for name in cluster if name in active]
+                    detail.update(
+                        allocation_active_symbols=active,
+                        allocation_cluster_count=int(d[22]),
+                        allocation_opening_equity=float(d[23]),
+                    )
                 detail.update(
                     allocation_feature_id=feature["id"],
-                    allocation_weight=feature["weights"][signal["symbol"]],
+                    allocation_weight=float(d[21])
+                    if p.flags[9]
+                    else feature["weights"][signal["symbol"]],
                     allocation_cluster=list(cluster),
                     allocation_cluster_before=float(d[20]) if d[20] else 0,
                     allocation_symbol_capacity_shares=float(caps[11]),

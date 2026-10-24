@@ -111,7 +111,11 @@ def normalize_policy(raw=None):
     }
     if version == ALLOCATION_VERSION:
         mode = raw.get("allocation_mode")
-        if mode not in ("original", "prior60_cluster_inverse_vol"):
+        if mode not in (
+            "original",
+            "prior60_cluster_inverse_vol",
+            "active_prior60_cluster_inverse_vol",
+        ):
             raise ValueError("Choose a supported portfolio allocation mode")
     if version in (PRIORITY_VERSION, TURNOVER_VERSION, CAPACITY_VERSION, ALLOCATION_VERSION):
         allowed.add("entry_priority")

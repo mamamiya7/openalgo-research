@@ -56,11 +56,13 @@ function settingValue(key: string, value: number | string): string {
   if (key === 'portfolio.entry_priority' && typeof value === 'string')
     return entryPriorityLabel(value)
   if (key === 'portfolio.allocation_mode')
-    return value === 'prior60_cluster_inverse_vol'
-      ? 'Cluster inverse volatility · new entries'
-      : value === 'original'
-        ? 'Original allocation'
-        : 'Not recorded'
+    return value === 'active_prior60_cluster_inverse_vol'
+      ? 'Active opportunities · cluster inverse volatility'
+      : value === 'prior60_cluster_inverse_vol'
+        ? 'Cluster inverse volatility · new entries'
+        : value === 'original'
+          ? 'Original allocation'
+          : 'Not recorded'
   if (key === 'hypothesis' && typeof value === 'string')
     return value === 'none' ? 'No additional filter' : value.replaceAll('_', ' ')
   if (parameter === 'timing_choice' && typeof value === 'string') {

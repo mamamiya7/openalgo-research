@@ -17,6 +17,9 @@ TURNOVER_SEARCH_VERSION = "research-execution-search-v3"
 CAPACITY_SEARCH_VERSION = "research-execution-search-v4"
 ALLOCATION_SEARCH_VERSION = "research-execution-search-v5"
 CAPITAL_SEARCH_VERSION = "research-execution-search-v6"
+ACTION_SEARCH_VERSION = "research-execution-search-v7"
+ACTIVE_MODES = ("original", "active_prior60_cluster_inverse_vol")
+ACTIVE_POLICY = "Entry-only cluster inverse-volatility targets over contemporaneously eligible and held symbols using prior aligned returns; inactive source-universe members receive no budget. Hard account and strategy ceilings, costs, whole shares and deterministic entry order remain unchanged."
 ALLOCATION_AXIS = "portfolio.allocation_mode"
 ALLOCATION_MODES = ("original", "prior60_cluster_inverse_vol")
 ALLOCATION_POLICY = "One account-wide entry-only cluster inverse-volatility policy from exactly60 prior aligned returns, covariance shrunk10% to diagonal, positive regularized correlation>=0.8 connected components; equal gross-cap cluster budgets and inverse-volatility weights within each cluster. No matrix inversion, held-position rebalance or future inputs; unavailable inputs fail closed."
@@ -86,6 +89,7 @@ def descriptor(evidence):
 
     portfolio = evidence["portfolio"]
     capital_design = _capital_design(portfolio)
+    actions = portfolio.get("automatic_research", {}).get("action_policy") == "automatic_actions_v1"
     allocation = (
         portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v16"
     )
@@ -162,7 +166,9 @@ def descriptor(evidence):
     if not 1 <= len(originals) <= 8 or len({row["id"] for row in originals}) != len(originals):
         raise ValueError("Execution research requires one to eight distinct strategies")
     value = {
-        "version": CAPITAL_SEARCH_VERSION
+        "version": ACTION_SEARCH_VERSION
+        if actions
+        else CAPITAL_SEARCH_VERSION
         if capital_design
         else ALLOCATION_SEARCH_VERSION
         if allocation
@@ -190,6 +196,8 @@ def descriptor(evidence):
         )
     if allocation:
         value.update(allocation_modes=list(ALLOCATION_MODES), allocation_policy=ALLOCATION_POLICY)
+    if actions:
+        value.update(allocation_modes=list(ACTIVE_MODES), allocation_policy=ACTIVE_POLICY)
     if priority:
         value.update(
             entry_priorities=list(ENTRY_PRIORITIES),
@@ -205,6 +213,24 @@ def descriptor(evidence):
 
 def _validate(specification):
     from research.execution_policy import normalize_limits, normalize_policy
+
+    if isinstance(specification, dict) and specification.get("version") == ACTION_SEARCH_VERSION:
+        if (
+            specification.get("id")
+            != fingerprint({k: v for k, v in specification.items() if k != "id"})
+            or specification.get("allocation_modes") != list(ACTIVE_MODES)
+            or specification.get("allocation_policy") != ACTIVE_POLICY
+        ):
+            raise ValueError("The frozen active-opportunity policy changed")
+        legacy = {
+            **specification,
+            "version": CAPITAL_SEARCH_VERSION,
+            "allocation_modes": list(ALLOCATION_MODES),
+            "allocation_policy": ALLOCATION_POLICY,
+        }
+        legacy["id"] = fingerprint({k: v for k, v in legacy.items() if k != "id"})
+        _validate(legacy)
+        return
 
     if (
         not isinstance(specification, dict)
@@ -235,7 +261,7 @@ def _validate(specification):
         )
     ):
         raise ValueError("The frozen execution choices changed")
-    if specification["version"] == CAPITAL_SEARCH_VERSION:
+    if specification["version"] in (CAPITAL_SEARCH_VERSION, ACTION_SEARCH_VERSION):
         if (
             specification.get("design_policy") != "automatic_design_v1"
             or specification.get("ceilings") != CAPITAL_CEILINGS
@@ -245,22 +271,32 @@ def _validate(specification):
     elif "design_policy" in specification:
         raise ValueError("Automatic capital design needs its frozen execution version")
     rows = specification["strategies"]
-    if specification["version"] in (ALLOCATION_SEARCH_VERSION, CAPITAL_SEARCH_VERSION) and (
+    if specification["version"] in (
+        ALLOCATION_SEARCH_VERSION,
+        CAPITAL_SEARCH_VERSION,
+        ACTION_SEARCH_VERSION,
+    ) and (
         specification.get("allocation_modes") != list(ALLOCATION_MODES)
         or specification.get("allocation_policy") != ALLOCATION_POLICY
     ):
         raise ValueError("The frozen account allocation choices changed")
-    allocation = specification["version"] in (ALLOCATION_SEARCH_VERSION, CAPITAL_SEARCH_VERSION)
+    allocation = specification["version"] in (
+        ALLOCATION_SEARCH_VERSION,
+        CAPITAL_SEARCH_VERSION,
+        ACTION_SEARCH_VERSION,
+    )
     capacity = specification["version"] in (
         CAPACITY_SEARCH_VERSION,
         ALLOCATION_SEARCH_VERSION,
         CAPITAL_SEARCH_VERSION,
+        ACTION_SEARCH_VERSION,
     )
     turnover = specification["version"] in (
         TURNOVER_SEARCH_VERSION,
         CAPACITY_SEARCH_VERSION,
         ALLOCATION_SEARCH_VERSION,
         CAPITAL_SEARCH_VERSION,
+        ACTION_SEARCH_VERSION,
     )
     priority = specification["version"] in (
         PRIORITY_SEARCH_VERSION,
@@ -268,6 +304,7 @@ def _validate(specification):
         CAPACITY_SEARCH_VERSION,
         ALLOCATION_SEARCH_VERSION,
         CAPITAL_SEARCH_VERSION,
+        ACTION_SEARCH_VERSION,
     )
     if priority and (
         specification.get("entry_priorities") != list(ENTRY_PRIORITIES)
@@ -328,7 +365,7 @@ def _validate(specification):
             or (not priority and policy["version"] != "research-execution-aware-v1")
         ):
             raise ValueError("The frozen execution reference policy changed")
-    if specification["version"] == CAPITAL_SEARCH_VERSION:
+    if specification["version"] in (CAPITAL_SEARCH_VERSION, ACTION_SEARCH_VERSION):
         expected = descriptor(
             {
                 "portfolio": {
@@ -373,10 +410,18 @@ def axes(specification):
         CAPACITY_SEARCH_VERSION,
         ALLOCATION_SEARCH_VERSION,
         CAPITAL_SEARCH_VERSION,
+        ACTION_SEARCH_VERSION,
     ):
         result[PRIORITY_AXIS] = {"type": "categorical", "choices": list(ENTRY_PRIORITIES)}
-    if specification["version"] in (ALLOCATION_SEARCH_VERSION, CAPITAL_SEARCH_VERSION):
-        result[ALLOCATION_AXIS] = {"type": "categorical", "choices": list(ALLOCATION_MODES)}
+    if specification["version"] in (
+        ALLOCATION_SEARCH_VERSION,
+        CAPITAL_SEARCH_VERSION,
+        ACTION_SEARCH_VERSION,
+    ):
+        result[ALLOCATION_AXIS] = {
+            "type": "categorical",
+            "choices": list(specification["allocation_modes"]),
+        }
     return result
 
 
@@ -384,17 +429,23 @@ def apply_choices(strategies, params, specification):
     from research.execution_policy import normalize_policy
 
     _validate(specification)
-    allocation = specification["version"] in (ALLOCATION_SEARCH_VERSION, CAPITAL_SEARCH_VERSION)
+    allocation = specification["version"] in (
+        ALLOCATION_SEARCH_VERSION,
+        CAPITAL_SEARCH_VERSION,
+        ACTION_SEARCH_VERSION,
+    )
     capacity = specification["version"] in (
         CAPACITY_SEARCH_VERSION,
         ALLOCATION_SEARCH_VERSION,
         CAPITAL_SEARCH_VERSION,
+        ACTION_SEARCH_VERSION,
     )
     turnover = specification["version"] in (
         TURNOVER_SEARCH_VERSION,
         CAPACITY_SEARCH_VERSION,
         ALLOCATION_SEARCH_VERSION,
         CAPITAL_SEARCH_VERSION,
+        ACTION_SEARCH_VERSION,
     )
     priority = specification["version"] in (
         PRIORITY_SEARCH_VERSION,
@@ -402,9 +453,10 @@ def apply_choices(strategies, params, specification):
         CAPACITY_SEARCH_VERSION,
         ALLOCATION_SEARCH_VERSION,
         CAPITAL_SEARCH_VERSION,
+        ACTION_SEARCH_VERSION,
     )
     chosen_allocation = params.get(ALLOCATION_AXIS)
-    if allocation and chosen_allocation not in ALLOCATION_MODES:
+    if allocation and chosen_allocation not in specification["allocation_modes"]:
         raise ValueError("Allocation mode must belong to its frozen account choices")
     chosen_priority = params.get(PRIORITY_AXIS)
     if priority and chosen_priority not in ENTRY_PRIORITIES:
@@ -435,7 +487,7 @@ def apply_choices(strategies, params, specification):
             raise ValueError("Execution and portfolio states must belong to their frozen choices")
         original = definition["original"]
         fraction = Decimal(str(sizing["fraction"]))
-        capital_design = specification["version"] == CAPITAL_SEARCH_VERSION
+        capital_design = specification["version"] in (CAPITAL_SEARCH_VERSION, ACTION_SEARCH_VERSION)
         row["allocation_pct"] = (
             original["allocation_pct"]
             if capital_design
@@ -517,7 +569,7 @@ def original_sizing(settings, specification):
                 **(
                     {"allocation_mode": "original"}
                     if specification["version"]
-                    in (ALLOCATION_SEARCH_VERSION, CAPITAL_SEARCH_VERSION)
+                    in (ALLOCATION_SEARCH_VERSION, CAPITAL_SEARCH_VERSION, ACTION_SEARCH_VERSION)
                     else {}
                 ),
             }
@@ -528,13 +580,15 @@ def original_sizing(settings, specification):
         CAPACITY_SEARCH_VERSION,
         ALLOCATION_SEARCH_VERSION,
         CAPITAL_SEARCH_VERSION,
+        ACTION_SEARCH_VERSION,
     ) and (
         len({row["execution_policy"].get("entry_priority") for row in result}) != 1
         or any(
             row["execution_policy"].get("version")
             != (
                 "research-execution-aware-v5"
-                if specification["version"] in (ALLOCATION_SEARCH_VERSION, CAPITAL_SEARCH_VERSION)
+                if specification["version"]
+                in (ALLOCATION_SEARCH_VERSION, CAPITAL_SEARCH_VERSION, ACTION_SEARCH_VERSION)
                 else "research-execution-aware-v4"
                 if specification["version"] == CAPACITY_SEARCH_VERSION
                 else "research-execution-aware-v3"
@@ -561,9 +615,14 @@ def probes(midpoint, specification):
         CAPACITY_SEARCH_VERSION,
         ALLOCATION_SEARCH_VERSION,
         CAPITAL_SEARCH_VERSION,
+        ACTION_SEARCH_VERSION,
     ):
         base[PRIORITY_AXIS] = "source"
-    if specification["version"] in (ALLOCATION_SEARCH_VERSION, CAPITAL_SEARCH_VERSION):
+    if specification["version"] in (
+        ALLOCATION_SEARCH_VERSION,
+        CAPITAL_SEARCH_VERSION,
+        ACTION_SEARCH_VERSION,
+    ):
         base[ALLOCATION_AXIS] = "original"
     result = [
         {**base, **{f"{row['id']}.{axis}": choice["id"] for row in specification["strategies"]}}
@@ -579,9 +638,14 @@ def probes(midpoint, specification):
         CAPACITY_SEARCH_VERSION,
         ALLOCATION_SEARCH_VERSION,
         CAPITAL_SEARCH_VERSION,
+        ACTION_SEARCH_VERSION,
     ):
         result.extend({**base, PRIORITY_AXIS: value} for value in ENTRY_PRIORITIES[1:])
-    if specification["version"] in (ALLOCATION_SEARCH_VERSION, CAPITAL_SEARCH_VERSION):
+    if specification["version"] in (
+        ALLOCATION_SEARCH_VERSION,
+        CAPITAL_SEARCH_VERSION,
+        ACTION_SEARCH_VERSION,
+    ):
         # Replace a redundant reduced-allocation screen; total search work is unchanged.
         replaced = next(
             i
@@ -589,7 +653,7 @@ def probes(midpoint, specification):
             if row.get(f"{specification['strategies'][0]['id']}.portfolio_choice")
             == "allocation_50"
         )
-        result[replaced] = {**base, ALLOCATION_AXIS: "prior60_cluster_inverse_vol"}
+        result[replaced] = {**base, ALLOCATION_AXIS: specification["allocation_modes"][1]}
     return result
 
 

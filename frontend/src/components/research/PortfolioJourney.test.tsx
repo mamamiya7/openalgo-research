@@ -266,6 +266,7 @@ describe('native portfolio consumer journey', () => {
       history_policy: 'available_history',
       design_policy: 'automatic_design_v1',
       decision_policy: 'automatic_decision_v1',
+      action_policy: 'automatic_actions_v1',
     })
     expect(optimized.portfolio.strategies).toEqual(original.portfolio.strategies)
     expect(optimized.portfolio.capital).toBe(original.portfolio.capital)
@@ -603,6 +604,7 @@ describe('native portfolio consumer journey', () => {
       history_policy: 'available_history',
       design_policy: 'automatic_design_v1',
       decision_policy: 'automatic_decision_v1',
+      action_policy: 'automatic_actions_v1',
     })
     expect(sent.capital).toBe(original.portfolio.capital)
     expect(sent.strategies[0].config).toEqual(original.portfolio.strategies[0].config)
@@ -2478,7 +2480,7 @@ it('uses all available history automatically without an extra option or changing
   expect(
     screen.queryByRole('checkbox', { name: 'Historical optimisation' })
   ).not.toBeInTheDocument()
-  expect(screen.getByText(/Using all available signal history/)).toBeVisible()
+  expect(screen.getByText(/Uses available history, searches trade sizes/)).toBeVisible()
   await userEvent.click(screen.getByRole('button', { name: 'Optimize automatically' }))
   await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
   const sent = vi.mocked(portfolioResearch.submit).mock.calls[0][0]
@@ -2487,6 +2489,7 @@ it('uses all available history automatically without an extra option or changing
     history_policy: 'available_history',
     design_policy: 'automatic_design_v1',
     decision_policy: 'automatic_decision_v1',
+    action_policy: 'automatic_actions_v1',
   })
   expect(sent.capital).toBe(original.portfolio.capital)
   expect(sent.strategies[0].config).toEqual(original.portfolio.strategies[0].config)
@@ -2496,6 +2499,7 @@ it('uses all available history automatically without an extra option or changing
     history_policy: 'available_history',
     design_policy: 'automatic_design_v1',
     decision_policy: 'automatic_decision_v1',
+    action_policy: 'automatic_actions_v1',
   })
 })
 
@@ -2513,6 +2517,7 @@ it('opts an existing strict v16 draft into available history on a new run withou
     history_policy: 'available_history',
     design_policy: 'automatic_design_v1',
     decision_policy: 'automatic_decision_v1',
+    action_policy: 'automatic_actions_v1',
   })
   expect(original).toEqual(before)
 })

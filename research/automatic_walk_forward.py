@@ -1386,7 +1386,85 @@ def _run(
                 persist()
         return winner, rows
 
+    def with_automatic_actions(result):
+        from research.automatic_actions import descriptor, entry_prices
+        from research.capital_planning import (
+            selected_account_descriptor,
+            selected_account_finish,
+            selected_account_next,
+            selected_account_plan,
+            selected_account_receipt,
+            selected_account_settings,
+        )
+
+        if (
+            recipe["automatic_actions"] != descriptor()
+            or recipe["capital_planning"] != selected_account_descriptor()
+        ):
+            raise ValueError("The frozen automatic action policy changed")
+        selected = state["selection"]
+        planned = selected_account_plan(
+            selected["strategies"],
+            capital,
+            entry_prices(
+                state["selected_report"], selected["strategies"], window("search")["snapshot"]
+            ),
+            max_accounts=recipe["budget"]["max_capital_planning_accounts"],
+        )
+        retained = state.get("automatic_actions")
+        if retained is None:
+            retained = {"plan": planned, "accounts": []}
+            state["automatic_actions"] = retained
+            persist()
+        if retained.get("plan") != planned or not isinstance(retained.get("accounts"), list):
+            raise ValueError("The saved automatic action programme changed")
+        receipts = []
+        while (index := selected_account_next(planned, receipts)) is not None:
+            control()
+            settings = selected_account_settings(planned, index)
+            offset = len(receipts)
+            if offset < len(retained["accounts"]):
+                item = retained["accounts"][offset]
+                report = item["report"]
+                if numerical_settings(report.get("strategies")) != numerical_settings(settings):
+                    raise ValueError("Saved automatic action settings changed")
+                audit = prepared_portfolio.assess(report, evidence["portfolio_execution_features"])
+                if (
+                    audit != report.get("portfolio_constraint_evidence")
+                    or audit.get("status") != "supported"
+                ):
+                    raise ValueError("Saved automatic action native constraints changed")
+                receipt = selected_account_receipt(report, planned, index)
+                if receipt != item["receipt"]:
+                    raise ValueError("Saved automatic action evidence changed")
+            else:
+                report = simulate(
+                    settings,
+                    selected["hypothesis"],
+                    "search",
+                    report_analysis=False,
+                    account_capital=planned["options"][index]["capital"],
+                )
+                if report.get("portfolio_constraint_evidence", {}).get("status") != "supported":
+                    raise ValueError(
+                        "Automatic capital actions require supported native constraint evidence"
+                    )
+                receipt = selected_account_receipt(report, planned, index)
+                retained["accounts"].append({"report": report, "receipt": receipt})
+                persist()
+            receipts.append(receipt)
+        if len(receipts) != len(retained["accounts"]):
+            raise ValueError("Saved automatic actions continued after their recorded stop")
+        findings = result["automatic_research"]
+        findings["capital_planning"] = selected_account_finish(planned, receipts)
+        findings["counts"].update(
+            simulations=state["simulations"], attempts_reserved=state["attempts"]
+        )
+        return result
+
     def with_capital_planning(result):
+        if "automatic_actions" in recipe:
+            return with_automatic_actions(result)
         if "capital_planning" not in recipe:
             return result
         from research.capital_planning import (
