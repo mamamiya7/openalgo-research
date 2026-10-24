@@ -416,6 +416,7 @@ export interface PortfolioRequest {
         validation_mode?: 'historical_only'
         history_policy?: 'available_history'
         design_policy?: 'automatic_design_v1'
+        decision_policy?: 'automatic_decision_v1'
       }
   )
   entry_conditions?: EntryConditions
@@ -634,8 +635,36 @@ export interface ResearchHistoryAvailability {
   usable_entry_session_count?: number
 }
 export interface AutomaticResearchFindings {
+  decision?: {
+    version: 'research-automatic-decision-v1'
+    outcome: 'no_useful_improvement' | 'insufficient_evidence' | 'supported_candidate'
+    historical_candidate: boolean
+    independently_validated: boolean
+    selected_config_id?: string
+    reasons: string[]
+    checks: Array<{ kind: string; passed: boolean; reasons?: string[]; [key: string]: unknown }>
+    next_action: string
+    stopping_reason?: string
+    allocation?: { mean_invested_pct?: number | null; maximum_invested_pct?: number | null }
+  }
+  decision_preflight?: {
+    goal: string
+    steps: string[]
+    complete_entry_sessions?: number | null
+    [key: string]: unknown
+  }
   capital_planning?: {
-    version: 'research-capital-planning-v1'
+    version: 'research-capital-planning-v1' | 'research-capital-planning-v2'
+    diagnosis?: {
+      action:
+        | 'funding_verified'
+        | 'review_noncash_constraints'
+        | 'test_higher_capital'
+        | 'insufficient_funding_evidence'
+        | 'account_budget_exhausted'
+        | 'unsupported_capital_representation'
+      reason: string
+    }
     status: 'verified_sufficient' | 'no_verified_amount'
     estimated_capital: number
     verified_capital: number | null

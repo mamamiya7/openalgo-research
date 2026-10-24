@@ -143,6 +143,7 @@ function availableHistoryResearch(
         version: recipe.version,
         history_policy: 'available_history',
         design_policy: 'automatic_design_v1',
+        decision_policy: 'automatic_decision_v1',
       }
     : recipe
 }
@@ -1111,7 +1112,8 @@ export function PortfolioBuilder({
                 <p className="mt-2 text-sm text-muted-foreground">
                   Using all available signal history. Sizes trades within your risk limits and
                   estimates starting capital from your initial order amount. Findings show which
-                  historical checks the available dates support.
+                  historical checks the available dates support. The final decision explains whether
+                  the chosen rules survived higher costs and nearby settings.
                 </p>
               )}
               <details className="mt-3 text-sm">

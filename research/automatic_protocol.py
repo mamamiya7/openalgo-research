@@ -116,7 +116,8 @@ def normalize_auto(raw, strategies=None, engine="vectorbt"):
     if (
         not isinstance(raw, dict)
         or "version" not in raw
-        or set(raw) - {"version", "validation_mode", "history_policy", "design_policy"}
+        or set(raw)
+        - {"version", "validation_mode", "history_policy", "design_policy", "decision_policy"}
         or raw["version"]
         not in (VERSION, CONDITION_VERSION, STABILITY_VERSION, *HYPOTHESIS_VERSIONS)
     ):
@@ -138,6 +139,15 @@ def normalize_auto(raw, strategies=None, engine="vectorbt"):
         ):
             raise ValueError("Choose the current automatic design policy")
         result["design_policy"] = "automatic_design_v1"
+    if "decision_policy" in raw:
+        if (
+            raw["version"] != ALLOCATION_VERSION
+            or raw.get("history_policy") != "available_history"
+            or raw.get("design_policy") != "automatic_design_v1"
+            or raw["decision_policy"] != "automatic_decision_v1"
+        ):
+            raise ValueError("Choose the current automatic decision policy with design admission")
+        result["decision_policy"] = raw["decision_policy"]
     if "validation_mode" in raw:
         if raw["version"] != ALLOCATION_VERSION or raw["validation_mode"] != "historical_only":
             raise ValueError(
@@ -733,6 +743,46 @@ def compile_recipe(evidence):
             "participation across the predeclared complete-entry calendar and bounded "
             "symbol-profit concentration. Failure retains the unchanged baseline."
         )
+    from research.automatic_decision import descriptor as decision_descriptor
+    from research.automatic_decision import enabled as decision_enabled
+
+    if decision_enabled(portfolio):
+        from research.capital_planning import DECISION_VERSION
+
+        payload["automatic_decision"] = decision_descriptor()
+        payload["capital_planning"] = capital_descriptor(DECISION_VERSION)
+        payload["budget"]["max_decision_accounts"] = (
+            decision_descriptor()["max_additional_accounts"]
+            if validation_mode == "exploratory_only"
+            else 0
+        )
+        payload["policies"]["decision"] = decision_descriptor()["selection"]
+        plan = payload.get("research_plan")
+        if plan:
+            plan["decision"] = deepcopy(payload["automatic_decision"])
+            if validation_mode == "exploratory_only":
+                plan["chronology"] = (
+                    "Expanding historical prefixes and same-history seed repeats; no separate later-period validation"
+                )
+                for method in plan.get("methods", []):
+                    if method.get("id") == "symbol_date_sensitivity":
+                        method.update(
+                            status="unavailable",
+                            reason="This available-history programme records fixed-choice prefixes and stock-profit concentration; it does not run separate symbol-group or chronological-half accounts",
+                        )
+                    if method.get("id") in (
+                        "recommendation_evidence",
+                        "recommendation_sensitivity",
+                        "search_seed_stability",
+                    ):
+                        method.update(
+                            status="diagnostic",
+                            reason="Same-history diagnostics cannot establish independent validation",
+                        )
+            plan["id"] = fingerprint({key: value for key, value in plan.items() if key != "id"})
+        from research.automatic_decision import preflight
+
+        payload["decision_preflight"] = preflight(evidence, payload)
     return {**payload, "id": fingerprint(payload)}
 
 

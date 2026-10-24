@@ -265,6 +265,7 @@ describe('native portfolio consumer journey', () => {
       version: 'automatic-hypotheses-v16',
       history_policy: 'available_history',
       design_policy: 'automatic_design_v1',
+      decision_policy: 'automatic_decision_v1',
     })
     expect(optimized.portfolio.strategies).toEqual(original.portfolio.strategies)
     expect(optimized.portfolio.capital).toBe(original.portfolio.capital)
@@ -601,6 +602,7 @@ describe('native portfolio consumer journey', () => {
       version: 'automatic-hypotheses-v16',
       history_policy: 'available_history',
       design_policy: 'automatic_design_v1',
+      decision_policy: 'automatic_decision_v1',
     })
     expect(sent.capital).toBe(original.portfolio.capital)
     expect(sent.strategies[0].config).toEqual(original.portfolio.strategies[0].config)
@@ -2484,6 +2486,7 @@ it('uses all available history automatically without an extra option or changing
     version: 'automatic-hypotheses-v16',
     history_policy: 'available_history',
     design_policy: 'automatic_design_v1',
+    decision_policy: 'automatic_decision_v1',
   })
   expect(sent.capital).toBe(original.portfolio.capital)
   expect(sent.strategies[0].config).toEqual(original.portfolio.strategies[0].config)
@@ -2492,6 +2495,7 @@ it('uses all available history automatically without an extra option or changing
     version: 'automatic-hypotheses-v16',
     history_policy: 'available_history',
     design_policy: 'automatic_design_v1',
+    decision_policy: 'automatic_decision_v1',
   })
 })
 
@@ -2508,6 +2512,7 @@ it('opts an existing strict v16 draft into available history on a new run withou
     version: 'automatic-hypotheses-v16',
     history_policy: 'available_history',
     design_policy: 'automatic_design_v1',
+    decision_policy: 'automatic_decision_v1',
   })
   expect(original).toEqual(before)
 })
@@ -2660,6 +2665,15 @@ it.each([
       automatic_research: {
         version: 'automatic-hypotheses-v16',
         selected_config_id: 'candidate',
+        decision: {
+          version: 'research-automatic-decision-v1',
+          outcome: 'no_useful_improvement',
+          historical_candidate: false,
+          independently_validated: false,
+          reasons: ['The chosen rules did not survive higher transaction costs'],
+          checks: [{ kind: 'higher_costs', passed: false }],
+          next_action: 'Retain original rules; review the recorded failure reasons',
+        },
         capital_planning: {
           version: 'research-capital-planning-v1',
           status: 'verified_sufficient',
@@ -2721,12 +2735,18 @@ it.each([
   )
   expect(await screen.findByText(/Using all available signal history · 160 sessions/)).toBeVisible()
   expect(screen.getByText('Historical research · no independent later-period check')).toBeVisible()
-  if (configId === 'candidate')
+  if (configId === 'candidate') {
     expect(screen.getByText('Capital verified for this history: ₹75,000')).toBeVisible()
-  else
+    expect(screen.getByRole('region', { name: 'Research decision' })).toBeVisible()
+    expect(
+      screen.getByText('The chosen rules did not survive higher transaction costs')
+    ).toBeVisible()
+  } else {
     expect(
       screen.queryByRole('region', { name: 'Starting capital estimate' })
     ).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Research decision' })).not.toBeInTheDocument()
+  }
   expect(portfolioResearch.job).toHaveBeenCalledWith(parentId, expect.any(AbortSignal))
   expect(child).toEqual(original)
 })

@@ -143,7 +143,7 @@ def attempt_reserver(
             # planning accounts. A larger reserve only restricts admission;
             # the immutable total and lost-attempt bounds remain unchanged.
             or type(reserve) is not int
-            or reserve not in (0, 2, 3, 4, 5)
+            or reserve not in (0, 2, 3, 4, 5, 13)
         ):
             raise ValueError("Research attempt admission changed its recorded accounting")
         with store.sessions.begin() as db:
@@ -162,6 +162,28 @@ def attempt_reserver(
             receipt = db.get(ResearchExperiment, job_id)
             if receipt is None or receipt.identity != identity:
                 raise ValueError("Research attempt admission belongs to different frozen inputs")
+            if reserve == 13:
+                # The available-history decision programme reserves nine
+                # challenges plus four capital accounts. Admit that exact
+                # phase only for its frozen opt-in request; legacy journals
+                # and arbitrary larger reserves gain no new admission path.
+                specification = _counts(receipt.specification)
+                portfolio = specification.get("portfolio")
+                automatic = (
+                    portfolio.get("automatic_research") if isinstance(portfolio, dict) else None
+                )
+                if not isinstance(automatic, dict) or any(
+                    automatic.get(key) != value
+                    for key, value in (
+                        ("version", "automatic-hypotheses-v16"),
+                        ("history_policy", "available_history"),
+                        ("design_policy", "automatic_design_v1"),
+                        ("decision_policy", "automatic_decision_v1"),
+                    )
+                ):
+                    raise ValueError(
+                        "Decision account reservation needs its frozen research policy"
+                    )
             counts = deepcopy(_counts(receipt.counts))
             if KEY in counts:
                 counter = deepcopy(_counter(counts[KEY]))

@@ -1,5 +1,19 @@
 # OpenAlgo Research status
 
+## Automatic decision policy — 24 October 2026, preview.28
+
+The [decision-layer research and implementation](AUTOMATIC_DECISION_RESEARCH_20261024.md)
+compares five established open-source/agent engines and records the new
+`automatic_decision_v1` opt-in for editable runs. It uses the existing pinned
+Optuna engine with named admission constraints, pre-outcome goals, all 408
+proposals, automatic cost/neighbor challenges, honest historical conclusions,
+separate cash/noncash capital diagnosis and durable decision recovery. Existing
+studies keep their frozen behavior. The 512-account ceiling and hard validation
+rules are unchanged. The [installation acceptance](INSTALLED_DECISION28_ACCEPTANCE_20261024.md)
+records the installed candidate, preserved settings and records, platform checks
+and the Chartink handoff's pending user sign-in. The installed save/reopen journey
+is not claimed complete while that blocker remains.
+
 ## Immediate production execution plan — 23 October 2026
 
 The [production implementation plan](PRODUCTION_IMPLEMENTATION_20261023.md)

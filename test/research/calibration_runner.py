@@ -124,13 +124,14 @@ class ControlledAccounts:
         return result
 
 
-def controlled_audit(report, features, _identity_check=None):
+def controlled_audit(report, features, _identity_check=None, *, _owned_report=None):
     """Explicit schema-compatible stub, never evidence of native risk arithmetic.
 
     The scope/qualification strings implement the interface consumed by the
     real controller. The sealed test_double flag and outer runner/model identity
     distinguish these simulated facts from native execution qualification.
     """
+    assert _owned_report is None, "A controlled account cannot claim native ownership"
     body = {
         "version": "research-portfolio-constraint-evidence-v1",
         "status": "supported",

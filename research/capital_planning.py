@@ -8,6 +8,7 @@ from research.execution_policy import normalize_limits
 from research.report_contract import fingerprint, settings_identity
 
 VERSION = "research-capital-planning-v1"
+DECISION_VERSION = "research-capital-planning-v2"
 MAX_NATIVE_CAPITAL = 1_000_000_000
 
 
@@ -21,19 +22,26 @@ def _seal(value):
     return {**value, "id": fingerprint(value)}
 
 
-def descriptor():
-    return _seal(
-        {
-            "version": VERSION,
-            "max_accounts": 4,
-            "multipliers": [1.0, 1.25, 1.5, 2.0],
-            "rounding_rupees": 1000,
-            "ticket_basis": "Original capital, strategy allocation and order size define fixed initial rupee tickets; later account equity compounds the ticket fraction.",
-            "scope": "Separate capital-planning variant of frozen selected rules, not selected-setup replay, minimum capital or independent validation.",
-            "risk": "All original hard account risk limits remain unchanged; fixed tickets may still be clipped or blocked.",
-            "representation": "Only account amounts within the native 1 to 1,000,000,000 rupee capital range and preserving active original tickets within the 0.01% to 100% order-size range are tested; inactive zero allocations retain zero tickets, and tickets are never rounded or increased.",
+def descriptor(version=VERSION):
+    if version not in (VERSION, DECISION_VERSION):
+        raise ValueError("Choose a recorded capital-planning policy")
+    value = {
+        "version": version,
+        "max_accounts": 4,
+        "multipliers": [1.0, 1.25, 1.5, 2.0],
+        "rounding_rupees": 1000,
+        "ticket_basis": "Original capital, strategy allocation and order size define fixed initial rupee tickets; later account equity compounds the ticket fraction.",
+        "scope": "Separate capital-planning variant of frozen selected rules, not selected-setup replay, minimum capital or independent validation.",
+        "risk": "All original hard account risk limits remain unchanged; fixed tickets may still be clipped or blocked.",
+        "representation": "Only account amounts within the native 1 to 1,000,000,000 rupee capital range and preserving active original tickets within the 0.01% to 100% order-size range are tested; inactive zero allocations retain zero tickets, and tickets are never rounded or increased.",
+    }
+    if version == DECISION_VERSION:
+        value["decision_policy"] = {
+            "cash": "Only recorded shared-cash shortfalls justify testing a higher account amount automatically.",
+            "noncash": "Fixed risk, allocation, position and liquidity limits, whole-share ticket affordability and unavailable evidence require a separate decision; increasing funds is not a cash-only solution.",
+            "stopping": "Stop at verified funding, any noncash blocker, no recorded cash shortfall, or the frozen account bound. Preserve every recorded constraint; overlapping tags are not proof of a unique binding cause.",
         }
-    )
+    return _seal(value)
 
 
 def _rows(baseline, selected):
@@ -48,7 +56,7 @@ def _rows(baseline, selected):
         raise ValueError("Capital planning needs matching frozen strategy rows")
 
 
-def plan(baseline, selected, capital, risk_limits=None, *, max_accounts=4):
+def plan(baseline, selected, capital, risk_limits=None, *, max_accounts=4, version=VERSION):
     _rows(baseline, selected)
     capital = _number(capital, "original capital")
     if type(max_accounts) is not int or max_accounts not in (3, 4):
@@ -106,7 +114,8 @@ def plan(baseline, selected, capital, risk_limits=None, *, max_accounts=4):
         positions * maximum_ticket / (limits["max_gross_exposure_pct"] / 100),
     )
     seed = ceil(round(seed / 1000, 10)) * 1000
-    candidates = [ceil(seed * factor / 1000) * 1000 for factor in descriptor()["multipliers"]]
+    policy = descriptor(version)
+    candidates = [ceil(seed * factor / 1000) * 1000 for factor in policy["multipliers"]]
     # Tiny ticket sizes can round neighbouring candidates to the same amount.
     candidates = sorted(set(candidates))[:max_accounts]
     representable = [
@@ -121,8 +130,8 @@ def plan(baseline, selected, capital, risk_limits=None, *, max_accounts=4):
     ]
     return _seal(
         {
-            "version": VERSION,
-            "policy_id": descriptor()["id"],
+            "version": version,
+            "policy_id": policy["id"],
             "original_capital": capital,
             "baseline": deepcopy(baseline),
             "selected": deepcopy(selected),
@@ -149,6 +158,7 @@ def _validate_plan(value):
         value["original_capital"],
         value["risk_limits"],
         max_accounts=value["max_accounts"],
+        version=value["version"],
     )
     if value != expected:
         raise ValueError("The frozen capital plan differs from its declared policy")
@@ -188,6 +198,8 @@ def account_receipt(report, plan, capital):
     if _number(report["summary"]["initial_capital"], "native initial capital") != capital:
         raise ValueError("Native account capital differs from the frozen plan")
     blockers, clipped, admitted = Counter(), 0, 0
+    constraint_counts, category_counts = Counter(), Counter()
+    cash_requests, noncash_requests = 0, 0
     inactive = {row["strategy_id"] for row in plan["tickets"] if row["initial_ticket"] == 0}
     for row in report["ledger"]:
         if row.get("strategy_id") in inactive:
@@ -204,14 +216,20 @@ def account_receipt(report, plan, capital):
             if "not met:" in reason or reason.startswith("maximum holding window crosses"):
                 continue
             blockers["unavailable_evidence"] += 1
+            category_counts["unavailable_evidence"] += 1
+            noncash_requests += 1
             continue
         if status == "pending" and not quantity:
             blockers["unavailable_entry_period"] += 1
+            category_counts["unavailable_entry_period"] += 1
+            noncash_requests += 1
             continue
         if quantity:
             admitted += 1
             if "requested_quantity" not in details:
                 blockers["unavailable_execution_evidence"] += 1
+                category_counts["unavailable_execution_evidence"] += 1
+                noncash_requests += 1
         requested = _number(
             details.get("requested_quantity", quantity), "requested quantity", positive=False
         )
@@ -226,6 +244,39 @@ def account_receipt(report, plan, capital):
         if blocked:
             clipped += int(quantity > 0)
             tags = set(constraints)
+            constraint_counts.update(tags)
+            categories = set()
+            if "shared_cash" in tags:
+                cash_requests += 1
+                categories.add("cash_shortfall")
+            if "open_positions" in tags:
+                categories.add("position_limit")
+            if "daily_volume_participation" in tags:
+                categories.add("liquidity_limit")
+            policy_tags = {
+                "gross_exposure",
+                "strategy_allocation",
+                "symbol_exposure",
+                "trade_stop_risk",
+                "total_stop_risk",
+                "correlated_exposure",
+                "daily_buy_turnover",
+                "risk_sizing_target",
+                "portfolio_symbol_allocation",
+                "portfolio_cluster_allocation",
+            }
+            if tags & policy_tags:
+                categories.add("risk_or_allocation_policy")
+            if tags - policy_tags - {"shared_cash", "open_positions", "daily_volume_participation"}:
+                categories.add("unexplained_execution_limit")
+            if "unavailable" in reason or "missing" in reason:
+                categories.add("unavailable_evidence")
+            if not requested or ("requested_cash_budget" in reason and not tags):
+                categories.add("fixed_ticket_affordability")
+            if not categories:
+                categories.add("unexplained_execution_limit")
+            category_counts.update(categories)
+            noncash_requests += int(bool(categories - {"cash_shortfall"}))
             if "open_positions" in tags:
                 blockers["position_count"] += 1
             elif "daily_volume_participation" in tags:
@@ -250,29 +301,105 @@ def account_receipt(report, plan, capital):
                 blockers["funding_or_percentage_limit"] += 1
             else:
                 blockers["other_execution_limit"] += 1
-    return _seal(
-        {
-            "version": VERSION,
-            "plan_id": plan["id"],
-            "capital": capital,
-            "ledger_id": fingerprint(report["ledger"]),
-            "summary": deepcopy(report["summary"]),
-            "admitted_requests": admitted,
-            "clipped_requests": clipped,
-            "blockers": dict(sorted(blockers.items())),
-            "verified_sufficient": admitted > 0 and not blockers,
-        }
+    value = {
+        "version": plan["version"],
+        "plan_id": plan["id"],
+        "capital": capital,
+        "ledger_id": fingerprint(report["ledger"]),
+        "summary": deepcopy(report["summary"]),
+        "admitted_requests": admitted,
+        "clipped_requests": clipped,
+        "blockers": dict(sorted(blockers.items())),
+        "verified_sufficient": admitted > 0 and not blockers,
+    }
+    if plan["version"] == DECISION_VERSION:
+        value["diagnosis"] = _diagnosis(
+            value["verified_sufficient"],
+            cash_requests,
+            noncash_requests,
+            constraint_counts,
+            category_counts,
+        )
+    return _seal(value)
+
+
+def _diagnosis(verified, cash, noncash, constraints, categories):
+    action = (
+        "funding_verified"
+        if verified
+        else "review_noncash_constraints"
+        if noncash
+        else "test_higher_capital"
+        if cash
+        else "insufficient_funding_evidence"
     )
+    reasons = {
+        "funding_verified": "All recorded eligible requests were funded in this historical planning variant.",
+        "review_noncash_constraints": "Recorded requests also hit policy, ticket or evidence constraints. Preserve those limits and resolve the noncash causes before recommending more money.",
+        "test_higher_capital": "Recorded requests have shared-cash shortfalls without a recorded noncash blocker. Test the next frozen amount within the existing budget.",
+        "insufficient_funding_evidence": "No complete eligible fills or attributable shared-cash shortfalls establish a reason to increase funds.",
+    }
+    return {
+        "action": action,
+        "stop_increases": action != "test_higher_capital",
+        "cash_shortfall_requests": cash,
+        "noncash_blocker_requests": noncash,
+        "constraint_counts": dict(sorted(constraints.items())),
+        "categories": dict(sorted(categories.items())),
+        "reason": reasons[action],
+        "scope": "All recorded clipping or rejection tags are preserved; they may overlap and do not establish a unique causal bottleneck. No fixed limit is relaxed.",
+    }
+
+
+def should_continue(receipt):
+    if not isinstance(receipt, dict) or receipt.get("id") != fingerprint(
+        {key: value for key, value in receipt.items() if key != "id"}
+    ):
+        raise ValueError("Recorded capital account evidence changed")
+    if receipt.get("version") == VERSION:
+        return not receipt["verified_sufficient"]
+    if receipt.get("version") != DECISION_VERSION:
+        raise ValueError("Recorded capital decision policy changed")
+    diagnosis = receipt.get("diagnosis", {})
+    for name in ("cash_shortfall_requests", "noncash_blocker_requests"):
+        if type(diagnosis.get(name)) is not int or diagnosis[name] < 0:
+            raise ValueError("Recorded capital diagnosis counts changed")
+    for name in ("constraint_counts", "categories"):
+        values = diagnosis.get(name)
+        if not isinstance(values, dict) or any(
+            not isinstance(key, str) or type(value) is not int or value <= 0
+            for key, value in values.items()
+        ):
+            raise ValueError("Recorded capital constraint counts changed")
+    if diagnosis["categories"].get("cash_shortfall", 0) != diagnosis["cash_shortfall_requests"]:
+        raise ValueError("Recorded capital cash-shortfall counts disagree")
+    noncash_count = sum(
+        value for key, value in diagnosis["categories"].items() if key != "cash_shortfall"
+    )
+    if not diagnosis["noncash_blocker_requests"] <= noncash_count or bool(noncash_count) != bool(
+        diagnosis["noncash_blocker_requests"]
+    ):
+        raise ValueError("Recorded capital noncash-blocker counts disagree")
+    expected = _diagnosis(
+        receipt["verified_sufficient"],
+        diagnosis["cash_shortfall_requests"],
+        diagnosis["noncash_blocker_requests"],
+        diagnosis["constraint_counts"],
+        diagnosis["categories"],
+    )
+    if diagnosis != expected:
+        raise ValueError("Recorded capital decision changed")
+    return not diagnosis["stop_increases"]
 
 
 def finish(plan, receipts):
     _validate_plan(plan)
     if not isinstance(receipts, list) or len(receipts) > len(plan["candidate_capitals"]):
         raise ValueError("Capital planning exceeded its frozen account budget")
-    sufficient = None
+    sufficient, stopped = None, False
     for index, receipt in enumerate(receipts):
         if (
-            sufficient is not None
+            stopped
             or not isinstance(receipt, dict)
             or receipt.get("plan_id") != plan["id"]
             or receipt.get("capital") != plan["candidate_capitals"][index]
@@ -284,9 +411,27 @@ def finish(plan, receipts):
             raise ValueError("Recorded capital accounts differ from their frozen sequence")
         if receipt["verified_sufficient"]:
             sufficient = receipt["capital"]
+        stopped = not should_continue(receipt)
+    diagnosis = None
+    if plan["version"] == DECISION_VERSION:
+        diagnosis = (
+            deepcopy(receipts[-1]["diagnosis"]) if receipts else _diagnosis(False, 0, 0, {}, {})
+        )
+        if not plan["candidate_capitals"]:
+            diagnosis.update(
+                action="unsupported_capital_representation",
+                stop_increases=True,
+                reason="No frozen account amount can preserve the original ticket within supported account-capital and order-size ranges. No additional account is admitted.",
+            )
+        elif receipts and not stopped and len(receipts) == len(plan["candidate_capitals"]):
+            diagnosis.update(
+                action="account_budget_exhausted",
+                stop_increases=True,
+                reason="The recorded capital amounts were tested without establishing sufficient funding. The frozen account budget is complete; no further increase is admitted.",
+            )
     return _seal(
         {
-            "version": VERSION,
+            "version": plan["version"],
             "plan_id": plan["id"],
             "status": "verified_sufficient" if sufficient is not None else "no_verified_amount",
             "estimated_capital": plan["seed_capital"],
@@ -303,7 +448,8 @@ def finish(plan, receipts):
             ),
             "verified_capital": sufficient,
             "accounts": deepcopy(receipts),
-            "policy": descriptor(),
+            "policy": descriptor(plan["version"]),
+            **({"diagnosis": diagnosis} if diagnosis is not None else {}),
             "independently_validated": False,
             "scope": "Sufficient only for recorded eligible requests in this fixed-initial-ticket historical planning variant; not minimum capital or an exact replay of the selected setup.",
         }

@@ -34,6 +34,86 @@ const capitalBlockerLabels: Record<string, string> = {
   other_execution_limit: 'Other execution limit',
 }
 
+const capitalActions = {
+  funding_verified: 'Funding verified for the recorded history',
+  review_noncash_constraints: 'Review policy, order-size and data constraints',
+  test_higher_capital: 'A higher capital check is needed',
+  insufficient_funding_evidence: 'Insufficient funding evidence',
+  account_budget_exhausted: 'Capital checks reached their recorded limit',
+  unsupported_capital_representation: 'The fixed order amount cannot be represented',
+}
+
+function decisionTitle(decision: NonNullable<Findings['decision']>) {
+  return decision.outcome === 'no_useful_improvement'
+    ? 'No useful improvement found'
+    : decision.outcome === 'insufficient_evidence'
+      ? 'Historical candidate · insufficient independent evidence'
+      : 'Candidate passed the recorded checks'
+}
+
+const decisionChecks: Record<string, string> = {
+  higher_costs: 'Higher trading costs',
+  neighboring_settings: 'Nearby settings',
+}
+const decisionSteps: Record<string, string> = {
+  freeze_inputs_and_goal: 'Freeze inputs and rules',
+  baseline: 'Check original settings',
+  constrained_search: 'Search within limits',
+  freeze_choice: 'Freeze the chosen settings',
+  challenge_costs_and_neighbors: 'Challenge costs and nearby settings',
+  diagnose_capital: 'Check funding',
+  conclude: 'Record the final decision',
+}
+
+export function ResearchDecision({
+  decision,
+  preflight,
+}: {
+  decision: NonNullable<Findings['decision']>
+  preflight?: Findings['decision_preflight']
+}) {
+  if (decision.version !== 'research-automatic-decision-v1') return null
+  return (
+    <section aria-label="Research decision" className="space-y-2 pt-2 text-sm">
+      <p className="font-medium">{decisionTitle(decision)}</p>
+      {decision.reasons.length > 0 && (
+        <ul className="list-disc space-y-1 pl-5">
+          {decision.reasons.map((reason) => (
+            <li key={reason}>{reason}</li>
+          ))}
+        </ul>
+      )}
+      {decision.checks.length > 0 && (
+        <div className="space-y-1">
+          {decision.checks.map((check) => (
+            <p key={check.kind}>
+              {decisionChecks[check.kind] ?? check.kind.replaceAll('_', ' ')}:{' '}
+              {check.passed ? 'Passed' : 'Did not pass'}
+            </p>
+          ))}
+        </div>
+      )}
+      <p className="font-medium">{decision.next_action}</p>
+      {!decision.independently_validated && (
+        <p className="text-muted-foreground">Historical findings; not independently validated.</p>
+      )}
+      {preflight && (
+        <details>
+          <summary className="cursor-pointer text-muted-foreground">
+            What this research checked
+          </summary>
+          <p className="pt-1">{preflight.goal}</p>
+          <p className="text-muted-foreground">
+            {preflight.steps
+              .map((step) => decisionSteps[step] ?? 'Recorded research step')
+              .join(' · ')}
+          </p>
+        </details>
+      )}
+    </section>
+  )
+}
+
 export function CapitalPlanning({
   planning,
 }: {
@@ -56,8 +136,16 @@ export function CapitalPlanning({
       </p>
       {planning.status === 'no_verified_amount' && (
         <p>
-          No tested amount funded every eligible request. Extra money cannot resolve every limit.
+          {planning.accounts.length === 0
+            ? 'No capital amount was verified from the available checks.'
+            : 'No tested amount funded every eligible request. Extra money cannot resolve every limit.'}
         </p>
+      )}
+      {planning.diagnosis && (
+        <section className="space-y-1" aria-label="Capital check conclusion">
+          <p className="font-medium">{capitalActions[planning.diagnosis.action]}</p>
+          <p>{planning.diagnosis.reason}</p>
+        </section>
       )}
       <p className="text-muted-foreground">
         Separate funding check for the chosen rules; the search result above keeps its recorded
@@ -423,7 +511,9 @@ export function AutomaticResearchFindings({
   const final = findings.final
   const historyAvailability = recordedHistoryAvailability(findings)
   const independentUnavailable =
-    findings.independently_validated === false || Boolean(historyAvailability)
+    findings.independently_validated === false ||
+    findings.decision?.independently_validated === false ||
+    Boolean(historyAvailability)
   const historical =
     findings.version === 'automatic-hypotheses-v16' &&
     (findings.status === 'historical' || findings.recipe.validation_mode === 'historical_only')
@@ -471,7 +561,10 @@ export function AutomaticResearchFindings({
     >
       <div className="flex items-start gap-3">
         <span className="mt-0.5 rounded-full border border-cyan-500/25 p-2" aria-hidden="true">
-          {findings.status === 'supported' && !historical && !independentUnavailable ? (
+          {findings.status === 'supported' &&
+          !historical &&
+          !independentUnavailable &&
+          (!findings.decision || findings.decision.outcome === 'supported_candidate') ? (
             <Check className="size-4" />
           ) : (
             <FlaskConical className="size-4" />
@@ -488,9 +581,11 @@ export function AutomaticResearchFindings({
                   : 'Exploratory research'}
           </p>
           <h3 className="text-lg font-semibold">
-            {historical && !historyAvailability
-              ? 'Historical optimisation — not independently validated'
-              : findings.headline}
+            {findings.decision?.version === 'research-automatic-decision-v1'
+              ? decisionTitle(findings.decision)
+              : historical && !historyAvailability
+                ? 'Historical optimisation — not independently validated'
+                : findings.headline}
           </h3>
           <p className="max-w-3xl text-sm text-muted-foreground">
             {historyAvailability?.mode === 'exploratory_only'
@@ -510,6 +605,12 @@ export function AutomaticResearchFindings({
                       : 'Best settings found on the available research dates.'}
           </p>
           {historyAvailability && <ResearchHistoryScope availability={historyAvailability} />}
+          {findings.decision && (
+            <ResearchDecision
+              decision={findings.decision}
+              preflight={findings.decision_preflight}
+            />
+          )}
           {findings.automatic_design && (
             <section className="space-y-1 pt-2 text-sm" aria-label="Automatic design checks">
               <p>

@@ -92,7 +92,8 @@ def exercise_full_service(app, client, monkeypatch, value):
     monkeypatch.setattr("services.research_automatic_periods.claim", lambda *a: None)
     monkeypatch.setattr("research.automatic_walk_forward.prepare_method_gate", PreparedJointContext)
 
-    def audit(report, features, _identity_check):
+    def audit(report, features, _identity_check, *, _owned_report=None):
+        assert _owned_report is None, "A controlled account cannot claim native ownership"
         condition = report.get("automatic_stock_condition", {}).get("hypothesis", {})
         if condition.get("id") != "none":
             assert report["evaluation_basis"]["comparison"]["execution"].get("entry_conditions")

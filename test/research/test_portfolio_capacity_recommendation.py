@@ -40,7 +40,8 @@ def test_v13_reads_real_histories_qualifies_before_final_and_recovers_exactly(
 
     # The controlled economics do not produce native order records. Keep this
     # isolated admission stub visible rather than pretending to audit fake fills.
-    def supported_audit(report, features, _identity_check):
+    def supported_audit(report, features, _identity_check, *, _owned_report=None):
+        assert _owned_report is None, "A controlled account cannot claim native ownership"
         hypothesis = report.get("automatic_stock_condition", {}).get("hypothesis", {})
         if hypothesis.get("id") != "none":
             marker = report["evaluation_basis"]["comparison"]["execution"].get("entry_conditions")

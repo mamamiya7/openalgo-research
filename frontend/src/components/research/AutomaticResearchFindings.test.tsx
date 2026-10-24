@@ -7,7 +7,7 @@ import type {
   AutomaticResearchFindings as Findings,
 } from '@/api/portfolioResearch'
 import { researchDefaults } from '@/lib/researchDraft'
-import { AutomaticResearchFindings } from './AutomaticResearchFindings'
+import { AutomaticResearchFindings, CapitalPlanning } from './AutomaticResearchFindings'
 
 function findings(): Findings {
   const summary = {
@@ -1071,4 +1071,88 @@ it('does not present a supported status as independently validated when the rece
   expect(
     screen.queryByText('Checked on later dates and with higher trading costs.')
   ).not.toBeInTheDocument()
+})
+
+it.each([
+  ['no_useful_improvement', 'No useful improvement found'],
+  ['insufficient_evidence', 'Historical candidate · insufficient independent evidence'],
+  ['supported_candidate', 'Candidate passed the recorded checks'],
+] as const)('shows the recorded decision prominently after reopening (%s)', async (outcome, title) => {
+  const data = availableHistoryFindings('exploratory_only')
+  data.decision = {
+    version: 'research-automatic-decision-v1',
+    outcome,
+    historical_candidate: outcome !== 'no_useful_improvement',
+    independently_validated: false,
+    reasons: ['Higher costs removed the historical improvement'],
+    checks: [
+      { kind: 'higher_costs', passed: false },
+      { kind: 'neighboring_settings', passed: true },
+    ],
+    next_action: 'Retain original rules; review the recorded failure reasons',
+  }
+  data.decision_preflight = {
+    goal: 'Find useful improvement within every frozen risk limit',
+    steps: ['baseline', 'constrained_search', 'challenge_costs_and_neighbors', 'conclude'],
+  }
+  const reopened: Findings = JSON.parse(JSON.stringify(data))
+  render(<AutomaticResearchFindings findings={reopened} />)
+  expect(screen.getByRole('heading', { name: title })).toBeVisible()
+  const decision = screen.getByRole('region', { name: 'Research decision' })
+  expect(
+    within(decision).getByText('Higher costs removed the historical improvement')
+  ).toBeVisible()
+  expect(within(decision).getByText('Higher trading costs: Did not pass')).toBeVisible()
+  expect(within(decision).getByText('Nearby settings: Passed')).toBeVisible()
+  expect(within(decision).getByText(data.decision.next_action)).toBeVisible()
+  expect(
+    within(decision).getByText('Historical findings; not independently validated.')
+  ).toBeVisible()
+  await userEvent.click(within(decision).getByText('What this research checked'))
+  expect(within(decision).getByText(data.decision_preflight.goal)).toBeVisible()
+  expect(reopened).toEqual(data)
+})
+
+it.each([
+  ['funding_verified', 'Funding verified for the recorded history'],
+  ['review_noncash_constraints', 'Review policy, order-size and data constraints'],
+  ['test_higher_capital', 'A higher capital check is needed'],
+  ['insufficient_funding_evidence', 'Insufficient funding evidence'],
+  ['account_budget_exhausted', 'Capital checks reached their recorded limit'],
+  ['unsupported_capital_representation', 'The fixed order amount cannot be represented'],
+] as const)('shows the capital v2 stop reason (%s)', (action, label) => {
+  render(
+    <CapitalPlanning
+      planning={{
+        version: 'research-capital-planning-v2',
+        status: 'no_verified_amount',
+        estimated_capital: 100000,
+        verified_capital: null,
+        original_capital: 100000,
+        reference_tickets: [{ strategy_id: 'one', initial_ticket: 3000 }],
+        tested_range: null,
+        accounts: [],
+        diagnosis: { action, reason: 'Recorded stop reason for this capital check' },
+      }}
+    />
+  )
+  const conclusion = screen.getByLabelText('Capital check conclusion')
+  expect(within(conclusion).getByText(label)).toBeVisible()
+  expect(within(conclusion).getByText('Recorded stop reason for this capital check')).toBeVisible()
+})
+
+it('does not show a success badge when a recorded decision rejects an otherwise supported result', () => {
+  const data = findings()
+  data.decision = {
+    version: 'research-automatic-decision-v1',
+    outcome: 'no_useful_improvement',
+    historical_candidate: false,
+    independently_validated: false,
+    reasons: ['Higher trading costs removed the improvement'],
+    checks: [],
+    next_action: 'Retain original rules',
+  }
+  const { container } = render(<AutomaticResearchFindings findings={data} />)
+  expect(screen.getByRole('heading', { name: 'No useful improvement found' })).toBeVisible()
+  expect(container.querySelector('svg.lucide-check')).not.toBeInTheDocument()
 })

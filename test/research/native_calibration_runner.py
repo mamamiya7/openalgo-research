@@ -340,11 +340,13 @@ def run_case(case, plan, *, calibration_seed_plan=None, native_cache=None):
         total_marks += marks
         return deepcopy(descriptor)
 
-    def audited(report, features, identity_check):
+    def audited(report, features, identity_check, *, _owned_report=None):
         # Observation-only wrapper: invoke the genuine consumer exactly once;
         # never synthesize, alter or weaken its numerical evidence or status.
         nonlocal audits, audit_rechecks
-        result = actual_constraint_audit(report, features, identity_check)
+        result = actual_constraint_audit(
+            report, features, identity_check, _owned_report=_owned_report
+        )
         if id(report) in pending_native_audits:
             pending_native_audits.remove(id(report))
             audits += 1

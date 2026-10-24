@@ -20,6 +20,7 @@ import { useAuthStore } from '@/stores/authStore'
 import {
   AutomaticResearchFindings,
   CapitalPlanning,
+  ResearchDecision,
   ResearchHistoryScope,
   recordedHistoryAvailability,
 } from './AutomaticResearchFindings'
@@ -244,6 +245,9 @@ function ParentResearchHistoryScope({
   return (
     <>
       {availability && <ResearchHistoryScope availability={availability} />}
+      {selectionConfigId === findings?.selected_config_id && findings?.decision && (
+        <ResearchDecision decision={findings.decision} preflight={findings.decision_preflight} />
+      )}
       {selectionConfigId === findings?.selected_config_id && findings?.capital_planning && (
         <CapitalPlanning planning={findings.capital_planning} />
       )}
@@ -287,6 +291,12 @@ export function PortfolioResults(props: ResultProps) {
     historyAvailability && !props.result.automatic_research ? (
       <>
         <ResearchHistoryScope availability={historyAvailability} />
+        {selectionConfigId === parentAutomatic?.selected_config_id && parentAutomatic?.decision && (
+          <ResearchDecision
+            decision={parentAutomatic.decision}
+            preflight={parentAutomatic.decision_preflight}
+          />
+        )}
         {selectionConfigId === parentAutomatic?.selected_config_id &&
           parentAutomatic?.capital_planning && (
             <CapitalPlanning planning={parentAutomatic.capital_planning} />

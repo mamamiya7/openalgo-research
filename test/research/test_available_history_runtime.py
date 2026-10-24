@@ -92,7 +92,11 @@ def install_controlled_gate_and_account_audit(monkeypatch):
         "research.automatic_walk_forward.prepare_method_gate", synthetic_prepare_method_gate
     )
 
-    def audit(report, features, _identity_check):
+    def audit(report, features, _identity_check, *, _owned_report=None):
+        # Controlled account fixtures never produce the native engine's private
+        # ownership token. Accept its explicit absent-token keyword, retaining
+        # the distinction between orchestration tests and native fill evidence.
+        assert _owned_report is None, "A controlled account cannot claim native ownership"
         body = {
             "version": "research-portfolio-constraint-evidence-v1",
             "status": "supported",
@@ -110,6 +114,17 @@ def install_controlled_gate_and_account_audit(monkeypatch):
         return {**body, "id": fingerprint(body)}
 
     monkeypatch.setattr("research.portfolio_constraint_evidence._assess", audit)
+
+
+def test_controlled_audit_accepts_absent_ownership_without_claiming_native_provenance():
+    from research.portfolio_constraint_evidence import _assess
+
+    report = {"summary": {}, "equity_curve": [], "evaluation_basis": {}, "strategies": []}
+    receipt = _assess(report, {"id": "controlled-features"}, lambda: None, _owned_report=None)
+    assert receipt["scope"] == "caller_admitted_development_account"
+    assert receipt["report_evidence_id"] == fingerprint(report)
+    with pytest.raises(AssertionError, match="cannot claim native ownership"):
+        _assess(report, {"id": "controlled-features"}, lambda: None, _owned_report=object())
 
 
 @pytest.fixture(autouse=True)

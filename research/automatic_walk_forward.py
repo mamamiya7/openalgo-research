@@ -56,7 +56,7 @@ FITS = ("fit1", "fit2", "fit3", "search")
 SEED_FITS = (*FITS, "search_seed1", "search_seed2")
 
 
-def _account_reserve(recipe, period, *, planning=False):
+def _account_reserve(recipe, period, *, planning=False, decision=False):
     """Hold back only accounts still ahead of this calculation phase."""
     if planning:
         if "capital_planning" not in recipe:
@@ -72,6 +72,8 @@ def _account_reserve(recipe, period, *, planning=False):
     )
     if "capital_planning" in recipe:
         reserve += recipe["budget"]["max_capital_planning_accounts"]
+    if "automatic_decision" in recipe and not decision:
+        reserve += recipe["budget"]["max_decision_accounts"]
     return reserve
 
 
@@ -612,6 +614,8 @@ def _run(
                     + 64
                     + recipe["budget"]["max_capital_planning_accounts"]
                 )
+        if "automatic_decision" in recipe:
+            upper += recipe["budget"]["max_decision_accounts"]
         if upper > max_simulations or proposals_per_fit - 50 < 16:
             raise ValueError("Priority research exceeded its accounting or refinement reserve")
     base, numeric_axes = _prepare(evidence["strategies"])
@@ -826,10 +830,19 @@ def _run(
 
     @capture_native_report(prepared_calculations is not None)
     def simulate(
-        settings, hypothesis, period, stress=False, *, report_analysis=True, account_capital=None
+        settings,
+        hypothesis,
+        period,
+        stress=False,
+        *,
+        report_analysis=True,
+        account_capital=None,
+        decision=False,
     ):
         control()
-        reserve = _account_reserve(recipe, period, planning=account_capital is not None)
+        reserve = _account_reserve(
+            recipe, period, planning=account_capital is not None, decision=decision
+        )
         if (
             state["attempts"] >= max_simulations - reserve
             or state["attempts"] - state["simulations"] >= 64
@@ -1022,11 +1035,17 @@ def _run(
         report_slot=None,
         reconstruct=False,
         defer_checkpoint=False,
+        decision=False,
     ):
         key = key_for(settings, hypothesis, period, stress)
         if key not in state["evaluations"] or reconstruct:
             report = simulate(
-                settings, hypothesis, period, stress, report_analysis=report_slot is not None
+                settings,
+                hypothesis,
+                period,
+                stress,
+                report_analysis=report_slot is not None,
+                decision=decision,
             )
             descriptor = None
             if retain_evaluation is not None and period != "final":
@@ -1274,6 +1293,14 @@ def _run(
                             "fit_period": fit_name,
                         }
                     )
+            if "automatic_decision" in recipe:
+                from research.automatic_decision import feedback
+
+                constraints = feedback(
+                    current["candidates"][config_id], reference, recipe["automatic_design"]
+                )
+                for name, value in constraints.items():
+                    trial.set_constraint(name, value)
             study.tell(trial, score)
             seen.add(config_id)
         rows = sorted(
@@ -1282,10 +1309,21 @@ def _run(
 
         def admission_reasons(row):
             failures = _support(row["summary"], reference["summary"], dates=row["entry_dates"])
+            if "automatic_decision" in recipe:
+                from research.automatic_decision import support_reasons
+
+                failures = support_reasons(
+                    row["summary"], reference["summary"], dates=row["entry_dates"]
+                )
             if "automatic_design" in recipe:
                 from research.automatic_design import reasons
 
                 failures.extend(reasons(row, recipe["automatic_design"]))
+            if (
+                "automatic_decision" in recipe
+                and row.get("portfolio_constraint_evidence", {}).get("status") != "supported"
+            ):
+                failures.append("Native portfolio constraint evidence is incomplete")
             return failures
 
         winner = next(
@@ -1357,9 +1395,11 @@ def _run(
             finish,
             plan,
             settings_for,
+            should_continue,
         )
 
-        if recipe["capital_planning"] != descriptor():
+        planning_version = recipe["capital_planning"]["version"]
+        if recipe["capital_planning"] != descriptor(planning_version):
             raise ValueError("The recorded capital-planning policy changed")
         selected = state["selection"]
         planned = plan(
@@ -1368,6 +1408,7 @@ def _run(
             capital,
             risk_limits=recipe["execution_research"]["risk_limits"],
             max_accounts=recipe["budget"]["max_capital_planning_accounts"],
+            version=planning_version,
         )
         retained = state.get("capital_planning")
         if retained is None:
@@ -1407,14 +1448,109 @@ def _run(
                 retained["accounts"].append({"report": report, "receipt": receipt})
                 persist()
             receipts.append(receipt)
-            if receipt["verified_sufficient"]:
+            if not should_continue(receipt):
                 if len(retained["accounts"]) != index + 1:
-                    raise ValueError("Saved capital planning continued after its verified amount")
+                    raise ValueError("Saved capital planning continued after its recorded stop")
                 break
         result["automatic_research"]["capital_planning"] = finish(planned, receipts)
         result["automatic_research"]["counts"].update(
             simulations=state["simulations"], attempts_reserved=state["attempts"]
         )
+        return result
+
+    def with_decision(result):
+        if "automatic_decision" not in recipe:
+            return with_capital_planning(result)
+        from research.automatic_decision import conclude, descriptor
+        from research.recommendation_plan import challenges
+
+        if recipe["automatic_decision"] != descriptor():
+            raise ValueError("The recorded automatic decision policy changed")
+        selected = state["selection"]
+        exploratory = recipe.get("validation_mode") == "exploratory_only"
+        choice = measured(selected["strategies"], selected["hypothesis"], "search", decision=True)
+        reference = measured(baseline, none, "search", decision=True)
+        stress = stress_base = None
+        neighbors = []
+        prefixes = []
+        challenge_plan = {"neighbors": []}
+        if not selected["is_baseline"]:
+            # These accounts retain every ordinary gate, frozen maximum-hold
+            # cohort and native financial audit. Reused strict-path challenges
+            # spend no extra accounts; exploratory runs reserve nine up front.
+            stress = measured(
+                selected["strategies"], selected["hypothesis"], "search", True, decision=True
+            )
+            stress_base = measured(baseline, none, "search", True, decision=True)
+            challenge_plan = challenges(selected["strategies"], recipe["ranges"])
+            neighbors = [
+                measured(item["strategies"], selected["hypothesis"], "search", decision=True)
+                for item in challenge_plan["neighbors"]
+            ]
+            if exploratory:
+                for name in FITS[:3]:
+                    row = measured(
+                        selected["strategies"], selected["hypothesis"], name, decision=True
+                    )
+                    prefixes.append(
+                        {
+                            "period": name,
+                            "summary": deepcopy(row["summary"]),
+                            "entry_dates": row["entry_dates"],
+                            "independently_validated": False,
+                        }
+                    )
+        result = with_capital_planning(result)
+        findings = result["automatic_research"]
+        report_row = {**choice, "config_id": selected["config_id"]}
+        receipt = conclude(
+            policy=recipe["automatic_decision"],
+            selected=report_row,
+            baseline=reference,
+            stress=stress,
+            stress_baseline=stress_base,
+            neighbors=neighbors,
+            prefixes=prefixes,
+            seed_choices=[
+                state["fits"][name]["selection"]
+                for name in SEED_FITS[3:]
+                if state["fits"].get(name, {}).get("selection") is not None
+            ],
+            is_baseline=selected["is_baseline"],
+            independently_validated=findings.get("independently_validated", False),
+            validation_passed=findings.get("status") == "supported",
+            capital_diagnosis=findings.get("capital_planning", {}).get("diagnosis"),
+        )
+        receipt["challenge_plan"] = {
+            "neighbors": [
+                {key: value for key, value in item.items() if key != "strategies"}
+                for item in challenge_plan["neighbors"]
+            ],
+            "selection_changed": False,
+        }
+        missing_seeds = [
+            name for name in SEED_FITS[3:] if state["fits"].get(name, {}).get("selection") is None
+        ]
+        if missing_seeds:
+            receipt["seed_diagnostics"]["not_run"] = missing_seeds
+        receipt["id"] = fingerprint({key: value for key, value in receipt.items() if key != "id"})
+        if state.get("decision") is not None and state["decision"] != receipt:
+            raise ValueError("The frozen automatic decision changed on recovery")
+        if state.get("decision") is None:
+            state["decision"] = deepcopy(receipt)
+            persist()
+        findings["decision"] = receipt
+        findings["decision_preflight"] = deepcopy(recipe["decision_preflight"])
+        findings["counts"].update(
+            simulations=state["simulations"], attempts_reserved=state["attempts"]
+        )
+        result["experiment"]["next_action"] = receipt["next_action"]
+        standalone = result["experiment"].get("selected_reports", {}).get(selected["config_id"])
+        if standalone is not None:
+            # Presentation copy only: preserve the native selected_report and
+            # its financial seals. Standalone exports must retain the verdict
+            # instead of depending on a parent study being loaded beside them.
+            standalone["automatic_research"] = deepcopy(findings)
         return result
 
     if recipe.get("history_availability", {}).get("mode") == "exploratory_only":
@@ -1441,7 +1577,7 @@ def _run(
             defer_study_analysis=defer_study_analysis,
             design_assessment=design_assessment,
         )
-        return with_capital_planning(result)
+        return with_decision(result)
 
     for fold in recipe["walk_forward"]["folds"]:
         winner, _ = fit(fold["fit_period"])
@@ -1486,6 +1622,13 @@ def _run(
         persist()
 
     winner, rows = fit("search")
+    if "automatic_decision" in recipe:
+        # Complete the declared programme even when earlier validation failed.
+        # The extra seeds remain training diagnostics and cannot rescue a failed
+        # process or replace the primary choice. Legacy studies keep their
+        # original conditional repeat policy and exact replay.
+        for name in SEED_FITS[4:]:
+            fit(name)
     process_supported = all(row["eligible"] for row in state["folds"])
     folds_supported = process_supported
     if version in (
@@ -2083,4 +2226,4 @@ def _run(
     result = (
         _historical_result(result) if recipe.get("validation_mode") == "historical_only" else result
     )
-    return with_capital_planning(result)
+    return with_decision(result)

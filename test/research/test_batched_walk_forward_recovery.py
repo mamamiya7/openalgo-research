@@ -225,16 +225,16 @@ def test_failed_shard_flush_cannot_advance_checkpoint_metadata(reference, tmp_pa
     value, _, _ = reference
     store = initialized(tmp_path / "failed-flush")
     delivery, engine = Delivery(store, batch=True, pause_after=3), AccountEngine(value)
-    original = history_module.save_artifact
+    original = history_module._save_owned_artifact
     failed = []
 
-    def fail_after_observed_prefix(selected_store, shard):
+    def fail_after_observed_prefix(selected_store, owned):
         if len(delivery.finished) == 3:
-            failed.append(shard["evaluation_id"])
+            failed.append(owned.value["evaluation_id"])
             raise OSError("controlled shard flush failure")
-        return original(selected_store, shard)
+        return original(selected_store, owned)
 
-    monkeypatch.setattr(history_module, "save_artifact", fail_after_observed_prefix)
+    monkeypatch.setattr(history_module, "_save_owned_artifact", fail_after_observed_prefix)
     try:
         with pytest.raises(OSError, match="shard flush failure"):
             execute(value, engine, delivery, monkeypatch)

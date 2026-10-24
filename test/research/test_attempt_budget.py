@@ -4,6 +4,9 @@ import json
 from copy import deepcopy
 
 import pytest
+from test_automatic_decision_runtime import deciding  # noqa: F401
+from test_automatic_design_runtime import designed  # noqa: F401
+from test_available_history_runtime import available  # noqa: F401
 
 from database.research_db import ResearchExperiment, ResearchJob, ResearchStore, ResearchWorker
 from services.research_attempt_budget import (
@@ -313,3 +316,104 @@ def test_planning_cannot_spend_slots_without_a_recorded_planning_programme():
 
     with pytest.raises(ValueError, match="recorded account reservation"):
         _account_reserve({}, "search", planning=True)
+
+
+def decision_request(store):
+    automatic = {
+        "version": "automatic-hypotheses-v16",
+        "history_policy": "available_history",
+        "design_policy": "automatic_design_v1",
+        "decision_policy": "automatic_decision_v1",
+    }
+    with store.sessions.begin() as db:
+        db.get(ResearchExperiment, "job").specification = json.dumps(
+            {"portfolio": {"automatic_research": automatic}}
+        )
+    return automatic
+
+
+def test_decision_worker_first_durable_account_holds_exact_thirteen_future_slots(store):
+    from research.automatic_walk_forward import _account_reserve
+
+    decision_request(store)
+    recipe = {
+        "history_availability": {"mode": "exploratory_only"},
+        "capital_planning": {"version": "research-capital-planning-v2"},
+        "automatic_decision": {"version": "research-automatic-decision-v1"},
+        "budget": {"max_capital_planning_accounts": 4, "max_decision_accounts": 9},
+    }
+    reserved = _account_reserve(recipe, "fit1")
+    assert reserved == 13
+    reserve = reserver(store)
+    assert reserve(0, 0, reserved, 512) == 1
+    assert counts(store)[KEY]["attempts"] == 1
+    # Preserve the actual worker's durable-journal handshake across a new
+    # callback after checkpoint publication, rather than resetting attempts.
+    current = counts(store)
+    rewrite(store, merge_counts(current, {}, checkpoint_state={"attempts": 1, "simulations": 1}))
+    assert reserver(store, 1, 1)(1, 1, reserved, 512) == 2
+
+
+def test_decision_reserve_boundary_releases_only_its_own_slots_and_still_rejects_513(store):
+    decision_request(store)
+    reserve = reserver(store, 498, 498)
+    assert reserve(498, 498, 13, 512) == 499
+    with pytest.raises(ValueError, match="calculation limit"):
+        reserve(499, 499, 13, 512)
+    # Nine decision accounts run with four capital slots retained.
+    for attempt in range(499, 508):
+        assert reserve(attempt, attempt, 4, 512) == attempt + 1
+    with pytest.raises(ValueError, match="calculation limit"):
+        reserve(508, 508, 4, 512)
+    for attempt in range(508, 512):
+        assert reserve(attempt, attempt, 0, 512) == attempt + 1
+    with pytest.raises(ValueError, match="calculation limit"):
+        reserve(512, 512, 0, 512)
+
+
+@pytest.mark.parametrize("field", ["version", "history_policy", "design_policy", "decision_policy"])
+def test_thirteen_reserved_accounts_require_the_complete_frozen_decision_request(store, field):
+    automatic = decision_request(store)
+    automatic.pop(field)
+    with store.sessions.begin() as db:
+        db.get(ResearchExperiment, "job").specification = json.dumps(
+            {"portfolio": {"automatic_research": automatic}}
+        )
+    with pytest.raises(ValueError, match="frozen research policy"):
+        reserver(store)(0, 0, 13, 512)
+    assert KEY not in counts(store)
+
+
+def test_thirteen_reserved_accounts_do_not_apply_to_legacy_or_lost_attempt_overflow(store):
+    with pytest.raises(ValueError, match="frozen research policy"):
+        reserver(store)(0, 0, 13, 512)
+    assert KEY not in counts(store)
+    decision_request(store)
+    reserve = reserver(store)
+    for attempt in range(64):
+        assert reserve(attempt, 0, 13, 512) == attempt + 1
+    with pytest.raises(ValueError, match="calculation limit"):
+        reserve(64, 0, 13, 512)
+
+
+def test_decision_service_durably_reserves_first_account_before_entering_engine(
+    store, request, monkeypatch
+):
+    from test_batched_walk_forward_recovery import Delivery, execute
+
+    decision_request(store)
+    decision_inputs = request.getfixturevalue("deciding")
+    delivery = Delivery(store, batch=True)
+
+    class FirstAccountReached(Exception):
+        pass
+
+    def stop_after_durable_admission(*args, **kwargs):
+        assert counts(store)[KEY]["attempts"] == 1
+        assert delivery.reservations == [1]
+        raise FirstAccountReached()
+
+    with pytest.raises(FirstAccountReached):
+        execute(decision_inputs, stop_after_durable_admission, delivery, monkeypatch)
+    assert counts(store)[KEY]["attempts"] == 1
+    assert counts(store)[KEY]["checkpoint_simulations"] == 0
