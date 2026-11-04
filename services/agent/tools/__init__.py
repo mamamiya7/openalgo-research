@@ -390,6 +390,14 @@ class ToolkitSpec:
 #: costs nothing.
 TOOLKITS: list[ToolkitSpec] = [
     ToolkitSpec(
+        key="research",
+        module="services.agent.tools.research",
+        attr="ResearchToolkit",
+        surfaces=CHAT_ONLY,
+        order=35,
+        description="Saved historical research and bounded, validated research supervision.",
+    ),
+    ToolkitSpec(
         key="market",
         module="services.agent.tools.market",
         attr="MarketToolkit",

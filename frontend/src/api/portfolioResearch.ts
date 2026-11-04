@@ -420,7 +420,7 @@ export interface PortfolioRequest {
         history_policy?: 'available_history'
         design_policy?: 'automatic_design_v1'
         decision_policy?: 'automatic_decision_v1'
-        action_policy?: 'automatic_actions_v1'
+        action_policy?: 'automatic_actions_v1' | 'automatic_actions_v2' | 'automatic_actions_v3'
       }
   )
   entry_conditions?: EntryConditions
@@ -662,6 +662,17 @@ export interface AutomaticResearchFindings {
       | 'research-capital-planning-v1'
       | 'research-capital-planning-v2'
       | 'research-capital-planning-v3'
+      | 'research-capital-planning-v4'
+      | 'research-capital-planning-v5'
+    validation?: {
+      outcome: 'validated' | 'rejected' | 'blocked' | 'unchanged'
+      historically_validated: boolean
+      independently_validated: false
+      reasons: string[]
+      accounts?: number
+      capital: number
+      selected_config_id: string
+    }
     diagnosis?: {
       action:
         | 'funding_verified'

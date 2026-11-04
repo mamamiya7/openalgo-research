@@ -129,6 +129,18 @@ def validate_archive(bundle, *, expected_version=None):
         "uv.lock",
         "pyproject.toml",
     }
+    preview = re.fullmatch(r"0\.1\.0-preview\.(\d+)", version)
+    if version == "0.1.0" or (preview and int(preview[1]) >= 32):
+        required.update(
+            {
+                "research/supervisor_accounts.py",
+                "services/research_supervisor.py",
+                "services/research_supervisor_program.py",
+                "services/agent/tools/research.py",
+            }
+        )
+    if version == "0.1.0" or (preview and int(preview[1]) >= 33):
+        required.update({"services/research_automation.py", "services/agent/research_decision.py"})
     if (
         not required.issubset(files)
         or ".env" in files

@@ -1,8 +1,9 @@
 """Bounded capital planning for fixed initial tickets; no account calculations or I/O."""
 
+import re
 from collections import Counter
 from copy import deepcopy
-from math import ceil, isfinite
+from math import ceil, floor, isclose, isfinite
 
 from research.execution_policy import normalize_limits
 from research.report_contract import fingerprint, settings_identity
@@ -11,6 +12,11 @@ VERSION = "research-capital-planning-v1"
 DECISION_VERSION = "research-capital-planning-v2"
 MAX_NATIVE_CAPITAL = 1_000_000_000
 SELECTED_VERSION = "research-capital-planning-v3"
+INTENDED_VERSION = "research-capital-planning-v4"
+CLOSED_LOOP_VERSION = "research-capital-planning-v5"
+FEASIBLE_VERSION = "research-capital-planning-v6"
+CAUSAL_VERSION = "research-capital-planning-v7"
+MAX_REQUEST_PRICES = 100_000
 
 
 def _number(value, label, *, positive=True):
@@ -457,24 +463,74 @@ def finish(plan, receipts):
     )
 
 
-def selected_account_descriptor():
+def selected_account_descriptor(version=SELECTED_VERSION):
     """A separate capacity experiment, never a replacement for winner validation."""
+    if version not in (
+        SELECTED_VERSION,
+        INTENDED_VERSION,
+        CLOSED_LOOP_VERSION,
+        FEASIBLE_VERSION,
+        CAUSAL_VERSION,
+    ):
+        raise ValueError("Selected account policy version is unsupported")
     return _seal(
         {
-            "version": SELECTED_VERSION,
+            "version": version,
             "max_accounts": 4,
-            "size_multipliers": [1.0, 0.5, 0.25],
+            "size_multipliers": [1.0, 0.5, 0.25]
+            if version not in (FEASIBLE_VERSION, CAUSAL_VERSION)
+            else "Original size, analytically feasible single-ticket factor, then a conservative concurrent-slot factor; all frozen before native results.",
             "cash_buffer_fraction": 0.01,
             "rounding_rupees": 1000,
             "capital_basis": "Selected percentage sizing and fee/slippage-adjusted historical entry prices, never original fixed rupee tickets or profit.",
             "routing": "Whole-share affordability tests the frozen larger account; shared cash or percentage risk clipping tests smaller frozen cash and risk targets. Missing evidence and position/liquidity exclusions remain recorded and never relax hard limits.",
             "operating_point": "On the identical recorded opportunity cohort, minimize cash-shortfall plus whole-share-affordability plus percentage-policy constrained requests; then maximize admitted requests, prefer less capital and the earlier frozen option. Ignore profit. A tested operating point with exclusions is not verified complete funding or performance promotion.",
             "scope": "Bounded historical capacity variants. A feasible account is not a minimum, performance recommendation or independent validation; any changed settings require unchanged performance and chronological validation before promotion.",
+            **(
+                {
+                    "quantity_basis": "For stop-risk sizing, intended units are the minimum of the recorded cash ceiling and the native friction-adjusted risk target. Fulfilling that target is not a shortage. Missing exact entry prices or risk evidence cannot establish sufficiency. Raw native constraint tags remain diagnostic, including nonbinding limits below the cash ceiling."
+                }
+                if version
+                in (INTENDED_VERSION, CLOSED_LOOP_VERSION, FEASIBLE_VERSION, CAUSAL_VERSION)
+                else {}
+            ),
+            **(
+                {
+                    "capital_floor": "Freeze a separate fee/slippage-adjusted whole-share, exposure and stop-risk capital floor for each actual cash-size and risk-target multiplier, rounded to rupees 1000 with a one-percent buffer, never below original capital.",
+                    "capacity_rank": "Prefer verified sufficiency, then known evidence, fewer unique constrained requests and evidence gaps, more admitted requests, less capital and earlier frozen option. Raw overlapping cause counts and profit never choose the account. All reported selections and diagnosis refer to the same chosen receipt.",
+                    "request_prices": "Exact eligible historical opening prices keyed by frozen strategy/symbol/signal-time/source-row identity; missing observations remain unavailable, never inferred from later or maximum prices.",
+                }
+                if version in (CLOSED_LOOP_VERSION, FEASIBLE_VERSION, CAUSAL_VERSION)
+                else {}
+            ),
+            **(
+                {
+                    "feasible_sizing": "Bound cash and percentage-stop sizing by prospective fee/slippage-adjusted native exposure and stop-risk ceilings, retaining a one-percent buffer. A second size reserves capacity equally across the existing hard position allowance, conservatively treating positions as related. Never change allocation weights or any hard limit. ATR stop capacity remains native-only; do not infer ATR from prices.",
+                    "representation": "Omit only size options whose active ticket would fall below the native 0.01-percent representation floor. Preserve the original and same-size capital accounts, all exclusions and the existing maximum four-account allowance. Analytical feasibility is an estimate; only native receipts establish funding.",
+                }
+                if version in (FEASIBLE_VERSION, CAUSAL_VERSION)
+                else {}
+            ),
+            **(
+                {
+                    "constraint_diagnosis": "For a positive intended whole-share request with zero native fill and verified open_positions_before at or above the unchanged hard position allowance, retain the position exclusion and every raw constraint tag without treating overlapping cash/percentage tags as a repairable funding cause. Unknown or incomplete position evidence retains the conservative original diagnosis. This never establishes complete funding or relaxes performance validation.",
+                }
+                if version == CAUSAL_VERSION
+                else {}
+            ),
         }
     )
 
 
-def selected_account_plan(selected, capital, entry_prices, *, max_accounts=4):
+def selected_account_plan(
+    selected,
+    capital,
+    entry_prices,
+    *,
+    max_accounts=4,
+    version=SELECTED_VERSION,
+    request_prices=None,
+):
     """Freeze all account/size variants before reading native capacity outcomes.
 
     ``entry_prices`` maps strategy IDs to raw eligible historical entry prices.
@@ -482,6 +538,13 @@ def selected_account_plan(selected, capital, entry_prices, *, max_accounts=4):
     policy. ATR stops cannot be inferred from prices; native execution remains the
     authority for their risk capacity.
     """
+    capacity_policy = selected_account_descriptor(version)
+    if version in (CLOSED_LOOP_VERSION, FEASIBLE_VERSION, CAUSAL_VERSION):
+        return _closed_loop_plan(
+            selected, capital, entry_prices, max_accounts, request_prices, version=version
+        )
+    if request_prices is not None:
+        raise ValueError("Frozen request prices require the closed-loop capital policy")
     _rows(selected, selected)
     capital = _number(capital, "selected capital")
     if (
@@ -556,8 +619,8 @@ def selected_account_plan(selected, capital, entry_prices, *, max_accounts=4):
     options = options[:max_accounts]
     return _seal(
         {
-            "version": SELECTED_VERSION,
-            "policy_id": selected_account_descriptor()["id"],
+            "version": version,
+            "policy_id": capacity_policy["id"],
             "selected": deepcopy(selected),
             "selected_config_id": settings_identity(selected),
             "original_capital": capital,
@@ -572,6 +635,154 @@ def selected_account_plan(selected, capital, entry_prices, *, max_accounts=4):
     )
 
 
+def _option_floor(selected, capital, prices, multiplier):
+    floors = [capital]
+    for row in selected:
+        allocation = row["allocation_pct"] / 100
+        observed = prices[row["id"]]
+        if not allocation or not observed:
+            continue
+        cfg, policy = row["config"], row["execution_policy"]
+        limits = policy["risk_limits"]
+        raw = max(observed)
+        fee, slip = cfg.get("cost_bps", 0) / 10000, cfg.get("slippage_bps", 0) / 10000
+        cash = raw * (1 + slip) * (1 + fee)
+        for name in (
+            "max_gross_exposure_pct",
+            "max_symbol_exposure_pct",
+            "max_correlated_exposure_pct",
+        ):
+            if name in limits:
+                floors.append((raw / (limits[name] / 100) + cash - raw) / 0.99)
+        order = cfg["order_size_pct"] / 100 * multiplier
+        floors.append(cash / (allocation * order * 0.99))
+        if policy["exit_mode"] == "percent":
+            stop = cfg["stop_pct"] / 100
+            loss = cash - raw * (1 + slip) * (1 - stop) * (1 - slip) * (1 - fee)
+            target = limits["max_trade_risk_pct"] / 100
+            if policy["sizing"] == "stop_risk":
+                target *= policy["risk_budget_fraction"] * multiplier
+            floors.append((loss / target + cash - raw) / 0.99)
+            floors.append((loss / (limits["max_total_stop_risk_pct"] / 100) + cash - raw) / 0.99)
+    return max(capital, ceil(max(floors) / 1000) * 1000)
+
+
+def _feasible_size_factors(selected):
+    """Freeze percentage capacities from settings alone, never from profitability.
+
+    The first reduction fits a new ticket into an empty account. The second
+    reserves the same hard capacity across the maximum permitted open positions,
+    including the worst case of related/same-symbol positions. This estimate
+    cannot promise that observed prices, turnover or an ATR risk target will fit;
+    the unchanged native engine and receipts remain the only admission authority.
+    """
+    candidates = []
+    active = [row for row in selected if row["allocation_pct"] > 0]
+    for concurrent in (False, True):
+        factor = 0.5
+        for row in active:
+            cfg, policy = row["config"], row["execution_policy"]
+            limits = policy["risk_limits"]
+            slots = limits["max_open_positions"] if concurrent else 1
+            allocation = row["allocation_pct"] / 100
+            ticket = allocation * cfg["order_size_pct"] / 100
+            fee = cfg.get("cost_bps", 0) / 10000
+            slip = cfg.get("slippage_bps", 0) / 10000
+            cash = (1 + slip) * (1 + fee)
+            friction = cash - 1
+            exposure = (
+                min(
+                    allocation,
+                    *(
+                        limits[name] / 100
+                        for name in (
+                            "max_gross_exposure_pct",
+                            "max_symbol_exposure_pct",
+                            "max_correlated_exposure_pct",
+                        )
+                        if name in limits
+                    ),
+                )
+                / slots
+            )
+            # Native limits use equity *after* prospective entry friction.
+            budget = cash * exposure / (1 + exposure * friction)
+            if policy["exit_mode"] == "percent":
+                stop = cfg["stop_pct"] / 100
+                loss = cash - (1 + slip) * (1 - stop) * (1 - slip) * (1 - fee)
+                risk = min(
+                    limits["max_trade_risk_pct"] / 100,
+                    limits["max_total_stop_risk_pct"] / 100 / slots,
+                )
+                budget = min(budget, cash * risk / (loss + risk * friction))
+            factor = min(factor, budget * 0.99 / ticket)
+        if candidates:
+            factor = min(factor, candidates[-1] / 2)
+        # Do not invent a rounded-up size that no longer fits the frozen cap.
+        if active and all(
+            0.01 <= row["config"]["order_size_pct"] * factor <= 100 for row in active
+        ):
+            candidates.append(factor)
+    return candidates
+
+
+def _closed_loop_plan(
+    selected, capital, entry_prices, max_accounts, request_prices, *, version=CLOSED_LOOP_VERSION
+):
+    # Reuse the unchanged v4 admission for settings, price lists and hard caps;
+    # replace only its quarter-size blanket estimate with per-option floors.
+    previous = selected_account_plan(
+        selected, capital, entry_prices, max_accounts=max_accounts, version=INTENDED_VERSION
+    )
+    observations = {} if request_prices is None else request_prices
+    if (
+        type(observations) is not dict
+        or len(observations) > MAX_REQUEST_PRICES
+        or any(
+            type(key) is not str or re.fullmatch(r"[a-f0-9]{64}", key) is None
+            for key in observations
+        )
+    ):
+        raise ValueError("Frozen request prices exceed their registered identity bounds")
+    observations = {
+        key: _number(price, "frozen request opening price") for key, price in observations.items()
+    }
+    factors = (
+        [1.0, *_feasible_size_factors(previous["selected"])]
+        if version in (FEASIBLE_VERSION, CAUSAL_VERSION)
+        else [1.0, 0.5, 0.25]
+    )
+    estimates = [
+        previous["original_capital"],
+        *[
+            _option_floor(selected, previous["original_capital"], previous["entry_prices"], factor)
+            for factor in factors
+        ],
+    ][:max_accounts]
+    options = [deepcopy(previous["options"][0])]
+    options.extend(
+        {
+            "capital": min(estimates[index], MAX_NATIVE_CAPITAL),
+            "size_multiplier": factor,
+            "purpose": "whole_share_affordability" if index == 1 else "reduce_cash_and_risk_demand",
+        }
+        for index, factor in enumerate(factors[: max_accounts - 1], 1)
+    )
+    options[0]["capital"] = min(estimates[0], MAX_NATIVE_CAPITAL)
+    return _seal(
+        {
+            **{key: value for key, value in previous.items() if key != "id"},
+            "version": version,
+            "policy_id": selected_account_descriptor(version)["id"],
+            "options": options,
+            "option_estimates": estimates,
+            "estimated_capital": estimates[1],
+            "representation_limited": any(amount > MAX_NATIVE_CAPITAL for amount in estimates),
+            "request_prices": observations,
+        }
+    )
+
+
 def _validate_selected_plan(value):
     if not isinstance(value, dict) or value.get("id") != fingerprint(
         {key: item for key, item in value.items() if key != "id"}
@@ -582,6 +793,8 @@ def _validate_selected_plan(value):
         value["original_capital"],
         value["entry_prices"],
         max_accounts=value["max_accounts"],
+        version=value["version"],
+        request_prices=value.get("request_prices"),
     ):
         raise ValueError("The selected account plan differs from its declared policy")
 
@@ -593,6 +806,12 @@ def selected_account_settings(value, index):
     option = value["options"][index]
     result = deepcopy(value["selected"])
     for row in result:
+        if value["version"] in (FEASIBLE_VERSION, CAUSAL_VERSION) and not row["allocation_pct"]:
+            # An inactive strategy has no ticket to resize. Keep its valid
+            # configuration representable rather than letting it veto an
+            # independently feasible active account.
+            row["config"]["initial_capital"] = option["capital"]
+            continue
         fraction = row["config"]["order_size_pct"] * option["size_multiplier"]
         if not 0.01 <= fraction <= 100:
             raise ValueError("Selected reduced size exceeds native representation")
@@ -608,6 +827,42 @@ def selected_account_settings(value, index):
     return result
 
 
+def request_identity(row):
+    """Exact source opportunity identity shared by frozen observation producers."""
+    return fingerprint(
+        {
+            key: row.get(key)
+            for key in ("strategy_id", "symbol", "signal_date", "signal_timestamp", "source_row")
+        }
+    )
+
+
+def _intended_units(row, details, settings, requested, *, request_prices=None):
+    """Recover the native target, never infer an absent historical opening."""
+    policy = settings["execution_policy"]
+    if policy["sizing"] != "stop_risk" or not requested:
+        return requested
+    try:
+        raw = row.get("entry_raw_price")
+        if raw is None and request_prices is not None:
+            raw = request_prices.get(request_identity(row))
+        raw = _number(raw, "native raw entry price")
+        equity = _number(details["opening_equity"], "native opening equity", positive=False)
+        loss = _number(details["initial_risk_per_share"], "native stop loss per share")
+        target = policy["risk_limits"]["max_trade_risk_pct"] / 100 * policy["risk_budget_fraction"]
+        reported = _number(details["target_stop_risk_pct"], "native stop risk target") / 100
+        if details.get("sizing") != "stop_risk" or not isclose(
+            reported, target, rel_tol=1e-12, abs_tol=0
+        ):
+            return None
+        cfg = settings["config"]
+        friction = raw * (1 + cfg["slippage_bps"] / 10000) * (1 + cfg["cost_bps"] / 10000) - raw
+        units = max(0.0, equity * target / (loss + target * friction))
+        return min(requested, floor(units + 1e-9))
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return None
+
+
 def selected_account_receipt(report, value, index):
     _validate_selected_plan(value)
     settings = selected_account_settings(value, index)
@@ -617,6 +872,14 @@ def selected_account_receipt(report, value, index):
     # Orchestration independently verifies full normalized settings and native
     # constraint evidence; preserve exact ledger/summary identities here too.
     counts, tags = Counter(), Counter()
+    gap_requests = set()
+    intended_policy = value["version"] in (
+        INTENDED_VERSION,
+        CLOSED_LOOP_VERSION,
+        FEASIBLE_VERSION,
+        CAUSAL_VERSION,
+    )
+    by_strategy = {row["id"]: row for row in settings}
     active = {row["id"] for row in settings if row["allocation_pct"] > 0}
     policy_tags = {
         "gross_exposure",
@@ -629,7 +892,7 @@ def selected_account_receipt(report, value, index):
         "portfolio_symbol_allocation",
         "portfolio_cluster_allocation",
     }
-    for row in report["ledger"]:
+    for row_index, row in enumerate(report["ledger"]):
         if row.get("strategy_id") is not None and row["strategy_id"] not in active:
             counts["inactive_strategy"] += 1
             continue
@@ -637,11 +900,14 @@ def selected_account_receipt(report, value, index):
         if status not in ("closed", "open", "pending", "excluded", "skipped"):
             raise ValueError("Selected account request status is unavailable")
         if status == "excluded":
-            counts[
+            category = (
                 "rule_or_window_exclusion"
                 if "not met:" in reason or reason.startswith("maximum holding window crosses")
                 else "unavailable_evidence"
-            ] += 1
+            )
+            counts[category] += 1
+            if category == "unavailable_evidence":
+                gap_requests.add(row_index)
             continue
         details = row.get("execution_details") or {}
         quantity = _number(row.get("quantity", 0), "native quantity", positive=False)
@@ -657,19 +923,64 @@ def selected_account_receipt(report, value, index):
             raise ValueError("Selected account constraints are unavailable")
         if status == "pending" and not quantity:
             counts["unavailable_evidence"] += 1
+            gap_requests.add(row_index)
             continue
         counts["eligible_requests"] += 1
         if quantity:
             counts["admitted_requests"] += 1
-        if quantity and "requested_quantity" not in details:
+        if (quantity or intended_policy) and "requested_quantity" not in details:
             counts["unavailable_evidence"] += 1
-        if status == "skipped" or quantity < requested:
+            gap_requests.add(row_index)
+        intended = requested
+        if intended_policy:
+            tags.update(set(constraints))
+            strategy = by_strategy.get(row.get("strategy_id"))
+            intended = (
+                _intended_units(
+                    row,
+                    details,
+                    strategy,
+                    requested,
+                    request_prices=value.get("request_prices")
+                    if value["version"] in (CLOSED_LOOP_VERSION, FEASIBLE_VERSION, CAUSAL_VERSION)
+                    else None,
+                )
+                if strategy is not None
+                else None
+            )
+            if intended is None:
+                counts["unavailable_evidence"] += 1
+                counts["unavailable_sizing_intent"] += 1
+                gap_requests.add(row_index)
+                continue
+            if quantity > intended:
+                raise ValueError("Native filled quantity exceeds its frozen sizing intent")
+            if quantity == intended and 0 < intended < requested:
+                counts["fulfilled_risk_targets"] += 1
+        if status == "skipped" or quantity < intended:
             counts["constrained_requests"] += 1
             causes = set(constraints)
-            tags.update(causes)
-            if "shared_cash" in causes:
+            if intended_policy and not intended:
+                counts["whole_share_affordability"] += 1
+                continue
+            if not intended_policy:
+                tags.update(causes)
+            before = details.get("open_positions_before")
+            fixed_position_block = (
+                value["version"] == CAUSAL_VERSION
+                and not quantity
+                and intended > 0
+                and "open_positions" in causes
+                and strategy is not None
+                and type(before) in (int, float)
+                and 0 <= before <= 200
+                and isfinite(before)
+                and before == int(before)
+                and before >= strategy["execution_policy"]["risk_limits"]["max_open_positions"]
+            )
+            if "shared_cash" in causes and not fixed_position_block:
                 counts["cash_shortfall"] += 1
-            if causes & policy_tags:
+            if causes & policy_tags and not fixed_position_block:
                 counts["percentage_policy"] += 1
             if "open_positions" in causes:
                 counts["position_limit"] += 1
@@ -679,6 +990,7 @@ def selected_account_receipt(report, value, index):
                 counts["whole_share_affordability"] += 1
             if "unavailable" in reason or "missing" in reason:
                 counts["unavailable_evidence"] += 1
+                gap_requests.add(row_index)
             if (
                 causes
                 - policy_tags
@@ -693,6 +1005,9 @@ def selected_account_receipt(report, value, index):
                 and requested
             ):
                 counts["unexplained_execution_limit"] += 1
+                gap_requests.add(row_index)
+    if value["version"] in (CLOSED_LOOP_VERSION, FEASIBLE_VERSION, CAUSAL_VERSION):
+        counts["evidence_gap_requests"] = len(gap_requests)
     complete = (
         counts["admitted_requests"] > 0
         and not counts["constrained_requests"]
@@ -700,7 +1015,7 @@ def selected_account_receipt(report, value, index):
     )
     return _seal(
         {
-            "version": SELECTED_VERSION,
+            "version": value["version"],
             "plan_id": value["id"],
             "option_index": index,
             **deepcopy(option),
@@ -759,6 +1074,9 @@ def _selected_sequence(value, receipts):
             != fingerprint({key: item for key, item in receipt.items() if key != "id"})
             or receipt.get("plan_id") != value["id"]
             or receipt.get("option_index") != next_index
+            or value["version"]
+            in (INTENDED_VERSION, CLOSED_LOOP_VERSION, FEASIBLE_VERSION, CAUSAL_VERSION)
+            and receipt.get("version") != value["version"]
         ):
             raise ValueError("Selected account receipts differ from their routed sequence")
         if receipt.get("cohort_id") != receipts[0].get("cohort_id"):
@@ -815,6 +1133,20 @@ def selected_account_next(value, receipts):
     return _selected_sequence(value, receipts)
 
 
+def _closed_loop_rank(receipt):
+    counts = receipt["counts"]
+    gaps = counts.get("evidence_gap_requests", 0)
+    return (
+        not receipt["verified_sufficient"],
+        bool(gaps),
+        counts.get("constrained_requests", 0),
+        gaps,
+        -counts.get("admitted_requests", 0),
+        receipt["capital"],
+        receipt["option_index"],
+    )
+
+
 def selected_account_finish(value, receipts):
     next_index = _selected_sequence(value, receipts)
     if next_index is not None:
@@ -838,6 +1170,13 @@ def selected_account_finish(value, receipts):
         ),
         default=None,
     )
+    if value["version"] in (CLOSED_LOOP_VERSION, FEASIBLE_VERSION, CAUSAL_VERSION):
+        chosen = min(receipts, key=_closed_loop_rank, default=None)
+        last = chosen
+        verified = bool(chosen and chosen["verified_sufficient"])
+        feasible = chosen if chosen and chosen["counts"].get("admitted_requests") else None
+        operating = feasible
+        counts = deepcopy(chosen["counts"]) if chosen else {}
     action = (
         "funding_verified"
         if verified
@@ -847,10 +1186,12 @@ def selected_account_finish(value, receipts):
     )
     return _seal(
         {
-            "version": SELECTED_VERSION,
+            "version": value["version"],
             "plan_id": value["id"],
             "status": "verified_sufficient" if verified else "no_verified_amount",
-            "estimated_capital": value["estimated_capital"],
+            "estimated_capital": value["option_estimates"][last["option_index"]]
+            if value["version"] in (CLOSED_LOOP_VERSION, FEASIBLE_VERSION, CAUSAL_VERSION) and last
+            else value["estimated_capital"],
             "original_capital": value["original_capital"],
             "recommended_capital": last["capital"] if verified else None,
             "verified_capital": last["capital"] if verified else None,
@@ -865,7 +1206,9 @@ def selected_account_finish(value, receipts):
                 "remaining_exclusions": {
                     key: count
                     for key, count in operating["counts"].items()
-                    if key not in ("admitted_requests", "eligible_requests") and count > 0
+                    if key
+                    not in ("admitted_requests", "eligible_requests", "fulfilled_risk_targets")
+                    and count > 0
                 },
                 "performance_validated": False,
                 "scope": "Capacity-tested historical operating point on the same opportunity cohort; unchanged performance and chronological gates are required before promotion.",
@@ -880,9 +1223,12 @@ def selected_account_finish(value, receipts):
             ]
             if receipts
             else None,
-            "representation_limited": value["representation_limited"],
+            "representation_limited": value["option_estimates"][last["option_index"]]
+            > MAX_NATIVE_CAPITAL
+            if value["version"] in (CLOSED_LOOP_VERSION, FEASIBLE_VERSION, CAUSAL_VERSION) and last
+            else value["representation_limited"],
             "reference_tickets": [],
-            "policy": selected_account_descriptor(),
+            "policy": selected_account_descriptor(value["version"]),
             "diagnosis": {
                 "action": action,
                 "stop_increases": True,
@@ -894,6 +1240,6 @@ def selected_account_finish(value, receipts):
             },
             "independently_validated": False,
             "performance_validated": False,
-            "scope": selected_account_descriptor()["scope"],
+            "scope": selected_account_descriptor(value["version"])["scope"],
         }
     )

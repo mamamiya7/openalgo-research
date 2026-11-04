@@ -12,6 +12,8 @@ import pytest
 
 from tools import research_setup as setup
 
+SIGNED_WINDOWS_BASE = setup.signed_windows_base
+
 SAMPLE = """ENV_CONFIG_VERSION='1.0.7'
 VALID_BROKERS='zerodha,fyers,dhan,flattrade,fivepaisa'
 BROKER_API_KEY='YOUR_BROKER_API_KEY'
@@ -23,6 +25,12 @@ REDIRECT_URL='http://127.0.0.1:5000/<broker>/callback'
 DATABASE_URL='sqlite:///db/openalgo.db'
 FLASK_PORT='5000'
 """
+
+
+@pytest.fixture(autouse=True)
+def no_host_python_discovery(monkeypatch):
+    # Installer tests never select or modify the developer's real runtime.
+    monkeypatch.setattr(setup, "signed_windows_base", lambda: None)
 
 
 @pytest.fixture
@@ -237,6 +245,104 @@ def test_setup_orders_sync_check_migrations_preserves_settings_and_handles_space
     assert (root / ".env").read_bytes() == original
 
 
+def test_signed_windows_runtime_prepares_same_venv_before_exact_base_sync(install, monkeypatch):
+    root, uv = install
+    official = root / "Existing signed Python 3.12/python.exe"
+    original = b"FLASK_PORT='59991'\r\nAPP_KEY='private'\r\n"
+    (root / ".env").write_bytes(original)
+    monkeypatch.setattr(setup, "check_not_running", lambda *_, **__: None)
+    monkeypatch.setattr(setup, "signed_windows_base", lambda: official)
+    calls = []
+    assert (
+        setup.setup(
+            root, uv, no_launch=True, runner=lambda command, *a, **kw: calls.append(command)
+        )
+        == 0
+    )
+    assert calls[0] == [
+        str(official),
+        "-m",
+        "venv",
+        "--upgrade",
+        "--without-pip",
+        str(root / ".venv"),
+    ]
+    assert calls[1] == [
+        str(uv),
+        "sync",
+        "--frozen",
+        "--extra",
+        "research",
+        "--python",
+        str(official),
+        "--no-managed-python",
+    ]
+    assert all("--managed-python" not in row for row in calls)
+    assert calls[2][-1] == "tools/research_check.py"
+    assert [row[-1] for row in calls[3:]] == list(setup.MIGRATIONS)
+    assert (root / ".env").read_bytes() == original
+
+
+def test_signed_base_requires_valid_psf_signature_without_executing_candidate(
+    monkeypatch, tmp_path
+):
+    from types import SimpleNamespace
+
+    candidate = tmp_path / "Python's signed runtime/python.exe"
+    candidate.parent.mkdir()
+    candidate.touch()
+    monkeypatch.setattr(setup, "os", SimpleNamespace(name="nt", environ=os.environ))
+    monkeypatch.setattr(setup.sys, "_base_executable", str(candidate))
+    captured = []
+
+    def verify(command, **kwargs):
+        captured.append((command, kwargs))
+        return SimpleNamespace(returncode=0, stdout="SIGNED-PSF-PYTHON\n")
+
+    monkeypatch.setattr(setup.subprocess, "run", verify)
+    assert SIGNED_WINDOWS_BASE() == candidate.resolve()
+    command, options = captured[0]
+    assert command[:3] == ["powershell.exe", "-NoProfile", "-Command"]
+    assert str(candidate) not in command[-1]  # no command-text interpolation
+    assert options["env"]["OPENALGO_VERIFY_PYTHON"] == str(candidate.resolve())
+    assert (
+        "Get-AuthenticodeSignature" in command[-1] and "Python Software Foundation" in command[-1]
+    )
+    assert "Set-ExecutionPolicy" not in command[-1]
+    assert options["timeout"] == 15
+    assert not any(str(candidate) == arg for arg in command)
+
+
+@pytest.mark.parametrize("outcome", ["unsigned", "wrong_marker", "timeout", "unavailable"])
+def test_unsigned_or_unavailable_signature_keeps_managed_fallback(monkeypatch, tmp_path, outcome):
+    from types import SimpleNamespace
+
+    candidate = tmp_path / "python.exe"
+    candidate.touch()
+    monkeypatch.setattr(setup, "os", SimpleNamespace(name="nt", environ=os.environ))
+    monkeypatch.setattr(setup.sys, "_base_executable", str(candidate))
+
+    def verify(*a, **kw):
+        if outcome == "timeout":
+            raise subprocess.TimeoutExpired("signature check", 15)
+        if outcome == "unavailable":
+            raise OSError("unavailable")
+        return SimpleNamespace(returncode=1 if outcome == "unsigned" else 0, stdout="OTHER")
+
+    monkeypatch.setattr(setup.subprocess, "run", verify)
+    assert SIGNED_WINDOWS_BASE() is None
+
+
+def test_nonwindows_runtime_selection_never_invokes_powershell(monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(setup, "os", SimpleNamespace(name="posix"))
+    monkeypatch.setattr(
+        setup.subprocess, "run", lambda *a, **kw: pytest.fail("No Windows discovery on POSIX")
+    )
+    assert SIGNED_WINDOWS_BASE() is None
+
+
 def test_failed_dependency_download_preserves_existing_configuration(install, monkeypatch):
     root, uv = install
     original = b"APP_KEY='preserve'\r\n"
@@ -310,6 +416,12 @@ def test_bootstrap_pins_and_checksums_match_platforms():
     assert "$env:UV_NO_MANAGED_PYTHON = $null" in windows
     assert "unset UV_PYTHON_PREFERENCE UV_MANAGED_PYTHON UV_NO_MANAGED_PYTHON" in linux
     assert "--managed-python" in windows and "--managed-python" in linux
+    assert "Get-SignedPython312" in windows
+    assert "Get-AuthenticodeSignature" in windows and "Python Software Foundation" in windows
+    assert "OPENALGO_PYTHON312" in windows
+    assert "HKCU:\\Software\\Python\\PythonCore" in windows
+    # Validate trust before the isolated version probe executes any candidate.
+    assert windows.index("$taskSignature =") < windows.index("$taskVersion = & $taskCandidate")
 
 
 def test_fresh_port_overrides_keep_all_urls_consistent(install):

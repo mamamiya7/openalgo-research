@@ -10,6 +10,7 @@ from services import research_chartink as chartink
 from services import research_chosen_setups as chosen_setups
 from services import research_comparisons as comparisons
 from services import research_decisions as decisions
+from services import research_journey as journey
 from services import research_library as library
 from services import research_live_progress as live_progress
 from services import research_method_coverage as method_coverage
@@ -809,6 +810,32 @@ def library_replay(experiment_id):
     return jsonify(
         library.replay_experiment(store(), session["user"], experiment_id, library_body())
     ), 202
+
+
+@scanner_research_bp.get("/library/experiments/<experiment_id>/journey")
+def library_journey(experiment_id):
+    return jsonify(journey.status(store(), session["user"], experiment_id))
+
+
+@scanner_research_bp.post("/library/experiments/<experiment_id>/journey/prepare")
+def library_journey_prepare(experiment_id):
+    if current_app.config.get("RESEARCH_PREVIEW"):
+        raise ValueError("Open the installed app to prepare research data.")
+    return jsonify(journey.prepare(store(), session["user"], experiment_id, library_body())), 202
+
+
+@scanner_research_bp.put("/library/experiments/<experiment_id>/journey/plan")
+def library_journey_plan(experiment_id):
+    if current_app.config.get("RESEARCH_PREVIEW"):
+        raise ValueError("Open the installed app to edit the research plan.")
+    return jsonify(journey.edit_plan(store(), session["user"], experiment_id, library_body()))
+
+
+@scanner_research_bp.post("/library/experiments/<experiment_id>/journey/start")
+def library_journey_start(experiment_id):
+    if current_app.config.get("RESEARCH_PREVIEW"):
+        raise ValueError("Open the installed app to start research.")
+    return jsonify(journey.start(store(), session["user"], experiment_id, library_body())), 202
 
 
 @scanner_research_bp.post("/library/experiments/from-job")

@@ -267,6 +267,56 @@ def submit(store, owner, request, request_id=None):
     )
 
 
+def _operating_replay_capital(report, selected_row, config_id, risk_limits):
+    """Admit changed capital only from an exact, historically validated point."""
+    from math import isfinite
+
+    if not selected_row:
+        return None
+    if selected_row.get("provenance") != "automatic_operating_validation":
+        if "account_capital" in selected_row or "operating_validation_id" in selected_row:
+            raise ValueError("Saved account capital lacks operating validation provenance")
+        return None
+    from research.operating_validation import VERSION
+    from research.report_contract import fingerprint, settings_identity
+
+    receipt = report.get("automatic_research", {}).get("operating_validation")
+    tested = report.get("experiment", {}).get("selected_reports", {}).get(config_id)
+    if not isinstance(receipt, dict) or not isinstance(tested, dict):
+        raise ValueError("The validated operating-point report is unavailable")
+    capital = receipt.get("capital")
+    if (
+        receipt.get("version") != VERSION
+        or receipt.get("id")
+        != fingerprint({key: value for key, value in receipt.items() if key != "id"})
+        or receipt.get("outcome") != "validated"
+        or receipt.get("historically_validated") is not True
+        or receipt.get("independently_validated") is not False
+        or receipt.get("selection_changed") is not False
+        or receipt.get("selected_config_id") != config_id
+        or selected_row.get("config_id") != config_id
+        or selected_row.get("operating_validation_id") != receipt.get("id")
+        or type(capital) not in (int, float)
+        or not isfinite(capital)
+        or not 1 <= capital <= 1e9
+        or not _same_wire_value(selected_row.get("account_capital"), capital)
+        or receipt.get("selected_report_id")
+        != fingerprint({key: value for key, value in tested.items() if key != "automatic_research"})
+        or settings_identity(tested.get("strategies")) != config_id
+        or not _same_wire_value(tested.get("summary", {}).get("initial_capital"), capital)
+        or tested.get("portfolio_constraint_evidence", {}).get("status") != "supported"
+        or not _same_wire_value(selected_row.get("summary"), tested.get("summary"))
+    ):
+        raise ValueError("The saved operating-point validation binding changed")
+    for row in tested["strategies"]:
+        if (
+            not _same_wire_value(row.get("config", {}).get("initial_capital"), capital)
+            or row.get("execution_policy", {}).get("risk_limits") != risk_limits
+        ):
+            raise ValueError("The saved operating point changed capital or hard account limits")
+    return capital
+
+
 def replay_inputs(store, owner, job_id, *, trial_id=None, period="selection"):
     """One exact candidate/period contract for direct and library follow-up jobs."""
     from research.report_contract import settings_identity
@@ -309,6 +359,9 @@ def replay_inputs(store, owner, job_id, *, trial_id=None, period="selection"):
     selected_row = None
     if trial_id is not None:
         rows = report.get("experiment", {}).get("rows", [])
+        operating = report.get("experiment", {}).get("operating_candidate")
+        if operating is not None:
+            rows = [*rows, operating]
         matches = [row for row in rows if row["config_id"] == trial_id]
         if len(matches) != 1:
             raise ValueError("Choose a saved trial from this run")
@@ -321,8 +374,20 @@ def replay_inputs(store, owner, job_id, *, trial_id=None, period="selection"):
         selected_row = next(
             (row for row in study.get("rows", []) if row["config_id"] == config_id), None
         )
+        if (
+            selected_row is None
+            and study.get("operating_candidate", {}).get("config_id") == config_id
+        ):
+            selected_row = study["operating_candidate"]
     definitions = {item["id"]: item for item in selected}
     portfolio = deepcopy(evidence["portfolio"])
+    operating_capital = _operating_replay_capital(
+        report, selected_row, config_id, portfolio.get("risk_limits")
+    )
+    if operating_capital is not None:
+        # normalize deliberately applies account capital to every strategy;
+        # admit the recorded validated capital before that normalization.
+        portfolio["capital"] = operating_capital
     if set(definitions) != {item["id"] for item in portfolio["strategies"]}:
         raise ValueError("Saved strategy identities do not match")
     portfolio.pop("optimization", None)
@@ -382,6 +447,14 @@ def replay_inputs(store, owner, job_id, *, trial_id=None, period="selection"):
             else report.get("replay_origin", {}).get("period")
             or report.get("matched_baseline_origin", {}).get("period", "full"),
             "config_id": config_id,
+            **(
+                {
+                    "operating_validation_id": selected_row["operating_validation_id"],
+                    "account_capital": operating_capital,
+                }
+                if operating_capital is not None
+                else {}
+            ),
             **(
                 {
                     "study_job_id": job.id,
@@ -1084,6 +1157,20 @@ def run(
     job_id=None,
     defer_study_analysis=False,
 ):
+    if evidence.get("supervisor_program"):
+        from services.research_supervisor_program import run as supervisor_run
+
+        return supervisor_run(
+            store,
+            owner,
+            evidence,
+            spec,
+            saved=saved,
+            checkpoint=checkpoint,
+            progress=progress,
+            cancelled=cancelled,
+            job_id=job_id,
+        )
     evidence, inputs_id, requirements = _prepare_inputs(
         store,
         owner,

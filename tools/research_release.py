@@ -56,6 +56,7 @@ NEW_PREFIXES = (
 NEW_FILES = {
     ".github/workflows/research-distribution.yml",
     "tools/research_release.py",
+    "test/test_agent_research_toolkit.py",
     "tools/research_worker.py",
     "tools/research_dev.py",
     "blueprints/scanner_research.py",

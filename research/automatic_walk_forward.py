@@ -56,14 +56,21 @@ FITS = ("fit1", "fit2", "fit3", "search")
 SEED_FITS = (*FITS, "search_seed1", "search_seed2")
 
 
-def _account_reserve(recipe, period, *, planning=False, decision=False):
+def _account_reserve(recipe, period, *, planning=False, decision=False, operating=False):
     """Hold back only accounts still ahead of this calculation phase."""
+    operating_reserve = (
+        recipe["budget"].get("max_operating_validation_accounts", 0)
+        if recipe.get("validation_mode") == "exploratory_only"
+        else 0
+    )
+    if operating:
+        return 0
     if planning:
         if "capital_planning" not in recipe:
             raise ValueError("Capital planning needs its recorded account reservation")
         # Planning follows the selected/final report and spends its own already
         # reserved slots. The final comparison pair has already completed.
-        return 0
+        return operating_reserve
     reserve = (
         2
         if period != "final"
@@ -74,7 +81,7 @@ def _account_reserve(recipe, period, *, planning=False, decision=False):
         reserve += recipe["budget"]["max_capital_planning_accounts"]
     if "automatic_decision" in recipe and not decision:
         reserve += recipe["budget"]["max_decision_accounts"]
-    return reserve
+    return reserve + operating_reserve
 
 
 def fit_names(version):
@@ -273,6 +280,18 @@ def _screening_program(version, entries, axes, timing, execution=None):
     ):
         raise ValueError("Walk-forward screening exceeded its reserved refinement budget")
     return screening
+
+
+def _intent_program(recipe, entries, screening):
+    """Lock new journey choices while retaining legacy frozen catalogues."""
+    if recipe.get("execution_intent", {}).get("version") != "fixed-signals-v1":
+        return entries, screening
+    none = next(row for row in entries if row["id"] == "none")
+    unique = {}
+    for point in screening:
+        point = {**point, "hypothesis": "none"}
+        unique.setdefault(fingerprint(point), point)
+    return [none], list(unique.values())
 
 
 def _validate_state(saved, *, version=None):
@@ -616,6 +635,8 @@ def _run(
                 )
         if "automatic_decision" in recipe:
             upper += recipe["budget"]["max_decision_accounts"]
+        if recipe.get("validation_mode") == "exploratory_only":
+            upper += recipe["budget"].get("max_operating_validation_accounts", 0)
         if upper > max_simulations or proposals_per_fit - 50 < 16:
             raise ValueError("Priority research exceeded its accounting or refinement reserve")
     base, numeric_axes = _prepare(evidence["strategies"])
@@ -644,6 +665,10 @@ def _run(
     screening = _screening_program(
         version, entries, axes, recipe["timing_research"], recipe.get("execution_research")
     )
+    # Repeated family screens collapse to one; the unchanged68 proposals per
+    # fit now spend their refinement on managing the original scanner signals.
+    entries, screening = _intent_program(recipe, entries, screening)
+    by_id = {row["id"]: row for row in entries}
     optimizer = {
         "id": "optuna",
         "version": optuna.__version__,
@@ -838,10 +863,15 @@ def _run(
         report_analysis=True,
         account_capital=None,
         decision=False,
+        operating=False,
     ):
         control()
         reserve = _account_reserve(
-            recipe, period, planning=account_capital is not None, decision=decision
+            recipe,
+            period,
+            planning=account_capital is not None,
+            decision=decision,
+            operating=operating,
         )
         if (
             state["attempts"] >= max_simulations - reserve
@@ -1387,7 +1417,7 @@ def _run(
         return winner, rows
 
     def with_automatic_actions(result):
-        from research.automatic_actions import descriptor, entry_prices
+        from research.automatic_actions import descriptor, entry_prices, request_prices
         from research.capital_planning import (
             selected_account_descriptor,
             selected_account_finish,
@@ -1397,10 +1427,19 @@ def _run(
             selected_account_settings,
         )
 
-        if (
-            recipe["automatic_actions"] != descriptor()
-            or recipe["capital_planning"] != selected_account_descriptor()
-        ):
+        action_policy = recipe["automatic_actions"]["policy"]
+        capital_version = (
+            "research-capital-planning-v5"
+            if action_policy == "automatic_actions_v3"
+            else (
+                "research-capital-planning-v4"
+                if action_policy == "automatic_actions_v2"
+                else "research-capital-planning-v3"
+            )
+        )
+        if recipe["automatic_actions"] != descriptor(action_policy) or recipe[
+            "capital_planning"
+        ] != selected_account_descriptor(version=capital_version):
             raise ValueError("The frozen automatic action policy changed")
         selected = state["selection"]
         planned = selected_account_plan(
@@ -1410,6 +1449,18 @@ def _run(
                 state["selected_report"], selected["strategies"], window("search")["snapshot"]
             ),
             max_accounts=recipe["budget"]["max_capital_planning_accounts"],
+            version=capital_version,
+            **(
+                {
+                    "request_prices": request_prices(
+                        state["selected_report"],
+                        selected["strategies"],
+                        window("search")["snapshot"],
+                    )
+                }
+                if action_policy == "automatic_actions_v3"
+                else {}
+            ),
         )
         retained = state.get("automatic_actions")
         if retained is None:
@@ -1629,6 +1680,81 @@ def _run(
             # its financial seals. Standalone exports must retain the verdict
             # instead of depending on a parent study being loaded beside them.
             standalone["automatic_research"] = deepcopy(findings)
+        if "operating_validation" in recipe:
+            from research.operating_loop import run as operating_loop
+
+            def operating_audit(report, request):
+                period = request["period"]
+                current = dict(window(period))
+                chosen = {row["id"]: row for row in report["strategies"]}
+                current["strategies"] = [
+                    {**row, **deepcopy(chosen[row["id"]]), "search": {}}
+                    for row in current["strategies"]
+                ]
+                current["portfolio"] = {
+                    **current["portfolio"],
+                    "capital": report["summary"]["initial_capital"],
+                }
+                current = prepared_execution.attach(current)
+                current = prepared_portfolio.attach(current)
+                hypothesis = request["hypothesis"]
+                if hypothesis["id"] != "none":
+                    current["portfolio"] = {
+                        **current["portfolio"],
+                        "entry_conditions": {
+                            "version": policy_for_version(version)["condition_version"],
+                            "hypothesis": hypothesis,
+                        },
+                    }
+                market = prepared_calculations.get(period) if prepared_calculations else None
+                with market.activate() if market is not None else nullcontext():
+                    current["strategies"], _ = _gate(
+                        current,
+                        stock,
+                        hypothesis,
+                        gates,
+                        period,
+                        apply_fn=prepared_gate.apply,
+                        markers_fn=context.markers,
+                        calculation_version=policy_for_version(version)["calculation_version"],
+                        trailing_activation=True,
+                    )
+                    expected_basis = build_evaluation_basis(
+                        {**current, "snapshot": market.snapshot} if market else current,
+                        period="evaluation" if period == "final" else "selection",
+                    )
+                if report.get("evaluation_basis") != expected_basis:
+                    raise ValueError("Operating validation period or native account basis changed")
+                if report.get("automatic_design") != design_assessment(report, period):
+                    raise ValueError("Operating validation design evidence changed")
+                return prepared_portfolio.assess(report, current["portfolio_execution_features"])
+
+            result = operating_loop(
+                result,
+                state=state,
+                recipe=recipe,
+                baseline=baseline,
+                baseline_hypothesis=none,
+                available_accounts=lambda: max(
+                    0,
+                    min(
+                        max_simulations - state["attempts"],
+                        max_simulations if state["attempts"] - state["simulations"] < 64 else 0,
+                    ),
+                ),
+                evaluate=lambda settings, hypothesis, period, stress: simulate(
+                    settings,
+                    hypothesis,
+                    period,
+                    stress,
+                    report_analysis=False,
+                    account_capital=settings[0]["config"]["initial_capital"],
+                    operating=True,
+                ),
+                audit=operating_audit,
+                persist=persist,
+                control=control,
+            )
         return result
 
     if recipe.get("history_availability", {}).get("mode") == "exploratory_only":

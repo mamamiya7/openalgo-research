@@ -17,11 +17,13 @@ from copy import deepcopy
 from datetime import datetime
 from urllib.parse import urlsplit
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from database.research_db import (
     ResearchChartinkImport,
+    ResearchJob,
     ResearchLibraryExperiment,
+    ResearchLibraryJob,
     ResearchLibrarySource,
     ResearchSource,
     ResearchSourceReceipt,
@@ -231,6 +233,14 @@ def _draft(source, receipt, previous=None):
                 execution_policy = deepcopy(strategy["execution_policy"])
                 allocation = strategy["allocation_pct"]
                 draft["portfolio"]["risk_limits"] = deepcopy(execution_policy["risk_limits"])
+        if (
+            old["portfolio"].get("automatic_research", {}).get("intent_policy")
+            == "fixed-signals-v1"
+        ):
+            draft["portfolio"]["automatic_research"] = deepcopy(
+                old["portfolio"]["automatic_research"]
+            )
+            draft["optimizing"] = old["optimizing"]
     draft["portfolio"].update(
         name=source["title"][:120],
         strategies=[
@@ -247,6 +257,13 @@ def _draft(source, receipt, previous=None):
         ],
     )
     draft["sources"] = {receipt["id"]: receipt}
+    if (
+        previous
+        and draft["portfolio"].get("automatic_research", {}).get("intent_policy")
+        == "fixed-signals-v1"
+    ):
+        if strategy:
+            draft["portfolio"]["strategies"][0]["id"] = strategy["id"]
     return draft
 
 
@@ -315,7 +332,36 @@ def import_capture(store, owner, data):
                     },
                     create=True,
                 )
-                experiment_id = library._new_experiment(db, owner, draft, metadata).id
+                guided = bool(
+                    previous_draft
+                    and previous_draft[0]["portfolio"]
+                    .get("automatic_research", {})
+                    .get("intent_policy")
+                    == "fixed-signals-v1"
+                )
+                if guided:
+                    parent = library._owned(db, owner, parent_id)
+                    library._editable(parent)
+                    active = db.scalar(
+                        select(func.count())
+                        .select_from(ResearchLibraryJob)
+                        .join(ResearchJob, ResearchJob.id == ResearchLibraryJob.job_id)
+                        .where(
+                            ResearchLibraryJob.experiment_id == parent_id,
+                            ResearchJob.status.in_(evidence_service.ACTIVE),
+                        )
+                    )
+                    if active:
+                        raise ValueError(
+                            "This study is still researching; let it finish before updating its signals"
+                        )
+                    library._preserve_draft(db, parent, draft, "Before scanner data update")
+                    parent.draft = library._bounded_json(draft)
+                    library._link_sources(db, parent.id, draft)
+                    library._touch(parent)
+                    experiment_id = parent.id
+                else:
+                    experiment_id = library._new_experiment(db, owner, draft, metadata).id
                 reused = False
             record = ResearchChartinkImport(
                 owner=owner,

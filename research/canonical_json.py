@@ -266,6 +266,8 @@ def bounded_canonical_fragments(value, *, max_bytes, allow_native_float64=False)
         # immediately; only a successful caller's immutable tuple owns bytes.
         pieces.clear()
         active.clear()
+        # Break the recursive closure as well, rather than await cyclic GC.
+        visit = None
 
 
 def prepared_canonical_fragments(
@@ -474,6 +476,8 @@ def prepared_canonical_fragments(
     finally:
         raw_leaves.clear()
         active.clear()
+        # The recursive copier also captures the complete prepared owner.
+        copy = None
 
 
 def _canonical_bytes(
@@ -613,3 +617,10 @@ def _canonical_bytes(
         return raw
     except (ValueError, TypeError, RuntimeError, OverflowError):
         return None
+    finally:
+        # The recursive function closes over itself and _capture. A successful
+        # snapshot appends its entire detached tree to _capture; leaving the
+        # closure cycle intact retains every old checkpoint until cyclic GC.
+        # Release that ownership synchronously, including failed encodings.
+        active.clear()
+        copy = None

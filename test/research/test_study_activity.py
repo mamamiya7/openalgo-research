@@ -644,7 +644,9 @@ def test_joint_stock_checkpoint_marks_categorical_proposal_durably(app):
     finalize(store, job_id, observer)
 
 
-@pytest.mark.parametrize("mode", ["original", "prior60_cluster_inverse_vol"])
+@pytest.mark.parametrize(
+    "mode", ["original", "prior60_cluster_inverse_vol", "active_prior60_cluster_inverse_vol"]
+)
 def test_current_allocation_proposal_is_recorded_and_checkpointed(app, mode):
     store, job_id, observer = claimed(app, budget=408)
     started = {

@@ -124,6 +124,8 @@ def _references(engine, *, store=None):
 
         chosen_roots = chosen_references(db, tables)
         automatic_roots = _automatic_period_references(db, tables, store=store)
+        supervisor_roots = _supervisor_references(db, tables, store=store)
+        journey_roots = _journey_references(db, tables)
         _study_activity_references(db, tables)
     source_ids, job_ids = {row[0] for row in sources}, {row[0] for row in jobs}
     if any(row[1] not in source_ids for row in jobs):
@@ -145,7 +147,423 @@ def _references(engine, *, store=None):
         | decision_roots
         | chosen_roots
         | automatic_roots
+        | supervisor_roots
+        | journey_roots
     )
+
+
+def _journey_references(connection, tables):
+    """Reviewed input snapshots and compact memory remain owned retained roots."""
+    if "research_journeys" not in tables:
+        return set()
+    from services.research_journey import MAX_STATE_BYTES, VERSION
+
+    if connection.exec_driver_sql(
+        "SELECT 1 FROM research_journeys WHERE length(CAST(state AS BLOB)) > ? LIMIT 1",
+        (MAX_STATE_BYTES,),
+    ).first():
+        raise ValueError("Research journey state exceeds its maintenance bound")
+    parents = dict(_rows(connection, "research_library_experiments", ("id", "owner")))
+    jobs = dict(_rows(connection, "research_jobs", ("id", "owner")))
+    roots = set()
+    for identifier, owner, phase, raw in _rows(
+        connection, "research_journeys", ("experiment_id", "owner", "phase", "state")
+    ):
+        state = json.loads(raw)
+        if (
+            parents.get(identifier) != owner
+            or phase
+            not in (
+                "preparing",
+                "review",
+                "researching",
+                "finalizing",
+                "complete",
+                "none",
+                "needs_action",
+            )
+            or state.get("version") != VERSION
+        ):
+            raise ValueError("Research journey metadata no longer matches its study")
+        if state.get("job_id") and jobs.get(state["job_id"]) != owner:
+            raise ValueError("Research journey references a missing owned job")
+        history = state.get("history", [])
+        if not isinstance(history, list) or len(history) > 24:
+            raise ValueError("Research journey memory exceeds its supported bound")
+        entries = [state.get("plan") or {}, state.get("approved_plan") or {}, *history]
+        for entry in entries:
+            for field in ("inputs_artifact", "prepared_inputs_artifact"):
+                value = entry.get(field)
+                if value is not None:
+                    if not isinstance(value, str) or not re.fullmatch(r"[a-f0-9]{64}", value):
+                        raise ValueError("Research journey references invalid input evidence")
+                    roots.add(value)
+    return roots
+
+
+def _supervisor_references(connection, tables, *, store=None):
+    """Retain bounded research grants and verify their exact historical chain."""
+    table = "research_supervisors"
+    if table not in tables:
+        return set()
+    from research.report_contract import fingerprint, settings_identity
+    from services.research_supervisor import (
+        ADAPTIVE_EXPERIMENT_LIMIT,
+        ADAPTIVE_POLICY,
+        CONCRETE_EXPERIMENT_LIMIT,
+        EXPERIMENT_POLICY,
+        MAX_LEDGER_BYTES,
+        REMEDIES,
+        VERSION,
+    )
+
+    if connection.exec_driver_sql(f"SELECT count(*) FROM {table}").scalar() > MAX_FILES:
+        raise ValueError("Research supervisor metadata exceeds its maintenance bound")
+    if connection.exec_driver_sql(
+        f"SELECT 1 FROM {table} WHERE length(CAST(state AS BLOB)) > ? LIMIT 1",
+        (MAX_LEDGER_BYTES,),
+    ).first():
+        raise ValueError("Research supervisor state exceeds its size bound")
+    jobs = {
+        row[0]: row[1:]
+        for row in _rows(connection, "research_jobs", ("id", "owner", "result_artifact", "status"))
+    }
+    requests = {
+        (row[0], row[1]): row[2:]
+        for row in _rows(
+            connection, "research_requests", ("owner", "token", "job_id", "payload_hash")
+        )
+    }
+    choices = {
+        row[0]: row[1:]
+        for row in _rows(
+            connection, "research_chosen_setups", ("id", "owner", "experiment_id", "snapshot")
+        )
+    }
+    library = dict(_rows(connection, "research_library_experiments", ("id", "owner")))
+
+    def hex_id(value, length=64):
+        return isinstance(value, str) and re.fullmatch(r"[a-f0-9]{" + str(length) + "}", value)
+
+    def integer(value, maximum):
+        return type(value) is int and 0 <= value <= maximum
+
+    def fail():
+        raise ValueError("Research supervisor references invalid or changed historical evidence")
+
+    roots = set()
+    cursor = connection.exec_driver_sql(
+        "SELECT id,owner,root_job_id,root_artifact,conversation_id,request_id,state,updated_at "
+        "FROM research_supervisors"
+    )
+    try:
+        for identifier, owner, root, artifact, conversation, request, raw, updated in cursor:
+            if (
+                not hex_id(identifier, 32)
+                or not isinstance(owner, str)
+                or not 1 <= len(owner) <= 255
+                or not owner.strip()
+                or jobs.get(root) != (owner, artifact, "completed")
+                or not hex_id(artifact)
+                or not isinstance(conversation, str)
+                or not 1 <= len(conversation.strip()) <= 128
+                or not isinstance(request, str)
+                or not re.fullmatch(r"[A-Za-z0-9_-]{8,128}", request)
+                or type(updated) not in (int, float)
+                or not math.isfinite(updated)
+                or updated < 0
+                or not isinstance(raw, str)
+            ):
+                fail()
+            try:
+                state = json.loads(
+                    raw, parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value))
+                )
+            except (ValueError, TypeError, RecursionError):
+                fail()
+            if not isinstance(state, dict):
+                fail()
+            capital_policy = state.get("capital_policy_version")
+            if capital_policy not in (
+                None,
+                "research-capital-planning-v6",
+                "research-capital-planning-v7",
+            ):
+                fail()
+            proposals = state.get("proposals")
+            maximum = state.get("max_experiments")
+            mode = state.get("validation_mode")
+            attempts, simulations = (
+                state.get("original_attempts"),
+                state.get("original_simulations"),
+            )
+            if (
+                state.get("version") != VERSION
+                or state.get("objective") != "robust_improvement"
+                or type(maximum) is not int
+                or state.get("continuation_policy") not in (None, ADAPTIVE_POLICY)
+                or (
+                    state.get("continuation_policy") == ADAPTIVE_POLICY
+                    and (
+                        state.get("experiment_policy") != EXPERIMENT_POLICY
+                        or mode != "exploratory_only"
+                    )
+                )
+                or not 1
+                <= maximum
+                <= (
+                    (
+                        ADAPTIVE_EXPERIMENT_LIMIT
+                        if state.get("continuation_policy") == ADAPTIVE_POLICY
+                        else CONCRETE_EXPERIMENT_LIMIT
+                    )
+                    if state.get("experiment_policy") == EXPERIMENT_POLICY
+                    else 3
+                )
+                or mode not in ("exploratory_only", "chronological", "historical_only")
+                or state.get("status")
+                not in ("planning", "running", "awaiting_plan", "accepted", "saved", "stopped")
+                or not integer(attempts, 512)
+                or not integer(simulations, attempts)
+                or not isinstance(proposals, list)
+                or len(proposals) > maximum
+                or (mode != "exploratory_only" and len(proposals) > 1)
+            ):
+                fail()
+            if store is not None:
+                report = read_artifact(store, artifact).get("result", {})
+                saved = report.get("automatic_research", {})
+                counts = saved.get("counts", {})
+                recipe = saved.get("recipe", report.get("automatic_recipe", {}))
+                if (
+                    counts.get("attempts_reserved") != attempts
+                    or counts.get("simulations") != simulations
+                    or recipe.get("version") != "automatic-hypotheses-v16"
+                    or recipe.get("validation_mode") != mode
+                ):
+                    fail()
+                del report, saved, counts, recipe
+            roots.add(artifact)
+            seen, children = set(), set()
+            seeds = {root: artifact}
+            blocked_seeds = set()
+            committed = attempts
+            lost = attempts - simulations
+            accepted = []
+            for proposal in proposals:
+                if not isinstance(proposal, dict):
+                    fail()
+                pid, remedy = proposal.get("id"), proposal.get("remedy")
+                seed, source = proposal.get("seed_job_id"), proposal.get("source_result_artifact")
+                reservation, spent = proposal.get("reserved_accounts"), proposal.get("spent")
+                completed, outcome, child = (
+                    proposal.get("completed", 0),
+                    proposal.get("outcome"),
+                    proposal.get("job_id"),
+                )
+                expected = (
+                    (17 if remedy == "funding_and_size" else 14)
+                    if mode == "exploratory_only"
+                    else 24
+                )
+                rationale = proposal.get("rationale")
+                if (
+                    not hex_id(pid)
+                    or proposal.get("capital_policy_version") != capital_policy
+                    or pid in seen
+                    or remedy not in REMEDIES
+                    or not isinstance(seed, str)
+                    or seed not in seeds
+                    or source != seeds.get(seed)
+                    or not hex_id(source)
+                    or jobs.get(seed) != (owner, source, "completed")
+                    or (
+                        seed in blocked_seeds
+                        and (remedy != "funding_and_size" or mode != "exploratory_only")
+                    )
+                    or not isinstance(rationale, str)
+                    or not 1 <= len(rationale.strip()) <= 1000
+                    or settings_identity(proposal.get("settings")) is None
+                    or len(proposal["settings"]) > 8
+                    or type(reservation) is not int
+                    or reservation != expected
+                    or not integer(spent, reservation)
+                    or not integer(completed, spent)
+                    or outcome not in (None, "validated", "rejected", "blocked")
+                    or pid
+                    != fingerprint(
+                        {
+                            "remedy": remedy,
+                            "settings": proposal["settings"],
+                            "source_result_artifact": source,
+                            "root_job_id": root,
+                            **(
+                                {"capital_policy_version": proposal["capital_policy_version"]}
+                                if proposal.get("capital_policy_version")
+                                else {}
+                            ),
+                        }
+                    )
+                    or (child is None and (spent or completed or outcome is not None))
+                    or (
+                        mode != "exploratory_only"
+                        and (remedy != "funding_and_size" or seed != root)
+                    )
+                ):
+                    fail()
+                seen.add(pid)
+                committed += spent if outcome is not None else reservation
+                lost += spent - completed
+                if committed > 512 or lost > 64:
+                    fail()
+                if child is not None:
+                    receipt = requests.get((owner, "supervisor_" + pid))
+                    if (
+                        not isinstance(child, str)
+                        or child in children
+                        or child == root
+                        or child not in jobs
+                        or jobs[child][0] != owner
+                        or receipt is None
+                        or receipt[0] != child
+                        or not hex_id(receipt[1])
+                        or (outcome == "validated" and jobs[child][2] != "completed")
+                    ):
+                        fail()
+                    children.add(child)
+                    if jobs[child][1]:
+                        if not hex_id(jobs[child][1]):
+                            fail()
+                        roots.add(jobs[child][1])
+                    if outcome in ("rejected", "blocked") and jobs[child][2] == "completed":
+                        seeds[child] = jobs[child][1]
+                        if outcome == "blocked":
+                            blocked_seeds.add(child)
+                    if outcome == "validated":
+                        accepted.append(child)
+                roots.add(source)
+            chosen = state.get("accepted_job_id")
+            if (chosen is None and accepted) or (chosen is not None and accepted != [chosen]):
+                fail()
+            if state["status"] in ("accepted", "saved") and chosen is None:
+                fail()
+            if chosen is not None and state["status"] not in ("accepted", "saved"):
+                fail()
+            latest = state.get("latest_source_result_artifact")
+            recovery = state.get("blocked_recovery")
+            if recovery is not None and (
+                not isinstance(recovery, dict)
+                or recovery.get("scope") != "feasibility_only"
+                or recovery.get("job_id") not in blocked_seeds
+                or seeds.get(recovery.get("job_id")) != recovery.get("artifact")
+                or not hex_id(recovery.get("source_settings_id"))
+                or not isinstance(recovery.get("unresolved_constraints"), dict)
+            ):
+                fail()
+            if latest is not None and latest not in seeds.values():
+                fail()
+            latest_seed = state.get("latest_seed_job_id")
+            if latest_seed is not None and (
+                not isinstance(latest_seed, str) or seeds.get(latest_seed) != latest
+            ):
+                fail()
+            saved_result = state.get("saved_result")
+            if saved_result is not None:
+                if (
+                    not isinstance(saved_result, dict)
+                    or chosen is None
+                    or state["status"] != "saved"
+                ):
+                    fail()
+                experiment, choice_id = (
+                    saved_result.get("experiment_id"),
+                    saved_result.get("choice_id"),
+                )
+                choice = choices.get(choice_id) if isinstance(choice_id, str) else None
+                if (
+                    not hex_id(experiment, 32)
+                    or not hex_id(choice_id, 32)
+                    or library.get(experiment) != owner
+                    or choice is None
+                    or choice[:2] != (owner, experiment)
+                    or not hex_id(saved_result.get("supervisor_validation_id"))
+                ):
+                    fail()
+                try:
+                    snapshot = json.loads(choice[2])
+                except (TypeError, ValueError):
+                    fail()
+                if (
+                    not isinstance(snapshot, dict)
+                    or snapshot.get("report_job_id") != chosen
+                    or snapshot.get("report_result_artifact") != jobs[chosen][1]
+                ):
+                    fail()
+            elif state["status"] == "saved":
+                fail()
+            automatic = state.get("automation")
+            if automatic is not None:
+                from services.research_automation import VERSION as automatic_version
+
+                if (
+                    not isinstance(automatic, dict)
+                    or automatic.get("version") != automatic_version
+                    or not integer(
+                        automatic.get("max_model_calls"),
+                        ADAPTIVE_EXPERIMENT_LIMIT
+                        if state.get("continuation_policy") == ADAPTIVE_POLICY
+                        else 3,
+                    )
+                    or not integer(automatic.get("calls_spent"), automatic["max_model_calls"])
+                    or not isinstance(automatic.get("decisions"), list)
+                    or len(automatic["decisions"]) > maximum + 1
+                    or (
+                        automatic.get("model_id") is not None
+                        and (type(automatic["model_id"]) is not int or automatic["model_id"] < 1)
+                    )
+                ):
+                    fail()
+                for decision in automatic["decisions"]:
+                    if (
+                        not isinstance(decision, dict)
+                        or decision.get("remedy") not in (*REMEDIES, "stop")
+                        or not isinstance(decision.get("reason"), str)
+                        or not 1 <= len(decision["reason"]) <= 1000
+                        or decision.get("seed_artifact") not in seeds.values()
+                    ):
+                        fail()
+                if "research_decision_jobs" not in tables:
+                    fail()
+                queued = connection.exec_driver_sql(
+                    "SELECT owner,phase,claim_token FROM research_decision_jobs WHERE supervisor_id=?",
+                    (identifier,),
+                ).fetchone()
+                if (
+                    not queued
+                    or queued[0] != owner
+                    or queued[1]
+                    not in (
+                        "queued",
+                        "deciding",
+                        "waiting",
+                        "applying",
+                        "finalizing",
+                        "completed",
+                        "stopped",
+                        "cancelled",
+                    )
+                ):
+                    fail()
+    finally:
+        cursor.close()
+    if "research_decision_jobs" in tables:
+        orphan = connection.exec_driver_sql(
+            "SELECT 1 FROM research_decision_jobs d LEFT JOIN research_supervisors s "
+            "ON s.id=d.supervisor_id WHERE s.id IS NULL OR s.owner!=d.owner LIMIT 1"
+        ).first()
+        if orphan:
+            fail()
+    return roots
 
 
 def _automatic_period_references(connection, tables, *, store=None):

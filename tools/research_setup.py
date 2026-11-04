@@ -1,6 +1,7 @@
 """Install the locked Research desktop runtime without replacing private data.
 
-Setup.cmd / setup-research.sh supply verified uv and managed Python 3.12 first.
+Setup.cmd prefers an existing signed Windows CPython 3.12; otherwise the entry
+scripts supply verified uv and private managed Python 3.12.
 This module is stdlib-only until dependency installation has completed.
 """
 
@@ -282,6 +283,47 @@ def clean_environment(root: Path) -> dict[str, str]:
     return environment
 
 
+def signed_windows_base() -> Path | None:
+    """Return this interpreter's signed PSF base without executing unknown code.
+
+    Bootstrap discovery chooses a verified installed interpreter when available.
+    Recheck its signature here before creating stdlib venv launchers; uv's own
+    Windows redirector may be unsigned even when it targets that signed base.
+    Unrestricted machines without installed Python retain the managed path.
+    """
+    if os.name != "nt":
+        return None
+    candidate = Path(getattr(sys, "_base_executable", sys.executable)).resolve()
+    if not candidate.is_file():
+        return None
+    environment = clean_environment(ROOT)
+    environment["OPENALGO_VERIFY_PYTHON"] = str(candidate)
+    command = (
+        "$taskSignature = Microsoft.PowerShell.Security\\Get-AuthenticodeSignature "
+        "-LiteralPath $env:OPENALGO_VERIFY_PYTHON; "
+        "if ($taskSignature.Status -eq 'Valid' -and $null -ne $taskSignature.SignerCertificate "
+        "-and $taskSignature.SignerCertificate.Subject -match "
+        "'(?:^|,)\\s*(?:CN|O)=Python Software Foundation(?:,|$)') "
+        "{ Write-Output 'SIGNED-PSF-PYTHON'; exit 0 } else { exit 1 }"
+    )
+    try:
+        checked = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-Command", command],
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return (
+        candidate
+        if checked.returncode == 0 and checked.stdout.strip() == "SIGNED-PSF-PYTHON"
+        else None
+    )
+
+
 def _stop(child: subprocess.Popen, log) -> None:
     if child.poll() is None:
         try:
@@ -347,7 +389,7 @@ def run_step(
                         tail = receipt.read(8192).decode("utf-8", errors="replace")
                     if "os error 4551" in tail or "Application Control policy has blocked" in tail:
                         raise SetupError(
-                            f"Windows Application Control blocked the installed Python executable. Setup cannot change that policy. Review the block with your device administrator before continuing. Details: {log_path}."
+                            f"Windows Application Control blocked the installed Python executable. Setup cannot change that policy. Install signed 64-bit Python 3.12 from python.org and run Setup again, or review the block with your device administrator. Details: {log_path}."
                         )
                     raise SetupError(
                         f"{label} did not finish (exit {code}). See {log_path}. For downloads, check your internet connection and free disk space, then run Setup again."
@@ -406,6 +448,17 @@ def setup(
     with InstanceLock(root / "tmp/research-desktop.lock"):
         print("[3/6] Installing the locked dependencies. The first setup can take several minutes.")
         print(f"Progress log: {log_path}", flush=True)
+        official = signed_windows_base()
+        if official is not None:
+            # Stdlib venv copies the vendor's signed launchers. Upgrade in place
+            # preserves site-packages, private settings and data; no second venv.
+            runner(
+                [str(official), "-m", "venv", "--upgrade", "--without-pip", str(root / ".venv")],
+                root,
+                log_path,
+                "Preparing signed Python launchers",
+                timeout=180,
+            )
         runner(
             [
                 str(uv),
@@ -414,8 +467,8 @@ def setup(
                 "--extra",
                 "research",
                 "--python",
-                "3.12",
-                "--managed-python",
+                str(official) if official is not None else "3.12",
+                "--no-managed-python" if official is not None else "--managed-python",
             ],
             root,
             log_path,

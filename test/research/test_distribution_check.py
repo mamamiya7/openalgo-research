@@ -9,6 +9,20 @@ from tools.research_check import ROOT, accepts_keywords, check, distribution
 from tools.research_release import inventory
 
 
+def test_pending_supervisor_modules_are_required_and_included_before_git_commit():
+    from tools.research_check import REQUIRED_RESEARCH_FILES
+
+    required = {
+        "research/supervisor_accounts.py",
+        "services/research_supervisor.py",
+        "services/research_supervisor_program.py",
+        "services/agent/tools/research.py",
+    }
+    included, _, _ = inventory(ROOT)
+    assert required <= REQUIRED_RESEARCH_FILES
+    assert required <= set(included)
+
+
 def test_current_source_and_installed_contract():
     pins = distribution()["packages"]
     result = check(installed_version=pins.__getitem__, python="3.12")

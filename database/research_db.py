@@ -417,6 +417,47 @@ class ResearchAutomaticPeriodUse(Base):
     created_at = Column(Float, nullable=False)
 
 
+class ResearchSupervisor(Base):
+    """One bounded, conversation-authorized research ledger per saved study."""
+
+    __tablename__ = "research_supervisors"
+    id = Column(String(32), primary_key=True)
+    owner = Column(String(255), nullable=False, index=True)
+    root_job_id = Column(String(64), nullable=False)
+    root_artifact = Column(String(64), nullable=False)
+    conversation_id = Column(String(128), nullable=False)
+    request_id = Column(String(128), nullable=False)
+    state = Column(Text, nullable=False)
+    updated_at = Column(Float, nullable=False)
+    __table_args__ = (
+        UniqueConstraint("owner", "root_artifact"),
+        UniqueConstraint("owner", "request_id"),
+    )
+
+
+class ResearchDecisionJob(Base):
+    """Indexed durable continuation of one explicitly authorized research plan."""
+
+    __tablename__ = "research_decision_jobs"
+    supervisor_id = Column(String(32), primary_key=True)
+    owner = Column(String(255), nullable=False)
+    phase = Column(String(16), nullable=False, index=True)
+    claim_token = Column(String(128))
+    claimed_at = Column(Float)
+    updated_at = Column(Float, nullable=False)
+
+
+class ResearchJourney(Base):
+    """Current reviewed-plan pointer; financial results remain immutable jobs."""
+
+    __tablename__ = "research_journeys"
+    experiment_id = Column(String(32), primary_key=True)
+    owner = Column(String(255), nullable=False, index=True)
+    phase = Column(String(24), nullable=False, index=True)
+    state = Column(Text, nullable=False)
+    updated_at = Column(Float, nullable=False)
+
+
 class ResearchStore:
     def __init__(self, root=None):
         self.root = Path(root or os.getenv("RESEARCH_DATA_DIR", "research_data")).resolve()

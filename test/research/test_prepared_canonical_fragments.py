@@ -1,7 +1,9 @@
 """Scoped immutable JSON byte reuse with ordinary mutable-input safeguards."""
 
+import gc
 import hashlib
 import json
+import weakref
 from unittest.mock import patch
 
 import numpy as np
@@ -20,6 +22,35 @@ from research.prepared_calculation import prepared_calculation
 def encoded(value, **kwargs):
     result = canonical_json.prepared_canonical_fragments(value, max_bytes=64 * 1024**2, **kwargs)
     return b"".join(result) if result is not None else None
+
+
+@pytest.mark.parametrize("failure", [None, "bound", "invalid"])
+def test_encoding_does_not_retain_prepared_owner_until_cyclic_collection(failure):
+    gc.collect()
+    enabled = gc.isenabled()
+    gc.disable()
+    try:
+        with prepared_calculation(snapshot()) as owner:
+            reference = weakref.ref(owner)
+            value = {"snapshot": owner.snapshot, "number": -0.0}
+            if failure == "invalid":
+                value["invalid"] = object()
+            raw = canonical_json.prepared_canonical_fragments(
+                value, max_bytes=1 if failure == "bound" else 64 * 1024**2
+            )
+            if failure:
+                assert raw is None
+            else:
+                expected = json.dumps(
+                    value, sort_keys=True, separators=(",", ":"), allow_nan=False
+                ).encode()
+                assert b"".join(raw) == expected
+        del owner, value, raw
+        assert reference() is None
+    finally:
+        if enabled:
+            gc.enable()
+        gc.collect()
 
 
 def test_shared_features_encode_once_and_mutable_outer_fields_always_change_hash():

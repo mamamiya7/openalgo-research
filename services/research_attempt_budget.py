@@ -143,7 +143,7 @@ def attempt_reserver(
             # planning accounts. A larger reserve only restricts admission;
             # the immutable total and lost-attempt bounds remain unchanged.
             or type(reserve) is not int
-            or reserve not in (0, 2, 3, 4, 5, 13)
+            or reserve not in (0, 2, 3, 4, 5, 13, 17, 26)
         ):
             raise ValueError("Research attempt admission changed its recorded accounting")
         with store.sessions.begin() as db:
@@ -162,11 +162,11 @@ def attempt_reserver(
             receipt = db.get(ResearchExperiment, job_id)
             if receipt is None or receipt.identity != identity:
                 raise ValueError("Research attempt admission belongs to different frozen inputs")
-            if reserve == 13:
-                # The available-history decision programme reserves nine
-                # challenges plus four capital accounts. Admit that exact
-                # phase only for its frozen opt-in request; legacy journals
-                # and arbitrary larger reserves gain no new admission path.
+            if reserve in (13, 17, 26):
+                # The frozen v3 programme also retains thirteen operating
+                # challenges: search holds26, decision17, planning13, then
+                # operating validation spends its own slots. No extra total
+                # attempts or lost-attempt refunds are admitted.
                 specification = _counts(receipt.specification)
                 portfolio = specification.get("portfolio")
                 automatic = (
@@ -183,6 +183,10 @@ def attempt_reserver(
                 ):
                     raise ValueError(
                         "Decision account reservation needs its frozen research policy"
+                    )
+                if reserve in (17, 26) and automatic.get("action_policy") != "automatic_actions_v3":
+                    raise ValueError(
+                        "Operating validation reservation needs its frozen v3 action policy"
                     )
             counts = deepcopy(_counts(receipt.counts))
             if KEY in counts:

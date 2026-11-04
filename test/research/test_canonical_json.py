@@ -1,8 +1,11 @@
 """The bounded optimization must preserve existing evidence bytes exactly."""
 
+import gc
 import hashlib
 import json
 import math
+import sys
+import types
 from decimal import Decimal
 
 import pytest
@@ -282,6 +285,70 @@ def test_checkpoint_snapshot_and_bytes_own_the_same_detached_plain_tree():
     assert streamed(snapshot) == original
     snapshot["params"]["n"] = 8
     assert value["params"]["n"] == 9
+
+
+def test_repeated_checkpoints_release_detached_trees_without_cyclic_collection():
+    from research.canonical_json import bounded_canonical_snapshot
+
+    # Reproduce a long-running worker whose older cycles have reached a less
+    # frequently collected generation. Immutable strings are shared by the
+    # detached copies, so their refcount detects retained whole snapshots.
+    marker = "".join(("checkpoint-memory-", str(id(object()))))
+    value = {"marker": marker, "rows": [{"price": -0.0, "n": i} for i in range(2048)]}
+    expected = streamed(value)
+    gc.collect()
+    enabled = gc.isenabled()
+    gc.disable()
+    references = sys.getrefcount(marker)
+    try:
+        for _ in range(128):
+            snapshot, raw = bounded_canonical_snapshot(value)
+            assert snapshot is not value and snapshot["rows"] is not value["rows"]
+            assert raw == expected == streamed(snapshot)
+            del snapshot, raw
+            assert sys.getrefcount(marker) == references
+    finally:
+        if enabled:
+            gc.enable()
+        gc.collect()
+
+
+@pytest.mark.parametrize("failure", [None, "invalid", "encoder", "memory"])
+def test_recursive_encoder_closures_are_released_on_every_exit(monkeypatch, failure):
+    from research.canonical_json import bounded_canonical_snapshot
+
+    def retained_copiers():
+        return sum(
+            type(item) is types.FunctionType
+            and item.__qualname__ == "_canonical_bytes.<locals>.copy"
+            for item in gc.get_objects()
+        )
+
+    if failure in ("encoder", "memory"):
+
+        def fail(*args, **kwargs):
+            raise MemoryError if failure == "memory" else ValueError
+
+        monkeypatch.setattr(json, "dumps", fail)
+    value = {"rows": [1, 2, float("nan") if failure == "invalid" else -0.0]}
+    gc.collect()
+    enabled = gc.isenabled()
+    gc.disable()
+    before = retained_copiers()
+    try:
+        for _ in range(16):
+            if failure == "memory":
+                with pytest.raises(MemoryError):
+                    bounded_canonical_snapshot(value)
+            elif failure:
+                assert bounded_canonical_snapshot(value) is None
+            else:
+                assert bounded_canonical_snapshot(value) is not None
+            assert retained_copiers() == before
+    finally:
+        if enabled:
+            gc.enable()
+        gc.collect()
 
 
 @pytest.mark.parametrize("value", [(1, 2), {"a": (1, 2)}, float("nan"), {1: "key"}])

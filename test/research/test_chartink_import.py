@@ -201,6 +201,33 @@ def test_changed_history_creates_related_child_without_overwriting_settings(app,
     assert child["draft"]["portfolio"]["strategies"][0]["source_id"] != first["source_id"]
 
 
+def test_guided_history_update_versions_same_study_and_preserves_execution_settings(app, client):
+    from services.research_journey import _guided_draft
+
+    data = capture()
+    first = client.post(URL, json=data).json
+    store = app.extensions["research_store"]
+    parent = library.get_experiment(store, OWNER, first["experiment_id"])
+    guided = _guided_draft(parent["draft"])
+    guided["portfolio"]["strategies"][0]["config"]["stop_pct"] = 8
+    before = library.save_draft(
+        store, OWNER, parent["id"], {"revision": parent["revision"], "draft": guided}
+    )
+    strategy = before["draft"]["portfolio"]["strategies"][0]
+    data["request_id"] = str(uuid.uuid4())
+    data["csv_text"] += "27-01-2026,INFY,Largecap,IT\n"
+    response = client.post(URL, json=data)
+    assert response.status_code == 201, response.json
+    assert response.json["experiment_id"] == parent["id"]
+    after = library.get_experiment(store, OWNER, parent["id"])
+    revised = after["draft"]["portfolio"]["strategies"][0]
+    assert revised["id"] == strategy["id"] and revised["config"] == strategy["config"]
+    assert after["revision"] > before["revision"]
+    assert after["version_count"] == before["version_count"] + 1
+    assert after["draft"]["portfolio"]["automatic_research"]["intent_policy"] == "fixed-signals-v1"
+    assert count(store, ResearchLibraryExperiment) == 1
+
+
 def test_archived_deleted_and_foreign_experiments_are_not_reused(app, client):
     data = capture()
     first = client.post(URL, json=data).json

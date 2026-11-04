@@ -197,10 +197,20 @@ def reconstruct_study(experiment):
         and isinstance(execution_descriptor, dict)
         and execution_descriptor.get("design_policy") == "automatic_design_v1"
     ):
-        expected_execution = "research-execution-search-v6"
+        # Action research extends this same frozen capital-design programme.
+        # Version admission alone grants nothing: execution_domains below
+        # verifies the sealed descriptor's complete registered grammar before
+        # any recorded parameters or trials are reconstructed.
+        expected_execution = (
+            "research-execution-search-v6",
+            "research-execution-search-v7",
+        )
     if expected_execution and (
         not isinstance(experiment.get("execution_research"), dict)
-        or experiment["execution_research"].get("version") != expected_execution
+        or experiment["execution_research"].get("version")
+        not in (
+            expected_execution if isinstance(expected_execution, tuple) else (expected_execution,)
+        )
     ):
         raise ValueError("Recorded execution descriptor differs from its programme version")
     if experiment.get("execution_research") is not None:

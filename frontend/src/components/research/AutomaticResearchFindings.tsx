@@ -123,8 +123,25 @@ export function CapitalPlanning({
   planning: NonNullable<Findings['capital_planning']>
 }) {
   const last = planning.accounts.at(-1)
-  if (planning.version === 'research-capital-planning-v3') {
+  if (
+    planning.version === 'research-capital-planning-v3' ||
+    planning.version === 'research-capital-planning-v4' ||
+    planning.version === 'research-capital-planning-v5'
+  ) {
     const point = planning.operating_point
+    const closedLoop = planning.version === 'research-capital-planning-v5'
+    const validation = closedLoop ? planning.validation : undefined
+    const historicallyValidated =
+      validation?.outcome === 'validated' && validation.historically_validated === true
+    const validationTitle = historicallyValidated
+      ? 'Historical performance checks passed'
+      : validation?.outcome === 'rejected'
+        ? 'Changed capital and trade size rejected'
+        : validation?.outcome === 'blocked'
+          ? 'Insufficient evidence to validate capital and trade size'
+          : validation?.outcome === 'unchanged'
+            ? 'Original capital and trade size retained'
+            : 'Capital and trade size have not passed performance validation'
     return (
       <section aria-label="Automatic capital and trade size" className="space-y-2 pt-3 text-sm">
         <p className="font-medium">Automatic capital and trade size</p>
@@ -132,9 +149,17 @@ export function CapitalPlanning({
           <>
             <p>Capacity-tested capital: ₹{number(point.capital)}</p>
             {point.settings.map((row) => (
-              <p key={row.id}>
-                {row.name}: {strategyRuleSummary({ ...row, search: {} })}
-              </p>
+              <div key={row.id}>
+                <p>
+                  {row.name}: {strategyRuleSummary({ ...row, search: {} })}
+                </p>
+                {closedLoop && (
+                  <p>
+                    Order cash ceiling: {number(row.config.order_size_pct, '%')} of strategy
+                    allocation.
+                  </p>
+                )}
+              </div>
             ))}
           </>
         ) : (
@@ -145,6 +170,17 @@ export function CapitalPlanning({
           without ranking profits.
         </p>
         <p>{planning.diagnosis?.reason}</p>
+        {closedLoop && (
+          <section aria-label="Capital and trade size validation" className="space-y-1">
+            <p className="font-medium">{validationTitle}</p>
+            {validation?.reasons.map((reason) => (
+              <p key={reason}>{reason}</p>
+            ))}
+            <p className="text-muted-foreground">
+              Historical checks only; not independently validated.
+            </p>
+          </section>
+        )}
         {point &&
           Object.entries(point.remaining_exclusions)
             .filter(([, count]) => count > 0)
@@ -154,8 +190,9 @@ export function CapitalPlanning({
               </p>
             ))}
         <p className="text-muted-foreground">
-          Separate capacity checks preserve every hard limit. Changed capital or sizes are not a
-          validated performance recommendation; the research verdict above remains unchanged.
+          {historicallyValidated
+            ? 'Capital and trade size passed the recorded historical checks with every hard limit preserved. This is not independent evidence or a future performance guarantee.'
+            : 'Separate capacity checks preserve every hard limit. Changed capital or sizes are not a validated performance recommendation; the research verdict above remains unchanged.'}
         </p>
       </section>
     )
@@ -548,6 +585,21 @@ export function AutomaticResearchFindings({
   selectedSettings?: PortfolioSettings[]
   developmentEvidence?: DevelopmentEvidenceMetadata
 }) {
+  if (!Array.isArray(findings.checks)) {
+    return (
+      <section aria-label="Automatic research findings" className="rounded-xl border p-5">
+        <h3 className="font-semibold">
+          {findings.counts?.proposals === 0
+            ? 'Saved baseline · no search run'
+            : 'Search validation details unavailable'}
+        </h3>
+        <p className="mt-2 text-sm text-muted-foreground">
+          This report does not establish a validated research setup. The saved account and trades
+          are shown below.
+        </p>
+      </section>
+    )
+  }
   const final = findings.final
   const historyAvailability = recordedHistoryAvailability(findings)
   const independentUnavailable =

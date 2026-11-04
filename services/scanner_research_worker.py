@@ -181,9 +181,16 @@ def network_lease(store, token, job_id, stop_requested=None):
 
 
 def run_one(store, token, stop_requested=None):
+    from services.research_automation import run_one as continue_decision
+    from services.research_journey import run_one as continue_journey
     from services.research_worker_sessions import scoped_metadata_sessions
 
     with scoped_metadata_sessions(store):
+        heartbeat(store, token)
+        if continue_journey(store, token, stop_requested=stop_requested):
+            return True
+        if continue_decision(store, token, stop_requested=stop_requested):
+            return True
         return _run_one(store, token, stop_requested)
 
 
@@ -903,6 +910,15 @@ def _run_one(store, token, stop_requested=None):
                 )
             if history_record is not None:
                 db.add(history_record)
+        if evidence.get("supervisor_program"):
+            try:
+                from services.research_supervisor import job_finished
+
+                job_finished(store, job.owner, job.id)
+            except Exception:
+                # Native completion remains durable if downstream saving needs
+                # attention; the same supervisor can retry its exact save.
+                logger.exception("Saved research supervisor continuation needs attention")
         # Findings are committed before optional plots. Admission cannot change
         # the completed study's immutable evidence or completion state.
         if kind == "portfolio_optimize" and result.get("experiment", {}).get("diagnostics"):

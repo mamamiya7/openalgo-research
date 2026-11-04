@@ -1,5 +1,11 @@
 # Automatic allocation, capital and corrective actions
 
+Current checkpoint: preview.31 / automatic actions v3 / capital planning v5
+supersedes the initial implementation described below. Exact changed-account
+historical validation can now create a separately bound saveable operating
+candidate; original search trials remain unchanged. See the [current plan comparison](DELIVERY_PLAN.md#current-comparison-and-intelligence-research--24-october-2026-preview31)
+for remaining decision/LLM gaps. The original v1/v3 account below is historical.
+
 24 October 2026. This batch implements the three follow-up gaps identified in
 the [philosophy review](DECISION_PHILOSOPHY_REVIEW_20261024.md). It adds no engine,
 broker downloader, LLM dependency or relaxed validation threshold.

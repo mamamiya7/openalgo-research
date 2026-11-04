@@ -124,6 +124,7 @@ def normalize_auto(raw, strategies=None, engine="vectorbt"):
             "design_policy",
             "decision_policy",
             "action_policy",
+            "intent_policy",
         }
         or raw["version"]
         not in (VERSION, CONDITION_VERSION, STABILITY_VERSION, *HYPOTHESIS_VERSIONS)
@@ -134,6 +135,10 @@ def normalize_auto(raw, strategies=None, engine="vectorbt"):
     if raw["version"] in (CONDITION_VERSION, *HYPOTHESIS_VERSIONS) and engine != "vectorbt":
         raise ValueError("Automatic entry-condition research currently needs VectorBT")
     result = {"version": raw["version"]}
+    if "intent_policy" in raw:
+        if raw["version"] != ALLOCATION_VERSION or raw["intent_policy"] != "fixed-signals-v1":
+            raise ValueError("Choose the supported fixed-signal research intent")
+        result["intent_policy"] = raw["intent_policy"]
     if "history_policy" in raw:
         if raw["version"] != ALLOCATION_VERSION or raw["history_policy"] != "available_history":
             raise ValueError("Choose the current available-history research policy")
@@ -156,9 +161,10 @@ def normalize_auto(raw, strategies=None, engine="vectorbt"):
             raise ValueError("Choose the current automatic decision policy with design admission")
         result["decision_policy"] = raw["decision_policy"]
     if "action_policy" in raw:
-        if (
-            raw.get("decision_policy") != "automatic_decision_v1"
-            or raw["action_policy"] != "automatic_actions_v1"
+        if raw.get("decision_policy") != "automatic_decision_v1" or raw["action_policy"] not in (
+            "automatic_actions_v1",
+            "automatic_actions_v2",
+            "automatic_actions_v3",
         ):
             raise ValueError("Automatic actions require the current validated decision policy")
         result["action_policy"] = raw["action_policy"]
@@ -797,16 +803,84 @@ def compile_recipe(evidence):
         from research.automatic_decision import preflight
 
         payload["decision_preflight"] = preflight(evidence, payload)
-    if portfolio.get("automatic_research", {}).get("action_policy") == "automatic_actions_v1":
+    if portfolio.get("automatic_research", {}).get("action_policy") in (
+        "automatic_actions_v1",
+        "automatic_actions_v2",
+        "automatic_actions_v3",
+    ):
         from research.automatic_actions import descriptor as actions_descriptor
         from research.capital_planning import selected_account_descriptor
 
-        payload["automatic_actions"] = actions_descriptor()
-        payload["capital_planning"] = selected_account_descriptor()
-        payload["policies"]["capacity_actions"] = actions_descriptor()["scope"]
+        action_policy = portfolio["automatic_research"]["action_policy"]
+        capital_version = (
+            "research-capital-planning-v5"
+            if action_policy == "automatic_actions_v3"
+            else (
+                "research-capital-planning-v4"
+                if action_policy == "automatic_actions_v2"
+                else "research-capital-planning-v3"
+            )
+        )
+        payload["automatic_actions"] = actions_descriptor(action_policy)
+        payload["capital_planning"] = selected_account_descriptor(version=capital_version)
+        if action_policy == "automatic_actions_v3":
+            from research.operating_validation import descriptor as operating_descriptor
+
+            payload["operating_validation"] = operating_descriptor()
+            payload["budget"]["max_operating_validation_accounts"] = (
+                13 if validation_mode == "exploratory_only" else 21
+            )
+            payload["policies"]["operating_validation"] = (
+                "Validate one frozen remedy against the original baseline at matched capital; "
+                "reserve thirteen exploratory accounts, or use remaining strict allowance. "
+                "Block rather than truncate checks or exceed 512 attempts."
+            )
+        payload["policies"]["capacity_actions"] = payload["automatic_actions"]["scope"]
         payload["decision_preflight"]["steps"].insert(-1, "automatic_capacity_actions")
         payload["decision_preflight"]["id"] = fingerprint(
             {key: value for key, value in payload["decision_preflight"].items() if key != "id"}
+        )
+    if portfolio.get("automatic_research", {}).get("intent_policy") == "fixed-signals-v1":
+        from research.automatic_timing import _clock_config
+
+        styles = {
+            "intraday" if row["config"].get("trade_horizon") == "intraday" else "positional"
+            for row in portfolio["strategies"]
+        }
+        if len(styles) != 1:
+            raise ValueError("Fixed-signal research requires one user-selected trading style")
+        style = styles.pop()
+        payload["execution_intent"] = {
+            "version": "fixed-signals-v1",
+            "hypothesis_ids": ["none"],
+            "style": style,
+            "engine": portfolio["engine"],
+            "objective": "robust_improvement",
+            "risk_limits_id": fingerprint(portfolio["risk_limits"]),
+        }
+        payload["scope"] = "Trading execution of unchanged supplied scanner signals"
+        definitions = {row["id"]: row for row in portfolio["strategies"]}
+        for item in payload["timing_research"]["strategies"]:
+            cfg = definitions[item["id"]]["config"]
+            # An intraday CSV can specify a horizon without clock fields. The
+            # legacy empty-clock reset must not turn that original into swing.
+            if "trade_horizon" in cfg:
+                item["original"]["trade_horizon"] = cfg["trade_horizon"]
+            item["branches"] = [
+                branch
+                for branch in item["branches"]
+                if (
+                    "intraday"
+                    if _clock_config(cfg, item, branch).get("trade_horizon") == "intraday"
+                    else "positional"
+                )
+                == style
+            ]
+            if not item["branches"]:
+                raise ValueError("No supported timing choice preserves the selected trading style")
+        payload["timing_research"]["screening"] = (
+            "Original signals only; supported exits, allocation, sizing and same-style timing "
+            "probes, followed by seeded joint refinement within all68 proposals per fit"
         )
     return {**payload, "id": fingerprint(payload)}
 

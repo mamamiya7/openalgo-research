@@ -1,5 +1,254 @@
 # OpenAlgo Research — essential one-click delivery plan
 
+Paired small saved-data controls now cover accepted-result selection/save/reopen
+and rejection with unchanged native checks. The pass control is explicitly
+synthetic; no real-market passing edge is claimed. The negative control exposed
+futile setting changes below the fixed-signal sample ceiling. A sealed structural
+stop now refuses those experiments and explains why additional data is needed.
+The original failed trials and their financial/model debits remain preserved.
+Current proof and limitations are recorded in STATUS.
+
+Recovery gap resolved on the same saved case: blocked feasibility now admits a
+verified native funding/sizing repair without exposing unvalidated performance to
+selection. Funding attempts are scoped to complete effective settings. The case
+resumed48→105/512 accounts; capital517000→1034000, order size1.5%→0.75%, and the
+feasibility block cleared. Three subsequent ChatGPT choices received full native
+validation and were rejected. Its explicit reasoned stop was honored with407
+accounts remaining. Saving and exact reopening succeeded without calculations;
+the installed UI shows the actual reason. See STATUS for evidence and limitations.
+
+## Agreed flow and research brain — implementation batch, 29 October 2026
+
+The feedback refinement is implemented and qualified on the same saved5-stock
+case: concrete experiment IDs, failed-check and exit-mechanism feedback, negative
+repeat suppression, bounded model selection and unchanged native validation.
+See [the observed decisions and rejected outcomes](STATUS.md). New concrete plans
+use automatic failed-check feedback until acceptance, supported-option exhaustion,
+complete-validation affordability exhaustion, or an explicit operational/safety
+stop within the unchanged512-account ceiling. The separate24-record/24-call
+bound and unused numerical budget are reported if reached. Legacy frozen plans
+are preserved until explicitly authorized to adopt this policy. Historical
+feedback guides further tests and is never relabelled as independent evidence.
+
+Authorized by the user after the step-by-step flow review. Execute this batch;
+no further implementation approval is required. Status is tracked below and must
+reflect actual checks, not treat an implemented screen as qualified intelligence.
+
+### Product contract
+
+Honor a reasoned model stop even while supported options and budget remain.
+Persist its reason and end/save the study; background branch exploration cannot
+restart it. Compare complete actual configurations rather than single changed
+values. Suppress proven inactive-control equivalents, while retaining active
+risk-state differences and every native validation requirement. Spending the
+budget is not the objective. The saved-case qualification is recorded in STATUS.
+
+Chartink and CSV both start background preparation, then show an editable plan
+with available data/exclusions, suggested settings, supported tests and an honest
+time estimate. Research starts only after the user reviews the plan and presses
+Start research. It continues after leaving the page and returns live actions and
+reasons. A study update retains one study identity and immutable result versions.
+
+The user chooses intraday or positional trading style. The AI can choose other
+trading settings and estimate needed capital without a user cash ceiling, while
+existing execution limits remain enforced. Original scanner signals remain fixed;
+unusable price windows and native risk exclusions must remain visible. There is
+one supported calculation engine with the existing full validation. No new code,
+external method installation, invented data or discretionary signal filters.
+
+The brain freezes its supported objective and constraints before calculations,
+reads prior same-study evidence, establishes/tests the setup, diagnoses failures,
+declares the problem/change/expected evidence for the next supported experiment,
+executes it and records feedback. Ineffective changes are rejected early. Changed
+data may justify a retest; identical input must not silently repeat failed work.
+It saves/opens the best passing result, otherwise displays exactly: "None of the
+tested setups passed validation." It must not search until a winner is forced.
+
+### Implementation and acceptance sequence
+
+| Step | Concrete work | Completion evidence |
+|---|---|---|
+| 1. Reviewed journey | Persist a revision-bound plan and background state; expose preparation/plan/start/status APIs; connect both existing entry paths and existing study versions. | No calculation before Start; edited/stale plans cannot start; background work survives navigation; original settings and price exclusions visible. |
+| 2. Playbook and memory | Server-enforced fixed signals/style/risk/engine and objective; evidence-based next experiments; bounded same-study memory with explicit retest reasons. Reuse supported native repair, Optuna search and backtest services. | Small tests reject style/filter/risk widening, duplicated ineffective actions and stale evidence; changed observations invalidate reuse; every executed choice has its diagnosis and expectation. |
+| 3. Native continuation and results | Let the existing bounded worker drive search/diagnosis/remedies, save every native result, select only fully validated results and verify exact reopen. Safe technical recovery retains debits and completed work. | Failed/uncertain calls never receive refunded budget; financial gates unchanged; no-result outcome remains a valid completion; reopening performs zero calculations. |
+| 4. User-facing flow | Four-part pre-filled editable plan; settings-owned style; live action/reason view; automatic result summary or exact no-result sentence; previous study context retained. | Frontend interaction tests and screenshots of the actual installed app. |
+| 5. Real-data qualification and one delivery | Freeze small real Chartink/CSV cases before observing new outcomes; run the installed code through plan/start/decision/save/reopen; check update memory and interruption; refresh the existing local package and clean owned temporary outputs. | Actual native/model receipts and unchanged financial thresholds, sources and required budget. No full scanner, new dependency environment, Git/public release claim or unrelated cleanup. |
+
+Implementation status: steps1–4 implemented with focused backend/UI checks.
+Step5's installed saved-Chartink qualification completed through real native and
+connected-model decisions, automatic evidence saving and exact reopening. See
+[the case, accounting and limitations](STATUS.md). A fresh live CSV/acquisition
+and broader production toolchain/Linux/Git qualification remain unverified;
+these small historical cases do not establish independent trading performance.
+The current package, rollback and installed environment were reused; no public
+commit/push is included in this request.
+
+## Completed decision-loop repair — 28 October 2026, preview.33
+
+The installed-code small saved-data qualification now completes native diagnosis,
+bounded real-model selection, actual experiment submission, full required
+validation, automatic save and exact reopen. New capital v7 respects existing
+hard limits and distinguishes position saturation from repairable sizing; the
+exhausted-grid routes are filtered before selection. Failed/uncertain calls remain
+charged; durable continuation does not require another user message. See
+[actual case evidence and limitations](releases/0.1.0-preview.33.md).
+
+This completes decision steps 3–5 below for the bounded saved-data scope. It does
+not complete the separate preparation/persistence speed work, untouched real-market
+evaluation, Linux production-host checks or public/Git release. Existing frozen
+search programmes and financial validation remain unchanged. No scanner rerun was
+used to qualify this repair.
+
+## Next batch plan — faster, automatic decision loop
+
+Status: planned; no runtime changes or provider calls authorized by this plan
+alone. Extend installed preview.32 in one batch, using existing engines,
+provider adapters, worker and storage. No new full scanner runs.
+
+**Outcome:** one authorized research plan prepares supplied data, diagnoses
+problems, chooses a supported experiment, runs native accounts and all required
+checks, then automatically continues, saves/reopens an accepted historical
+result, or stops with a concrete reason. A new chat message must not be required
+between eligible development experiments. Acceptance remains historical evidence,
+not proof of future profitability or globally optimal capital.
+
+| Order | Implementation | Acceptance |
+|---|---|---|
+| 1. Reuse preparation | Extend current preparation/native-feature ownership into a bounded, immutable prepared-data artifact and reusable worker context. Bind admission to source, prices, calendar, policy and calculation versions. Scope account-specific gates/settings separately. | Same financial reports and checks; unchanged input avoids repeated preparation; changed data/version invalidates reuse; bounded memory and correct release on failure. |
+| 2. Incremental persistence | Reuse existing content-addressed artifacts and checkpoint mechanisms. Store each new verified account once; atomically publish a small ordered manifest with hashes and attempt receipts. Preserve older checkpoint readers. | Interrupted publication never loses a debit, accepts a partial result or repeats a completed account; exact reopen/backup/restore; fewer rewritten bytes on the same fixture. |
+| 3. Durable automatic continuation | Add a persisted, claimed decision job after verified development failure. Carry owner, frozen goal, permitted actions, tried actions and remaining authority. Reuse the existing model adapter on a compatible worker/real-thread boundary; no request-thread asyncio or browser-session dependency. | Chat disconnect/restart does not abandon continuation; duplicate callbacks submit one decision/experiment; cancellation stops new work; accepted/final states remain terminal. |
+| 4. Better decisions | Apply native rules first for affordability, fees, whole shares, sizing and fixed limits. Use a qualified LLM for ambiguous next-test selection, returning a restricted action/reason or stop. Validate its response against server-owned evidence and authority before execution. | Correct cause/action on frozen cases; missing data never becomes invented prices; fixed limits remain fixed; repeated/unsupported actions are rejected; provider failures have a bounded fallback or explicit stop. |
+| 5. Small qualification | Use saved cases for affordability, size clipping, fixed position limits, missing prices, cost fragility and temporal instability. Freeze a separate evaluation set before tuning decision logic. Include accepted and rejected results, duplicate callbacks, crash recovery and exact save/reopen. | Existing financial checks pass; real-provider decisions meet declared case expectations. Mocked planner tests alone cannot qualify model quality. One matched before/after fixture records preparation, native compute, persistence and model time separately. |
+| 6. One delivery | Complete resource and Linux/eventlet/gthread compatibility checks, refresh Graphify/status, verify required package modules, install the reviewed candidate and retain the minimum rollback/evidence. | Installed code matches package hashes; settings/results preserved; no disposable dependency copies; blocked cleanup stays in the existing reviewed manual script. Publish/push only within applicable authorization and host gates. |
+
+**Unchanged limits:** full original search budget; 512 total attempted accounts;
+64 interrupted accounts; at most three remedy experiments per existing grant;
+all native risk, cost, neighborhood, sample/design and chronological checks.
+Budget includes retries and cannot reset with an Agent turn. Development feedback
+must never select a new performance candidate from exposed final/later outcomes.
+Freeze candidates before their final checks. Do not silently increase history or
+select profitable dates. Reserve complete validation before each experiment.
+
+**Model-call controls:** persist a separate finite call/token/cost allowance and
+timeout; retry only within that allowance. Uncertain call failures do not permit
+unbounded retries. Native calculations remain authoritative; the model cannot
+edit limits, execute generated code, trade or activate another provider.
+
+**User input:** the user has connected their ChatGPT subscription in OpenAlgo.
+`chatgpt/gpt-6.1-sol` is enabled and default; the credential test and a real UI
+research tool call passed. Six bounded saved-data cases now qualify actual
+decisions separately from authentication. No separate API provider or key was
+configured. No further credentials are needed for this qualification. That
+connection does not authorize unbounded background calls or another provider.
+
+**Timing:** reduce repeated work while preserving results and checks. Keep the
+historical under-one-minute aspiration unqualified until supported by comparable
+evidence; a small fixture does not establish full-scanner latency. No repeated
+profiling campaign or new full scanner is part of this batch.
+
+## Approved batch implemented — preview.32
+
+The existing AI Agent can read full compact research evidence and authorize one
+finite historical plan. Registered funding/size, cost/holding, concentration and
+temporal remedies use native calculations with unchanged risk/search limits.
+The worker validates every changed account, continues the declared queue and
+saves/reopens the first accepted result. Durable authority, attempt accounting,
+checkpoint recovery and exact result identities are covered by small tests.
+
+The tiny native case changes capital and trade size, then correctly rejects
+the result; resume adds no calculations. Separate accepted-result tests verify
+canonical save/reopen. No full scanner or original optimization programme ran.
+
+Actual ChatGPT qualification now exposes unreliable action submission, an
+infeasible finite sizing grid and remedies advertised without executable frozen
+alternatives. See [six-case evidence](CHATGPT_LIVE_QUALIFICATION_20261024.md).
+No live accepted result exists to qualify save/reopen. Correct these gaps and
+complete Linux/eventlet/gthread production checks before publishing.
+`awaiting_plan` requires another Agent turn; the worker does not wake a model.
+The fixed objective and registered remedy catalogue remain explicit bounds.
+
+## Baseline comparison before this batch — 24 October 2026, preview.31
+
+This checkpoint reconciles the older plan with the locally installed candidate.
+The user now prioritizes automatic decision quality over timing and prohibits
+new full scanner runs. Small saved-data cases are the acceptance method. The
+user's chosen default is estimated starting capital, rather than asking them to
+guess the required account amount. Historical receipts below remain unchanged.
+
+| Commitment | Current evidence | Remaining gap |
+|---|---|---|
+| Automatic parameter search | Existing Optuna, six fits/408 proposals, native account evaluation and named feasibility feedback | Fixed return-minus-drawdown goal and registered search space; no general hypothesis planner |
+| Act on problems | Native cash/affordability/sizing causes route to bounded remedies | Cost fragility, temporal instability and concentration mostly produce rejection, not a predeclared corrective experiment |
+| Choose capital and trade size | Per-size fee/risk/whole-share floors; exact request prices; coherent capacity-based choice | Sizes remain 1, half and quarter; amount is feasible tested capital, not a proved economic optimum or minimum |
+| Validate changed settings | Exact matched-capital baseline, cost/neighbour/design checks; accepted derived report keeps actual capital/settings | Exploratory prefixes are diagnostics, not a temporal pass gate; strict 21-account programme can lack remaining allowance |
+| Save and return | Exact changed-account provenance, replay binding and unchanged original trials | Built-in AI Agent has no research save/reopen tool surface |
+| Production delivery | Preview.31 installed locally; focused cases/native bridge and UI/build checks pass | Git/public release and broad host qualification remain pending; no new full scanner qualification |
+
+Source anchors: `research/automatic_decision.py`, `automatic_actions.py`,
+`capital_planning.py`, `operating_validation.py`, `operating_loop.py` and
+`services/research_portfolio.py`. `historically_validated` in exploratory mode
+must not be described as independent validation or certified temporal stability.
+The original one-minute production target remains unqualified; it is not the
+active research acceptance target in this request.
+
+### Research conclusion: reuse the native agent as a bounded supervisor
+
+OpenAlgo already provides `/agent/config`, an Agno agent and a LiteLLM-backed
+provider adapter: OpenAI, Anthropic, Ollama, OpenAI-compatible endpoints and
+LiteLLM provider-prefixed models. Endpoint compatibility is not proof of reliable
+tool calling. The existing model Test checks a minimal credential completion.
+[Official Agent documentation](https://docs.openalgo.in/new-features/agent) ·
+[provider implementation](https://github.com/marketcalls/openalgo/blob/main/services/agent/providers.py).
+
+The concrete integration gaps are local, not a missing model framework:
+`services/agent/tools/__init__.py` has no research toolkit;
+`services/research_mcp.py::get_run` omits full automatic decisions/capital/operating
+validation from its summary; its historical research tools have no chosen-setup
+save/reopen actions. The built-in Agent's external MCP client registry is empty.
+Our separate research MCP tools do not automatically become built-in agent tools.
+
+[Freqtrade Hyperopt](https://www.freqtrade.io/en/stable/hyperopt/) illustrates
+explicit objective/loss selection; [Optuna multi-objective optimization](https://optuna.readthedocs.io/en/stable/tutorial/20_recipes/002_multi_objective.html)
+supports constrained trade-offs without replacing the engine. Neither requires
+an LLM to compute account values. [Microsoft RD-Agent](https://github.com/microsoft/RD-Agent)
+is the closest quantitative hypothesis/experiment/feedback reference. Adopt that
+loop, not its entire data/model stack. [LangGraph's workflow/agent distinction](https://docs.langchain.com/oss/python/langgraph/workflows-agents)
+clarifies the missing dynamic decision layer; a new framework is unnecessary
+while OpenAlgo's existing provider adapter and durable worker can own it.
+
+### Approved proposal recorded before implementation above
+
+1. Expose compact, complete structured research evidence to the existing Agent:
+   original/selected accounts, capacity causes, checks with scopes, failed gates,
+   remaining allowance, tried-action identities and exact save/reopen lineage.
+2. Freeze a typed objective and permitted action plan before experimentation.
+   Use server-owned budgets and deduplication across LLM turns. Reserve every
+   mandatory check before admitting a remedy. If all original search/checks and
+   retry allowance cannot fit 512, report the conflict rather than silently
+   reducing search or validation; any changed accounting needs a new contract.
+3. Add one backtest-only research supervisor using existing internal services.
+   It can diagnose, propose a registered remedy, request a native experiment,
+   observe verified evidence, then continue/retain/stop. Generated code, orders,
+   risk-limit edits and profitable-date selection are outside this capability.
+   Generic per-write chat confirmations need an explicit bounded research-job
+   capability, not a global removal of write protection.
+4. Performance remedies must learn only from designated development evidence.
+   Freeze the changed candidate before final checks; a failed final check cannot
+   become feedback for another candidate on the same final window. Repeated
+   attempts count in selection history. Limited supplied history remains useful
+   historical evidence without invented signals or false independence.
+5. Compare the supervisor with today's deterministic policy on six saved cases:
+   affordability, sizing clipping, fixed positions, missing prices, cost fragility
+   and temporal instability. Require correct cause/action, rejected unsupported
+   changes, no duplicate job after interruption, explicit stop and exact
+   save/reopen. Keep a new held-back set of test cases for evaluation. Enable a
+   provider only after tool-use qualification; retain deterministic fallback.
+
+This is a recommendation for an additional decision layer, not proof that an
+LLM improves returns. A model cannot supply missing observations or make repeated
+historical trials independent. Deterministic native calculations and validation
+remain the authority for every accepted result.
+
 ## Feature development order after the human audit
 
 **Revised 22 October 2026 following the user's scope correction.** This short

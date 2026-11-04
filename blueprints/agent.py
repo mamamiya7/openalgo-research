@@ -45,7 +45,16 @@ from decimal import Decimal
 from typing import Any
 from urllib.parse import urlsplit
 
-from flask import Blueprint, Response, jsonify, request, session, stream_with_context
+from flask import (
+    Blueprint,
+    Response,
+    current_app,
+    has_app_context,
+    jsonify,
+    request,
+    session,
+    stream_with_context,
+)
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from database import agent_db
@@ -2328,6 +2337,11 @@ def _build_context(
     """
     chart_context = body.get("chart_context")
     extras: dict = {"user_message": operator_message} if operator_message else {}
+    # Borrow the application-owned store. Never serialize this resource into
+    # model/session state or create another engine on the agent thread.
+    store = current_app.extensions.get("research_store") if has_app_context() else None
+    if store is not None:
+        extras["research_store"] = store
     if isinstance(chart_context, dict):
         extras["chart_context"] = chart_context
     if viz_sink is not None:

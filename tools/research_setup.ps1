@@ -6,6 +6,45 @@ $taskRoot = Split-Path -Parent $PSScriptRoot
 $runtimePath = Join-Path $taskRoot '.research-runtime'
 $uvPath = Join-Path $runtimePath 'bin\uv.exe'
 $downloadDirectory = $null
+
+function Get-SignedPython312 {
+    # Inspect known installer locations before executing any candidate. This is
+    # runtime selection, never an Application Control or execution-policy change.
+    $taskCandidates = [Collections.Generic.List[string]]::new()
+    if ($env:OPENALGO_PYTHON312) { $taskCandidates.Add($env:OPENALGO_PYTHON312) }
+    foreach ($taskRegistryRoot in @('HKCU:\Software\Python\PythonCore', 'HKLM:\Software\Python\PythonCore', 'HKLM:\Software\WOW6432Node\Python\PythonCore')) {
+        foreach ($taskPythonTag in @('3.12', '3.12-64')) {
+            $taskRegistryPath = Join-Path $taskRegistryRoot ($taskPythonTag + '\InstallPath')
+            if (Test-Path -LiteralPath $taskRegistryPath) {
+                $taskRegistryKey = Get-Item -LiteralPath $taskRegistryPath
+                $taskExecutable = $taskRegistryKey.GetValue('ExecutablePath')
+                $taskInstallPath = $taskRegistryKey.GetValue('')
+                if ($taskExecutable) { $taskCandidates.Add([string]$taskExecutable) }
+                if ($taskInstallPath) { $taskCandidates.Add((Join-Path $taskInstallPath 'python.exe')) }
+            }
+        }
+    }
+    if ($env:LOCALAPPDATA) { $taskCandidates.Add((Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe')) }
+    if ($env:ProgramFiles) { $taskCandidates.Add((Join-Path $env:ProgramFiles 'Python312\python.exe')) }
+    foreach ($taskCandidate in ($taskCandidates | Select-Object -Unique)) {
+        try {
+            if (-not (Test-Path -LiteralPath $taskCandidate -PathType Leaf)) { continue }
+            $taskSignature = Microsoft.PowerShell.Security\Get-AuthenticodeSignature -LiteralPath $taskCandidate
+            if ($taskSignature.Status -ne 'Valid' -or $null -eq $taskSignature.SignerCertificate -or
+                $taskSignature.SignerCertificate.Subject -notmatch '(?:^|,)\s*(?:CN|O)=Python Software Foundation(?:,|$)') { continue }
+            $taskVersion = & $taskCandidate -I -S -c 'import sys; print(sys.implementation.name, chr(46).join(map(str, sys.version_info[:2])), 64 if sys.maxsize > 2**32 else 32)' 2>$null
+            if ($LASTEXITCODE -eq 0 -and $taskVersion -eq 'cpython 3.12 64') {
+                return [IO.Path]::GetFullPath($taskCandidate)
+            }
+        } catch {
+            # An inaccessible, invalid or blocked candidate is not executable
+            # authority. Keep discovery bounded to the explicit known locations.
+            continue
+        }
+    }
+    return $null
+}
+
 try {
     if (-not (Test-Path -LiteralPath (Join-Path $taskRoot 'frontend\dist\index.html'))) {
         throw 'The built interface is missing. Download the openalgo-research ZIP from GitHub Releases, not the Source code ZIP. Developers: run npm ci and npm run build inside frontend first.'
@@ -58,13 +97,20 @@ try {
     $env:UV_MANAGED_PYTHON = $null
     $env:UV_NO_MANAGED_PYTHON = $null
     $env:UV_NO_PROGRESS = '1'
-    Write-Host '[2/6] Preparing Python 3.12 (first setup needs an internet connection)...'
-    & $uvPath --directory $taskRoot run --no-project --managed-python --python 3.12 python (Join-Path $PSScriptRoot 'research_setup.py') --uv $uvPath @SetupArgs
+    $taskSignedPython = Get-SignedPython312
+    if ($taskSignedPython) {
+        Write-Host '[2/6] Using your signed Python 3.12 installation...'
+        & $taskSignedPython (Join-Path $PSScriptRoot 'research_setup.py') --uv $uvPath @SetupArgs
+    } else {
+        Write-Host '[2/6] Preparing private Python 3.12 (first setup needs an internet connection)...'
+        & $uvPath --directory $taskRoot run --no-project --managed-python --python 3.12 python (Join-Path $PSScriptRoot 'research_setup.py') --uv $uvPath @SetupArgs
+    }
     if ($LASTEXITCODE -ne 0) { throw 'Setup stopped. Your existing settings and saved results have not been replaced. See the message above; retry Setup.cmd after correcting it.' }
 } catch {
     Write-Host ''
     Write-Host ('OpenAlgo Research: ' + $_.Exception.Message) -ForegroundColor Red
     Write-Host 'Downloads require access to github.com, astral-sh.github.io and pypi.org. No Python or Node installation is needed for a release ZIP.'
+    Write-Host 'If Windows blocks the private Python runtime, install signed 64-bit Python 3.12 from python.org and run Setup.cmd again. Existing settings and results are retained.'
     exit 1
 } finally {
     if ($downloadDirectory -and (Test-Path -LiteralPath $downloadDirectory)) {

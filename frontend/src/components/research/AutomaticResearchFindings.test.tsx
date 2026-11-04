@@ -60,6 +60,21 @@ function findings(): Findings {
   }
 }
 
+it('opens a saved native baseline without inventing search validation', () => {
+  const value = { version: 'automatic-hypotheses-v16', counts: { proposals: 0 } } as Findings
+  render(<AutomaticResearchFindings findings={value} />)
+  expect(screen.getByText('Saved baseline · no search run')).toBeVisible()
+  expect(screen.getByText(/does not establish a validated research setup/)).toBeVisible()
+  expect(screen.queryByText('The improvement held up on later dates')).not.toBeInTheDocument()
+})
+
+it('does not relabel missing validation details as a baseline without proof', () => {
+  const value = { version: 'automatic-hypotheses-v16' } as Findings
+  render(<AutomaticResearchFindings findings={value} />)
+  expect(screen.getByText('Search validation details unavailable')).toBeVisible()
+  expect(screen.queryByText('Saved baseline · no search run')).not.toBeInTheDocument()
+})
+
 describe('automatic research findings', () => {
   it('integrates descriptive suitability without replacing the recommendation or promoting final conditions', async () => {
     const data = findings()
@@ -1141,11 +1156,14 @@ it.each([
   expect(within(conclusion).getByText('Recorded stop reason for this capital check')).toBeVisible()
 })
 
-it('shows an automatically chosen capacity account without claiming performance validation', () => {
+it.each([
+  'research-capital-planning-v3',
+  'research-capital-planning-v4',
+] as const)('shows %s capacity account without claiming performance validation', (version) => {
   render(
     <CapitalPlanning
       planning={{
-        version: 'research-capital-planning-v3',
+        version,
         status: 'no_verified_amount',
         estimated_capital: 150000,
         verified_capital: null,
@@ -1188,4 +1206,92 @@ it('does not show a success badge when a recorded decision rejects an otherwise 
   const { container } = render(<AutomaticResearchFindings findings={data} />)
   expect(screen.getByRole('heading', { name: 'No useful improvement found' })).toBeVisible()
   expect(container.querySelector('svg.lucide-check')).not.toBeInTheDocument()
+})
+
+function closedLoopPlanning(): NonNullable<Findings['capital_planning']> {
+  return {
+    version: 'research-capital-planning-v5',
+    status: 'verified_sufficient',
+    estimated_capital: 120000,
+    verified_capital: 120000,
+    original_capital: 100000,
+    reference_tickets: [],
+    tested_range: [100000, 120000],
+    accounts: [],
+    operating_point: {
+      capital: 120000,
+      settings: [
+        {
+          id: 'scan',
+          name: 'Scanner',
+          allocation_pct: 100,
+          config: { ...researchDefaults, initial_capital: 120000, order_size_pct: 1.5 },
+          execution_policy: {
+            version: 'research-execution-aware-v1',
+            exit_mode: 'percent',
+            sizing: 'stop_risk',
+            risk_budget_fraction: 0.25,
+            risk_limits: {
+              version: 'research-risk-limits-v1',
+              max_trade_risk_pct: 1,
+              max_total_stop_risk_pct: 5,
+              max_gross_exposure_pct: 100,
+              max_symbol_exposure_pct: 25,
+              max_open_positions: 10,
+            },
+          },
+        },
+      ],
+      option_index: 2,
+      remaining_exclusions: {},
+      performance_validated: false,
+    },
+    validation: {
+      outcome: 'validated',
+      historically_validated: true,
+      independently_validated: false,
+      reasons: ['The changed account passed the recorded cost and robustness checks.'],
+      capital: 120000,
+      selected_config_id: 'changed-account',
+      accounts: 7,
+    },
+  }
+}
+
+it.each([
+  ['validated', true, 'Historical performance checks passed'],
+  ['rejected', false, 'Changed capital and trade size rejected'],
+  ['blocked', false, 'Insufficient evidence to validate capital and trade size'],
+  ['unchanged', false, 'Original capital and trade size retained'],
+  ['validated', false, 'Capital and trade size have not passed performance validation'],
+] as const)('shows v5 %s validation without inferring independent evidence', (outcome, validated, title) => {
+  const planning = closedLoopPlanning()
+  if (!planning.validation) throw new Error('Missing test validation')
+  planning.validation.outcome = outcome
+  planning.validation.historically_validated = validated
+  planning.validation.reasons = ['Recorded conclusion for the changed account.']
+  render(<CapitalPlanning planning={planning} />)
+  const region = screen.getByRole('region', { name: 'Capital and trade size validation' })
+  expect(within(region).getByText(title)).toBeVisible()
+  expect(within(region).getByText('Recorded conclusion for the changed account.')).toBeVisible()
+  expect(
+    within(region).getByText('Historical checks only; not independently validated.')
+  ).toBeVisible()
+  expect(screen.getByText('Capacity-tested capital: ₹1,20,000')).toBeVisible()
+  expect(screen.getByText('Order cash ceiling: 1.5% of strategy allocation.')).toBeVisible()
+  expect(screen.getByText(/Size by stop risk 0.25%/)).toBeVisible()
+  if (!validated)
+    expect(
+      within(region).queryByText('Historical performance checks passed')
+    ).not.toBeInTheDocument()
+})
+
+it('never treats a v5 capacity-only saved record as passed performance validation', () => {
+  const planning = closedLoopPlanning()
+  delete planning.validation
+  render(<CapitalPlanning planning={planning} />)
+  expect(
+    screen.getByText('Capital and trade size have not passed performance validation')
+  ).toBeVisible()
+  expect(screen.queryByText('Historical performance checks passed')).not.toBeInTheDocument()
 })

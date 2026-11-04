@@ -89,7 +89,11 @@ def descriptor(evidence):
 
     portfolio = evidence["portfolio"]
     capital_design = _capital_design(portfolio)
-    actions = portfolio.get("automatic_research", {}).get("action_policy") == "automatic_actions_v1"
+    actions = portfolio.get("automatic_research", {}).get("action_policy") in (
+        "automatic_actions_v1",
+        "automatic_actions_v2",
+        "automatic_actions_v3",
+    )
     allocation = (
         portfolio.get("automatic_research", {}).get("version") == "automatic-hypotheses-v16"
     )

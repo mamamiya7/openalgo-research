@@ -371,6 +371,63 @@ def test_decision_reserve_boundary_releases_only_its_own_slots_and_still_rejects
         reserve(512, 512, 0, 512)
 
 
+def test_v3_complete_programme_reserves_search_decision_funding_and_all_validation_accounts(store):
+    from research.automatic_walk_forward import _account_reserve
+
+    automatic = decision_request(store)
+    automatic["action_policy"] = "automatic_actions_v3"
+    with store.sessions.begin() as db:
+        db.get(ResearchExperiment, "job").specification = json.dumps(
+            {"portfolio": {"automatic_research": automatic}}
+        )
+    recipe = {
+        "validation_mode": "exploratory_only",
+        "history_availability": {"mode": "exploratory_only"},
+        "capital_planning": {},
+        "automatic_decision": {},
+        "budget": {
+            "max_capital_planning_accounts": 4,
+            "max_decision_accounts": 9,
+            "max_operating_validation_accounts": 13,
+        },
+    }
+    assert _account_reserve(recipe, "search") == 26
+    assert _account_reserve(recipe, "search", decision=True) == 17
+    assert _account_reserve(recipe, "search", planning=True) == 13
+    assert _account_reserve(recipe, "search", operating=True) == 0
+    reserve = reserver(store, 485, 485)
+    assert reserve(485, 485, 26, 512) == 486
+    with pytest.raises(ValueError, match="calculation limit"):
+        reserve(486, 486, 26, 512)
+    for attempt in range(486, 495):
+        assert reserve(attempt, attempt, 17, 512) == attempt + 1
+    with pytest.raises(ValueError, match="calculation limit"):
+        reserve(495, 495, 17, 512)
+    for attempt in range(495, 499):
+        assert reserve(attempt, attempt, 13, 512) == attempt + 1
+    for attempt in range(499, 512):
+        assert reserve(attempt, attempt, 0, 512) == attempt + 1
+    with pytest.raises(ValueError, match="calculation limit"):
+        reserve(512, 512, 0, 512)
+
+
+@pytest.mark.parametrize("slots", [17, 26])
+def test_operating_slots_require_v3_and_do_not_refund_lost_attempts(store, slots):
+    automatic = decision_request(store)
+    with pytest.raises(ValueError, match="frozen v3"):
+        reserver(store)(0, 0, slots, 512)
+    automatic["action_policy"] = "automatic_actions_v3"
+    with store.sessions.begin() as db:
+        db.get(ResearchExperiment, "job").specification = json.dumps(
+            {"portfolio": {"automatic_research": automatic}}
+        )
+    reserve = reserver(store)
+    for attempt in range(64):
+        assert reserve(attempt, 0, slots, 512) == attempt + 1
+    with pytest.raises(ValueError, match="calculation limit"):
+        reserve(64, 0, slots, 512)
+
+
 @pytest.mark.parametrize("field", ["version", "history_policy", "design_policy", "decision_policy"])
 def test_thirteen_reserved_accounts_require_the_complete_frozen_decision_request(store, field):
     automatic = decision_request(store)

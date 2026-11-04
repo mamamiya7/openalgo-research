@@ -24,13 +24,13 @@ import type { ResearchSource } from '@/api/scannerResearch'
 import { ChartinkConnect } from '@/components/research/ChartinkConnect'
 import { ChartinkImport } from '@/components/research/ChartinkImport'
 import { ChartinkSource } from '@/components/research/ChartinkSource'
-import { ChartinkPreparation } from '@/components/research/ChartinkPreparation'
 import { ChosenEntryConditions } from '@/components/research/ChosenEntryConditions'
 import { addPortfolioSource, freshPortfolioDraft } from '@/components/research/PortfolioBuilder'
 import { PortfolioCsvHelp } from '@/components/research/PortfolioCsvHelp'
 import { ResearchChosenSetup } from '@/components/research/ResearchChosenSetup'
 import { ResearchComparisons } from '@/components/research/ResearchComparisons'
 import { ResearchDecisions } from '@/components/research/ResearchDecisions'
+import { ResearchJourney } from '@/components/research/ResearchJourney'
 import {
   researchRecoveryActions,
   researchRunStatus,
@@ -881,6 +881,11 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
   const [params, setParams] = useSearchParams()
   const queryClient = useQueryClient()
   const jobId = params.get('job')
+  const manualSetup = params.get('manual') === '1'
+  const journeyEligible =
+    !server.archived &&
+    draft.portfolio.strategies.length > 0 &&
+    draft.portfolio.strategies.every((strategy) => strategy.type === 'signals')
   const returnResearch = researchBackParams(params.get('return_research'), server.id)
   const rawView = params.get('view') ?? 'overview'
   // Presentation aliases preserve all existing saved URLs and return chains.
@@ -1441,17 +1446,52 @@ function ExperimentWorkspace({ initial, owner }: { initial: ResearchExperiment; 
               </Button>
             </div>
           )}
-        {!jobId &&
-          view === 'setup' &&
-          !server.archived &&
-          Object.values(draft.sources).some((source) => source.receipt.chartink) && (
-            <ChartinkPreparation
+        {!jobId && ['setup', 'overview'].includes(view) && journeyEligible && !manualSetup && (
+          <>
+            <ResearchJourney
               experimentId={server.id}
               revision={server.revision}
               enabled={model.state === 'saved' && !busy}
+              onSaved={async (next) => {
+                const latest = next.experiment ?? (await researchLibrary.get(server.id))
+                if ((useAuthStore.getState().user?.username ?? 'account') !== owner) return
+                model.accept(latest)
+              }}
+              onResult={async (id) => {
+                const latest = await researchLibrary.get(server.id)
+                if ((useAuthStore.getState().user?.username ?? 'account') !== owner) return
+                model.accept(latest)
+                changeView('backtests', id)
+              }}
             />
-          )}
-        {(jobId || view === 'setup') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground"
+              onClick={() => {
+                const next = new URLSearchParams(params)
+                next.set('view', 'setup')
+                next.set('manual', '1')
+                setParams(next)
+              }}
+            >
+              Advanced/manual setup
+            </Button>
+          </>
+        )}
+        {!jobId && view === 'setup' && journeyEligible && manualSetup && (
+          <Button
+            variant="outline"
+            onClick={() => {
+              const next = new URLSearchParams(params)
+              next.delete('manual')
+              setParams(next)
+            }}
+          >
+            Return to guided research plan
+          </Button>
+        )}
+        {(jobId || (view === 'setup' && (!journeyEligible || manualSetup))) && (
           <fieldset
             disabled={!jobId && (server.archived || busy || model.state === 'conflict')}
             className="min-w-0 border-0 p-0"

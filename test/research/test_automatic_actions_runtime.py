@@ -52,6 +52,48 @@ def test_actions_are_explicit_and_old_frozen_recipes_keep_their_modes(acting, de
     assert descriptor(acting) == new["execution_research"]
 
 
+def test_intended_sizing_actions_are_versioned_without_changing_search_budget(acting):
+    from research.automatic_actions import descriptor as action_descriptor
+
+    value = deepcopy(acting)
+    value["portfolio"]["automatic_research"]["action_policy"] = "automatic_actions_v2"
+    value["portfolio"] = normalize(value["portfolio"])
+    value["versions"] = execution_versions(value["portfolio"])
+    value.pop("automatic_recipe")
+    recipe = compile_recipe(value)
+    assert recipe["capital_planning"]["version"] == "research-capital-planning-v4"
+    assert recipe["automatic_actions"] == action_descriptor("automatic_actions_v2")
+    assert recipe["budget"] == acting["automatic_recipe"]["budget"]
+    assert recipe["execution_research"] == acting["automatic_recipe"]["execution_research"]
+    assert (
+        acting["automatic_recipe"]["capital_planning"]["version"] == "research-capital-planning-v3"
+    )
+
+
+def test_closed_loop_policy_reserves_checks_without_changing_search_or_old_recipes(acting):
+    from research.automatic_walk_forward import _account_reserve
+    from research.operating_validation import descriptor as operating_descriptor
+
+    value = deepcopy(acting)
+    value["portfolio"]["automatic_research"]["action_policy"] = "automatic_actions_v3"
+    value["portfolio"] = normalize(value["portfolio"])
+    value["versions"] = execution_versions(value["portfolio"])
+    value.pop("automatic_recipe")
+    recipe = compile_recipe(value)
+    assert recipe["capital_planning"]["version"] == "research-capital-planning-v5"
+    assert recipe["operating_validation"] == operating_descriptor()
+    assert recipe["execution_research"] == acting["automatic_recipe"]["execution_research"]
+    assert recipe["budget"]["proposals"] == 408
+    assert recipe["budget"]["max_simulations"] == 512
+    assert recipe["budget"]["max_operating_validation_accounts"] == 13
+    assert _account_reserve(recipe, "search", planning=True) == 13
+    assert _account_reserve(recipe, "search", operating=True) == 0
+    assert _account_reserve(recipe, "search", decision=True) == 17
+    assert _account_reserve(recipe, "search") == 26
+    assert "operating_validation" not in acting["automatic_recipe"]
+    assert 6 * 69 + 4 + 1 + 64 + 4 + 9 + 13 == 509 <= 512
+
+
 @pytest.fixture(scope="module")
 def completed(request, acting):
     patch = pytest.MonkeyPatch()

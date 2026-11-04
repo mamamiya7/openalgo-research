@@ -1036,7 +1036,13 @@ def build_agent(
         # The factory falls back to this context where agno's run state lacks a
         # key, so it is handed the effective MCP flag, already ANDed with the
         # operator's switch, rather than the request's own ask.
-        tools=tool_factory(replace(context, mcp_enabled=bool(state["mcp_enabled"]))),
+        tools=tool_factory(
+            replace(
+                context,
+                mcp_enabled=bool(state["mcp_enabled"]),
+                extras={**context.extras, "research_model_id": resolved.id},
+            )
+        ),
         # Tool availability is a security control, so it is never served from a
         # cache keyed on the user id.
         cache_callables=False,

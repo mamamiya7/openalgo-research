@@ -18,6 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_RESEARCH_FILES = {
+    "services/research_configuration_context.py",
     ".sample.env",
     "START_HERE.html",
     "Setup.cmd",
@@ -51,6 +52,16 @@ REQUIRED_RESEARCH_FILES = {
     "tools/research_calibration.py",
     "research/failures.py",
     "services/research_recovery.py",
+    "research/supervisor_accounts.py",
+    "services/research_supervisor.py",
+    "services/research_supervisor_program.py",
+    "services/research_automation.py",
+    "services/research_journey.py",
+    "services/research_playbook.py",
+    "services/research_memory.py",
+    "services/research_experiments.py",
+    "services/agent/research_decision.py",
+    "services/agent/tools/research.py",
     "services/research_attempt_budget.py",
     "services/research_worker_sessions.py",
     "services/research_windows_inventory.py",

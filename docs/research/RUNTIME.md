@@ -63,7 +63,7 @@ managed server and Docker instructions remain below.
 | Built interface missing | Download the named `openalgo-research-0.1.0-preview.21.zip` asset and extract all files; the automatic Source code ZIP requires a developer build. |
 | Installing dependencies | First setup downloads the calculation libraries. Setup prints an elapsed-time update every 20 seconds; details are in `log/research-setup.log`. |
 | Port already in use | Close the existing OpenAlgo launcher before running Setup or Start again. Setup does not stop unrelated applications. |
-| Windows Application Control blocked a file | The computer's security policy rejected the downloaded Python launcher. Setup stops without changing that policy. On a managed device, ask its administrator to review an approved Python environment; do not disable security controls. This restriction was observed on the maintainer's host and is also tracked [upstream](https://github.com/astral-sh/uv/issues/6584). |
+| Windows Application Control blocked a file | Windows Setup now prefers an existing verified, signed Python Software Foundation CPython 3.12, repairs the same virtual-environment launchers and keeps the installed packages. Install official Python 3.12 if needed, then rerun Setup.cmd. The managed fallback remains available where permitted. On a managed device, use the administrator's approved Python environment; never disable security controls. |
 | Setup interrupted or download failed | Check the connection and free disk space, then run Setup again. Existing settings and saved data are preserved. |
 
 If it still fails, [open an installation issue](https://github.com/mamamiya7/openalgo-research/issues/new?template=installation.yml)

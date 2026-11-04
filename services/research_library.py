@@ -22,6 +22,7 @@ from database.research_db import (
     ResearchComparison,
     ResearchExperiment,
     ResearchJob,
+    ResearchJourney,
     ResearchLibraryExperiment,
     ResearchLibraryJob,
     ResearchLibraryRequest,
@@ -339,13 +340,16 @@ def portfolio_payload(draft):
             # Editable launches use the data the trader supplied. Retained job
             # evidence/exact replay bypass this builder and keep their original
             # frozen research policy and recipe.
+            intent_policy = automatic.get("intent_policy")
             automatic = {
                 "version": automatic["version"],
                 "history_policy": "available_history",
                 "design_policy": "automatic_design_v1",
                 "decision_policy": "automatic_decision_v1",
-                "action_policy": "automatic_actions_v1",
+                "action_policy": "automatic_actions_v3",
             }
+            if intent_policy == "fixed-signals-v1":
+                automatic["intent_policy"] = intent_policy
         portfolio["automatic_research"] = automatic
         for strategy in portfolio["strategies"]:
             strategy["search"] = {}
@@ -845,6 +849,7 @@ def _enqueue(
     source_fences=(),
     admission_guard=None,
     publication_hook=None,
+    initial_checkpoint_state=None,
 ):
     from research.connectors.registry import policy_for_request
     from research.engine import validate_config
@@ -872,6 +877,18 @@ def _enqueue(
             }
         )
     ).hexdigest()
+    initial_checkpoint = None
+    if initial_checkpoint_state is not None:
+        # Publish the immutable worker envelope before reserving SQLite's
+        # writer. Artifact quota admission owns its own fenced transaction.
+        initial_checkpoint = evidence_service.save_artifact(
+            store,
+            {
+                "identity": identity,
+                "policy_version": policy_for_request(evidence["snapshot"], specification),
+                "state": initial_checkpoint_state,
+            },
+        )
     # Core retry key has a separate namespace from callers of the older job API.
     core_token = "library_" + hashlib.sha256(f"{owner}:{token}".encode()).hexdigest()
     with store.sessions.begin() as db:
@@ -970,6 +987,7 @@ def _enqueue(
                     specification=evidence_service.encoded(specification).decode(),
                     identity=identity,
                     counts="{}",
+                    checkpoint=initial_checkpoint,
                 )
             )
             db.add(
@@ -1379,5 +1397,10 @@ def delete_experiment(store, owner, identifier, data):
                 pending.status = "cancelled" if pending.status == "queued" else "cancelling"
                 pending.updated_at = time.time()
             db.delete(preparation)
+        journey = db.get(ResearchJourney, identifier)
+        if journey:
+            if journey.phase in ("researching", "finalizing"):
+                raise ValueError("Let automatic research finish before deleting its study")
+            db.delete(journey)
         db.delete(row)
     return {"deleted": True, "id": identifier}
