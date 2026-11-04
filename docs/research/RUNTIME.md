@@ -8,13 +8,13 @@ separate locked Linux environment through the same worker and consumer interface
 
 ## Easy local installation (recommended)
 
-Preview.21 groups validated evidence writes and reuses a detached validated
-execution receipt, retaining every candidate-specific entry check. OpenAlgo,
-charts, dependency pins, the full search budget and validation are unchanged.
-[Changes, measured buckets and qualification](releases/0.1.0-preview.21.md).
+Preview.34 includes OpenAlgo 2.0.3.2, broker configuration and session security
+updates, and the reviewed automatic research flow. The full search allowance,
+native validation and saved-result identities remain intact.
+[Changes and qualification](releases/0.1.0-preview.34.md).
 
-Download the [preview.21 release](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.21)
-and extract **openalgo-research-0.1.0-preview.21.zip** into a permanent folder. This
+Download the [preview.34 release](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.34)
+and extract **openalgo-research-0.1.0-preview.34.zip** into a permanent folder. This
 named asset includes the built interface; GitHub's automatic source archives do not.
 
 On **Windows x64**, double-click **Setup.cmd** and choose your broker. Setup
@@ -22,11 +22,10 @@ downloads its private Python 3.12 runtime and locked dependencies, creates uniqu
 local security keys, applies migrations, and starts the application and worker
 together. Internet access is needed for initial setup. No separate Python, Git,
 Node.js or administrator installation is required. Create your account in the
-browser and sign in. On **Connect Broker**, choose **Add broker credentials**,
-enter the app credentials issued by your broker and save. Restart with
-**Start.cmd** (Linux: `bash start-research.sh`) to load them, sign in and connect
-your broker. Select **Tools → Backtest & Optimize**. Later changes are also
-available in **Profile → Broker Credentials**.
+browser and sign in. Open **Broker Configuration**, enter the app keys issued
+by your broker and save. Connect your broker, then select
+**Tools → Backtest & Optimize**. Keep passwords and broker keys inside the local
+application; the update preserves existing `.env` values and saved results.
 
 For later visits, double-click **Start.cmd**. Keep its window open while using the
 app; press **Ctrl+C** there to stop both services. A duplicate launch or an occupied

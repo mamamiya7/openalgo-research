@@ -1,10 +1,10 @@
 {
   "name": "OpenAlgo Research",
-  "version": "0.1.0-preview.33",
+  "version": "0.1.0-preview.34",
   "format": "openalgo-research-distribution-v1",
   "delivery": "native-openalgo-distribution",
-  "openalgo_version": "2.0.2.9",
-  "upstream_baseline": "f3e7de829d7c93515a3e041bd2a637546c62a1d7",
+  "openalgo_version": "2.0.3.2",
+  "upstream_baseline": "e2797fd3c08d3a177ed9d62cfd2698803ed4361a",
   "python": "3.12",
   "packages": {
     "vectorbt": "0.28.5",

@@ -14,13 +14,13 @@ The aim is to connect broker data, backtesting and optimization in one open-sour
 workflow. Start directly from a Chartink scanner with the Chrome extension, upload
 a CSV export, or reuse saved signals.
 
-**Published download: `0.1.0-preview.26` · OpenAlgo 2.0.2.9 · Windows and Linux**
+**Published download: `0.1.0-preview.34` · OpenAlgo 2.0.3.2 · Windows and Linux**
 
-This branch packages [preview.32](docs/research/releases/0.1.0-preview.32.md), connecting the existing AI Agent to bounded native research, exact-setting validation and save/reopen. The download below remains the existing published release.
+This release packages [preview.34](docs/research/releases/0.1.0-preview.34.md): OpenAlgo 2.0.3.2, reviewed automatic research, exact-setting validation and saved-result reopening.
 
-[**Download OpenAlgo Research**](https://github.com/mamamiya7/openalgo-research/releases/download/research-v0.1.0-preview.26/openalgo-research-0.1.0-preview.26.zip)
+[**Download OpenAlgo Research**](https://github.com/mamamiya7/openalgo-research/releases/download/research-v0.1.0-preview.34/openalgo-research-0.1.0-preview.34.zip)
 · [Install and start](docs/research/RUNTIME.md)
-· [Published release notes](docs/research/releases/0.1.0-preview.26.md)
+· [Published release notes](docs/research/releases/0.1.0-preview.34.md)
 · [Architecture](docs/research/SYSTEM_MAP.md)
 · [Released source](https://github.com/mamamiya7/openalgo-research/tree/main)
 
@@ -50,8 +50,8 @@ Date-only daily strategies stay on daily candles.
   hashing and seal checks now use bounded canonical pieces. Save, reload and
   reopen were verified. Full automatic research still allows 408 proposals/512
   accounts and requires adequate history; this timing is for the fixed backtest.
-- **Current native OpenAlgo.** Platform 2.0.2.9 with official updates through
-  22 October, charts 2.6.7, custom intervals and dependency security fixes.
+- **Current native OpenAlgo.** Platform 2.0.3.2 with official updates through
+  4 November, charts 2.6.9, broker configuration and dependency security fixes.
   Saved research keeps its frozen prices, markers and replay.
 - **Faster cached loading.** Save stock-preparation progress in bounded groups of
   16 fully cached stocks, while continuing to validate each candle and update
@@ -139,7 +139,7 @@ OpenAlgo saves the study**. Your broker connection supplies missing price histor
 2. Double-click **`Setup.cmd`**. Choose your broker when asked. Setup installs
    the required Python tools and dependencies, then opens the application.
 3. Create your OpenAlgo account and sign in. On **Connect Broker**, choose
-   **Add broker credentials**. Save, restart with **Start.cmd**, connect your
+   **Broker Configuration**. Save your broker app keys, connect your
    broker, then open **Tools → Backtest & Optimize**.
 
 After the first setup, double-click **`Start.cmd`**. It starts the app and research
@@ -261,7 +261,7 @@ to preserve their accounts, broker settings and saved research.
 To develop from a Git checkout instead, first run `npm ci` and `npm run build` in
 `frontend`, then run the setup script from the repository root. GitHub's automatic
 **Source code** archives do not contain the built interface; use the named
-`openalgo-research-0.1.0-preview.26.zip` asset for the published installation.
+`openalgo-research-0.1.0-preview.34.zip` asset for the published installation.
 
 Use the [Chartink extension](extensions/chartink/README.md), or open **Tools →
 Backtest & Optimize** to upload a CSV or reuse saved signals. Review the settings

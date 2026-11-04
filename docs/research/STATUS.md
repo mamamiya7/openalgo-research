@@ -1,5 +1,35 @@
 # OpenAlgo Research status
 
+## OpenAlgo update and publication — 4 November 2026
+
+Preview.34 incorporates official OpenAlgo2.0.3.2 through
+`e2797fd3c08d3a177ed9d62cfd2698803ed4361a` (69 upstream commits since the previous
+baseline), charts2.6.9 and the locked LiteLLM1.106.6 compatibility shims. Research
+host-call signatures are unchanged. The reviewed decision loop, full408/512
+search allowance, financial validation and immutable results remain in place.
+All previously uncommitted research fixes were checkpointed in41720f3ad before
+the upstream merge.
+
+The installer now applies November quantity limits, Muhurat sessions and the
+additive broker-key/session schema. The new upstream broker configuration and
+revocation-aware login flow are retained. A malformed non-object JSON request
+to save broker keys is rejected with400 rather than crashing. Isolated startup
+subprocess tests explicitly load their fixture .env while the parent test suite
+continues to disable ambient private configuration.
+
+Targeted Windows checks:582 backend tests passed;9 optional/platform-specific
+checks skipped. This includes five isolated-startup checks rerun after correcting
+their inherited dotenv-disable test environment.132 broker/auth/research UI
+checks, TypeScript and Vite passed using the existing environment and supported
+Node24.22.1. Source and installed-dependency compatibility passed. No full scanner
+or new research search was run. Fresh Linux/WSL qualification is not claimed by
+this update; its numerical contracts and supported scope remain documented.
+
+Release notes: [preview.34](releases/0.1.0-preview.34.md). Private install,
+saved-result, packaging and publication receipts belong under the existing
+ignored `.agent-native/upstream-update/` directory; credentials and runtime data
+are excluded from Git and release assets.
+
 ## Paired saved-data controls — 29 October 2026
 
 The current installed loop freshly tested the existing predeclared synthetic G

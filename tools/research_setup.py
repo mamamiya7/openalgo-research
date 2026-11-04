@@ -28,7 +28,9 @@ MIGRATIONS = (
     "upgrade/migrate_agent.py",
     "upgrade/migrate_agent_voice.py",
     "upgrade/migrate_agent_voice_phrase_removal.py",
-    "upgrade/migrate_qty_freeze_oct_2026.py",
+    "upgrade/migrate_qty_freeze_nov_2026.py",
+    "upgrade/migrate_muhurat_2026.py",
+    "upgrade/migrate_broker_keys.py",
     "upgrade/migrate_research_nse_calendar.py",
     "upgrade/migrate_scanner_research.py",
 )
@@ -502,7 +504,7 @@ def setup(
     print("[6/6] Ready. Use Start.cmd (Windows) or bash start-research.sh next time.")
     if fresh:
         print(
-            "Create your OpenAlgo account in the browser. On Connect Broker, choose Add broker credentials, save your broker app keys, and restart with Start."
+            "Create your OpenAlgo account in the browser. Open Broker Configuration, save your broker app keys, then connect your broker."
         )
     if no_launch:
         return 0
