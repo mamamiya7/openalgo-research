@@ -8,13 +8,13 @@ separate locked Linux environment through the same worker and consumer interface
 
 ## Easy local installation (recommended)
 
-Preview.34 includes OpenAlgo 2.0.3.2, broker configuration and session security
+Preview.36 includes OpenAlgo 2.0.3.3, broker configuration and session security
 updates, and the reviewed automatic research flow. The full search allowance,
 native validation and saved-result identities remain intact.
-[Changes and qualification](releases/0.1.0-preview.34.md).
+[Changes and qualification](releases/0.1.0-preview.36.md).
 
-Download the [preview.34 release](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.34)
-and extract **openalgo-research-0.1.0-preview.34.zip** into a permanent folder. This
+Download the [preview.36 release](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.36)
+and extract **openalgo-research-0.1.0-preview.36.zip** into a permanent folder. This
 named asset includes the built interface; GitHub's automatic source archives do not.
 
 On **Windows x64**, double-click **Setup.cmd** and choose your broker. Setup

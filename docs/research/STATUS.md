@@ -2,7 +2,7 @@
 
 ## Decision feedback and visible changes — 12 November 2026
 
-Local preview.36 adds measured development scorecards to model decisions,
+Published preview.36 adds measured development scorecards to model decisions,
 conservative checked-branch comparison and verified actual parameter deltas in
 the journey. 254 focused backend checks and 122 frontend checks pass, alongside
 TypeScript and Vite. The exact engine/save/reopen test passed on retry after an
