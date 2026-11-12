@@ -1,3 +1,13 @@
+## [Research 0.1.0-preview.36] - 2026-11-12
+
+Measured development feedback, conservative checked-branch comparison and
+verified actual setting changes in the Research journey. Validation and account
+budgets are unchanged. [Notes](research/releases/0.1.0-preview.36.md).
+
+### Contributors
+
+- **@mamamiya7** — Research decision feedback, checked-branch selection, UI and qualification.
+
 ## [Research 0.1.0-preview.35] - 2026-11-12
 
 OpenAlgo 2.0.3.3 plus reviewed November fixes, charts 2.7.1, strict Fyers

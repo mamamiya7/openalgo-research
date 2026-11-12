@@ -36,6 +36,24 @@ export interface JourneyDecision {
   expected_evidence?: string
   outcome?: string | null
   no_effect?: { status: string } | null
+  selection?: string
+  reasons?: string[]
+  change?: {
+    axis: string
+    from?: number | string | boolean | null
+    to?: number | string | boolean | null
+    current_capital?: number
+  }
+  settings_change?: {
+    status: 'proposed' | 'verified' | 'blocked' | 'unavailable'
+    rows: Array<{
+      strategy_id?: string | null
+      strategy: string
+      field: string
+      before: number | string | boolean | null
+      after: number | string | boolean | null
+    }>
+  }
 }
 export interface JourneyState {
   version: string

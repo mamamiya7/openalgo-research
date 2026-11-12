@@ -56,6 +56,16 @@ Reconstruct every field; a repeated holding value alone is not a repeated setup.
 Compare capital, trade size, exits, trailing controls and risk together. Matching
 observed_execution_id means the saved fills/equity matched; different
 stop_risk_state_id can still affect validation, so it is not proof of equivalence.
+Read validation_scorecard for the current branch and each previous configuration.
+Use its recorded gate measurements to distinguish improved, worsened and unknown
+checks. In particular compare higher-cost improvement and neighboring settings'
+tested/passing counts and median edge. A near miss remains REJECTED; fewer failed
+development checks is neither acceptance nor independent evidence. Explain why
+the proposed mechanism could address the remaining failures without repeating
+an ineffective change. Do not assume missing measurements improved. If you stop,
+acknowledge the strongest recorded near miss and its remaining failed check,
+and explain why the available complete configurations offer no supported next
+test. A justified stop is valid while budget remains.
 Do not repeat a failed mechanism merely because a different number is available.
 Explain what distinct evidence a new test could resolve against the failed checks.
 A reasoned stop is a first-class result: unused budget does not justify testing.

@@ -1,5 +1,29 @@
 # OpenAlgo Research — essential one-click delivery plan
 
+## Decision feedback batch — 12 November 2026
+
+Execute one bounded batch against the agreed automatic flow:
+
+1. Supply the configured model compact, immutable development-validation
+   scorecards: cost results, neighbor passing/tested counts and existing
+   thresholds, sample/concentration and prefix gates. Missing measurements stay
+   unknown; blocked and later-period performance remains unavailable.
+2. Preserve a demonstrably stronger checked planning branch instead of blindly
+   promoting the latest rejected result. Prefer only strict gate improvements
+   with no new native objections; incomparable branches retain their order.
+   Honor explicit model stops, all input authority and every validation debit.
+3. Show proposed versus verified actual setting changes, native versus model
+   attribution and native rejection reasons in the existing journey.
+4. Qualify on small controlled/saved-data cases through saving and reopening,
+   install one batch, and retain minimal evidence. No full scanner run.
+
+Implementation and focused checks are complete. The one native-engine check
+initially blocked by Windows Application Control passed on an unchanged retry;
+no security setting or validation rule was changed. Installation and the fresh
+saved-data qualification are tracked in private `.agent-native/decision-quality/`
+receipts. This batch improves decision evidence, not a guarantee of a passing
+historical setup. Native completion notifications remain deferred.
+
 Paired small saved-data controls now cover accepted-result selection/save/reopen
 and rejection with unchanged native checks. The pass control is explicitly
 synthetic; no real-market passing edge is claimed. The negative control exposed

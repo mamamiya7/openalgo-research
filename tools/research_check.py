@@ -54,6 +54,7 @@ REQUIRED_RESEARCH_FILES = {
     "services/research_recovery.py",
     "research/supervisor_accounts.py",
     "services/research_supervisor.py",
+    "services/research_validation_scorecard.py",
     "services/research_supervisor_program.py",
     "services/research_automation.py",
     "services/research_journey.py",

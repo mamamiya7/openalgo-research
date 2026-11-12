@@ -1,6 +1,7 @@
 import { Check, ChevronRight, Clock3, Database, FlaskConical, Play, Settings2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import {
+  type JourneyDecision,
   type JourneyPlan,
   type JourneyPlanUpdate,
   type JourneyState,
@@ -34,6 +35,78 @@ const remedyLabel: Record<string, string> = {
   temporal_stability: 'Check consistency over time',
   reduce_concentration: 'Check allocation',
   stop: 'Finish research',
+}
+const settingLabel: Record<string, string> = {
+  capital: 'Capital',
+  order_size_pct: 'Trade size',
+  allocation_pct: 'Allocation',
+  allocation_mode: 'Allocation method',
+  hold_sessions: 'Holding sessions',
+  hold_minutes: 'Holding minutes',
+  stop_pct: 'Stop loss',
+  target_pct: 'Profit target',
+  trailing_enabled: 'Trailing stop',
+  trailing_pct: 'Trailing distance',
+  trailing_choice: 'Trailing distance',
+  execution_choice: 'Exit method',
+  exit_mode: 'Exit method',
+  atr_stop_multiple: 'ATR stop multiple',
+  atr_target_multiple: 'ATR target multiple',
+}
+function settingValue(field: string, value: number | string | boolean | null | undefined) {
+  if (value == null) return 'Not set'
+  if (typeof value === 'boolean') return value ? 'On' : 'Off'
+  if (field === 'capital') return money(value)
+  if (typeof value === 'number') {
+    if (field === 'trailing_choice' && value === 0) return 'Off'
+    const unit = field.endsWith('_pct') || field === 'trailing_choice' ? '%' : ''
+    return `${number(value)}${unit}`
+  }
+  const labels: Record<string, string> = {
+    percent: 'Percentage exits',
+    atr: 'ATR exits',
+    atr_2_4: 'ATR exits (2× stop / 4× target)',
+    original: 'Original allocation',
+    active_prior60_cluster_inverse_vol: 'Prior-data cluster and volatility weights',
+  }
+  return labels[value] ?? value.replaceAll('_', ' ')
+}
+function DecisionSettings({ decision }: { decision: JourneyDecision }) {
+  const actual = decision.settings_change
+  if (actual?.status === 'verified') {
+    return (
+      <div className="mt-2 space-y-1 text-xs" aria-label="Verified tested settings">
+        <p className="font-medium">Tested settings · verified saved report</p>
+        {actual.rows.length ? (
+          actual.rows.map((row) => (
+            <p key={`${row.strategy_id ?? row.strategy}-${row.field}`}>
+              {row.strategy} · {settingLabel[row.field] ?? row.field.replaceAll('_', ' ')}:{' '}
+              {settingValue(row.field, row.before)} → {settingValue(row.field, row.after)}
+            </p>
+          ))
+        ) : <p>No setting values changed.</p>}
+      </div>
+    )
+  }
+  const change = decision.change
+  return (
+    <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+      {change && (
+        <p>
+          Proposed:{' '}
+          {change.axis === 'native_funding_and_size'
+            ? 'estimate capital and trade size during native checks'
+            : `${settingLabel[change.axis] ?? change.axis.replaceAll('_', ' ')}: ${change.from !== undefined ? `${settingValue(change.axis, change.from)} → ` : ''}${settingValue(change.axis, change.to)}`}.
+        </p>
+      )}
+      {actual?.status === 'blocked' && (
+        <p>Validation blocked. No verified tested-settings comparison.</p>
+      )}
+      {actual?.status === 'unavailable' && (
+        <p>Saved settings could not be verified. Proposed values are not confirmed results.</p>
+      )}
+    </div>
+  )
 }
 function editable(plan: JourneyPlan): JourneyPlanUpdate {
   return { revision: plan.revision, style: plan.style, ...plan.settings }
@@ -449,7 +522,21 @@ export function ResearchJourney({
                       ? ` · ${decision.outcome}`
                       : ''}
                 </p>
+                {decision.selection && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {decision.selection === 'model' ? 'Chosen by the configured AI model'
+                      : decision.selection === 'native' ? 'Chosen by the native controller'
+                      : 'Chosen by a controller fallback'}
+                  </p>
+                )}
+                <DecisionSettings decision={decision} />
                 <p className="mt-1 text-xs text-muted-foreground">{decision.reason}</p>
+                {[...new Set(decision.reasons ?? [])].filter((reason) => reason !== decision.reason).length > 0 && (
+                  <div className="mt-2 space-y-1 text-xs" aria-label="Native validation findings">
+                    <p className="font-medium">Native validation</p>
+                    {[...new Set(decision.reasons ?? [])].filter((reason) => reason !== decision.reason).map((reason) => <p key={reason}>{reason}</p>)}
+                  </div>
+                )}
                 {decision.expected_evidence && (
                   <p className="mt-1 text-xs text-muted-foreground">
                     Expected: {decision.expected_evidence}

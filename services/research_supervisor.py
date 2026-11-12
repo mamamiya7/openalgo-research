@@ -740,10 +740,18 @@ def resume_frontier(store, owner, supervisor_id, *, conversation_id):
             cost = validation_reserve(option["remedy"])
             required.append(cost)
             if cost <= current["remaining_accounts"]:
-                selected = seed, diagnosis, conclusion
+                candidate = seed, diagnosis, conclusion, report
+                if selected is None:
+                    selected = candidate
+                else:
+                    from services.research_validation_scorecard import dominates
+
+                    # All reports above were verified against this supervisor.
+                    # Prefer a strict development-gate improvement, never raw
+                    # profit or recency alone; incomparable branches keep order.
+                    if dominates(report, selected[3]):
+                        selected = candidate
                 break
-        if selected:
-            break
     if selected is None:
         reason = (
             f"The remaining {current['remaining_accounts']} of512 accounts cannot fund the complete {min(required)}-account validation of supported changes on any checked branch; validation was not reduced"
@@ -765,8 +773,9 @@ def resume_frontier(store, owner, supervisor_id, *, conversation_id):
                 else "No untried supported funding/sizing repair or effect-relevant alternative remains on any fully checked branch; the blocked setup was not validated."
             )
         return {**current, "continuation_stop_reason": reason}
-    seed, diagnosis, conclusion = selected
+    seed, diagnosis, conclusion, selected_report = selected
     from database.research_db import ResearchJourney
+    from services.research_validation_scorecard import build as validation_scorecard
 
     with store.sessions.begin() as db:
         service.write_guard(db)
@@ -786,7 +795,8 @@ def resume_frontier(store, owner, supervisor_id, *, conversation_id):
                 "to": seed.result_artifact,
                 "after_proposals": len(saved["proposals"]),
                 "attempts_already_spent": 512 - current["remaining_accounts"],
-                "reason": "The latest branch has no affordable untested change; resume an earlier fully checked branch with a supported mechanism",
+                "reason": "Resume an affordable fully checked branch; comparable development-gate improvements take priority, while incomparable branches retain their recorded order. This is planning evidence, not validation acceptance.",
+                "validation_scorecard": validation_scorecard(selected_report),
             }
         )
         saved.update(
@@ -1235,6 +1245,24 @@ def advance(store, owner, supervisor_id, *, conversation_id):
             validate_settings(
                 current["research_context"]["contract"], completed_report["strategies"]
             )
+        retain_stronger_seed = False
+        if (
+            completed_report is not None
+            and conclusion.get("outcome") == "rejected"
+            and not conclusion.get("no_effect")
+            and current.get("continuation_policy") == ADAPTIVE_POLICY
+            and current.get("experiment_policy") == EXPERIMENT_POLICY
+            and current["validation_mode"] == "exploratory_only"
+            and not current.get("feasibility_only")
+        ):
+            from services.research_validation_scorecard import dominates
+
+            checked_seed = (
+                _parent(store, owner, current["root_job_id"])[2]
+                if current["seed_job_id"] == current["root_job_id"]
+                else service.read_artifact(store, current["source_result_artifact"])["result"]
+            )
+            retain_stronger_seed = dominates(checked_seed, completed_report)
         with store.sessions.begin() as db:
             service.write_guard(db)
             row, state = _owned(db, owner, supervisor_id, conversation_id)
@@ -1251,6 +1279,11 @@ def advance(store, owner, supervisor_id, *, conversation_id):
             )
             if conclusion.get("no_effect"):
                 item["no_effect"] = deepcopy(conclusion["no_effect"])
+            if retain_stronger_seed:
+                item["planning_branch"] = {
+                    "retained_job_id": current["seed_job_id"],
+                    "reason": "The existing checked development branch has strictly fewer failed gates without a gate regression; keep it as the planning source. The new attempt remains rejected and fully recorded.",
+                }
             if item.get("experiment"):
                 from services.research_experiments import (
                     CONFIGURATION_VERSION,
@@ -1283,6 +1316,7 @@ def advance(store, owner, supervisor_id, *, conversation_id):
                     and item["outcome"] == "rejected"
                     and state["validation_mode"] == "exploratory_only"
                     and conclusion.get("no_effect", {}).get("status") != "unchanged"
+                    and not retain_stronger_seed
                 ):
                     state["diagnosis"] = (
                         _reviewed_diagnosis(

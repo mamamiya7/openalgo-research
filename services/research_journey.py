@@ -439,6 +439,77 @@ def start(store, owner, identifier, data):
     return _response(store, owner, identifier)
 
 
+def _decision_settings(report):
+    """Small settings-only view; never promotes blocked-account performance."""
+    values = {(None, "capital"): report.get("summary", {}).get("initial_capital")}
+    for strategy in report.get("strategies", []):
+        identifier = strategy["id"]
+        config = strategy.get("config", {})
+        policy = strategy.get("execution_policy", {})
+        values[(identifier, "allocation_pct")] = strategy.get("allocation_pct")
+        for key in (
+            "order_size_pct", "hold_sessions", "hold_minutes", "stop_pct", "target_pct",
+            "trailing_enabled", "trailing_pct",
+        ):
+            values[(identifier, key)] = config.get(key)
+        for key in ("exit_mode", "allocation_mode", "atr_stop_multiple", "atr_target_multiple"):
+            values[(identifier, key)] = policy.get(key)
+    return values
+
+
+def _decision_display(store, owner, current, decision, proposal):
+    """Declare intent separately from settings bound to a completed native report."""
+    from services import research_supervisor as supervisor
+
+    experiment = proposal.get("experiment", proposal.get("playbook", {}))
+    item = {**decision, **proposal, **experiment}
+    if not proposal:
+        return item
+    item["settings_change"] = {"status": "proposed", "rows": []}
+    if not proposal.get("job_id"):
+        return item
+    try:
+        job = service.get_job(store, owner, proposal["job_id"])
+        if job.status != "completed" or not job.result_artifact:
+            return item
+        bundle = service.read_artifact(store, job.result_artifact)
+        if bundle.get("job_id") != job.id:
+            raise ValueError("The saved research job binding changed")
+        report = bundle["result"]
+        conclusion = supervisor._verified_conclusion(
+            report, current["id"], proposal["id"], current["root_job_id"], store, owner
+        )
+        if conclusion["outcome"] == "blocked":
+            item["settings_change"]["status"] = "blocked"
+            return item
+        seed = service.get_job(store, owner, proposal["seed_job_id"])
+        if seed.status != "completed" or seed.result_artifact != proposal["source_result_artifact"]:
+            raise ValueError("The saved comparison source changed")
+        source = service.read_artifact(store, seed.result_artifact)
+        if source.get("job_id") != seed.id:
+            raise ValueError("The saved comparison job binding changed")
+        if seed.id != current["root_job_id"]:
+            prior = next(p for p in current["proposals"] if p.get("job_id") == seed.id)
+            supervisor._verified_conclusion(
+                source["result"], current["id"], prior["id"], current["root_job_id"], store, owner
+            )
+        before, after = _decision_settings(source["result"]), _decision_settings(report)
+        names = {row["id"]: row.get("name") or row["id"] for row in report["strategies"]}
+        item["settings_change"] = {
+            "status": "verified",
+            "rows": [
+                {"strategy_id": identifier, "strategy": names.get(identifier, "Account"),
+                 "field": field, "before": before.get((identifier, field)), "after": value}
+                for (identifier, field), value in after.items()
+                if value != before.get((identifier, field))
+            ],
+        }
+    except (ValueError, LookupError, KeyError, StopIteration, TypeError):
+        # A stale/unbound report must never make intent look like a tested setting.
+        item["settings_change"] = {"status": "unavailable", "rows": []}
+    return item
+
+
 def status(store, owner, identifier):
     from services import research_supervisor as supervisor
 
@@ -482,7 +553,7 @@ def status(store, owner, identifier):
             store, owner, state["supervisor_id"], conversation_id="journey:" + identifier
         )
         decisions = [
-            {**d, **proposal, **proposal.get("experiment", proposal.get("playbook", {}))}
+            _decision_display(store, owner, current, d, proposal)
             for d in current.get("automation", {}).get("decisions", [])
             for proposal in [
                 next(

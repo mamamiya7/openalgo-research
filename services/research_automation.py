@@ -187,9 +187,12 @@ def _evidence(store, owner, current):
         from research.report_contract import fingerprint
         from services.research_configuration_context import build
         from services.research_supervisor_program import _economic_execution
+        from services.research_validation_scorecard import build as validation_scorecard
 
         history = []
-        for proposal in current["proposals"][-24:]:
+        retained_proposals = current["proposals"][-24:]
+        detailed_ids = {p["id"] for p in retained_proposals[-8:]}
+        for proposal in retained_proposals:
             settings = proposal["settings"]
             facts = {}
             if proposal.get("job_id") and proposal.get("outcome"):
@@ -200,6 +203,8 @@ def _evidence(store, owner, current):
                     ]
                     # Funding requests can differ from the actual operating point.
                     settings = native["strategies"]
+                    if proposal["id"] in detailed_ids:
+                        facts["validation_scorecard"] = validation_scorecard(native)
                     economic = (
                         _economic_execution(native)
                         if proposal.get("outcome") != "blocked"
@@ -258,6 +263,7 @@ def _evidence(store, owner, current):
                 "sample_adequacy",
             )
         }
+        evidence["validation_scorecard"] = validation_scorecard(report)
         if current.get("feasibility_only"):
             evidence["current_account"] = {
                 "initial_capital": report["summary"]["initial_capital"],

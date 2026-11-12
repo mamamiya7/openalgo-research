@@ -74,6 +74,101 @@ afterEach(() => {
 })
 
 describe('Reviewed automatic research journey', () => {
+  it('shows verified native funding values and rejection reasons without claiming acceptance', async () => {
+    vi.mocked(researchJourney.prepare).mockResolvedValue({
+      ...state(), phase: 'none', can_start: false,
+      decisions: [{
+        remedy: 'funding_and_size', selection: 'native', reason: 'Repair affordability.',
+        outcome: 'rejected', reasons: ['Nearby settings did not pass.', 'Nearby settings did not pass.'],
+        change: { axis: 'native_funding_and_size', current_capital: 100000 },
+        settings_change: { status: 'verified', rows: [
+          { strategy: 'Account', field: 'capital', before: 100000, after: 517000 },
+          { strategy: 'Stocks', field: 'order_size_pct', before: 3, after: 1.5 },
+        ] },
+      }],
+    })
+    render(<ResearchJourney experimentId="e" revision={1} enabled />)
+    fireEvent.click(await screen.findByText('Research decisions (1)'))
+    expect(await screen.findByText('Account · Capital: ₹1,00,000 → ₹5,17,000')).toBeVisible()
+    expect(screen.getByText('Stocks · Trade size: 3% → 1.5%')).toBeVisible()
+    expect(screen.getByText('Chosen by the native controller')).toBeVisible()
+    expect(screen.getAllByText('Nearby settings did not pass.')).toHaveLength(1)
+    expect(screen.queryByText(/Proposed:/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Best passing result saved')).not.toBeInTheDocument()
+  })
+  it('labels pending model changes as proposed until the saved native result is verified', async () => {
+    vi.mocked(researchJourney.prepare).mockResolvedValue({
+      ...state(), phase: 'researching', can_start: false,
+      decisions: [{
+        remedy: 'temporal_stability', selection: 'model', reason: 'Release capacity earlier.',
+        change: { axis: 'hold_sessions', from: 20, to: 10 },
+        settings_change: { status: 'proposed', rows: [] },
+      }],
+    })
+    render(<ResearchJourney experimentId="e" revision={1} enabled />)
+    fireEvent.click(await screen.findByText('Research decisions (1)'))
+    expect(await screen.findByText('Proposed: Holding sessions: 20 → 10.')).toBeVisible()
+    expect(screen.getByText('Chosen by the configured AI model')).toBeVisible()
+    expect(screen.queryByText('Tested settings · verified saved report')).not.toBeInTheDocument()
+    expect(researchJourney.start).not.toHaveBeenCalled()
+  })
+  it('shows tested holding, exit and trailing changes from a verified rejected report', async () => {
+    vi.mocked(researchJourney.prepare).mockResolvedValue({
+      ...state(), phase: 'none', can_start: false,
+      decisions: [{
+        remedy: 'lower_turnover', selection: 'model', reason: 'Reduce cost-sensitive exits.',
+        outcome: 'rejected', reasons: ['Nearby settings did not pass.'],
+        settings_change: { status: 'verified', rows: [
+          { strategy: 'Stocks', field: 'hold_sessions', before: 10, after: 40 },
+          { strategy: 'Stocks', field: 'exit_mode', before: 'percent', after: 'atr' },
+          { strategy: 'Stocks', field: 'trailing_enabled', before: true, after: false },
+        ] },
+      }],
+    })
+    render(<ResearchJourney experimentId="e" revision={1} enabled />)
+    fireEvent.click(await screen.findByText('Research decisions (1)'))
+    expect(screen.getByText('Stocks · Holding sessions: 10 → 40')).toBeVisible()
+    expect(screen.getByText('Stocks · Exit method: Percentage exits → ATR exits')).toBeVisible()
+    expect(screen.getByText('Stocks · Trailing stop: On → Off')).toBeVisible()
+    expect(screen.queryByText('Best passing result saved')).not.toBeInTheDocument()
+  })
+  it('retains no-effect and blocked outcomes without suggesting they passed', async () => {
+    vi.mocked(researchJourney.prepare).mockResolvedValue({
+      ...state(), phase: 'none', can_start: false,
+      decisions: [{
+        remedy: 'reduce_concentration', selection: 'model', reason: 'Test diversification.',
+        outcome: 'rejected', no_effect: { status: 'unchanged' },
+        reasons: ['The economic execution was unchanged.'],
+        settings_change: { status: 'verified', rows: [] },
+      }, {
+        remedy: 'funding_and_size', selection: 'native', reason: 'Test funding.', outcome: 'blocked',
+        change: { axis: 'native_funding_and_size', current_capital: 100000 },
+        settings_change: { status: 'blocked', rows: [] },
+      }],
+    })
+    render(<ResearchJourney experimentId="e" revision={1} enabled />)
+    fireEvent.click(await screen.findByText('Research decisions (2)'))
+    expect(await screen.findByText(/No change; further checks skipped/)).toBeVisible()
+    expect(screen.getByText('The economic execution was unchanged.')).toBeVisible()
+    expect(screen.getByText('Validation blocked. No verified tested-settings comparison.')).toBeVisible()
+    expect(screen.getByText('Proposed: estimate capital and trade size during native checks.')).toBeVisible()
+    expect(screen.queryByText('Best passing result saved')).not.toBeInTheDocument()
+  })
+  it('does not promote unverified saved values to tested settings', async () => {
+    vi.mocked(researchJourney.prepare).mockResolvedValue({
+      ...state(), phase: 'none', can_start: false,
+      decisions: [{
+        remedy: 'lower_turnover', selection: 'model', reason: 'Test exits.', outcome: 'rejected',
+        change: { axis: 'trailing_choice', from: 6.25, to: 9.4 },
+        settings_change: { status: 'unavailable', rows: [] },
+      }],
+    })
+    render(<ResearchJourney experimentId="e" revision={1} enabled />)
+    fireEvent.click(await screen.findByText('Research decisions (1)'))
+    expect(await screen.findByText('Proposed: Trailing distance: 6.25% → 9.4%.')).toBeVisible()
+    expect(screen.getByText('Saved settings could not be verified. Proposed values are not confirmed results.')).toBeVisible()
+    expect(screen.queryByText('Tested settings · verified saved report')).not.toBeInTheDocument()
+  })
   it('shows the saved reason research stopped without suggesting validation passed', async () => {
     vi.mocked(researchJourney.prepare).mockResolvedValue({
       ...state(),

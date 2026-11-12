@@ -1,5 +1,16 @@
 # OpenAlgo Research status
 
+## Decision feedback and visible changes — 12 November 2026
+
+Local preview.36 adds measured development scorecards to model decisions,
+conservative checked-branch comparison and verified actual parameter deltas in
+the journey. 254 focused backend checks and 122 frontend checks pass, alongside
+TypeScript and Vite. The exact engine/save/reopen test passed on retry after an
+initial Windows native-library policy block, with no security or validation
+changes. [Plan and constraints](DELIVERY_PLAN.md#decision-feedback-batch--12-november-2026),
+[release notes](releases/0.1.0-preview.36.md). Fresh saved-data qualification
+and installation receipts are private under `.agent-native/decision-quality/`.
+
 ## OpenAlgo host update — 12 November 2026
 
 Local preview.35 integrates OpenAlgo 2.0.3.3 and reviewed upstream main through

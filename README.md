@@ -14,7 +14,7 @@ The aim is to connect broker data, backtesting and optimization in one open-sour
 workflow. Start directly from a Chartink scanner with the Chrome extension, upload
 a CSV export, or reuse saved signals.
 
-**Local source update:** preview.35 / OpenAlgo 2.0.3.3, including reviewed fixes through 12 November. [Changes and reuse](docs/research/releases/0.1.0-preview.35.md).
+**Local source update:** preview.36 / OpenAlgo 2.0.3.3, including reviewed fixes through 12 November. [Changes and reuse](docs/research/releases/0.1.0-preview.36.md).
 
 **Published download: `0.1.0-preview.34` · OpenAlgo 2.0.3.2 · Windows and Linux**
 
