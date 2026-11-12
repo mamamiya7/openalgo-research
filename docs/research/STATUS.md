@@ -1,5 +1,16 @@
 # OpenAlgo Research status
 
+## OpenAlgo host update — 12 November 2026
+
+Local preview.35 integrates OpenAlgo 2.0.3.3 and reviewed upstream main through
+`be6c3bbe4887a615d66eeafe9dbf3b1294f29bc0`, including Fyers failure handling,
+cached instrument output, charts 2.7.1 and security fixes. Our strict history
+guards and all Research validation/search contracts are preserved. There is no
+new AI decision engine in this upstream interval. See [changes, direct reuse
+and qualification](releases/0.1.0-preview.35.md). The public download remains
+preview.34 until separately published. Private receipts are under
+`.agent-native/upstream35/`; no private data belongs in Git.
+
 ## OpenAlgo update and publication — 4 November 2026
 
 Preview.34 incorporates official OpenAlgo2.0.3.2 through

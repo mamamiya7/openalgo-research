@@ -88,12 +88,12 @@ def test_confirmed_empty_native_window_does_not_retry_or_sleep(native, reply):
         RuntimeError("synthetic transport failure"),
     ],
 )
-def test_exhausted_failure_never_returns_an_empty_dataframe(native, reply):
+def test_terminal_failure_never_returns_an_empty_dataframe(native, reply):
     invoke, calls, sleeps = native
     with pytest.raises(Exception, match="Error fetching historical data"):
         invoke([reply])
-    assert len(calls) == 4
-    assert sleeps == [2, 4, 6]
+    assert len(calls) == 1
+    assert sleeps == []
 
 
 @pytest.mark.parametrize(
@@ -112,18 +112,18 @@ def test_contradictory_or_malformed_empty_response_is_a_failure(native, reply):
     invoke, calls, sleeps = native
     with pytest.raises(Exception, match="Error fetching historical data"):
         invoke([reply])
-    assert len(calls) == 4
-    assert sleeps == [2, 4, 6]
+    assert len(calls) == 1
+    assert sleeps == []
 
 
 def test_successful_first_chunk_does_not_hide_failed_second_chunk(native):
     invoke, calls, sleeps = native
     with pytest.raises(Exception, match="Error fetching historical data"):
         invoke([{"s": "ok", "candles": [CANDLE]}, {"s": "error", "code": 503}], last="2025-11-03")
-    assert len(calls) == 5
+    assert len(calls) == 2
     assert len(set(calls)) == 2
     assert len(set(calls[1:])) == 1
-    assert sleeps == [2, 4, 6]
+    assert sleeps == []
 
 
 def test_confirmed_empty_second_chunk_preserves_valid_first_chunk(native):

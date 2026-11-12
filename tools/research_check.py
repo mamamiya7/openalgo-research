@@ -223,6 +223,8 @@ REQUIRED_RESEARCH_FILES = {
     "upgrade/migrate_qty_freeze_nov_2026.py",
     "upgrade/migrate_muhurat_2026.py",
     "upgrade/migrate_broker_keys.py",
+    "upgrade/migrate_alert_channels.py",
+    "upgrade/migrate_password_reset_grants.py",
     "upgrade/migrate_research_nse_calendar.py",
     "tools/research_runtime.py",
     "tools/research_check.py",

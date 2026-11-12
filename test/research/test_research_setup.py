@@ -241,6 +241,8 @@ def test_setup_orders_sync_check_migrations_preserves_settings_and_handles_space
     assert "upgrade/migrate_qty_freeze_nov_2026.py" in setup.MIGRATIONS
     assert "upgrade/migrate_muhurat_2026.py" in setup.MIGRATIONS
     assert "upgrade/migrate_broker_keys.py" in setup.MIGRATIONS
+    assert "upgrade/migrate_alert_channels.py" in setup.MIGRATIONS
+    assert "upgrade/migrate_password_reset_grants.py" in setup.MIGRATIONS
     # uv 0.12.5 reparses absolute Windows env-file paths containing spaces.
     # cwd is the installation above; a relative filename preserves that scope.
     assert all(command[command.index("--env-file") + 1] == ".env" for command in calls[1:])

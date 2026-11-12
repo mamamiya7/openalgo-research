@@ -1,10 +1,12 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ResearchLayout } from '@/components/layout/ResearchLayout'
 import Tools from '@/pages/Tools'
 import { useAuthStore } from '@/stores/authStore'
-import { AuthSync } from './AuthSync'
+import { useBrokerStore } from '@/stores/brokerStore'
+import { useThemeStore } from '@/stores/themeStore'
+import { AuthSync, syncBrokerSession } from './AuthSync'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -99,5 +101,58 @@ describe('Research credential authentication', () => {
       '/scanner-research'
     )
     expect(useAuthStore.getState().isAuthenticated).toBe(false)
+  })
+})
+
+function respondWith(body: unknown, ok = true) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => ({ ok, json: async () => body }) as Response)
+  )
+}
+
+describe('syncBrokerSession', () => {
+  beforeEach(() => {
+    useAuthStore.setState({ user: null, apiKey: null, isAuthenticated: false })
+    vi.spyOn(useBrokerStore.getState(), 'fetchCapabilities').mockResolvedValue()
+    vi.spyOn(useThemeStore.getState(), 'syncAppMode').mockResolvedValue()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('loads the API key, capabilities and app mode after an in-app login', async () => {
+    respondWith({
+      status: 'success',
+      logged_in: true,
+      user: 'trader',
+      broker: 'angel',
+      api_key: 'key-123',
+      active_sessions: 1,
+    })
+    await expect(syncBrokerSession()).resolves.toBe(true)
+    expect(useAuthStore.getState().apiKey).toBe('key-123')
+    expect(useAuthStore.getState().user?.broker).toBe('angel')
+    expect(useBrokerStore.getState().fetchCapabilities).toHaveBeenCalled()
+    expect(useThemeStore.getState().syncAppMode).toHaveBeenCalled()
+  })
+
+  it('changes nothing when the server reports no broker session', async () => {
+    respondWith({ status: 'success', authenticated: true, logged_in: false })
+    await expect(syncBrokerSession()).resolves.toBe(false)
+    expect(useAuthStore.getState().apiKey).toBeNull()
+  })
+
+  it('changes nothing when the request fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('offline')
+      })
+    )
+    await expect(syncBrokerSession()).resolves.toBe(false)
+    expect(useAuthStore.getState().apiKey).toBeNull()
   })
 })
