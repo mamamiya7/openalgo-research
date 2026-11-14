@@ -56,8 +56,12 @@ def test_staged_manifest_and_shards_match_default_without_writes_before_flush(st
         for key in staged.entries:
             assert staged.read(key) == immediate.read(key)
         restored = module.DevelopmentEvidenceWriter(
-            store, evidence, binding=binding, max_evaluations=32,
-            stage_publication=True, saved=staged.snapshot()
+            store,
+            evidence,
+            binding=binding,
+            max_evaluations=32,
+            stage_publication=True,
+            saved=staged.snapshot(),
         )
         assert restored.snapshot() == staged.snapshot()
         assert restored._pending == {}
@@ -122,7 +126,7 @@ def test_failed_flush_retains_all_pending_shards_for_exact_retry(store, monkeypa
     retain(writer, report, context, 1)
     pending = deepcopy(writer._pending)
     manifest = writer.snapshot()
-    original = module.save_artifact
+    original = module._save_owned_artifact
     calls = []
 
     def fail(selected, value):
@@ -133,14 +137,14 @@ def test_failed_flush_retains_all_pending_shards_for_exact_retry(store, monkeypa
             return "f" * 64
         return original(selected, value)
 
-    monkeypatch.setattr(module, "save_artifact", fail)
+    monkeypatch.setattr(module, "_save_owned_artifact", fail)
     with pytest.raises(ValueError, match="quota failure|identity changed"):
         with artifacts.artifact_publication(store):
             writer.publish_pending()
     assert writer._pending == pending and writer.snapshot() == manifest
     assert writer._pending_bytes == sum(map(len, pending.values()))
     assert artifacts._artifact_publication.get() is None
-    monkeypatch.setattr(module, "save_artifact", original)
+    monkeypatch.setattr(module, "_save_owned_artifact", original)
     with artifacts.artifact_publication(store):
         writer.publish_pending()
     assert writer._pending == {} and writer._pending_bytes == 0
@@ -154,8 +158,12 @@ def test_restore_does_not_trust_a_manifest_with_unpublished_pending_shards(store
     retain(writer, report, context)
     with pytest.raises(ValueError, match="missing or damaged"):
         module.DevelopmentEvidenceWriter(
-            store, evidence, binding=binding, max_evaluations=32,
-            stage_publication=True, saved=writer.snapshot()
+            store,
+            evidence,
+            binding=binding,
+            max_evaluations=32,
+            stage_publication=True,
+            saved=writer.snapshot(),
         )
 
 

@@ -88,6 +88,12 @@ def native_app(tmp_path, monkeypatch):
     modules["blueprints.mcp_http"] = mcp_module
     for name, module in modules.items():
         monkeypatch.setitem(sys.modules, name, module)
+    # Revocation lookups are real guard dependencies, not truthy MagicMocks.
+    # Their stored values belong to the isolated account fixture, never the
+    # developer's actual account database.
+    auth_db = modules["database.auth_db"]
+    auth_db.get_sessions_revoked_at = lambda user: None
+    auth_db.get_pre_broker_revoked_at = lambda user: None
     monkeypatch.setenv("APP_KEY", "isolated-research-app-key" * 3)
     monkeypatch.setenv("DATABASE_URL", "sqlite:///" + str(tmp_path / "native-account.db"))
     monkeypatch.setenv("RESEARCH_DATA_DIR", str(tmp_path / "research"))
@@ -130,6 +136,9 @@ def test_actual_native_registration_account_boundary_and_csrf(native_app):
     )  # public SPA shell; data remains authenticated
     with client.session_transaction() as session:
         session["user"] = "account-without-broker"
+    assert client.get("/scanner-research/api/jobs").status_code == 401
+    with client.session_transaction() as session:
+        session.update(user="account-without-broker", auth_at=datetime.now(UTC).isoformat())
     assert client.get("/scanner-research").status_code == 200
     assert client.get("/scanner-research/api/jobs").status_code == 200
     assert (
@@ -172,3 +181,16 @@ def test_actual_native_valid_account_retains_saved_access_with_expired_broker(na
         )
     assert client.get("/scanner-research/api/jobs").status_code == 200
     assert not revoked.called  # no broker request/token validity check is needed for saved research
+
+
+def test_actual_native_revoked_account_cannot_reopen_saved_research(native_app, monkeypatch):
+    app, _, _ = native_app
+    client = app.test_client()
+    signed_in = datetime.now(UTC) - timedelta(minutes=1)
+    with client.session_transaction() as session:
+        session.update(user="revoked-account", auth_at=signed_in.isoformat())
+    monkeypatch.setattr(sys.modules["database.auth_db"], "get_sessions_revoked_at",
+                        lambda user: signed_in + timedelta(seconds=1))
+    assert client.get("/scanner-research/api/jobs").status_code == 401
+    with client.session_transaction() as session:
+        assert "user" not in session

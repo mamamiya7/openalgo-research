@@ -225,10 +225,10 @@ def test_constraint_owned_bytes_are_hashed_after_all_fresh_checks(completed, mon
     owned, raw = captured[0]
     assert owned["ledger"] is not report["ledger"]
     assert result["report_evidence_id"] == hashlib.sha256(raw).hexdigest()
-    import numpy as np
-
     observed = owned["ledger"][1]["execution_details"]["gross_before"]
-    assert type(observed) is np.float64
+    original_value = report["ledger"][1]["execution_details"]["gross_before"]
+    assert type(observed) is float
+    assert observed == float(original_value)
     report["ledger"][0]["quantity"] += 1
     assert constraints.assess(report, frozen)["status"] == "invalid"
 

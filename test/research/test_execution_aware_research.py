@@ -278,7 +278,7 @@ def test_risk_limits_and_feature_binding_are_frozen_before_the_first_score():
         execute(changed, lambda *args, **kwargs: pytest.fail("Changed risk limits evaluated"))
     changed = deepcopy(value)
     changed["execution_features"]["id"] = "0" * 64
-    with pytest.raises(ValueError, match="recipe changed"):
+    with pytest.raises(ValueError, match="Saved execution features changed or exceed their bounds"):
         execute(changed, lambda *args, **kwargs: pytest.fail("Changed features evaluated"))
     changed = deepcopy(value["automatic_recipe"]["execution_research"])
     changed["strategies"][0]["portfolio_choices"][1]["fraction"] = 2

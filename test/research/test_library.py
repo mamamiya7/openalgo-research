@@ -444,7 +444,7 @@ def test_saved_setup_use_setup_launch_retains_current_automatic_decision(app, cl
         "history_policy": "available_history",
         "design_policy": "automatic_design_v1",
         "decision_policy": "automatic_decision_v1",
-        "action_policy": "automatic_actions_v2",
+        "action_policy": "automatic_actions_v3",
     }
     draft = draft_for(client)
     draft["optimizing"] = True

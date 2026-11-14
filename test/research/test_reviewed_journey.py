@@ -163,8 +163,11 @@ def test_review_http_does_not_launch_and_unknown_fields_cannot_widen_plan(app, c
     assert client.get(path).json["can_start"]
 
 
-def test_start_pins_exact_reviewed_snapshot_and_retry_does_not_reset_work(ready, monkeypatch):
-    from services import research_portfolio
+@pytest.mark.parametrize("channels", [[], ["slack"]])
+def test_start_pins_exact_reviewed_snapshot_and_retry_does_not_reset_work(
+    ready, monkeypatch, channels
+):
+    from services import research_notifications, research_portfolio
     from services.agent import builder
 
     store, state = ready
@@ -217,6 +220,9 @@ def test_start_pins_exact_reviewed_snapshot_and_retry_does_not_reset_work(ready,
         "plan_id": state["plan"]["id"],
         "request_id": "reviewed-snapshot-start",
     }
+    if channels:
+        request["notification_channels"] = channels
+    monkeypatch.setattr(research_notifications, "available", lambda channel: channel == "slack")
     started = journey.start(store, OWNER, identifier, request)
     assert started["phase"] == "researching" and len(validated) == 1
     job_id = started["run"]["job_id"]
@@ -230,6 +236,12 @@ def test_start_pins_exact_reviewed_snapshot_and_retry_does_not_reset_work(ready,
     assert receipt["policy_version"]
     again = journey.start(store, OWNER, identifier, request)
     assert again["run"]["job_id"] == job_id and len(validated) == 1
+    assert started["notification_channels"] == channels
+    assert len(again["notifications"]) == len(channels)
+    if channels:
+        changed_notifications = {k: v for k, v in request.items() if k != "notification_channels"}
+        with pytest.raises(ValueError, match="notification choices"):
+            journey.start(store, OWNER, identifier, changed_notifications)
     with store.sessions() as db:
         assert db.query(ResearchJob).count() == 2
 

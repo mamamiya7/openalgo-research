@@ -11,10 +11,30 @@ from sqlalchemy.engine import Connection
 from test_lease_read_checks import claimed  # noqa: F401 -- shared isolated fixture
 
 from database.research_db import ResearchJob, ResearchWorker
+from services import research_worker_sessions
 from services import scanner_research_worker as worker
 
 
-def test_each_callback_reads_both_live_fences_in_one_statement(claimed, monkeypatch):
+@pytest.fixture
+def observe_native_reads(monkeypatch):
+    """Observe the real pysqlite execution boundary, not SQLAlchemy events
+    which the already-compiled native fence intentionally bypasses.
+    """
+    original = research_worker_sessions._sqlite_fence
+
+    def install(callback):
+        def read(driver, sql, parameters):
+            callback(driver, sql)
+            return original(driver, sql, parameters)
+
+        monkeypatch.setattr(research_worker_sessions, "_sqlite_fence", read)
+
+    return install
+
+
+def test_each_callback_reads_both_live_fences_in_one_statement(
+    claimed, monkeypatch, observe_native_reads
+):
     monkeypatch.setattr(worker, "NETWORK_HEARTBEAT_SECONDS", 60)
     statements = []
 
@@ -22,6 +42,7 @@ def test_each_callback_reads_both_live_fences_in_one_statement(claimed, monkeypa
         statements.append(statement)
 
     event.listen(claimed.engine, "before_cursor_execute", record)
+    observe_native_reads(lambda driver, sql: statements.append(sql))
     try:
         with worker.network_lease(claimed, "owner", "job") as cancelled:
             for _ in range(100):
@@ -59,7 +80,9 @@ def test_next_callback_rejects_each_changed_or_missing_live_fence(claimed, monke
     assert not any(thread.name == "research-network-lease" for thread in threading.enumerate())
 
 
-def test_pausing_remains_live_and_local_stop_precedes_database_query(claimed, monkeypatch):
+def test_pausing_remains_live_and_local_stop_precedes_database_query(
+    claimed, monkeypatch, observe_native_reads
+):
     monkeypatch.setattr(worker, "NETWORK_HEARTBEAT_SECONDS", 60)
     stopping = [False]
     with pytest.raises(worker.Interrupted, match="Worker shutdown requested"):
@@ -75,6 +98,7 @@ def test_pausing_remains_live_and_local_stop_precedes_database_query(claimed, mo
                 pytest.fail("A local stop must be checked before accessing the database")
 
             event.listen(claimed.engine, "before_cursor_execute", unexpected_query)
+            observe_native_reads(unexpected_query)
             try:
                 cancelled()
             finally:
@@ -83,7 +107,7 @@ def test_pausing_remains_live_and_local_stop_precedes_database_query(claimed, mo
 
 
 def test_owner_read_connection_sees_independent_commits_without_read_transaction(
-    claimed, monkeypatch
+    claimed, monkeypatch, observe_native_reads
 ):
     monkeypatch.setattr(worker, "NETWORK_HEARTBEAT_SECONDS", 60)
     owner_thread = threading.get_ident()
@@ -96,6 +120,7 @@ def test_owner_read_connection_sees_independent_commits_without_read_transaction
             connections.append(connection.connection.dbapi_connection)
 
     event.listen(claimed.engine, "before_cursor_execute", record)
+    observe_native_reads(lambda driver, sql: connections.append(driver))
     try:
         with worker.network_lease(claimed, "owner", "job") as cancelled:
             for status in ("running", "pausing", "running"):
@@ -114,7 +139,9 @@ def test_owner_read_connection_sees_independent_commits_without_read_transaction
         event.remove(claimed.engine, "before_cursor_execute", record)
 
 
-def test_parallel_callbacks_and_monitor_never_share_owner_connection(claimed, monkeypatch):
+def test_parallel_callbacks_and_monitor_never_share_owner_connection(
+    claimed, monkeypatch, observe_native_reads
+):
     monkeypatch.setattr(worker, "NETWORK_HEARTBEAT_SECONDS", 0.01)
     owner_thread = threading.get_ident()
     owners = {}
@@ -126,6 +153,9 @@ def test_parallel_callbacks_and_monitor_never_share_owner_connection(claimed, mo
         )
 
     event.listen(claimed.engine, "before_cursor_execute", record)
+    observe_native_reads(
+        lambda driver, sql: owners.setdefault(threading.get_ident(), set()).add(id(driver))
+    )
     try:
         with worker.network_lease(claimed, "owner", "job") as cancelled:
             assert cancelled() is False
@@ -205,7 +235,7 @@ def test_owner_connection_is_closed_on_each_error_path(claimed, monkeypatch, fai
     elif failure == "autocommit_setup":
         monkeypatch.setattr(Connection, "execution_options", fail)
     elif failure == "query":
-        event.listen(claimed.engine, "before_cursor_execute", fail)
+        monkeypatch.setattr(research_worker_sessions, "_sqlite_fence", fail)
     event.listen(claimed.engine, "checkout", checkout)
     event.listen(claimed.engine, "checkin", checkin)
     try:
@@ -218,6 +248,4 @@ def test_owner_connection_is_closed_on_each_error_path(claimed, monkeypatch, fai
     finally:
         event.remove(claimed.engine, "checkout", checkout)
         event.remove(claimed.engine, "checkin", checkin)
-        if failure == "query":
-            event.remove(claimed.engine, "before_cursor_execute", fail)
     assert not any(thread.name == "research-network-lease" for thread in threading.enumerate())

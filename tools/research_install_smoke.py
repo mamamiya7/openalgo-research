@@ -36,6 +36,35 @@ def digest(path):
         return hashlib.file_digest(source, "sha256").hexdigest()
 
 
+def failure_diagnostics(log_path, *, stage, exit_code):
+    """Publish safe structure, never arbitrary log lines or generated secrets."""
+    from tools.research_native_ready import classify_failure
+
+    log_path = Path(log_path)
+    with log_path.open("rb") as source:
+        source.seek(max(0, log_path.stat().st_size - 16384))
+        tail = source.read(16384).decode("utf-8", errors="replace")
+    types = re.findall(r"^([A-Za-z_][A-Za-z0-9_.]*(?:Error|Exception)):", tail, re.MULTILINE)
+    frames = [
+        {"file": Path(path.replace("\\", "/")).name, "line": int(line), "function": function}
+        for path, line, function in re.findall(
+            r'^\s*File "([^"\n]+\.py)", line (\d+), in ([A-Za-z_][A-Za-z0-9_]*)\s*$',
+            tail, re.MULTILINE,
+        )[-8:]
+    ]
+    diagnostic = {
+        "stage": stage, "exit_code": exit_code,
+        "exception_type": types[-1] if types else None,
+        "classification": classify_failure(tail)["code"],
+        "traceback_frames": frames,
+        "private_log": log_path.name,
+        "log_sha256": digest(log_path),
+        "raw_log_or_exception_message_included": False,
+    }
+    (log_path.parent / "diagnostics.json").write_text(json.dumps(diagnostic, indent=2), encoding="utf-8")
+    return diagnostic
+
+
 def fresh_directory(path):
     """No guessed working folders, existing contents, links or filesystem roots."""
     path = Path(path)
@@ -122,6 +151,7 @@ def validate_archive(bundle, *, expected_version=None):
         "Setup.cmd",
         "setup-research.sh",
         "tools/research_install_smoke.py",
+        "tools/research_native_ready.py",
         "tools/research_desktop.py",
         "frontend/dist/index.html",
         "research/distribution.json",
@@ -287,8 +317,11 @@ class OwnedCommand:
                 if time.monotonic() >= deadline:
                     raise
         if code:
+            diagnostic = failure_diagnostics(
+                self.log.name, stage=Path(self.log.name).stem, exit_code=code
+            )
             raise RuntimeError(
-                f"Installation check failed (exit {code}); inspect {Path(self.log.name).name}"
+                f"Installation check failed (exit {code}, {diagnostic['exception_type'] or diagnostic['classification']}); inspect {Path(self.log.name).name} and diagnostics.json"
             )
 
     @staticmethod
@@ -416,6 +449,21 @@ def _check(value, message):
         raise RuntimeError(message)
 
 
+def verify_fresh_broker_cards(data):
+    """The native broker screen lists an unconfigured provider, not a live login."""
+    _check(isinstance(data, dict) and data.get("logged_in") is None,
+           "A fresh installation must not have a logged-in broker")
+    cards = data.get("brokers", [])
+    _check(isinstance(cards, list), "Native Broker Configuration returned invalid broker cards")
+    fyers = next((row for row in cards if row.get("id") == "fyers"), None)
+    _check(fyers is not None, "Native Broker Configuration did not list the selected broker")
+    _check(not fyers.get("configured") and not fyers.get("active")
+           and fyers.get("source") is None
+           and isinstance(fyers.get("fields"), list) and bool(fyers["fields"])
+           and all(not field.get("saved") for field in fyers["fields"]),
+           "A fresh broker card unexpectedly contains keys or a live session")
+
+
 def exercise(directory, ports):
     """Executed only by the newly installed interpreter, using its own packages."""
     import requests
@@ -532,12 +580,7 @@ def exercise(directory, ports):
                         get("/scanner-research/api/health")["worker_state"] == "online",
                         "Worker is not online",
                     )
-                    broker = get("/api/broker/credentials")["data"]
-                    _check(
-                        broker["current_broker"] == "fyers"
-                        and broker["broker_api_key_raw_length"] == 0,
-                        "Profile broker setup endpoint failed",
-                    )
+                    verify_fresh_broker_cards(get("/api/broker/config/list")["data"])
                     checks["fresh_account_login_and_broker_profile"] = True
                     seed_prices(directory, config)
                     source = post(

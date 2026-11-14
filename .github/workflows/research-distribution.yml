@@ -245,6 +245,10 @@ jobs:
           src/hooks/useResearchNavigation.test.tsx
           src/pages/ResearchLibrary.test.tsx
           src/pages/ScannerResearch.test.tsx
+          src/components/research/ResearchJourney.test.tsx
+          src/components/research/savedTradeChartFeed.test.ts
+          src/pages/BrokerSelect.test.tsx
+          src/pages/BrokerConfig.test.tsx
       - run: uv run --no-sync python tools/research_release.py --output .agent-native/release/ci
       - name: Check and package the Chartink browser connector
         working-directory: extensions/chartink
@@ -309,7 +313,9 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: fresh-install-${{ matrix.os }}
-          path: ${{ runner.temp }}/OpenAlgo Research Fresh Install/tmp/install-smoke/receipt.json
+          path: |
+            ${{ runner.temp }}/OpenAlgo Research Fresh Install/tmp/install-smoke/receipt.json
+            ${{ runner.temp }}/OpenAlgo Research Fresh Install/tmp/install-smoke/diagnostics.json
           if-no-files-found: warn
           retention-days: 14
 

@@ -174,5 +174,5 @@ def forget_webhook(channel: AlertChannel) -> ChannelSettings:
 
 
 def clear_cache() -> None:
-    """Forget every cached setting. For tests."""
+    """Refresh settings after cross-process changes, or reset isolated tests."""
     _cache.invalidate()

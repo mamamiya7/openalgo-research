@@ -458,6 +458,22 @@ class ResearchJourney(Base):
     updated_at = Column(Float, nullable=False)
 
 
+class ResearchNotification(Base):
+    """Opted-in per-run delivery ledger, shared by web admission and the worker."""
+
+    __tablename__ = "research_notifications"
+    id = Column(String(64), primary_key=True)
+    owner = Column(String(255), nullable=False, index=True)
+    experiment_id = Column(String(32), nullable=False, index=True)
+    request_id = Column(String(128), nullable=False)
+    channel = Column(String(20), nullable=False)
+    status = Column(String(20), nullable=False, index=True)
+    worker = Column(String(64))
+    detail = Column(String(160))
+    created_at = Column(Float, nullable=False)
+    updated_at = Column(Float, nullable=False, index=True)
+
+
 class ResearchStore:
     def __init__(self, root=None):
         self.root = Path(root or os.getenv("RESEARCH_DATA_DIR", "research_data")).resolve()

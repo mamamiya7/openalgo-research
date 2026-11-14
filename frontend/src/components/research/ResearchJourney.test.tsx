@@ -1,11 +1,23 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { type AlertChannel, alertsApi } from '@/api/alerts'
 import { type JourneyState, researchJourney } from '@/api/researchJourney'
 import { ResearchJourney } from './ResearchJourney'
 
 vi.mock('@/api/researchJourney', () => ({
   researchJourney: { prepare: vi.fn(), get: vi.fn(), updatePlan: vi.fn(), start: vi.fn() },
 }))
+vi.mock('@/api/alerts', () => ({
+  alertsApi: { list: vi.fn(), update: vi.fn(), saveWebhook: vi.fn(), sendTest: vi.fn() },
+}))
+
+function noticeChannel(name: 'slack' | 'discord', enabled = true, configured = true): AlertChannel {
+  return {
+    name, label: name === 'slack' ? 'Slack' : 'Discord', setup_path: `/${name}`,
+    uses_webhook: true, enabled, categories: [],
+    status: { configured, ready: configured, detail: configured ? 'Configured' : 'No webhook' },
+  }
+}
 
 function state(): JourneyState {
   return {
@@ -59,6 +71,7 @@ function state(): JourneyState {
 }
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.mocked(alertsApi.list).mockResolvedValue({ categories: [], channels: [] })
   vi.mocked(researchJourney.prepare).mockResolvedValue(state())
   vi.mocked(researchJourney.get).mockResolvedValue(state())
   vi.mocked(researchJourney.updatePlan).mockResolvedValue(state())
@@ -74,6 +87,105 @@ afterEach(() => {
 })
 
 describe('Reviewed automatic research journey', () => {
+  it('keeps even configured notifications off by default and omits them from Start', async () => {
+    vi.mocked(alertsApi.list).mockResolvedValue({
+      categories: [], channels: [noticeChannel('slack'), noticeChannel('discord')],
+    })
+    render(<ResearchJourney experimentId="e" revision={1} enabled />)
+    const slack = await screen.findByRole('checkbox', { name: 'Slack' })
+    const discord = screen.getByRole('checkbox', { name: 'Discord' })
+    await waitFor(() => expect(slack).toBeEnabled())
+    expect(slack).not.toBeChecked()
+    expect(discord).not.toBeChecked()
+    expect(screen.getByRole('link', { name: 'Configure channels in Alerts' })).toHaveAttribute('href', '/alerts')
+    fireEvent.click(screen.getByRole('button', { name: 'Start research' }))
+    await waitFor(() => expect(researchJourney.start).toHaveBeenCalledTimes(1))
+    expect(researchJourney.start).toHaveBeenCalledWith('e', expect.not.objectContaining({ notification_channels: expect.anything() }), expect.any(AbortSignal))
+    expect(alertsApi.update).not.toHaveBeenCalled()
+    expect(alertsApi.saveWebhook).not.toHaveBeenCalled()
+    expect(alertsApi.sendTest).not.toHaveBeenCalled()
+  })
+  it('sends only the channels deliberately selected by the user', async () => {
+    vi.mocked(alertsApi.list).mockResolvedValue({
+      categories: [], channels: [noticeChannel('slack'), noticeChannel('discord')],
+    })
+    render(<ResearchJourney experimentId="e" revision={1} enabled />)
+    const slack = await screen.findByRole('checkbox', { name: 'Slack' })
+    await waitFor(() => expect(slack).toBeEnabled())
+    fireEvent.click(slack)
+    expect(slack).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Discord' })).not.toBeChecked()
+    fireEvent.click(screen.getByRole('button', { name: 'Start research' }))
+    await waitFor(() => expect(researchJourney.start).toHaveBeenCalledWith('e', expect.objectContaining({ notification_channels: ['slack'] }), expect.any(AbortSignal)))
+    expect(alertsApi.update).not.toHaveBeenCalled()
+    expect(alertsApi.sendTest).not.toHaveBeenCalled()
+  })
+  it('cannot select disabled or unconfigured channels but can still start research', async () => {
+    vi.mocked(alertsApi.list).mockResolvedValue({
+      categories: [], channels: [noticeChannel('slack', false), noticeChannel('discord', true, false)],
+    })
+    render(<ResearchJourney experimentId="e" revision={1} enabled />)
+    const slack = await screen.findByRole('checkbox', { name: /Slack/ })
+    expect(slack).toBeDisabled()
+    expect(screen.getByRole('checkbox', { name: /Discord/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Start research' })).toBeEnabled()
+  })
+  it('does not carry notification consent into another study', async () => {
+    vi.mocked(alertsApi.list).mockResolvedValue({
+      categories: [], channels: [noticeChannel('slack')],
+    })
+    const view = render(<ResearchJourney experimentId="first" revision={1} enabled />)
+    const slack = await screen.findByRole('checkbox', { name: 'Slack' })
+    await waitFor(() => expect(slack).toBeEnabled())
+    fireEvent.click(slack)
+    expect(slack).toBeChecked()
+    view.rerender(<ResearchJourney experimentId="second" revision={1} enabled />)
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Slack' })).toBeEnabled())
+    expect(screen.getByRole('checkbox', { name: 'Slack' })).not.toBeChecked()
+    expect(researchJourney.start).not.toHaveBeenCalled()
+    expect(alertsApi.update).not.toHaveBeenCalled()
+  })
+  it('a failed notification readiness request never enables a channel or blocks research', async () => {
+    vi.mocked(alertsApi.list).mockRejectedValue(new Error('Offline'))
+    render(<ResearchJourney experimentId="e" revision={1} enabled />)
+    await screen.findByText('Configure channels in Alerts')
+    expect(screen.getByRole('checkbox', { name: /Slack/ })).toBeDisabled()
+    expect(screen.getByRole('checkbox', { name: /Discord/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Start research' })).toBeEnabled()
+    expect(alertsApi.sendTest).not.toHaveBeenCalled()
+  })
+  it('shows uncertain delivery honestly without retrying or changing channel settings', async () => {
+    vi.mocked(researchJourney.prepare).mockResolvedValue({
+      ...state(), phase: 'none', can_start: false,
+      notification_channels: ['slack'],
+      notifications: [{ channel: 'slack', status: 'uncertain', detail: 'The request outcome was not confirmed.' }],
+    })
+    render(<ResearchJourney experimentId="e" revision={1} enabled />)
+    expect(await screen.findByText(/Delivery uncertain; not automatically resent/)).toBeVisible()
+    expect(researchJourney.start).not.toHaveBeenCalled()
+    expect(alertsApi.update).not.toHaveBeenCalled()
+    expect(alertsApi.sendTest).not.toHaveBeenCalled()
+  })
+  it('reads pending delivery after research completes without rerunning research or sending alerts', async () => {
+    vi.useFakeTimers()
+    vi.mocked(researchJourney.prepare).mockResolvedValue({
+      ...state(), phase: 'none', can_start: false,
+      notifications: [{ channel: 'discord', status: 'watching' }],
+    })
+    vi.mocked(researchJourney.get).mockResolvedValue({
+      ...state(), phase: 'none', can_start: false,
+      notifications: [{ channel: 'discord', status: 'sent' }],
+    })
+    render(<ResearchJourney experimentId="e" revision={1} enabled />)
+    await act(async () => {})
+    expect(screen.getByText(/Will notify when finished/)).toBeVisible()
+    await act(async () => { await vi.advanceTimersByTimeAsync(2500) })
+    expect(screen.getByText(/Completion notification sent/)).toBeVisible()
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000) })
+    expect(researchJourney.get).toHaveBeenCalledTimes(1)
+    expect(researchJourney.start).not.toHaveBeenCalled()
+    expect(alertsApi.sendTest).not.toHaveBeenCalled()
+  })
   it('shows verified native funding values and rejection reasons without claiming acceptance', async () => {
     vi.mocked(researchJourney.prepare).mockResolvedValue({
       ...state(), phase: 'none', can_start: false,

@@ -330,6 +330,7 @@ def _review_ready(store, owner, identifier):
 
 def start(store, owner, identifier, data):
     from database import agent_db
+    from services import research_notifications as notifications
     from services.agent import builder
     from services.research_portfolio import (
         resolve_inputs,
@@ -337,7 +338,12 @@ def start(store, owner, identifier, data):
         validate_submission,
     )
 
-    library._object(data, {"revision", "plan_id", "request_id"}, "reviewed research start")
+    library._object(
+        data,
+        {"revision", "plan_id", "request_id", "notification_channels"},
+        "reviewed research start",
+    )
+    notification_channels = notifications.validate(data.get("notification_channels"))
     if not isinstance(data.get("request_id"), str) or not re.fullmatch(
         r"[A-Za-z0-9_-]{8,128}", data["request_id"]
     ):
@@ -350,6 +356,8 @@ def start(store, owner, identifier, data):
             and state.get("start_request") == data["request_id"]
         )
         if repeated:
+            if notification_channels != state.get("notification_channels", []):
+                raise ValueError("This research request already has different notification choices")
             plan, draft = state["approved_plan"], json.loads(parent.draft)
         else:
             library._revision(parent, data.get("revision"))
@@ -372,6 +380,8 @@ def start(store, owner, identifier, data):
                 raise ValueError("Prepared data changed; review the current plan")
     if repeated:
         return _response(store, owner, identifier)
+    if any(not notifications.available(channel) for channel in notification_channels):
+        raise ValueError("Enable the chosen notification channel in Alerts before starting")
     prepared = service.read_artifact(store, prepared_job.result_artifact)
     prepared_job_artifact = prepared_job.result_artifact
     if prepared.get("inputs_artifact") != plan["inputs_artifact"]:
@@ -398,7 +408,10 @@ def start(store, owner, identifier, data):
         "calculation": None,
     }
     launch = {"revision": data["revision"], "request_id": data["request_id"]}
-    token, request_hash = library._request({**launch, "experiment_id": identifier}, "run")
+    request_body = {**launch, "experiment_id": identifier}
+    if notification_channels:
+        request_body["notification_channels"] = notification_channels
+    token, request_hash = library._request(request_body, "run")
 
     def guard(db, parent):
         row, current = _owned(db, owner, identifier)
@@ -419,9 +432,11 @@ def start(store, owner, identifier, data):
             approved_plan=deepcopy(plan),
             model_id=model.id,
             model_name=model.litellm_id,
+            notification_channels=notification_channels,
             error=None,
         )
         _put(row, current, "researching")
+        notifications.register(db, owner, identifier, data["request_id"], notification_channels)
 
     library._enqueue(
         store,
@@ -448,8 +463,13 @@ def _decision_settings(report):
         policy = strategy.get("execution_policy", {})
         values[(identifier, "allocation_pct")] = strategy.get("allocation_pct")
         for key in (
-            "order_size_pct", "hold_sessions", "hold_minutes", "stop_pct", "target_pct",
-            "trailing_enabled", "trailing_pct",
+            "order_size_pct",
+            "hold_sessions",
+            "hold_minutes",
+            "stop_pct",
+            "target_pct",
+            "trailing_enabled",
+            "trailing_pct",
         ):
             values[(identifier, key)] = config.get(key)
         for key in ("exit_mode", "allocation_mode", "atr_stop_multiple", "atr_target_multiple"):
@@ -498,8 +518,13 @@ def _decision_display(store, owner, current, decision, proposal):
         item["settings_change"] = {
             "status": "verified",
             "rows": [
-                {"strategy_id": identifier, "strategy": names.get(identifier, "Account"),
-                 "field": field, "before": before.get((identifier, field)), "after": value}
+                {
+                    "strategy_id": identifier,
+                    "strategy": names.get(identifier, "Account"),
+                    "field": field,
+                    "before": before.get((identifier, field)),
+                    "after": value,
+                }
                 for (identifier, field), value in after.items()
                 if value != before.get((identifier, field))
             ],
@@ -511,8 +536,10 @@ def _decision_display(store, owner, current, decision, proposal):
 
 
 def status(store, owner, identifier):
+    from services import research_notifications
     from services import research_supervisor as supervisor
 
+    notification_status = []
     with store.sessions() as db:
         parent = library._owned(db, owner, identifier)
         row = db.get(ResearchJourney, identifier)
@@ -533,6 +560,10 @@ def status(store, owner, identifier):
             raise LookupError("Research journey not found")
         else:
             phase, state, revision = row.phase, json.loads(row.state), parent.revision
+            if state.get("notification_channels"):
+                notification_status = research_notifications.status(
+                    db, owner, identifier, state.get("start_request")
+                )
     if row is None:
         empty["preparation"] = preparation.status(store, owner, identifier)
         return empty
@@ -596,6 +627,8 @@ def status(store, owner, identifier):
         and bool(state.get("plan"))
         and revision == state["plan"]["revision"],
         "error": state.get("error"),
+        "notification_channels": state.get("notification_channels", []),
+        "notifications": notification_status,
     }
 
 

@@ -237,7 +237,8 @@ def test_setup_orders_sync_check_migrations_preserves_settings_and_handles_space
     assert "--managed-python" in calls[0]
     assert "UV_PYTHON_PREFERENCE" not in setup.clean_environment(root)
     assert calls[1][-1] == "tools/research_check.py"
-    assert [command[-1] for command in calls[2:]] == list(setup.MIGRATIONS)
+    assert calls[2][-1] == "tools/research_native_ready.py"
+    assert [command[-1] for command in calls[3:]] == list(setup.MIGRATIONS)
     assert "upgrade/migrate_qty_freeze_nov_2026.py" in setup.MIGRATIONS
     assert "upgrade/migrate_muhurat_2026.py" in setup.MIGRATIONS
     assert "upgrade/migrate_broker_keys.py" in setup.MIGRATIONS
@@ -283,7 +284,8 @@ def test_signed_windows_runtime_prepares_same_venv_before_exact_base_sync(instal
     ]
     assert all("--managed-python" not in row for row in calls)
     assert calls[2][-1] == "tools/research_check.py"
-    assert [row[-1] for row in calls[3:]] == list(setup.MIGRATIONS)
+    assert calls[3][-1] == "tools/research_native_ready.py"
+    assert [row[-1] for row in calls[4:]] == list(setup.MIGRATIONS)
     assert (root / ".env").read_bytes() == original
 
 
@@ -391,6 +393,31 @@ def test_windows_application_control_failure_is_identified_without_policy_change
             root / "policy-test.log",
             "Checking compatibility",
         )
+
+
+def test_blocked_native_library_is_not_reported_as_a_python_launcher_problem(install):
+    root, _ = install
+    with pytest.raises(setup.SetupError, match="compiled research library.*Python started"):
+        setup.run_step(
+            [sys.executable, "-c", "print('Cannot load libllvmlite.dll: Application Control policy blocked it (os error 4551)'); raise SystemExit(2)"],
+            root, root / "native-policy-test.log", "Checking native research libraries",
+        )
+
+
+def test_native_readiness_refusal_precedes_migrations_and_keeps_configuration(install, monkeypatch):
+    root, uv = install
+    original = b"FLASK_PORT='59991'\nAPP_KEY='keep'\n"
+    (root / ".env").write_bytes(original)
+    monkeypatch.setattr(setup, "check_not_running", lambda *a, **k: None)
+    calls = []
+    def runner(command, *args, **kwargs):
+        calls.append(command)
+        if command[-1] == "tools/research_native_ready.py":
+            raise setup.SetupError("Windows Application Control blocked a compiled research library")
+    with pytest.raises(setup.SetupError, match="compiled research library"):
+        setup.setup(root, uv, no_launch=True, runner=runner)
+    assert not any(command[-1] in setup.MIGRATIONS for command in calls)
+    assert (root / ".env").read_bytes() == original
 
 
 def test_entry_scripts_quote_paths_and_start_does_not_install():

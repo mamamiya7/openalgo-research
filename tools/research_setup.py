@@ -361,15 +361,17 @@ def run_step(
     with log_path.open("ab") as output:
         output.write(f"\n--- {label} ---\n".encode())
         output.flush()
-        with subprocess.Popen(
-            command,
-            cwd=root,
-            env=clean_environment(root),
-            stdout=output,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL,
-            **options,
-        ) as child:
+        try:
+            process = subprocess.Popen(
+                command, cwd=root, env=clean_environment(root), stdout=output,
+                stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, **options,
+            )
+        except OSError as error:
+            from tools.research_native_ready import classify_failure
+
+            diagnosis = classify_failure("", error)
+            raise SetupError(f"{diagnosis['message']} Details: {log_path}.") from error
+        with process as child:
             try:
                 started = time.monotonic()
                 deadline = started + timeout
@@ -391,10 +393,11 @@ def run_step(
                     with log_path.open("rb") as receipt:
                         receipt.seek(max(0, log_path.stat().st_size - 8192))
                         tail = receipt.read(8192).decode("utf-8", errors="replace")
-                    if "os error 4551" in tail or "Application Control policy has blocked" in tail:
-                        raise SetupError(
-                            f"Windows Application Control blocked the installed Python executable. Setup cannot change that policy. Install signed 64-bit Python 3.12 from python.org and run Setup again, or review the block with your device administrator. Details: {log_path}."
-                        )
+                    from tools.research_native_ready import classify_failure
+
+                    diagnosis = classify_failure(tail)
+                    if diagnosis["code"] != "step_failed":
+                        raise SetupError(f"{diagnosis['message']} Details: {log_path}.")
                     raise SetupError(
                         f"{label} did not finish (exit {code}). See {log_path}. For downloads, check your internet connection and free disk space, then run Setup again."
                     )
@@ -492,6 +495,10 @@ def setup(
             log_path,
             "Checking compatibility",
             timeout=180,
+        )
+        runner(
+            [*command, "tools/research_native_ready.py"],
+            root, log_path, "Checking native research libraries", timeout=180,
         )
         print("[5/6] Preparing the native database tables...")
         (root / "db").mkdir(exist_ok=True)

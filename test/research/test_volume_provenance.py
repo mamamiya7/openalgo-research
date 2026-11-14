@@ -1,7 +1,9 @@
 """Observed-volume provenance is exact evidence, not reconstructed liquidity."""
 
 import copy
+import hashlib
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -72,6 +74,49 @@ def test_completed_twenty_sessions_are_an_explicit_model_not_strict_admission():
     assert (
         "Not point-in-time corporate-action or executable-liquidity proof." in result["limitations"]
     )
+
+
+@pytest.mark.parametrize("digest", sorted(volume.REVIEWED_ADAPTER_SHA256S))
+def test_reviewed_current_and_historical_producers_remain_qualified(digest):
+    records = sources()
+    for record in records.values():
+        record["adapter_sha256"] = digest
+        reseal(record)
+    assert assess(records)["status"] == "available"
+    rows = [candle(day) for day in calendar()["sessions"]]
+    captured = volume.capture_rows(
+        "AAA",
+        rows,
+        dict(zip(calendar()["sessions"], rows, strict=True)),
+        broker="fyers",
+        adapter_sha256=digest,
+        captured_at="2026-11-14T00:00:00+00:00",
+    )
+    assert all(record["reviewed_profile"] == volume.PROFILE for record in captured.values())
+    assert assess(captured)["status"] == "available"
+
+
+def test_current_adapter_exact_lf_and_crlf_sources_are_reviewed():
+    raw = (Path(__file__).resolve().parents[2] / "broker/fyers/api/data.py").read_bytes()
+    lf = raw.replace(b"\r\n", b"\n")
+    for representation in (lf, lf.replace(b"\n", b"\r\n")):
+        assert hashlib.sha256(representation).hexdigest() in volume.REVIEWED_ADAPTER_SHA256S
+    assert NativeVolumeProvenance._adapter_digest("fyers") in volume.REVIEWED_ADAPTER_SHA256S
+
+
+def test_unreviewed_producer_cannot_capture_qualified_share_volume():
+    rows = [candle(day) for day in calendar()["sessions"]]
+    records = volume.capture_rows(
+        "AAA",
+        rows,
+        dict(zip(calendar()["sessions"], rows, strict=True)),
+        broker="fyers",
+        adapter_sha256="0" * 64,
+        captured_at="2026-11-14T00:00:00+00:00",
+    )
+    assert all(record["reviewed_profile"] is None for record in records.values())
+    assert all(record["volume_unit"] == "unknown" for record in records.values())
+    assert assess(records)["status"] == "unavailable"
 
 
 def test_entry_and_future_volume_cannot_change_assessment():

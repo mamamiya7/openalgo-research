@@ -3,10 +3,10 @@
 import copy
 
 import pytest
+from test_vectorbt_portfolio import DAYS, candle, signal, snapshot, strategy
 
 from research.connectors import vectorbt_portfolio as adapter
 from research.report_contract import fingerprint
-from test.research.test_vectorbt_portfolio import DAYS, candle, signal, snapshot, strategy
 
 
 @pytest.mark.timeout(240)
@@ -44,7 +44,7 @@ def test_native_empty_hook_bodies_preserve_every_account_field(monkeypatch, minu
         return original(*args, **kwargs)
 
     monkeypatch.setattr(vbt.Portfolio, "from_order_func", exact_python)
-    with adapter.discard_trial_analysis():
+    with adapter.python_reference(), adapter.discard_trial_analysis():
         actual = adapter.evaluate(copy.deepcopy(rows), copy.deepcopy(prices), 1000)
     assert observed
 
@@ -54,7 +54,7 @@ def test_native_empty_hook_bodies_preserve_every_account_field(monkeypatch, minu
         return original(*args, **kwargs)
 
     monkeypatch.setattr(vbt.Portfolio, "from_order_func", compiled_defaults)
-    with adapter.discard_trial_analysis():
+    with adapter.python_reference(), adapter.discard_trial_analysis():
         expected = adapter.evaluate(copy.deepcopy(rows), copy.deepcopy(prices), 1000)
     assert fingerprint(actual) == fingerprint(expected)
     assert actual == expected

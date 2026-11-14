@@ -18,6 +18,17 @@ MODEL_VERSION = "research-provider-observed-participation-v1"
 PROFILE = "fyers-nse-cash-equity-observed-shares-v1"
 ADAPTER = "broker.fyers.api.data.BrokerData.get_history"
 REVIEWED_ADAPTER_SHA256 = "0e38f1a3e96e04fe4159e753319837f7bc6db84880ed982564721d1c42daa3c2"
+# Reviewed fd6e8b8f5 removes redundant chunk retries, retaining NSE equity
+# [timestamp, open, high, low, close, volume] mapping and strict empty guards.
+# Exact LF/CRLF producer bytes differ across supported checkouts. Preserve the
+# original producer digest so sealed saved observations remain reproducible.
+REVIEWED_ADAPTER_SHA256S = frozenset(
+    {
+        REVIEWED_ADAPTER_SHA256,
+        "dde80608e484f760626237f8f6496169fd8416c9da2321310ae7f686c955cb2a",
+        "84476265cb44b91d53028f783e2555db552902d8bb1a551dc147a15c76a764af",
+    }
+)
 MAX_ROWS = 3000
 MAX_BYTES = 2 * 1024**2
 MAX_SHARES = 2**53 - 1
@@ -103,7 +114,15 @@ def capture_rows(symbol, original_rows, accepted, *, broker, adapter_sha256, cap
         if key in originals:
             duplicates.add(key)
         originals[key] = row
-    profile = PROFILE if broker == "fyers" and adapter_sha256 == REVIEWED_ADAPTER_SHA256 else None
+    profile = (
+        PROFILE
+        if (
+            broker == "fyers"
+            and isinstance(adapter_sha256, str)
+            and adapter_sha256 in REVIEWED_ADAPTER_SHA256S
+        )
+        else None
+    )
     result = {}
     for day, admitted in accepted.items():
         values = candle(admitted)
@@ -173,7 +192,8 @@ def validate_observation(record, symbol, slot):
         and record.get("reviewed_profile") == PROFILE
         and record.get("provider") == "fyers"
         and record.get("adapter") == ADAPTER
-        and record.get("adapter_sha256") == REVIEWED_ADAPTER_SHA256
+        and isinstance(record.get("adapter_sha256"), str)
+        and record["adapter_sha256"] in REVIEWED_ADAPTER_SHA256S
         and record.get("volume_supplied") is True
         and record.get("volume_unit") == "provider_returned_shares"
         and record.get("basis") == "provider_returned_historical_coordinates"
@@ -250,7 +270,8 @@ def _assess(records, calendar, entry_session, decision_at, *, symbol, _observed=
                 record.get("reviewed_profile") != PROFILE
                 or record.get("provider") != "fyers"
                 or record.get("adapter") != ADAPTER
-                or record.get("adapter_sha256") != REVIEWED_ADAPTER_SHA256
+                or not isinstance(record.get("adapter_sha256"), str)
+                or record["adapter_sha256"] not in REVIEWED_ADAPTER_SHA256S
                 or record.get("volume_unit") != "provider_returned_shares"
             ):
                 return result("volume_producer_profile_unqualified")

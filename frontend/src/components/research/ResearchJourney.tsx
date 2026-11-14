@@ -1,5 +1,6 @@
 import { Check, ChevronRight, Clock3, Database, FlaskConical, Play, Settings2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { type AlertChannel, alertsApi } from '@/api/alerts'
 import {
   type JourneyDecision,
   type JourneyPlan,
@@ -14,6 +15,15 @@ import { researchError } from '@/hooks/useResearchExperiment'
 
 const terminal = new Set(['complete', 'none', 'needs_action'])
 const noneMessage = 'None of the tested setups passed validation.'
+const notificationLabels = { slack: 'Slack', discord: 'Discord' } as const
+const notificationStates = {
+  watching: 'Will notify when finished.',
+  sending: 'Sending completion notification.',
+  sent: 'Completion notification sent.',
+  not_sent: 'Notification not sent.',
+  uncertain: 'Delivery uncertain; not automatically resent.',
+  cancelled: 'Notification cancelled.',
+} as const
 const number = (value: number) => value.toLocaleString('en-IN')
 const money = (value: unknown) =>
   typeof value === 'number'
@@ -131,6 +141,9 @@ export function ResearchJourney({
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState<'save' | 'start' | null>(null)
   const [retry, setRetry] = useState(0)
+  const [alertChannels, setAlertChannels] = useState<AlertChannel[]>([])
+  const [alertsLoaded, setAlertsLoaded] = useState(false)
+  const [notificationChannels, setNotificationChannels] = useState<Array<'slack' | 'discord'>>([])
   const formIdentity = useRef('')
   const action = useRef<AbortController | null>(null)
   const request = useRef<{ plan: string; id: string } | null>(null)
@@ -139,6 +152,22 @@ export function ResearchJourney({
   const result = useRef(onResult)
   saved.current = onSaved
   result.current = onResult
+
+  useEffect(() => {
+    setNotificationChannels([])
+    setAlertChannels([])
+    setAlertsLoaded(false)
+    if (!enabled) return
+    let active = true
+    alertsApi.list().then((listing) => {
+      if (active && Array.isArray(listing?.channels)) setAlertChannels(listing.channels)
+    }).catch(() => {
+      // Optional notifications never block research or enable an unknown channel.
+    }).finally(() => {
+      if (active) setAlertsLoaded(true)
+    })
+    return () => { active = false }
+  }, [experimentId, enabled])
 
   function accept(next: JourneyState) {
     setValue(next)
@@ -164,7 +193,10 @@ export function ResearchJourney({
       if (state.revision !== revision && state.experiment) {
         void Promise.resolve(saved.current?.(state)).catch(fail)
       }
-      if (!terminal.has(state.phase)) timer = setTimeout(poll, 2500)
+      const deliveryPending = state.notifications?.some(
+        (notice) => notice.status === 'watching' || notice.status === 'sending'
+      )
+      if (!terminal.has(state.phase) || deliveryPending) timer = setTimeout(poll, 2500)
     }
     const fail = (cause: unknown) => {
       if (controller.signal.aborted) return
@@ -209,7 +241,10 @@ export function ResearchJourney({
     try {
       const next = await researchJourney.start(
         experimentId,
-        { revision: plan.revision, plan_id: plan.id, request_id: request.current.id },
+        {
+          revision: plan.revision, plan_id: plan.id, request_id: request.current.id,
+          ...(notificationChannels.length ? { notification_channels: [...notificationChannels] } : {}),
+        },
         controller.signal
       )
       if (controller.signal.aborted) return
@@ -478,6 +513,47 @@ export function ResearchJourney({
             )}
           </article>
         </div>
+      )}
+      {value?.phase === 'review' && (
+        <fieldset disabled={!canEdit} className="space-y-2 rounded-lg border p-3 text-sm">
+          <legend className="px-1 font-medium">Notify when finished</legend>
+          <p className="text-xs text-muted-foreground">
+            Optional, off by default. Sends the outcome and saved-study link only; no financial details.
+          </p>
+          <div className="flex flex-wrap gap-x-6 gap-y-2">
+            {(['slack', 'discord'] as const).map((name) => {
+              const channel = alertChannels.find((item) => item.name === name)
+              const available = alertsLoaded && !!channel?.enabled && !!channel.status?.configured
+              return (
+                <label key={name} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="size-4 accent-primary"
+                    disabled={!canEdit || !available}
+                    checked={notificationChannels.includes(name)}
+                    onChange={({ target: { checked } }) => setNotificationChannels((current) => checked
+                      ? [...current.filter((value) => value !== name), name]
+                      : current.filter((value) => value !== name))}
+                  />
+                  {notificationLabels[name]}
+                  {!available && <span className="text-xs text-muted-foreground">{alertsLoaded ? 'Not ready' : 'Checking…'}</span>}
+                </label>
+              )
+            })}
+          </div>
+          <a href="/alerts" className="text-xs underline underline-offset-2">Configure channels in Alerts</a>
+        </fieldset>
+      )}
+      {!!value?.notifications?.length && (
+        <section aria-label="Completion notifications" className="space-y-1 rounded-lg border p-3 text-xs">
+          {value.notifications.map((notice) => (
+            <p key={notice.channel}>
+              <span className="font-medium">{notificationLabels[notice.channel]}</span> ·{' '}
+              {notificationStates[notice.status]}
+              {notice.detail && notice.detail !== notificationStates[notice.status] ? ` ${notice.detail}` : ''}
+            </p>
+          ))}
+        </section>
       )}
       {value?.phase === 'none' && (
         <div className="space-y-2 rounded-lg bg-muted/40 p-4 text-sm">

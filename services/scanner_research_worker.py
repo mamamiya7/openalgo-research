@@ -183,10 +183,13 @@ def network_lease(store, token, job_id, stop_requested=None):
 def run_one(store, token, stop_requested=None):
     from services.research_automation import run_one as continue_decision
     from services.research_journey import run_one as continue_journey
+    from services.research_notifications import dispatch_one as notify_finished
     from services.research_worker_sessions import scoped_metadata_sessions
 
     with scoped_metadata_sessions(store):
         heartbeat(store, token)
+        if notify_finished(store, token, stop_requested=stop_requested):
+            return True
         if continue_journey(store, token, stop_requested=stop_requested):
             return True
         if continue_decision(store, token, stop_requested=stop_requested):
@@ -1022,6 +1025,15 @@ def main():
         help="Create a new local supervisor marker after acquiring the worker lease",
     )
     args = parser.parse_args()
+    from tools.research_native_ready import check as check_native
+    from tools.research_native_ready import classify_failure
+
+    try:
+        check_native()
+    except Exception as error:
+        # Fail before claiming jobs or announcing worker readiness. Existing
+        # queued work and calculation allowances remain untouched.
+        raise RuntimeError(classify_failure(str(error))["message"]) from error
     store = ResearchStore()
     token = uuid.uuid4().hex
     stopping = False

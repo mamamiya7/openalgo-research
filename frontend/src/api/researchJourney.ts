@@ -77,6 +77,12 @@ export interface JourneyState {
     activity?: ResearchActivity | null
   } | null
   decisions: JourneyDecision[]
+  notification_channels?: Array<'slack' | 'discord'>
+  notifications?: Array<{
+    channel: 'slack' | 'discord'
+    status: 'watching' | 'sending' | 'sent' | 'not_sent' | 'uncertain' | 'cancelled'
+    detail?: string
+  }>
   result: {
     job_id: string
     experiment_id: string
@@ -115,7 +121,12 @@ export const researchJourney = {
   },
   async start(
     id: string,
-    data: { revision: number; plan_id: string; request_id: string },
+    data: {
+      revision: number
+      plan_id: string
+      request_id: string
+      notification_channels?: Array<'slack' | 'discord'>
+    },
     signal?: AbortSignal
   ): Promise<JourneyState> {
     return (await webClient.post(`${path(id)}/start`, data, { ...options, signal })).data

@@ -8,7 +8,7 @@ from sqlalchemy import event
 
 from database.research_db import ResearchExperiment, ResearchJob, ResearchStore, ResearchWorker
 from research.connectors import registry
-from services import research_portfolio
+from services import research_portfolio, research_preparation
 from services import scanner_research_service as service
 from services import scanner_research_worker as worker
 
@@ -53,6 +53,9 @@ def invoke(tmp_path, monkeypatch):
         )
     monkeypatch.setattr(registry, "policy_for_request", lambda *args: "test-policy")
     monkeypatch.setattr(worker, "source_for", lambda *args: {"snapshot": {}, "receipt": {}})
+    # This harness isolates calculation boundaries rather than importing the
+    # native preparation cache with deliberately minimal fake source evidence.
+    monkeypatch.setattr(research_preparation, "reuse_for_run", lambda *args: None)
 
     def run(callback, stop_requested=None):
         def calculate(*args, boundary, **kwargs):
@@ -141,8 +144,9 @@ def test_pause_rechecks_races_after_read_before_writer_reservation(invoke, race)
 
 @pytest.mark.parametrize("failure", [False, True])
 def test_pause_acknowledgement_and_observation_share_transaction(invoke, monkeypatch, failure):
-    def finish(self, db, state, reason):
+    def finish(self, db, state, reason, *, known_finish=True):
         assert state == "paused" and reason == "pause_requested"
+        assert known_finish is True
         assert db.in_transaction()
         db.get(ResearchExperiment, self.job_id).counts = '{"pause_observed":true}'
         if failure:

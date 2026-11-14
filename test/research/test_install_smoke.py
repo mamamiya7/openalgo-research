@@ -17,6 +17,7 @@ def archive(tmp_path, *, changed=None, extra=None):
             "Setup.cmd",
             "setup-research.sh",
             "tools/research_install_smoke.py",
+            "tools/research_native_ready.py",
             "tools/research_desktop.py",
             "frontend/dist/index.html",
             ".sample.env",
@@ -135,3 +136,26 @@ def test_actual_bootstrap_entry_handles_a_spaced_folder(tmp_path):
     ) as child:
         child.wait(10)
     assert (root / "finished").read_text().strip() == "complete"
+
+
+def test_fresh_native_broker_configuration_uses_cards_and_never_implies_live_login():
+    data = {"logged_in": None, "brokers": [{"id": "fyers", "active": False,
+            "configured": False, "source": None,
+            "fields": [{"key": "api_key", "saved": ""}, {"key": "api_secret", "saved": ""}]}]}
+    smoke.verify_fresh_broker_cards(data)
+    data["brokers"][0]["configured"] = True
+    with pytest.raises(RuntimeError, match="contains keys"):
+        smoke.verify_fresh_broker_cards(data)
+    with pytest.raises(RuntimeError, match="logged-in broker"):
+        smoke.verify_fresh_broker_cards({**data, "logged_in": "fyers"})
+
+
+def test_failure_diagnostics_keep_safe_frames_not_log_messages_or_generated_secrets(tmp_path):
+    log = tmp_path / "workflow.log"
+    log.write_text('Traceback (most recent call last):\n  File "/private/secret-owner/tools/research_install_smoke.py", line 537, in exercise\nKeyError: current_broker private-generated-token\nhttps://hooks.slack.com/services/private/generated/token\n')
+    result = smoke.failure_diagnostics(log, stage="workflow", exit_code=1)
+    published = json.loads((tmp_path / "diagnostics.json").read_text())
+    assert published == result and result["exception_type"] == "KeyError"
+    assert result["traceback_frames"] == [{"file": "research_install_smoke.py", "line": 537, "function": "exercise"}]
+    assert not any(value in json.dumps(published) for value in ("private-generated-token", "secret-owner", "hooks.slack.com", "current_broker"))
+    assert result["raw_log_or_exception_message_included"] is False

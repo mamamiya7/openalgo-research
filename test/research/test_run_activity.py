@@ -218,7 +218,9 @@ def test_automatic_continuation_preserves_activity_and_yields_to_next_job(app, c
         observe=None,
         boundary=None,
         defer_study_analysis=False,
+        job_id=None,
     ):
+        assert job_id in jobs
         calls.append(saved)
         if len(calls) == 1:
             activity(
@@ -271,7 +273,9 @@ def test_symbol_transition_is_persisted_before_a_long_request(app, client, monke
         observe=None,
         boundary=None,
         defer_study_analysis=False,
+        job_id=None,
     ):
+        assert job_id == expected_job_id
         for symbol in ("AAA", "BBB"):
             activity({"stage": "download", "prices": {"current_symbol": symbol}})
             shown = client.get(f"/scanner-research/api/jobs/{job_id}").json["activity"]
@@ -285,6 +289,7 @@ def test_symbol_transition_is_persisted_before_a_long_request(app, client, monke
         }
 
     monkeypatch.setattr(research_portfolio, "run", run)
+    expected_job_id = job_id
     worker.acquire(store, "symbol-activity")
     try:
         worker.run_one(store, "symbol-activity")

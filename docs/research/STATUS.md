@@ -1,5 +1,16 @@
 # OpenAlgo Research status
 
+## Release qualification batch — 14 November 2026
+
+Preview.37 candidate repairs post-upgrade test contracts, current Fyers volume
+producer provenance, early compiled-library checks and fresh-install diagnostics.
+Optional per-study completion notices reuse native Slack/Discord Alerts, default
+off and never automatically replay an uncertain delivery. See [release notes](releases/0.1.0-preview.37.md).
+Focused checks pass; complete Windows/Linux distribution qualification and fresh
+small saved-data browser acceptance are pending. Public preview.36 remains the
+download until the exact candidate passes. Search allowances, engine pins and
+financial validation remain unchanged. No full scanner run is authorized.
+
 ## Decision feedback and visible changes — 12 November 2026
 
 Published preview.36 adds measured development scorecards to model decisions,
