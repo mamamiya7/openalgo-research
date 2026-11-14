@@ -14,15 +14,15 @@ The aim is to connect broker data, backtesting and optimization in one open-sour
 workflow. Start directly from a Chartink scanner with the Chrome extension, upload
 a CSV export, or reuse saved signals.
 
-**Current release:** preview.37 / OpenAlgo 2.0.3.3, including reviewed fixes through 12 November. [Changes and reuse](docs/research/releases/0.1.0-preview.37.md).
+**Current release:** preview.38 / OpenAlgo 2.0.3.3, including the tested research-plan refresh fix. [Changes and reuse](docs/research/releases/0.1.0-preview.38.md).
 
-**Published download: `0.1.0-preview.37` · OpenAlgo 2.0.3.3 · Windows and Linux**
+**Published download: `0.1.0-preview.38` · OpenAlgo 2.0.3.3 · Windows and Linux**
 
-This release packages [preview.37](docs/research/releases/0.1.0-preview.37.md): OpenAlgo 2.0.3.3, reviewed automatic research, exact-setting validation and saved-result reopening.
+This release packages [preview.38](docs/research/releases/0.1.0-preview.38.md): OpenAlgo 2.0.3.3, refreshed reviewed plans, automatic research, exact-setting validation and saved-result reopening.
 
-[**Download OpenAlgo Research**](https://github.com/mamamiya7/openalgo-research/releases/download/research-v0.1.0-preview.37/openalgo-research-0.1.0-preview.37.zip)
+[**Download OpenAlgo Research**](https://github.com/mamamiya7/openalgo-research/releases/download/research-v0.1.0-preview.38/openalgo-research-0.1.0-preview.38.zip)
 · [Install and start](docs/research/RUNTIME.md)
-· [Published release notes](docs/research/releases/0.1.0-preview.37.md)
+· [Published release notes](docs/research/releases/0.1.0-preview.38.md)
 · [Architecture](docs/research/SYSTEM_MAP.md)
 · [Released source](https://github.com/mamamiya7/openalgo-research/tree/main)
 

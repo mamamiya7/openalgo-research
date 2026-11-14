@@ -1,5 +1,17 @@
 # OpenAlgo Research status
 
+## Preview.38 distribution — 14 November 2026
+
+Preview.38 packages the tested browser plan-refresh fix below. It refreshes a
+pre-Start review after metadata or preparation changes, reusing the current native
+preparation. The Start fences, immutable running/completed evidence, engine pins,
+all financial validation and the408/512 search programme are unchanged. Only
+`services/research_journey.py` changes runtime behavior relative to preview.37;
+the distribution version and documentation change separately. Frontend reuse
+requires identical source inputs, dependency locks and verified asset provenance.
+The26 focused checks and fresh browser case qualify this change; preview.37's
+full CI is a baseline, not a claim of a new full preview.38 matrix result.
+
 ## Browser qualification — 14 November 2026 local follow-up
 
 Signed-in Chrome reviewed and started a fresh five-stock,68-signal saved-data
