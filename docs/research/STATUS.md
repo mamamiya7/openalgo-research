@@ -1,5 +1,34 @@
 # OpenAlgo Research status
 
+## Browser qualification — 14 November 2026 local follow-up
+
+Signed-in Chrome reviewed and started a fresh five-stock,68-signal saved-data
+case through the native UI. The full408 proposals and512-account allowance were
+preserved. Native funding recovery changed capital from100000 to199000 and the
+searched ticket from100% to24.7685578605%; ChatGPT then disabled trailing and
+tested83-to23 holding sessions using measured exit and validation evidence.
+It stopped explicitly after higher-cost, neighborhood and prefix checks still
+failed. No winner was forced. The rejected outcome, complete decisions and exact
+tested report were saved and reopened through the library. All367 financial
+accounts remained unchanged, with145 remaining and zero new accounts on reopen.
+Private receipts and screenshots are under `.agent-native/release37/browser-*`.
+
+This exposed and fixed a pre-Start review bug: metadata-only revisions and a
+replacement native preparation pointer left the plan stale. The narrow refresh
+uses the current preparation without reacquiring data; all Start fences and
+running/terminal evidence remain unchanged.26 focused reviewed-journey/exact-save
+tests pass. This local service fix is installed and tested in the isolated browser
+workspace; it is not included in the previously published preview.37 ZIP.
+
+The qualification reused the existing isolated store and immutable observations,
+with broker requests prohibited at its acquisition boundary. Before isolation,
+opening an older six-stock study automatically refreshed missing history; this
+was not a saved-only acquisition check. No full scanner or orders were run.
+The isolated web process on5087 is retained solely for the user's result review;
+stop it when that review is finished. No app, dataset or dependency environment
+was copied. Six obsolete logs/control files remain for the existing reviewed
+manual cleanup helper, whose read-only preview passed; deletion is not claimed.
+
 ## Release qualification batch — 14 November 2026
 
 Published preview.37 repairs post-upgrade test contracts, current Fyers volume
@@ -33,8 +62,8 @@ recovers the same queue/Keep request after interruption.
 
 Targeted verification includes218 integrated release/journey/storage checks,
 158 capital/supervisor checks and109 journey/findings interface checks; these
-overlapping sets are not summed. Browser interaction remains pending operator
-sign-in; native-service qualification and component tests do not claim that check.
+overlapping sets are not summed. This published release qualification preceded
+browser interaction; the local follow-up above records the later browser check.
 Search allowances, engine pins and financial validation remain unchanged. No full
 scanner, new broker download or external notification send was performed.
 

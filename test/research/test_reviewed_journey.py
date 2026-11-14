@@ -134,6 +134,117 @@ def test_current_review_idempotently_reuses_plan_and_history(ready):
         assert len(history) == 1 and history[0]["outcome"] == "rejected"
 
 
+def test_metadata_rename_refreshes_review_without_repreparing_data(ready, monkeypatch):
+    store, state = ready
+    identifier = state["experiment"]["id"]
+    renamed = library.update_experiment(
+        store, OWNER, identifier, {"revision": state["revision"], "name": "Renamed study"}
+    )
+
+    def no_acquisition(*args, **kwargs):
+        raise AssertionError("An unchanged draft must not start another preparation")
+
+    monkeypatch.setattr(journey.preparation, "start", no_acquisition)
+    refreshed = journey.prepare(store, OWNER, identifier, {"revision": renamed["revision"]})
+    assert refreshed["phase"] == "review" and refreshed["can_start"]
+    assert refreshed["plan"]["revision"] == renamed["revision"]
+    assert refreshed["plan"]["id"] != state["plan"]["id"]
+    for field in ("draft_id", "inputs_artifact", "settings", "contract", "budget"):
+        assert refreshed["plan"][field] == state["plan"][field]
+    with store.sessions() as db:
+        assert db.query(ResearchJob).count() == 0
+
+
+@pytest.mark.parametrize("completed", [False, True])
+def test_replaced_preparation_refreshes_review_and_waits_for_current_data(
+    ready, monkeypatch, completed
+):
+    store, state = ready
+    identifier = state["experiment"]["id"]
+    replacement_id = "q" * 32
+    with store.sessions.begin() as db:
+        db.add(
+            ResearchPreparation(
+                experiment_id=identifier, owner=OWNER, job_id=replacement_id,
+                binding="b" * 64, revision=state["revision"],
+            )
+        )
+    original_prepared = journey._prepared
+    finished = [completed]
+
+    def current_prepared(*args):
+        progress, evidence, identity = original_prepared(*args)
+        progress.update(job_id=replacement_id, ready=finished[0],
+                        status="completed" if finished[0] else "running")
+        return progress, evidence if finished[0] else None, "f" * 64 if finished[0] else None
+
+    def no_acquisition(*args, **kwargs):
+        raise AssertionError("The current replacement preparation must be reused")
+
+    monkeypatch.setattr(journey, "_prepared", current_prepared)
+    monkeypatch.setattr(journey.preparation, "start", no_acquisition)
+    refreshed = journey.prepare(store, OWNER, identifier, {"revision": state["revision"]})
+    if not completed:
+        assert refreshed["phase"] == "preparing"
+        assert refreshed["plan"] is None and not refreshed["can_start"]
+        finished[0] = True
+        assert journey._review_ready(store, OWNER, identifier)
+        refreshed = journey.status(store, OWNER, identifier)
+    assert refreshed["phase"] == "review" and refreshed["can_start"]
+    assert refreshed["plan"]["preparation_job_id"] == replacement_id
+    assert refreshed["plan"]["inputs_artifact"] == "f" * 64
+    assert refreshed["plan"]["id"] != state["plan"]["id"]
+    assert refreshed["plan"]["budget"] == state["plan"]["budget"]
+    with pytest.raises(ValueError, match="Review"):
+        journey.start(store, OWNER, identifier, {
+            "revision": state["revision"], "plan_id": state["plan"]["id"],
+            "request_id": "superseded-preparation-plan",
+        })
+    with store.sessions() as db:
+        assert db.query(ResearchJob).count() == 0
+
+
+@pytest.mark.parametrize("phase", ["researching", "finalizing", "complete", "none"])
+def test_preparation_replacement_cannot_reset_admitted_or_finished_journey(
+    ready, monkeypatch, phase
+):
+    store, state = ready
+    identifier = state["experiment"]["id"]
+    with store.sessions.begin() as db:
+        row = db.get(ResearchJourney, identifier)
+        row.phase = phase
+        frozen = row.state
+        db.add(ResearchPreparation(
+            experiment_id=identifier, owner=OWNER, job_id="q" * 32,
+            binding="b" * 64, revision=state["revision"],
+        ))
+
+    def no_acquisition(*args, **kwargs):
+        raise AssertionError("An admitted or finished journey must not be prepared again")
+
+    monkeypatch.setattr(journey.preparation, "start", no_acquisition)
+    again = journey.prepare(store, OWNER, identifier, {"revision": state["revision"]})
+    assert again["phase"] == phase
+    with store.sessions() as db:
+        assert db.get(ResearchJourney, identifier).state == frozen
+        assert db.query(ResearchJob).count() == 0
+
+
+def test_review_refresh_rejects_another_owners_preparation(ready):
+    store, state = ready
+    identifier = state["experiment"]["id"]
+    with store.sessions.begin() as db:
+        db.add(ResearchPreparation(
+            experiment_id=identifier, owner="another-owner", job_id="q" * 32,
+            binding="b" * 64, revision=state["revision"],
+        ))
+    with pytest.raises(LookupError, match="preparation"):
+        journey.prepare(store, OWNER, identifier, {"revision": state["revision"]})
+    with store.sessions() as db:
+        row = db.get(ResearchJourney, identifier)
+        assert row.phase == "review" and json.loads(row.state)["plan"] == state["plan"]
+
+
 def test_review_and_state_are_owner_scoped(ready):
     store, state = ready
     with pytest.raises(LookupError):

@@ -145,12 +145,28 @@ def prepare(store, owner, identifier, data):
         library._revision(parent, current["revision"])
         row = db.get(ResearchJourney, identifier)
         same = False
+        refresh_review = False
         history = []
         if row is not None:
             previous = json.loads(row.state)
             history = previous.get("history", [])[-24:]
             if previous.get("draft_id") == draft_id:
                 same = row.phase != "needs_action" or bool(previous.get("job_id"))
+                if same and row.phase == "review" and not previous.get("job_id"):
+                    plan = previous.get("plan") or {}
+                    pointer = db.get(ResearchPreparation, identifier)
+                    if pointer and pointer.owner != owner:
+                        raise LookupError("Research preparation not found")
+                    if plan.get("revision") != parent.revision or (
+                        pointer and pointer.job_id != plan.get("preparation_job_id")
+                    ):
+                        # A metadata edit or another native preparation can
+                        # supersede a pre-Start review without changing its
+                        # draft. Rebuild that review against the current pointer;
+                        # never reacquire data or reset an admitted calculation.
+                        previous.update(revision=parent.revision, plan=None, error=None)
+                        _put(row, previous, "preparing")
+                        refresh_review = True
         else:
             row = ResearchJourney(
                 experiment_id=identifier,
@@ -178,6 +194,8 @@ def prepare(store, owner, identifier, data):
                 "preparing",
             )
     if same:
+        if refresh_review:
+            _review_ready(store, owner, identifier)
         return _response(store, owner, identifier)
     preparation.start(store, owner, identifier, {"revision": current["revision"]})
     _review_ready(store, owner, identifier)
