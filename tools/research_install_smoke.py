@@ -49,11 +49,13 @@ def failure_diagnostics(log_path, *, stage, exit_code):
         {"file": Path(path.replace("\\", "/")).name, "line": int(line), "function": function}
         for path, line, function in re.findall(
             r'^\s*File "([^"\n]+\.py)", line (\d+), in ([A-Za-z_][A-Za-z0-9_]*)\s*$',
-            tail, re.MULTILINE,
+            tail,
+            re.MULTILINE,
         )[-8:]
     ]
     diagnostic = {
-        "stage": stage, "exit_code": exit_code,
+        "stage": stage,
+        "exit_code": exit_code,
         "exception_type": types[-1] if types else None,
         "classification": classify_failure(tail)["code"],
         "traceback_frames": frames,
@@ -61,7 +63,9 @@ def failure_diagnostics(log_path, *, stage, exit_code):
         "log_sha256": digest(log_path),
         "raw_log_or_exception_message_included": False,
     }
-    (log_path.parent / "diagnostics.json").write_text(json.dumps(diagnostic, indent=2), encoding="utf-8")
+    (log_path.parent / "diagnostics.json").write_text(
+        json.dumps(diagnostic, indent=2), encoding="utf-8"
+    )
     return diagnostic
 
 
@@ -151,7 +155,6 @@ def validate_archive(bundle, *, expected_version=None):
         "Setup.cmd",
         "setup-research.sh",
         "tools/research_install_smoke.py",
-        "tools/research_native_ready.py",
         "tools/research_desktop.py",
         "frontend/dist/index.html",
         "research/distribution.json",
@@ -171,6 +174,8 @@ def validate_archive(bundle, *, expected_version=None):
         )
     if version == "0.1.0" or (preview and int(preview[1]) >= 33):
         required.update({"services/research_automation.py", "services/agent/research_decision.py"})
+    if version == "0.1.0" or (preview and int(preview[1]) >= 37):
+        required.add("tools/research_native_ready.py")
     if (
         not required.issubset(files)
         or ".env" in files
@@ -451,17 +456,35 @@ def _check(value, message):
 
 def verify_fresh_broker_cards(data):
     """The native broker screen lists an unconfigured provider, not a live login."""
-    _check(isinstance(data, dict) and data.get("logged_in") is None,
-           "A fresh installation must not have a logged-in broker")
+    _check(
+        isinstance(data, dict) and data.get("logged_in") is None,
+        "A fresh installation must not have a logged-in broker",
+    )
     cards = data.get("brokers", [])
     _check(isinstance(cards, list), "Native Broker Configuration returned invalid broker cards")
     fyers = next((row for row in cards if row.get("id") == "fyers"), None)
     _check(fyers is not None, "Native Broker Configuration did not list the selected broker")
-    _check(not fyers.get("configured") and not fyers.get("active")
-           and fyers.get("source") is None
-           and isinstance(fyers.get("fields"), list) and bool(fyers["fields"])
-           and all(not field.get("saved") for field in fyers["fields"]),
-           "A fresh broker card unexpectedly contains keys or a live session")
+    _check(
+        not fyers.get("configured")
+        and not fyers.get("active")
+        and fyers.get("source") is None
+        and isinstance(fyers.get("fields"), list)
+        and bool(fyers["fields"])
+        and all(not field.get("saved") for field in fyers["fields"]),
+        "A fresh broker card unexpectedly contains keys or a live session",
+    )
+
+
+def verify_fresh_broker_setup(get):
+    """Use the same routed broker-list endpoint and envelope as the native UI."""
+    response = get("/api/broker/list")
+    _check(
+        isinstance(response, dict)
+        and response.get("status") == "success"
+        and isinstance(response.get("data"), dict),
+        "Native Broker Configuration returned an invalid response",
+    )
+    verify_fresh_broker_cards(response["data"])
 
 
 def exercise(directory, ports):
@@ -580,7 +603,7 @@ def exercise(directory, ports):
                         get("/scanner-research/api/health")["worker_state"] == "online",
                         "Worker is not online",
                     )
-                    verify_fresh_broker_cards(get("/api/broker/config/list")["data"])
+                    verify_fresh_broker_setup(get)
                     checks["fresh_account_login_and_broker_profile"] = True
                     seed_prices(directory, config)
                     source = post(

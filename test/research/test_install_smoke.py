@@ -7,17 +7,18 @@ import zipfile
 from pathlib import Path
 
 import pytest
+from test_broker_first_setup import account
+from test_broker_first_setup import app as broker_app  # noqa: F401 -- isolated native route fixture
 
 from tools import research_install_smoke as smoke
 
 
-def archive(tmp_path, *, changed=None, extra=None):
+def archive(tmp_path, *, changed=None, extra=None, version="0.1.0-preview.5", native_ready=False):
     files = dict.fromkeys(
         (
             "Setup.cmd",
             "setup-research.sh",
             "tools/research_install_smoke.py",
-            "tools/research_native_ready.py",
             "tools/research_desktop.py",
             "frontend/dist/index.html",
             ".sample.env",
@@ -26,7 +27,29 @@ def archive(tmp_path, *, changed=None, extra=None):
         ),
         b"source",
     )
-    distribution = {"version": "0.1.0-preview.5"}
+    preview = int(version.rsplit(".", 1)[1]) if version.startswith("0.1.0-preview.") else None
+    if version == "0.1.0" or (preview is not None and preview >= 32):
+        files.update(
+            dict.fromkeys(
+                (
+                    "research/supervisor_accounts.py",
+                    "services/research_supervisor.py",
+                    "services/research_supervisor_program.py",
+                    "services/agent/tools/research.py",
+                ),
+                b"source",
+            )
+        )
+    if version == "0.1.0" or (preview is not None and preview >= 33):
+        files.update(
+            dict.fromkeys(
+                ("services/research_automation.py", "services/agent/research_decision.py"),
+                b"source",
+            )
+        )
+    if native_ready:
+        files["tools/research_native_ready.py"] = b"native readiness source"
+    distribution = {"version": version}
     files["research/distribution.json"] = json.dumps(distribution).encode()
     manifest = {
         "format": "openalgo-native-source-build-v1",
@@ -37,7 +60,7 @@ def archive(tmp_path, *, changed=None, extra=None):
             for name, data in files.items()
         },
     }
-    path = tmp_path / "openalgo-research-0.1.0-preview.5.zip"
+    path = tmp_path / f"openalgo-research-{version}.zip"
     with zipfile.ZipFile(path, "w") as bundle:
         bundle.writestr("RELEASE_MANIFEST.json", json.dumps(manifest))
         for name, data in files.items():
@@ -45,6 +68,43 @@ def archive(tmp_path, *, changed=None, extra=None):
         if extra:
             bundle.writestr(*extra)
     return path
+
+
+@pytest.mark.parametrize(
+    "version",
+    [
+        "0.1.0-preview.5",
+        "0.1.0-preview.31",
+        "0.1.0-preview.32",
+        "0.1.0-preview.33",
+        "0.1.0-preview.36",
+    ],
+)
+def test_retained_older_archives_without_native_preflight_remain_valid(tmp_path, version):
+    source = archive(tmp_path, version=version)
+    with zipfile.ZipFile(source) as bundle:
+        manifest = smoke.validate_archive(bundle, expected_version=version)
+    assert manifest["release_version"] == version
+    assert "tools/research_native_ready.py" not in manifest["files"]
+
+
+@pytest.mark.parametrize("version", ["0.1.0-preview.37", "0.1.0-preview.38", "0.1.0"])
+def test_new_archives_require_native_preflight_before_extraction(tmp_path, version):
+    missing = archive(tmp_path, version=version)
+    target = tmp_path / "not-created"
+    with pytest.raises(ValueError, match="incomplete"):
+        smoke.extract_archive(missing, target, expected_version=version)
+    assert not target.exists()
+    complete = archive(tmp_path, version=version, native_ready=True)
+    with zipfile.ZipFile(complete) as bundle:
+        manifest = smoke.validate_archive(bundle, expected_version=version)
+    assert "tools/research_native_ready.py" in manifest["files"]
+
+
+def test_new_archive_native_gate_preserves_checksum_validation(tmp_path):
+    forged = archive(tmp_path, version="0.1.0-preview.37", native_ready=True, changed=b"forged")
+    with zipfile.ZipFile(forged) as bundle, pytest.raises(ValueError, match="checksum"):
+        smoke.validate_archive(bundle, expected_version="0.1.0-preview.37")
 
 
 def test_valid_release_extracts_only_after_full_validation(tmp_path):
@@ -139,9 +199,18 @@ def test_actual_bootstrap_entry_handles_a_spaced_folder(tmp_path):
 
 
 def test_fresh_native_broker_configuration_uses_cards_and_never_implies_live_login():
-    data = {"logged_in": None, "brokers": [{"id": "fyers", "active": False,
-            "configured": False, "source": None,
-            "fields": [{"key": "api_key", "saved": ""}, {"key": "api_secret", "saved": ""}]}]}
+    data = {
+        "logged_in": None,
+        "brokers": [
+            {
+                "id": "fyers",
+                "active": False,
+                "configured": False,
+                "source": None,
+                "fields": [{"key": "api_key", "saved": ""}, {"key": "api_secret", "saved": ""}],
+            }
+        ],
+    }
     smoke.verify_fresh_broker_cards(data)
     data["brokers"][0]["configured"] = True
     with pytest.raises(RuntimeError, match="contains keys"):
@@ -150,12 +219,50 @@ def test_fresh_native_broker_configuration_uses_cards_and_never_implies_live_log
         smoke.verify_fresh_broker_cards({**data, "logged_in": "fyers"})
 
 
+def test_fresh_broker_smoke_reaches_the_actual_authenticated_native_route(broker_app):  # noqa: F811 -- shared isolated fixture
+    client = broker_app.test_client()
+    assert client.get("/api/broker/list", headers={"Accept": "application/json"}).status_code == 401
+    account(client)
+    paths = []
+
+    def get(path):
+        paths.append(path)
+        response = client.get(path, headers={"Accept": "application/json"})
+        assert response.status_code == 200
+        assert response.json["status"] == "success"
+        return response.json
+
+    smoke.verify_fresh_broker_setup(get)
+    assert paths == ["/api/broker/list"]
+
+
+@pytest.mark.parametrize(
+    "response",
+    [{}, {"data": {}}, {"status": "error", "data": {}}, {"status": "success", "data": []}],
+)
+def test_fresh_broker_smoke_rejects_an_invalid_native_envelope(response):
+    with pytest.raises(RuntimeError, match="invalid response"):
+        smoke.verify_fresh_broker_setup(lambda path: response)
+
+
 def test_failure_diagnostics_keep_safe_frames_not_log_messages_or_generated_secrets(tmp_path):
     log = tmp_path / "workflow.log"
-    log.write_text('Traceback (most recent call last):\n  File "/private/secret-owner/tools/research_install_smoke.py", line 537, in exercise\nKeyError: current_broker private-generated-token\nhttps://hooks.slack.com/services/private/generated/token\n')
+    log.write_text(
+        'Traceback (most recent call last):\n  File "/private/secret-owner/tools/research_install_smoke.py", line 537, in exercise\nKeyError: current_broker private-generated-token\nhttps://hooks.slack.com/services/private/generated/token\n'
+    )
     result = smoke.failure_diagnostics(log, stage="workflow", exit_code=1)
     published = json.loads((tmp_path / "diagnostics.json").read_text())
     assert published == result and result["exception_type"] == "KeyError"
-    assert result["traceback_frames"] == [{"file": "research_install_smoke.py", "line": 537, "function": "exercise"}]
-    assert not any(value in json.dumps(published) for value in ("private-generated-token", "secret-owner", "hooks.slack.com", "current_broker"))
+    assert result["traceback_frames"] == [
+        {"file": "research_install_smoke.py", "line": 537, "function": "exercise"}
+    ]
+    assert not any(
+        value in json.dumps(published)
+        for value in (
+            "private-generated-token",
+            "secret-owner",
+            "hooks.slack.com",
+            "current_broker",
+        )
+    )
     assert result["raw_log_or_exception_message_included"] is False

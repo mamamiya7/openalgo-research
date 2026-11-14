@@ -82,7 +82,13 @@ def main() -> int:
     sys.path.insert(0, str(root))
     import pytest
 
+    # Hosted Windows runners need room for cold native compilation and full
+    # 408-proposal fixture setup. The old host-wide 60-second default killed
+    # progressing tests; keep a finite bound without removing any work/checks.
+    # Explicit per-test timeouts continue to take precedence.
     options = [*modules, "-q", "--durations=20"]
+    if sys.platform == "win32":
+        options.append("--timeout=180")
     if args.junit_xml is not None:
         args.junit_xml.parent.mkdir(parents=True, exist_ok=True)
         options.append(f"--junitxml={args.junit_xml}")
