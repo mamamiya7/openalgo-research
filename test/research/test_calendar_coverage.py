@@ -10,7 +10,13 @@ from pathlib import Path
 
 import pytest
 
-from research.calendar_coverage import VERSION, check_native_window, check_saved_calendar
+from research.calendar_coverage import (
+    LEGACY_VERSION,
+    SOURCES,
+    VERSION,
+    check_native_window,
+    check_saved_calendar,
+)
 from services.research_native_calendar import native_calendar_snapshot
 
 
@@ -46,7 +52,73 @@ def test_missing_native_exception_requires_upgrade(day, window):
 
 def test_unannounced_special_hours_are_not_guessed():
     with pytest.raises(ValueError, match="session hours"):
-        check_native_window(date(2026, 11, 8), {"start_ms": 1, "end_ms": 2})
+        check_native_window(date(2026, 11, 15), {"start_ms": 1, "end_ms": 2})
+
+
+def test_reviewed_native_muhurat_window_is_admitted_without_overriding_admin_hours():
+    day = date(2026, 11, 8)
+    assert "https://nsearchives.nseindia.com/content/circulars/CMTR76941.pdf" in SOURCES
+    for start, end in (("14:20", "15:30"), ("14:25", "15:25")):
+        offset = timezone(timedelta(hours=5, minutes=30))
+        window = {
+            key: int(
+                datetime.fromisoformat(f"{day}T{value}:00").replace(tzinfo=offset).timestamp()
+                * 1000
+            )
+            for key, value in (("start_ms", start), ("end_ms", end))
+        }
+        before = copy.deepcopy(window)
+        check_native_window(day, window)
+        assert window == before
+    with pytest.raises(ValueError, match="calendar needs an update"):
+        check_native_window(day, None)
+
+
+@pytest.mark.parametrize("sessions", [["2026-10-21", "2026-10-22"], ["2026-11-12", "2026-11-13"]])
+def test_v1_unfinished_windows_outside_the_new_session_remain_compatible(sessions):
+    snapshot = {"sessions": sessions, "provenance": {"calendar_admission": LEGACY_VERSION}}
+    original = copy.deepcopy(snapshot)
+    check_saved_calendar(snapshot)
+    assert snapshot == original
+
+
+@pytest.mark.parametrize("admission", [LEGACY_VERSION, VERSION])
+def test_unfinished_window_missing_new_muhurat_session_is_rejected_without_changes(admission):
+    snapshot = {
+        "sessions": ["2026-11-06", "2026-11-09"],
+        "provenance": {"calendar_admission": admission},
+    }
+    original = copy.deepcopy(snapshot)
+    with pytest.raises(ValueError, match="Start a new run"):
+        check_saved_calendar(snapshot)
+    assert snapshot == original
+
+
+def test_v2_saved_calendar_includes_native_confirmed_muhurat_session():
+    snapshot = {
+        "sessions": ["2026-11-06", "2026-11-08", "2026-11-09"],
+        "provenance": {"calendar_admission": VERSION},
+    }
+    check_saved_calendar(snapshot)
+
+
+def test_old_completed_artifact_is_read_exactly_without_current_calendar_admission(tmp_path):
+    from database.research_db import ResearchStore
+    from services import scanner_research_service as service
+
+    snapshot = {
+        "sessions": ["2026-11-06", "2026-11-09"],
+        "provenance": {"calendar_admission": LEGACY_VERSION},
+    }
+    completed = {"job_id": "completed", "result": {"snapshot": snapshot}}
+    store = ResearchStore(tmp_path / "saved-evidence")
+    try:
+        store.initialize()
+        identifier = service.save_artifact(store, completed)
+        assert service.read_artifact(store, identifier) == completed
+        assert service.save_artifact(store, service.read_artifact(store, identifier)) == identifier
+    finally:
+        store.close()
 
 
 def test_native_administrator_hours_are_retained():
@@ -281,6 +353,7 @@ from sqlalchemy import select, event
 from database import market_calendar_db as c
 from database.research_calendar import repair_nse_calendar
 from services.research_native_calendar import native_calendar_snapshot
+from research.calendar_coverage import VERSION
 
 c.Base.metadata.create_all(c.engine)
 c.seed_holidays_2025()
@@ -312,12 +385,13 @@ assert c.get_effective_session_window(date(2025,11,1),"NSE") is None
 assert c.get_effective_session_window(date(2025,11,14),"NSE") is not None
 assert c.get_effective_session_window(date(2025,11,5),"NSE") is None
 c.db_session.remove()
-snapshot=native_calendar_snapshot([{"date":"2025-02-03","symbol":"AAA"}],today=date(2026,9,9))
+snapshot=native_calendar_snapshot([{"date":"2025-02-03","symbol":"AAA"}],today=date(2026,11,12))
 assert "2025-02-01" in snapshot["sessions"]
 assert "2026-02-01" in snapshot["sessions"]
 assert "2026-01-15" not in snapshot["sessions"]
 assert snapshot["session_hours"]["2025-10-21"] == {"open":"13:45","close":"14:45"}
-assert snapshot["provenance"]["calendar_admission"] == "nse-calendar-admission-2025-2026-v1"
+assert snapshot["provenance"]["calendar_admission"] == VERSION
+assert snapshot["session_hours"]["2026-11-08"] == {"open":"14:20","close":"15:30"}
 # A changed native entry is retained, never silently reset by the upgrade.
 with c.db_session() as db:
     row=db.execute(select(c.HolidayExchange).join(c.Holiday,c.Holiday.id==c.HolidayExchange.holiday_id).where(c.Holiday.holiday_date==date(2025,10,21),c.HolidayExchange.exchange_code=="NSE")).scalar_one()

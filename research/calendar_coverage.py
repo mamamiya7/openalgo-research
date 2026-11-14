@@ -7,12 +7,14 @@ baseline when exchange circulars add years or change special sessions.
 
 from datetime import date
 
-VERSION = "nse-calendar-admission-2025-2026-v1"
+VERSION = "nse-calendar-admission-2025-2026-v2"
+LEGACY_VERSION = "nse-calendar-admission-2025-2026-v1"
+MUHURAT_2026 = date(2026, 11, 8)
 FIRST_DAY = date(2025, 1, 1)
 LAST_DAY = date(2026, 12, 31)
 SOURCES = tuple(
     f"https://nsearchives.nseindia.com/content/circulars/CMTR{number}.pdf"
-    for number in (65587, 65729, 70319, 71775, 72260, 72349)
+    for number in (65587, 65729, 70319, 71775, 72260, 72349, 76941)
 )
 CLOSED_DAYS = frozenset(
     date.fromisoformat(f"{year}-{value}")
@@ -29,9 +31,12 @@ SPECIAL_HOURS = {
     date(2025, 2, 1): ("09:15", "15:30"),
     date(2025, 10, 21): ("13:45", "14:45"),
     date(2026, 2, 1): ("09:15", "15:30"),
+    # CMTR76941, 19 October 2026: native NSE cash/non-CAS daily contract.
+    # This admission record never overwrites administrator/native timings.
+    MUHURAT_2026: ("14:20", "15:30"),
 }
-# The annual circular announces this session but does not establish its hours.
-UNCONFIRMED_HOURS = frozenset({date(2026, 11, 8)})
+# Announced sessions without reviewed timings must remain fail-closed here.
+UNCONFIRMED_HOURS = frozenset()
 
 
 def require_covered_day(day):
@@ -45,7 +50,9 @@ def require_covered_day(day):
 def check_native_window(day, window):
     """Reject missing baseline exceptions without overriding native answers."""
     require_covered_day(day)
-    if day in UNCONFIRMED_HOURS:
+    if day in UNCONFIRMED_HOURS or (
+        window is not None and day.weekday() >= 5 and day not in SPECIAL_HOURS
+    ):
         raise ValueError(
             f"NSE session hours for {day.isoformat()} need a calendar update before this run."
         )
@@ -61,7 +68,8 @@ def check_saved_calendar(snapshot):
 
     Completed exports/replay never call this: they keep their original evidence.
     """
-    if snapshot.get("provenance", {}).get("calendar_admission") != VERSION:
+    admission = snapshot.get("provenance", {}).get("calendar_admission")
+    if admission not in (VERSION, LEGACY_VERSION):
         raise ValueError(
             "This unfinished run uses an older NSE calendar. Start a new run with the same signals."
         )
@@ -72,6 +80,11 @@ def check_saved_calendar(snapshot):
     first, last = min(days), max(days)
     require_covered_day(first)
     require_covered_day(last)
+    if admission == LEGACY_VERSION and first <= MUHURAT_2026 <= last:
+        raise ValueError(
+            "This unfinished run predates the reviewed 8 November NSE session. "
+            "Start a new run with the same signals after the calendar update."
+        )
     if days & CLOSED_DAYS or any(first <= day <= last and day not in days for day in SPECIAL_HOURS):
         raise ValueError(
             "This unfinished run uses an older NSE calendar. Start a new run with the same signals."
