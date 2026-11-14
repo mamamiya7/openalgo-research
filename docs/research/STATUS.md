@@ -2,14 +2,51 @@
 
 ## Release qualification batch — 14 November 2026
 
-Preview.37 candidate repairs post-upgrade test contracts, current Fyers volume
+Published preview.37 repairs post-upgrade test contracts, current Fyers volume
 producer provenance, early compiled-library checks and fresh-install diagnostics.
 Optional per-study completion notices reuse native Slack/Discord Alerts, default
 off and never automatically replay an uncertain delivery. See [release notes](releases/0.1.0-preview.37.md).
-Focused checks pass; complete Windows/Linux distribution qualification and fresh
-small saved-data browser acceptance are pending. Public preview.36 remains the
-download until the exact candidate passes. Search allowances, engine pins and
-financial validation remain unchanged. No full scanner run is authorized.
+The complete Windows/Linux matrix, package/Docker and both fresh-install,
+reinstall and restart checks passed in [run43580662494](https://github.com/mamamiya7/openalgo-research/actions/runs/43580662494)
+at tested source `810a59f1e505b698ede6e52d2a90d1b1b6fdf5dd`.
+The [installable release](https://github.com/mamamiya7/openalgo-research/releases/tag/research-v0.1.0-preview.37)
+and installed4452 managed files share ZIP SHA256
+`a4898b3f6aa1921dd5dd22aae239999773ee948d358d4a6477738377f9bb82af`.
+Existing configuration and database contents were preserved at installation.
+
+Fresh small saved-data native journeys each kept all408 proposals and the512
+account ceiling. The real-data v8 case cleared whole-share funding failures,
+completed all13 validation accounts, then received two actual ChatGPT changes
+and an explicit reasoned stop. Its failed checks stayed failed. The separate
+synthetic engineering control passed, automatically selected and saved its exact
+candidate, and used one additional reserved reconstruction account within512.
+Separate-process reopening of accepted and rejected cases forbade new native
+calculations and preserved exact results and accounting. Deferred analysis queues
+were completed without financial account execution. Private receipts remain under
+ignored `.agent-native/release37/`; no real-market passing edge is claimed.
+
+ATR capital policy v8 consumes recorded native entry risk and skips unsupported
+or equivalent repairs. Frozen v3–v7 plans retain their original reconstruction;
+backup/restore checks cover old and new ledgers. Exact saving pins the accepted
+parent, settings, inputs and validation before its one-account reservation, and
+recovers the same queue/Keep request after interruption.
+
+Targeted verification includes218 integrated release/journey/storage checks,
+158 capital/supervisor checks and109 journey/findings interface checks; these
+overlapping sets are not summed. Browser interaction remains pending operator
+sign-in; native-service qualification and component tests do not claim that check.
+Search allowances, engine pins and financial validation remain unchanged. No full
+scanner, new broker download or external notification send was performed.
+
+Review limitation: Available data describes prepared price/feature coverage.
+Research-horizon purges are retained consistently for every candidate and shown
+in results, but the review does not yet preview that separate research cohort.
+This does not change trade eligibility or validation.
+
+Cleanup removed153 reviewed obsolete files (62,524,985bytes), retaining the current
+preview.37 and preview.36 rollback. Five earlier policy-blocked logs remain for
+manual cleanup through the existing reviewed helper. Unique saved evidence and
+datasets were retained; no new local dependency environment or checkout was made.
 
 ## Decision feedback and visible changes — 12 November 2026
 

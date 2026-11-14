@@ -5,11 +5,13 @@ Finish understandable automatic findings and fix observed journey gaps using the
 existing engines/data/search programme. Broader method/asset/adaptive-policy and
 calibration expansion is outside the active queue. Batch verification and delivery.
 
-Local patch distribution: `0.1.0-preview.36`, on reviewed OpenAlgo 2.0.3.3, with v16
+Local patch distribution: `0.1.0-preview.37`, on reviewed OpenAlgo 2.0.3.3, with v16
 bounded automatic research, execution/risk constraints, causal portfolio
 allocation, chronological checks, saved evidence and native trade charts.
-The [current update notes](releases/0.1.0-preview.36.md) add bounded supervision through the existing AI Agent, retaining exact-setting capital/size validation, saved replay and OpenAlgo 2.0.2.9,
-rebuilt charts, history and the unchanged search and validation contracts.
+The [current update notes](releases/0.1.0-preview.37.md) add native ATR funding
+recovery, exact automatic saving and optional completion notices through existing
+OpenAlgo services, retaining exact-setting validation, saved replay and the
+unchanged search and validation contracts.
 Broker-backed daily/minute acceptance remains separately recorded. The prior
 [release acceptance](RELEASE_ACCEPTANCE_20261022.md) remains a historical record
 of preview.8 numerical, installation and compatibility scope; the

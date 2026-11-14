@@ -1,5 +1,25 @@
 # OpenAlgo Research — essential one-click delivery plan
 
+## Release and full saved-data batch — 14 November 2026
+
+Completed in preview.37: post-upgrade release failures, compiled-library readiness,
+current volume/calendar admission, ATR whole-share funding, exact automatic
+candidate reconstruction before Keep/save/reopen, and opt-in native completion
+notifications. All408 proposals, the512-account limit and every financial gate
+remain unchanged. Full Windows/Linux/package/fresh-install qualification and
+actual small saved-data native/ChatGPT cases are recorded in [STATUS](STATUS.md).
+Old frozen policies and failed outcomes are preserved. The positive control is
+synthetic engineering evidence, not market edge. Publication uses the exact
+qualified ZIP; no full scanner or new local dependency installation was used.
+
+Remaining verification: interactive browser acceptance requires operator sign-in.
+Remaining review disclosure: distinguish prepared price availability from the
+already-determined research-horizon cohort before Start; current final reports
+retain the exclusions correctly. Neither item authorizes new financial methods,
+weaker validation or additional scanner runs.
+
+Historical batch entries below describe their state at the stated date.
+
 ## Decision feedback batch — 12 November 2026
 
 Execute one bounded batch against the agreed automatic flow:
