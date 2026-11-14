@@ -63,9 +63,11 @@ def failure_diagnostics(log_path, *, stage, exit_code):
         "log_sha256": digest(log_path),
         "raw_log_or_exception_message_included": False,
     }
-    (log_path.parent / "diagnostics.json").write_text(
-        json.dumps(diagnostic, indent=2), encoding="utf-8"
-    )
+    encoded = json.dumps(diagnostic, indent=2)
+    (log_path.parent / "diagnostics.json").write_text(encoded, encoding="utf-8")
+    # A wrapping workflow failure must not discard the inner setup stage.
+    safe_stage = re.sub(r"[^a-zA-Z0-9_-]", "_", stage)[:64]
+    (log_path.parent / f"diagnostics.{safe_stage}.json").write_text(encoded, encoding="utf-8")
     return diagnostic
 
 
@@ -487,7 +489,7 @@ def verify_fresh_broker_setup(get):
     verify_fresh_broker_cards(response["data"])
 
 
-def exercise(directory, ports):
+def exercise(directory, ports, *, phase):
     """Executed only by the newly installed interpreter, using its own packages."""
     import requests
     from dotenv import dotenv_values
@@ -495,7 +497,9 @@ def exercise(directory, ports):
     evidence = directory / "tmp/install-smoke"
     receipt_path = evidence / "receipt.json"
     receipt = json.loads(receipt_path.read_text())
-    _check(receipt.get("state") == "installed", "Missing successful bootstrap receipt")
+    _check(phase in ("initial", "restart"), "Choose a bounded installation test phase")
+    expected_state = "installed" if phase == "initial" else "reinstalled"
+    _check(receipt.get("state") == expected_state, "Missing successful installation phase receipt")
     environment = clean_environment(directory)
     config = dotenv_values(directory / ".env")
     _check(
@@ -507,14 +511,24 @@ def exercise(directory, ports):
             bool(config.get(key)) and "PLACEHOLDER" not in config[key],
             "Fresh setup did not create unique account secrets",
         )
-    baseline_env = digest(directory / ".env")
+    baseline_env = receipt["environment_sha256"]
+    _check(digest(directory / ".env") == baseline_env, "Installation changed its existing .env")
     base = f"http://127.0.0.1:{ports[0]}"
-    username = "smoke" + secrets.token_hex(4)
-    password = "Fresh!" + secrets.token_urlsafe(18) + "Aa1"
+    username = os.environ.get("OPENALGO_SMOKE_USERNAME")
+    password = os.environ.get("OPENALGO_SMOKE_PASSWORD")
+    _check(
+        bool(username and password), "The external test driver must supply its temporary account"
+    )
     session = requests.Session()
     session.trust_env = False
     checks = receipt.setdefault("checks", {})
     saved = {}
+    if phase == "restart":
+        for job_id, expected_hash in receipt["export_sha256"].items():
+            _check(bool(re.fullmatch(r"[a-f0-9]{32}", job_id)), "Invalid saved test job identity")
+            path = evidence / "exports" / (job_id + ".json")
+            _check(digest(path) == expected_hash, "Retained test export changed before restart")
+            saved[job_id] = path.read_bytes()
 
     def get(path, *, json_response=True):
         with session.get(base + path, timeout=15) as response:
@@ -719,6 +733,9 @@ def exercise(directory, ports):
                             rerun["result"][key] == optimized["result"][key],
                             "Saved selected setup did not replay exactly",
                         )
+                    saved[rerun["id"]] = get(
+                        f"/scanner-research/api/jobs/{rerun['id']}/export", json_response=False
+                    )
                     checks.update(
                         daily_csv_archive_reuse=True,
                         vectorbt_backtest=True,
@@ -756,21 +773,22 @@ def exercise(directory, ports):
                 child.wait(55)
 
     try:
-        run_cycle(1)
+        run_cycle(1 if phase == "initial" else 2)
         _check(
             digest(directory / ".env") == baseline_env, "First run changed installer-created .env"
         )
-        install(directory, environment, ports, "reinstall")
-        _check(digest(directory / ".env") == baseline_env, "Reinstall changed existing .env")
-        run_cycle(2)
-        _check(digest(directory / ".env") == baseline_env, "Restart changed existing .env")
+        if phase == "initial":
+            exports = evidence / "exports"
+            exports.mkdir(exist_ok=True)
+            for job_id, raw in saved.items():
+                (exports / (job_id + ".json")).write_bytes(raw)
         from tools.research_desktop import InstanceLock, check_ports
 
         check_ports(list(zip(("website", "WebSocket", "market-data"), ports, strict=True)))
         with InstanceLock(directory / "tmp/research-desktop.lock"):
             pass
         checks["services_release_ports_and_instance_lock"] = True
-        receipt["state"] = "passed"
+        receipt["state"] = "exercised" if phase == "initial" else "passed"
     except BaseException as error:
         receipt["state"] = "failed"
         receipt["error"] = str(error)
@@ -814,11 +832,56 @@ def seed_prices(directory, config):
     )
 
 
+def qualify_installed_phases(directory, environment, ports):
+    """Reinstall from outside the managed environment, after all users exit.
+
+    On Windows a running test interpreter/native DLL can lock the files Setup
+    needs to update. Neither exercise process survives into reinstallation.
+    Credentials for this generated test account stay only in process memory.
+    """
+    receipt_path = directory / "tmp/install-smoke/receipt.json"
+    child_environment = {
+        **environment,
+        "OPENALGO_SMOKE_USERNAME": "smoke" + secrets.token_hex(4),
+        "OPENALGO_SMOKE_PASSWORD": "Fresh!" + secrets.token_urlsafe(18) + "Aa1",
+    }
+    for phase in ("initial", "restart"):
+        with OwnedCommand(
+            [
+                str(installed_python(directory)),
+                "tools/research_install_smoke.py",
+                "--directory",
+                str(directory),
+                "--exercise",
+                "--exercise-phase",
+                phase,
+            ],
+            directory,
+            child_environment,
+            directory / f"tmp/install-smoke/workflow-{phase}.log",
+        ) as child:
+            child.wait(1800)
+        current = json.loads(receipt_path.read_text())
+        _check(
+            current["state"] == ("exercised" if phase == "initial" else "passed"),
+            "The installed exercise did not finish its complete phase",
+        )
+        if phase == "initial":
+            install(directory, environment, ports, "reinstall")
+            _check(
+                digest(directory / ".env") == current["environment_sha256"],
+                "Reinstall changed existing .env",
+            )
+            current["state"] = "reinstalled"
+            receipt_path.write_text(json.dumps(current, indent=2), encoding="utf-8")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--archive", type=Path)
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--exercise", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--exercise-phase", choices=("initial", "restart"), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     if args.exercise:
         directory = args.directory.resolve(strict=True)
@@ -826,7 +889,7 @@ def main(argv=None):
         receipt = json.loads((directory / "tmp/install-smoke/receipt.json").read_text())
         _check(receipt["directory"] == str(directory), "Smoke directory identity differs")
         os.chdir(directory)
-        exercise(directory, receipt["ports"])
+        exercise(directory, receipt["ports"], phase=args.exercise_phase)
         return 0
     if args.archive is None:
         parser.error("--archive is required")
@@ -851,20 +914,9 @@ def main(argv=None):
     try:
         install(directory, environment, ports, "bootstrap")
         receipt["state"] = "installed"
+        receipt["environment_sha256"] = digest(directory / ".env")
         receipt_path.write_text(json.dumps(receipt, indent=2), encoding="utf-8")
-        with OwnedCommand(
-            [
-                str(installed_python(directory)),
-                "tools/research_install_smoke.py",
-                "--directory",
-                str(directory),
-                "--exercise",
-            ],
-            directory,
-            environment,
-            directory / "tmp/install-smoke/workflow.log",
-        ) as child:
-            child.wait(1800)
+        qualify_installed_phases(directory, environment, ports)
         finished = json.loads(receipt_path.read_text())
         _check(finished["state"] == "passed", "Fresh installation acceptance did not pass")
     except BaseException as error:

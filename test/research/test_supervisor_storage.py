@@ -96,16 +96,19 @@ def proposal(saved, *, seed=None, artifact=None, remedy="funding_and_size"):
         {"id": "s", "name": "Saved rules", "allocation_pct": 100, "config": {"hold_sessions": 3}}
     ]
     source = artifact or root_artifact
+    policy = saved[1].get("capital_policy_version")
     identity = fingerprint(
         {
             "remedy": remedy,
             "settings": settings,
             "source_result_artifact": source,
             "root_job_id": "2" * 32,
+            **({"capital_policy_version": policy} if policy else {}),
         }
     )
     return {
         "id": identity,
+        **({"capital_policy_version": policy} if policy else {}),
         "remedy": remedy,
         "rationale": "Native affordability evidence",
         "settings": settings,
@@ -391,8 +394,13 @@ def test_saved_reference_matches_exact_accepted_native_child(saved, change):
             refs(store, artifacts=True)
 
 
-def test_tiny_backup_restore_keeps_full_ledger_request_and_exact_artifacts(saved, tmp_path):
+@pytest.mark.parametrize(
+    "policy", [None, "research-capital-planning-v7", "research-capital-planning-v8"]
+)
+def test_tiny_backup_restore_keeps_full_ledger_request_and_exact_artifacts(saved, tmp_path, policy):
     store, state, root = saved
+    if policy:
+        state["capital_policy_version"] = policy
     item = proposal(saved)
     child = add_child(saved, item)
     state.update(

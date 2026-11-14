@@ -360,7 +360,7 @@ export function ResearchJourney({
             <div>
               <p className="font-medium">
                 {value?.phase === 'finalizing'
-                  ? 'Saving and reopening the tested result'
+                  ? 'Verifying, saving and reopening the chosen result'
                   : running
                     ? latest
                       ? (remedyLabel[latest.remedy] ?? latest.remedy)
@@ -369,7 +369,7 @@ export function ResearchJourney({
               </p>
               <p className="mt-1 text-muted-foreground">
                 {value?.phase === 'finalizing'
-                  ? 'Checking that saved settings and results reopen exactly.'
+                  ? 'Verifying the chosen settings, then saving and reopening the exact result.'
                   : running
                     ? latest?.reason ||
                       'Research continues in the background. You can leave this page and return later.'

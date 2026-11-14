@@ -472,7 +472,7 @@ describe('Reviewed automatic research journey', () => {
     render(<ResearchJourney experimentId="e" revision={1} enabled />)
     await screen.findByRole('heading', { name: 'Saving and verifying the result' })
     expect(
-      screen.getByText('Checking that saved settings and results reopen exactly.')
+      screen.getByText('Verifying the chosen settings, then saving and reopening the exact result.')
     ).toBeInTheDocument()
     expect(screen.queryByLabelText('Trading style')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Start research' })).not.toBeInTheDocument()

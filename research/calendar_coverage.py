@@ -50,9 +50,7 @@ def require_covered_day(day):
 def check_native_window(day, window):
     """Reject missing baseline exceptions without overriding native answers."""
     require_covered_day(day)
-    if day in UNCONFIRMED_HOURS or (
-        window is not None and day.weekday() >= 5 and day not in SPECIAL_HOURS
-    ):
+    if day in UNCONFIRMED_HOURS:
         raise ValueError(
             f"NSE session hours for {day.isoformat()} need a calendar update before this run."
         )

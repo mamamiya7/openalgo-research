@@ -288,6 +288,7 @@ def _supervisor_references(connection, tables, *, store=None):
                 None,
                 "research-capital-planning-v6",
                 "research-capital-planning-v7",
+                "research-capital-planning-v8",
             ):
                 fail()
             proposals = state.get("proposals")

@@ -56,7 +56,7 @@ def state(ledger, plan):
 
 def test_confirmed_command_submits_native_funding_without_more_model_prose(ledger, monkeypatch):
     plan = start(ledger, monkeypatch)
-    assert plan["capital_policy_version"] == "research-capital-planning-v7"
+    assert plan["capital_policy_version"] == "research-capital-planning-v8"
     assert auto.run_one(ledger.store, "worker-one")
     result = state(ledger, plan)
     assert result["status"] == "running" and len(ledger.submissions) == 1

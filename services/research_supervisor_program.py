@@ -361,6 +361,11 @@ def run(store, owner, evidence, spec, *, saved, checkpoint, progress, cancelled,
                 ),
                 max_accounts=4 if recipe["validation_mode"] == "exploratory_only" else 3,
                 version=proposal.get("capital_policy_version", capital.CLOSED_LOOP_VERSION),
+                **(
+                    {"request_risks": capital.selected_account_risks(report, report["strategies"])}
+                    if proposal.get("capital_policy_version") == capital.ATR_VERSION
+                    else {}
+                ),
             )
             receipts = []
             while (index := capital.selected_account_next(frozen, receipts)) is not None:
@@ -449,6 +454,11 @@ def run(store, owner, evidence, spec, *, saved, checkpoint, progress, cancelled,
                     chosen, settings, accounts.window("search")["snapshot"]
                 ),
                 version=proposal.get("capital_policy_version", capital.CLOSED_LOOP_VERSION),
+                **(
+                    {"request_risks": capital.selected_account_risks(chosen, settings)}
+                    if proposal.get("capital_policy_version") == capital.ATR_VERSION
+                    else {}
+                ),
             )
             counts = capital.selected_account_receipt(chosen, frozen, 0)["counts"]
             point = {

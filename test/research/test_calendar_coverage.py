@@ -50,7 +50,10 @@ def test_missing_native_exception_requires_upgrade(day, window):
         check_native_window(day, window)
 
 
-def test_unannounced_special_hours_are_not_guessed():
+def test_unannounced_special_hours_are_not_guessed(monkeypatch):
+    monkeypatch.setattr(
+        "research.calendar_coverage.UNCONFIRMED_HOURS", frozenset({date(2026, 11, 15)})
+    )
     with pytest.raises(ValueError, match="session hours"):
         check_native_window(date(2026, 11, 15), {"start_ms": 1, "end_ms": 2})
 

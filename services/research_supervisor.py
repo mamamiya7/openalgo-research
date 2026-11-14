@@ -460,7 +460,7 @@ def open_supervisor(
                 "status": "planning",
                 "validation_mode": recipe["validation_mode"],
                 "diagnosis": _reviewed_diagnosis(report, recipe, context, memory),
-                "capital_policy_version": "research-capital-planning-v7",
+                "capital_policy_version": "research-capital-planning-v8",
                 "decision_catalog_version": DECISION_CATALOG_VERSION,
                 "experiment_policy": experiment_policy,
                 "continuation_policy": continuation_policy,
@@ -599,8 +599,7 @@ def _structural_sample_stop(recipe, context):
     count = preflight.get("signal_count")
     if (
         contract.get("version") != "research-execution-playbook-v1"
-        or contract.get("id")
-        != fingerprint({k: v for k, v in contract.items() if k != "id"})
+        or contract.get("id") != fingerprint({k: v for k, v in contract.items() if k != "id"})
         or contract.get("signal_policy") != "fixed_signals"
         or contract.get("engine") != "vectorbt"
         or recipe.get("version") != "automatic-hypotheses-v16"
@@ -609,8 +608,7 @@ def _structural_sample_stop(recipe, context):
         or intent.get("hypothesis_ids") != ["none"]
         or recipe.get("automatic_design") != policy
         or recipe.get("id") != fingerprint({k: v for k, v in recipe.items() if k != "id"})
-        or preflight.get("id")
-        != fingerprint({k: v for k, v in preflight.items() if k != "id"})
+        or preflight.get("id") != fingerprint({k: v for k, v in preflight.items() if k != "id"})
         or type(count) is not int
         or count < 0
         or count >= policy["minimum_closed_trades"]

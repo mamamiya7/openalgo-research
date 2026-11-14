@@ -266,3 +266,72 @@ def test_failure_diagnostics_keep_safe_frames_not_log_messages_or_generated_secr
         )
     )
     assert result["raw_log_or_exception_message_included"] is False
+
+
+def test_reinstall_waits_for_managed_interpreter_exit_and_retains_the_same_test_account(
+    tmp_path, monkeypatch
+):
+    evidence = tmp_path / "tmp/install-smoke"
+    evidence.mkdir(parents=True)
+    (tmp_path / ".env").write_text("unique-test-environment")
+    receipt_path = evidence / "receipt.json"
+    receipt_path.write_text(
+        json.dumps({"state": "installed", "environment_sha256": smoke.digest(tmp_path / ".env")})
+    )
+    events, accounts = [], []
+    active = False
+
+    class ManagedExercise:
+        def __init__(self, command, directory, environment, log):
+            self.phase = command[-1]
+            assert command[-2] == "--exercise-phase"
+            accounts.append(
+                (environment["OPENALGO_SMOKE_USERNAME"], environment["OPENALGO_SMOKE_PASSWORD"])
+            )
+
+        def __enter__(self):
+            nonlocal active
+            assert not active
+            active = True
+            events.append("enter-" + self.phase)
+            return self
+
+        def wait(self, timeout):
+            assert timeout == 1800
+            current = json.loads(receipt_path.read_text())
+            assert current["state"] == ("installed" if self.phase == "initial" else "reinstalled")
+            current["state"] = "exercised" if self.phase == "initial" else "passed"
+            receipt_path.write_text(json.dumps(current))
+
+        def __exit__(self, *args):
+            nonlocal active
+            active = False
+            events.append("exit-" + self.phase)
+
+    def reinstall(directory, environment, ports, name):
+        assert not active, (
+            "Reinstallation must not run while its test interpreter owns native files"
+        )
+        assert name == "reinstall" and ports == [1, 2, 3]
+        assert "OPENALGO_SMOKE_PASSWORD" not in environment
+        events.append("reinstall")
+
+    monkeypatch.setattr(smoke, "OwnedCommand", ManagedExercise)
+    monkeypatch.setattr(smoke, "install", reinstall)
+    smoke.qualify_installed_phases(tmp_path, {}, [1, 2, 3])
+    assert events == ["enter-initial", "exit-initial", "reinstall", "enter-restart", "exit-restart"]
+    assert accounts[0] == accounts[1] and all(accounts[0])
+    assert accounts[0][1] not in receipt_path.read_text()
+    assert json.loads(receipt_path.read_text())["state"] == "passed"
+
+
+def test_wrapping_failure_does_not_discard_inner_redacted_diagnostics(tmp_path):
+    inner = tmp_path / "reinstall.log"
+    inner.write_text("PermissionError: private-path secret-account\n")
+    original = smoke.failure_diagnostics(inner, stage="reinstall", exit_code=1)
+    outer = tmp_path / "workflow-initial.log"
+    outer.write_text("RuntimeError: inspect private-log\n")
+    smoke.failure_diagnostics(outer, stage="workflow-initial", exit_code=1)
+    retained = json.loads((tmp_path / "diagnostics.reinstall.json").read_text())
+    assert retained == original and retained["exception_type"] == "PermissionError"
+    assert "secret-account" not in json.dumps(retained)

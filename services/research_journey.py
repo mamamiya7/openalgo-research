@@ -26,6 +26,10 @@ from services import scanner_research_service as service
 
 VERSION = "reviewed-research-journey-v1"
 NO_RESULT = "None of the tested setups passed validation."
+EXACT_SAVE_REQUIRED = (
+    "Open an exact backtest of these settings before saving or comparing "
+    "this automatic research choice."
+)
 ACTIVE_PHASES = ("preparing", "researching", "finalizing")
 MAX_STATE_BYTES = 131072
 
@@ -114,6 +118,12 @@ def prepare(store, owner, identifier, data):
             raise LookupError("Research journey not found")
         running = bool(prior and prior.phase in ("researching", "finalizing"))
     if running:
+        return _response(store, owner, identifier)
+    if (
+        prior
+        and prior.phase == "needs_action"
+        and _resume_exact_search_save(store, owner, identifier)
+    ):
         return _response(store, owner, identifier)
     draft = _guided_draft(current["draft"])
     if draft != current["draft"]:
@@ -569,7 +579,8 @@ def status(store, owner, identifier):
         return empty
     run = None
     if state.get("job_id"):
-        job = service.get_job(store, owner, state["job_id"])
+        exact_job = state.get("exact_account", {}).get("job_id")
+        job = service.get_job(store, owner, exact_job or state["job_id"])
         receipt = service.job_receipt(store, job, experiment_id=identifier)
         run = {
             "job_id": job.id,
@@ -831,6 +842,149 @@ def _reopen_native(store, owner, job_id):
     }
 
 
+def _reserve_exact_search_account(
+    store, owner, identifier, job, bundle, validation, *, recover=False
+):
+    """Debit one durable reconstruction account without modifying search evidence."""
+    if fingerprint(bundle) != job.result_artifact or bundle.get("job_id") != job.id:
+        raise ValueError("The validated search artifact no longer matches its native job")
+    findings = bundle["result"]["automatic_research"]
+    counts = findings["counts"]
+    pin = {
+        "parent_job_id": job.id,
+        "parent_result_artifact": job.result_artifact,
+        "inputs_artifact": bundle["inputs_artifact"],
+        "config_id": validation["config_id"],
+        "validation_id": validation["id"],
+        "parent_reserved": counts["attempts_reserved"],
+        "parent_completed": counts["simulations"],
+        "limit": 512,
+    }
+    with store.sessions.begin() as db:
+        service.write_guard(db)
+        row, fresh = _owned(db, owner, identifier)
+        actual = db.get(ResearchJob, job.id)
+        if (
+            fresh.get("job_id") != job.id
+            or not actual
+            or actual.owner != owner
+            or actual.status != "completed"
+            or actual.result_artifact != job.result_artifact
+        ):
+            raise ValueError("The validated search changed before exact-account admission")
+        if recover and (
+            row.phase != "needs_action"
+            or fresh.get("error") != EXACT_SAVE_REQUIRED
+            or not fresh.get("start_request")
+        ):
+            raise ValueError("This research stop does not admit automatic exact-account recovery")
+        prior = fresh.get("exact_account")
+        if prior:
+            if any(prior.get(key) != value for key, value in pin.items()):
+                raise ValueError(
+                    "The exact-account reservation no longer matches the validated search"
+                )
+            if (
+                type(prior.get("reserved_accounts")) is not int
+                or prior["reserved_accounts"] != 1
+                or type(prior.get("completed_accounts")) is not int
+                or prior["completed_accounts"] not in (0, 1)
+                or prior["parent_reserved"] + prior["reserved_accounts"] > prior["limit"]
+            ):
+                raise ValueError("The exact-account reservation exceeds its recorded allowance")
+        else:
+            if counts["attempts_reserved"] + 1 > pin["limit"]:
+                raise ValueError(
+                    "The remaining 512-account allowance cannot fund an exact saved result"
+                )
+            fresh["exact_account"] = {
+                **pin,
+                "reserved_accounts": 1,
+                "completed_accounts": 0,
+                "job_id": None,
+            }
+        fresh["error"] = None
+        _put(row, fresh, "finalizing")
+        return deepcopy(fresh["exact_account"])
+
+
+def _resume_exact_search_save(store, owner, identifier):
+    """Recover only the previously admitted, fully validated missing-exact path."""
+    from services.research_playbook import validate_full_search_result
+
+    with store.sessions() as db:
+        parent = library._owned(db, owner, identifier)
+        row, state = _owned(db, owner, identifier)
+        if (
+            row.phase != "needs_action"
+            or state.get("error") != EXACT_SAVE_REQUIRED
+            or state.get("draft_id") != fingerprint(json.loads(parent.draft))
+        ):
+            return False
+    job = service.get_job(store, owner, state["job_id"])
+    if job.status != "completed" or not job.result_artifact:
+        return False
+    bundle = service.read_artifact(store, job.result_artifact)
+    validation = validate_full_search_result(bundle["result"], state["approved_plan"]["contract"])
+    _reserve_exact_search_account(store, owner, identifier, job, bundle, validation, recover=True)
+    return True
+
+
+def _exact_search_account(store, owner, identifier, job, bundle, validation):
+    from services import research_candidates as candidates
+    from services.research_validation import canonical_source
+
+    reservation = _reserve_exact_search_account(store, owner, identifier, job, bundle, validation)
+    # The native candidate link is unique per parent/settings/period. A crash
+    # between its admission and the journey update reuses that same queued job.
+    receipt = candidates.prepare(store, owner, job.id, validation["config_id"])
+    exact_id = receipt.get("report_job_id")
+    if not exact_id:
+        raise ValueError(
+            receipt.get("error") or "The validated candidate has no exact native report"
+        )
+    with store.sessions.begin() as db:
+        row, fresh = _owned(db, owner, identifier)
+        pin = fresh["exact_account"]
+        if pin.get("job_id") not in (None, exact_id) or any(
+            pin.get(key) != value for key, value in reservation.items() if key != "job_id"
+        ):
+            raise ValueError("The exact-account job changed during admission")
+        pin["job_id"] = exact_id
+        _put(row, fresh)
+    exact = service.get_job(store, owner, exact_id)
+    if exact.status in service.ACTIVE:
+        return None
+    if exact.status != "completed" or not exact.result_artifact:
+        raise ValueError(
+            exact.error
+            or "The exact-account backtest did not finish; saved search evidence is retained"
+        )
+    source, config_id = canonical_source(store, owner, identifier, exact.id)
+    if source.id != exact.id or config_id != validation["config_id"]:
+        raise ValueError("The exact native report does not match the validated search settings")
+    exact_bundle = service.read_artifact(store, exact.result_artifact)
+    proof = exact_bundle["result"].get("candidate_report", {})
+    if (
+        exact_bundle.get("kind") != "portfolio_backtest"
+        or exact_bundle["result"].get("automatic_research")
+        or proof.get("study_job_id") != job.id
+        or proof.get("parent_result_artifact") != job.result_artifact
+        or proof.get("config_id") != validation["config_id"]
+        or proof.get("verification", {}).get("summary") != "matched"
+        or exact_bundle["result"]["summary"]["initial_capital"] != validation["capital"]
+    ):
+        raise ValueError(
+            "The exact native account does not retain the validated capital and settings"
+        )
+    with store.sessions.begin() as db:
+        row, fresh = _owned(db, owner, identifier)
+        fresh["exact_account"]["completed_accounts"] = 1
+        _put(row, fresh)
+        accounting = deepcopy(fresh["exact_account"])
+    return exact, exact_bundle, accounting
+
+
 def _save_search_result(store, owner, identifier, state, job, bundle):
     """Use native Keep/choose gates; never forge a supervisor validation wrapper."""
     from database.research_db import ResearchChosenRequest, ResearchDecisionRequest
@@ -841,11 +995,14 @@ def _save_search_result(store, owner, identifier, state, job, bundle):
 
     report = bundle["result"]
     validation = validate_full_search_result(report, state["approved_plan"]["contract"])
-    with store.sessions.begin() as db:
-        row, fresh = _owned(db, owner, identifier)
-        _put(row, fresh, "finalizing")
-    expected = {"result_artifact": job.result_artifact, "analysis_artifact": None}
-    context = decisions.direct_context(store, owner, identifier, job.id, expected_report=expected)
+    exact = _exact_search_account(store, owner, identifier, job, bundle, validation)
+    if exact is None:
+        return False
+    saved_job, _, accounting = exact
+    expected = {"result_artifact": saved_job.result_artifact, "analysis_artifact": None}
+    context = decisions.direct_context(
+        store, owner, identifier, saved_job.id, expected_report=expected
+    )
     revision = (context.get("current") or {}).get("revision", 0)
     token = "journey_save_" + state["approved_plan"]["id"][:40]
     with store.sessions() as db:
@@ -856,7 +1013,7 @@ def _save_search_result(store, owner, identifier, state, job, bundle):
         store,
         owner,
         identifier,
-        job.id,
+        saved_job.id,
         {
             "request_id": token + "_keep",
             "revision": revision,
@@ -889,13 +1046,14 @@ def _save_search_result(store, owner, identifier, state, job, bundle):
         owner,
         identifier,
         {
-            "job_id": job.id,
+            "job_id": saved_job.id,
             "experiment_id": identifier,
             "choice_id": saved["choice"]["id"],
             "before": report["automatic_research"].get("baseline", {}),
             "after": opened["summary"],
             "verification": opened["verification"],
             "validation": validation,
+            "exact_account": accounting,
         },
         accepted=True,
     )

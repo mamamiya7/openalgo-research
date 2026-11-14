@@ -315,7 +315,7 @@ jobs:
           name: fresh-install-${{ matrix.os }}
           path: |
             ${{ runner.temp }}/OpenAlgo Research Fresh Install/tmp/install-smoke/receipt.json
-            ${{ runner.temp }}/OpenAlgo Research Fresh Install/tmp/install-smoke/diagnostics.json
+            ${{ runner.temp }}/OpenAlgo Research Fresh Install/tmp/install-smoke/diagnostics*.json
           if-no-files-found: warn
           retention-days: 14
 
