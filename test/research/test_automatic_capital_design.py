@@ -136,6 +136,8 @@ def test_capital_metadata_cannot_be_relabelled_as_legacy():
         axes(spec)
 
 
+# The first native account may compile Numba kernels on a cold CI runner.
+@pytest.mark.timeout(180)
 @pytest.mark.parametrize("state,target", [("stop_risk", 0.5), ("stop_risk_50", 0.25)])
 def test_native_fills_can_exceed_reference_cash_without_exceeding_stop_risk(state, target):
     from test_portfolio_wide_allocation import account

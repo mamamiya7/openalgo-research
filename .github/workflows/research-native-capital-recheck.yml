@@ -1,0 +1,82 @@
+name: Research native capital recheck
+
+on:
+  workflow_dispatch:
+    inputs:
+      qualified_source_sha:
+        description: Source whose complete release CI needs only the cold native-capital test recheck
+        type: string
+        default: e46250374d082598ec2793fb7c3f4234ceaa8d19
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  native-capital:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      QUALIFIED_SOURCE_SHA: ${{ inputs.qualified_source_sha }}
+      PYTHON_DOTENV_DISABLED: '1'
+      PYTHONUTF8: '1'
+      LOG_FORMAT: '%(levelname)s %(message)s'
+      OPENBLAS_NUM_THREADS: '2'
+      NUMBA_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+          enable-cache: true
+      - name: Verify unchanged runtime and unchanged test assertions
+        run: |
+          python - <<'PY'
+          import ast
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+
+          qualified = os.environ['QUALIFIED_SOURCE_SHA']
+          if not re.fullmatch(r'[0-9a-f]{40}', qualified):
+              raise ValueError('Supply the full qualified source SHA')
+          subprocess.run(['git', 'merge-base', '--is-ancestor', qualified, 'HEAD'], check=True)
+          test = 'test/research/test_automatic_capital_design.py'
+          workflow = '.github/workflows/research-native-capital-recheck.yml'
+          changed = set(subprocess.check_output(
+              ['git', 'diff', '--name-only', '-z', qualified, 'HEAD', '--']
+          ).decode().split('\0')) - {''}
+          if not changed <= {test, workflow}:
+              raise ValueError(f'Changes exceed this scoped recheck: {sorted(changed)}')
+          before = ast.parse(subprocess.check_output(['git', 'show', f'{qualified}:{test}']))
+          after = ast.parse(Path(test).read_text(encoding='utf-8'))
+          target = 'test_native_fills_can_exceed_reference_cash_without_exceeding_stop_risk'
+          old = [n for n in ast.walk(before) if isinstance(n, ast.FunctionDef) and n.name == target]
+          new = [n for n in ast.walk(after) if isinstance(n, ast.FunctionDef) and n.name == target]
+          if len(old) != 1 or len(new) != 1:
+              raise ValueError('Expected the exact native-capital test function')
+          def timeout(d):
+              return isinstance(d, ast.Call) and ast.unparse(d.func) == 'pytest.mark.timeout'
+          marks = [d for d in new[0].decorator_list if timeout(d)]
+          if any(timeout(d) for d in old[0].decorator_list) or len(marks) != 1:
+              raise ValueError('Only the new targeted timeout decorator may differ')
+          if len(marks[0].args) != 1 or marks[0].keywords or ast.literal_eval(marks[0].args[0]) != 180:
+              raise ValueError('The native-capital timeout must be exactly 180 seconds')
+          new[0].decorator_list.remove(marks[0])
+          if ast.dump(before) != ast.dump(after):
+              raise ValueError('Test logic, parameters or assertions changed')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
+              summary.write('## Scoped native-capital recheck\n\n'
+                  f'Runtime and test assertions match `{qualified}`. Only the cold native '
+                  'compilation deadline changes from 60 to 180 seconds. The entire capital '
+                  'design module runs below. This does not repeat or relabel the full matrix; '
+                  'combine this result with the original release qualification '
+                  '[run 43588170778](https://github.com/mamamiya7/openalgo-research/actions/runs/43588170778).\n')
+          PY
+      - run: uv sync --frozen --extra research
+      - run: uv run --no-sync python tools/research_check.py
+      - name: Complete native capital design module
+        run: uv run --no-sync pytest test/research/test_automatic_capital_design.py -q
