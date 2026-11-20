@@ -1846,6 +1846,139 @@ describe('portfolio engine capabilities', () => {
     })
   }
 
+  function openAlgoDraft() {
+    const initial = draft()
+    initial.portfolio.engine = 'openalgo'
+    initial.portfolio.strategies[0].config.cost_bps = 0
+    return initial
+  }
+
+  function allowOpenAlgo(available = true) {
+    vi.mocked(portfolioResearch.capabilities).mockResolvedValue({
+      ...capabilities,
+      engines: [
+        ...capabilities.engines,
+        {
+          id: 'openalgo',
+          name: 'OpenAlgo Rust (preview)',
+          available,
+          intervals: ['D'],
+          ...(!available ? { reason: 'Install the optional tested OpenAlgo runtime.' } : {}),
+        },
+      ],
+    })
+  }
+
+  it('offers the optional OpenAlgo engine without changing the VectorBT default', async () => {
+    allowOpenAlgo()
+    savedDraft()
+    mount()
+    const picker = await screen.findByLabelText('Backtest engine')
+    expect(picker).not.toBeVisible()
+    expect(picker).toHaveValue('vectorbt')
+    await userEvent.click(screen.getByText('More settings'))
+    await userEvent.selectOptions(picker, 'openalgo')
+    expect(screen.getByText(/Repeated signals are supported only when/)).toBeVisible()
+    expect(
+      screen.getByText(/Holding-period exits fill at the opening; VectorBT uses the closing/)
+    ).toBeVisible()
+    expect(
+      screen.getByText(/Preview for daily NSE cash signals with dated Zerodha delivery charges/)
+    ).toBeVisible()
+    expect(screen.getByRole('alert')).toHaveTextContent('native Indian charges')
+    expect(screen.getByRole('button', { name: 'Run backtest' })).toBeDisabled()
+    const stored = JSON.parse(sessionStorage.getItem('portfolio-draft:account')!)
+    expect(stored.portfolio.strategies[0].config).toEqual(draft().portfolio.strategies[0].config)
+    expect(portfolioResearch.submit).not.toHaveBeenCalled()
+  })
+
+  it('submits a supported OpenAlgo backtest with the chosen engine and exact settings', async () => {
+    allowOpenAlgo()
+    const initial = openAlgoDraft()
+    savedDraft(initial)
+    mount()
+    await userEvent.click(await screen.findByRole('button', { name: 'Run backtest' }))
+    await waitFor(() => expect(portfolioResearch.submit).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(portfolioResearch.submit).mock.calls[0][0]).toMatchObject({
+      engine: 'openalgo',
+      capital: initial.portfolio.capital,
+      strategies: initial.portfolio.strategies,
+    })
+  })
+
+  it('keeps an unavailable saved OpenAlgo engine and exposes the installation reason', async () => {
+    allowOpenAlgo(false)
+    savedDraft(openAlgoDraft())
+    mount()
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'OpenAlgo Rust (preview) is unavailable'
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent('optional tested OpenAlgo runtime')
+    expect(screen.getByRole('button', { name: 'Run backtest' })).toBeDisabled()
+    expect(JSON.parse(sessionStorage.getItem('portfolio-draft:account')!).portfolio.engine).toBe(
+      'openalgo'
+    )
+  })
+
+  it('shows unavailable OpenAlgo as an optional engine without offering a silent replacement', async () => {
+    allowOpenAlgo(false)
+    savedDraft()
+    mount()
+    const picker = await screen.findByLabelText('Backtest engine')
+    expect(picker).toHaveValue('vectorbt')
+    expect(
+      screen.getByRole('option', { name: 'OpenAlgo Rust (preview) (unavailable)', hidden: true })
+    ).toBeDisabled()
+    await userEvent.click(screen.getByText('More settings'))
+    expect(screen.getByText('Install the optional tested OpenAlgo runtime.')).toBeVisible()
+  })
+
+  it('keeps OpenAlgo custom search separate from the unchanged automatic research programme', () => {
+    const initial = openAlgoDraft()
+    const next = selectPortfolioRun(initial, true)
+    expect(next.portfolio.engine).toBe('openalgo')
+    expect(next.portfolio.automatic_research).toBeUndefined()
+    expect(next.optimizing).toBe(true)
+    expect(Object.keys(next.portfolio.strategies[0].search).length).toBeGreaterThan(0)
+    initial.optimizing = true
+    initial.portfolio.automatic_research = { version: 'automatic-hypotheses-v16' }
+    expect(portfolioEngineIssue(initial)).toMatch(/Automatic research needs VectorBT/)
+    expect(initial.portfolio.automatic_research).toEqual({ version: 'automatic-hypotheses-v16' })
+  })
+
+  it('blocks unsupported OpenAlgo settings without changing them', () => {
+    const initial = openAlgoDraft()
+    initial.portfolio.strategies[0].config.hold_minutes = 15
+    expect(portfolioEngineIssue(initial)).toMatch(/daily NSE cash signals only/)
+    expect(initial.portfolio.strategies[0].config.hold_minutes).toBe(15)
+    initial.portfolio.strategies[0].config.hold_minutes = null
+    initial.portfolio.capital = 100000.123
+    expect(portfolioEngineIssue(initial)).toMatch(/at most two decimal places/)
+    initial.portfolio.capital = 100000
+    initial.portfolio.risk_limits = { ...defaultRiskLimits }
+    expect(portfolioEngineIssue(initial)).toMatch(/need VectorBT/)
+    expect(initial.portfolio.risk_limits).toEqual(defaultRiskLimits)
+  })
+
+  it('records OpenAlgo instead of VectorBT in reopened report headings and settings', async () => {
+    render(
+      <PortfolioResults
+        job={finished}
+        result={{
+          ...result,
+          source: { ...result.source!, interval: 'D' },
+          execution: { engine: 'openalgo', engine_version: '2.2.0', interval: 'D' },
+        }}
+        onRerun={vi.fn()}
+        rerunning={false}
+        exportUrl="/export"
+      />
+    )
+    expect(screen.getByText(/OpenAlgo Rust \(preview\) · Daily candles/)).toBeVisible()
+    await userEvent.click(screen.getByRole('tab', { name: 'Settings' }))
+    expect(screen.getByText('OpenAlgo Rust (preview) 2.2.0', { selector: 'p' })).toBeVisible()
+  })
+
   it('offers Nautilus inside More settings only when its runtime is available', async () => {
     allowNautilus()
     savedDraft()

@@ -32,6 +32,29 @@ EXACT_SAVE_REQUIRED = (
 )
 ACTIVE_PHASES = ("preparing", "researching", "finalizing")
 MAX_STATE_BYTES = 131072
+HANDS_OFF_MODEL_ALLOWANCE = 24
+
+
+def _continuation_model_budget(report, *, adaptive):
+    from services import research_supervisor
+
+    phase_limit = research_supervisor.ADAPTIVE_EXPERIMENT_LIMIT if adaptive else 3
+    initial = report.get("hands_off_planning")
+    if not initial:
+        return phase_limit
+    spent = initial.get("calls_spent")
+    if type(spent) is not int or not 0 <= spent <= (14 if initial.get("recovery") else 12):
+        raise ValueError("Invalid saved initial planning allowance")
+    if initial.get("recovery"):
+        from research.planning_recovery import accounting
+
+        book = {
+            "calls_spent": initial["normal_calls"],
+            "records": {f"{r['fit']}:{r['index']}": r for r in initial["records"]},
+        }
+        if accounting(book, initial["recovery"])["spent"] != spent:
+            raise ValueError("Saved correction allowance changed")
+    return min(phase_limit, HANDS_OFF_MODEL_ALLOWANCE - spent)
 
 
 def _put(row, state, phase=None):
@@ -97,6 +120,7 @@ def _guided_draft(draft):
         "design_policy": "automatic_design_v1",
         "decision_policy": "automatic_decision_v1",
         "action_policy": "automatic_actions_v3",
+        "planning_policy": "hands-off-fixed-signals-v1",
     }
     result["portfolio"] = intent(p, style=_style(p))
     result["optimizing"] = True
@@ -107,8 +131,31 @@ def _guided_draft(draft):
     return result
 
 
+def _flow(value=None):
+    from research.user_flow import normalize
+
+    return normalize(value)
+
+
+def _flow_draft(draft, flow):
+    if flow["intent"] == "improve":
+        return _guided_draft(draft)
+    result = deepcopy(draft)
+    portfolio = result["portfolio"]
+    if portfolio.get("entry_conditions") or any(
+        row.get("entry_condition") for row in portfolio["strategies"]
+    ):
+        raise ValueError("Replay starts from all original supplied scan signals")
+    for key in ("automatic_research", "optimization", "validation"):
+        portfolio.pop(key, None)
+    for row in portfolio["strategies"]:
+        row["search"] = {}
+    result["optimizing"] = False
+    return result
+
+
 def prepare(store, owner, identifier, data):
-    library._object(data, {"revision"}, "journey preparation")
+    library._object(data, {"revision", "flow"}, "journey preparation")
     current = library.get_experiment(store, owner, identifier)
     if data.get("revision") != current["revision"]:
         raise library.RevisionConflict(current["revision"])
@@ -116,16 +163,31 @@ def prepare(store, owner, identifier, data):
         prior = db.get(ResearchJourney, identifier)
         if prior and prior.owner != owner:
             raise LookupError("Research journey not found")
-        running = bool(prior and prior.phase in ("researching", "finalizing"))
+        running = bool(prior and prior.phase in ("researching", "finalizing", "awaiting_approval"))
+        previous_flow = json.loads(prior.state).get("flow") if prior else None
+    flow = _flow(data.get("flow", previous_flow))
     if running:
         return _response(store, owner, identifier)
     if (
         prior
         and prior.phase == "needs_action"
+        and flow == _flow(previous_flow)
         and _resume_exact_search_save(store, owner, identifier)
     ):
         return _response(store, owner, identifier)
-    draft = _guided_draft(current["draft"])
+    if (
+        prior
+        and prior.phase == "needs_action"
+        and (
+            json.loads(prior.state).get("controller_update")
+            or json.loads(prior.state).get("approved_plan", {}).get("controller_revision")
+            == "research-controller-v2"
+        )
+    ):
+        from services.research_hands_off import resume_updated_controller
+
+        return resume_updated_controller(store, owner, identifier)
+    draft = _flow_draft(current["draft"], flow)
     if draft != current["draft"]:
         # Preserve earlier user work before opting a pre-existing study in.
         if current["job_count"]:
@@ -150,7 +212,10 @@ def prepare(store, owner, identifier, data):
         if row is not None:
             previous = json.loads(row.state)
             history = previous.get("history", [])[-24:]
-            if previous.get("draft_id") == draft_id:
+            if previous.get("draft_id") == draft_id and (
+                previous.get("flow") == flow
+                or ("flow" not in data and previous.get("flow") is None)
+            ):
                 same = row.phase != "needs_action" or bool(previous.get("job_id"))
                 if same and row.phase == "review" and not previous.get("job_id"):
                     plan = previous.get("plan") or {}
@@ -181,6 +246,7 @@ def prepare(store, owner, identifier, data):
                 row,
                 {
                     "version": VERSION,
+                    "flow": flow,
                     "draft_id": draft_id,
                     "revision": parent.revision,
                     "plan": None,
@@ -211,16 +277,23 @@ def edit_plan(store, owner, identifier, data):
         "hold_sessions",
         "stop_pct",
         "target_pct",
+        "trailing_pct",
+        "allocation_pct",
+        "flow",
     }
     library._object(data, allowed, "research plan")
     current = library.get_experiment(store, owner, identifier)
     with store.sessions() as db:
         existing = db.get(ResearchJourney, identifier)
-        if existing and existing.phase in ("researching", "finalizing"):
+        if existing and existing.phase in ("researching", "finalizing", "awaiting_approval"):
             raise ValueError(
                 "This run is already using its reviewed settings; edit the next version after it finishes"
             )
     draft = deepcopy(current["draft"])
+    with store.sessions() as db:
+        row = db.get(ResearchJourney, identifier)
+        prior_flow = json.loads(row.state).get("flow") if row else None
+    flow = _flow(data.get("flow", prior_flow))
     p = draft["portfolio"]
     style = data.get("style", _style(p))
     if style not in ("intraday", "positional"):
@@ -229,9 +302,11 @@ def edit_plan(store, owner, identifier, data):
         p["capital"] = data["capital"]
     for row in p["strategies"]:
         cfg = row["config"]
-        for key in ("order_size_pct", "hold_sessions", "stop_pct", "target_pct"):
+        for key in ("order_size_pct", "hold_sessions", "stop_pct", "target_pct", "trailing_pct"):
             if key in data:
                 cfg[key] = data[key]
+        if "allocation_pct" in data:
+            row["allocation_pct"] = data["allocation_pct"]
         cfg["initial_capital"] = p["capital"]
         if style == "intraday":
             cfg.update(trade_horizon="intraday", exit_time=cfg.get("exit_time") or "15:15")
@@ -239,9 +314,12 @@ def edit_plan(store, owner, identifier, data):
             for key in ("trade_horizon", "entry_time", "exit_time", "hold_minutes"):
                 cfg.pop(key, None)
     saved = library.save_draft(
-        store, owner, identifier, {"revision": data.get("revision"), "draft": _guided_draft(draft)}
+        store,
+        owner,
+        identifier,
+        {"revision": data.get("revision"), "draft": _flow_draft(draft, flow)},
     )
-    return prepare(store, owner, identifier, {"revision": saved["revision"]})
+    return prepare(store, owner, identifier, {"revision": saved["revision"], "flow": flow})
 
 
 def _prepared(store, owner, identifier):
@@ -278,7 +356,20 @@ def _review_ready(store, owner, identifier):
             return True
         return False
     p = evidence["portfolio"]
-    contract = describe(p)
+    flow = _flow(state.get("flow"))
+    replay = flow["intent"] == "replay"
+    if replay:
+        body = {
+            "version": "research-replay-contract-v1",
+            "signal_policy": "fixed_signals",
+            "settings_policy": "exact_reviewed_settings",
+            "engine": p["engine"],
+            "style": _style(p),
+            "risk_limits": deepcopy(p.get("risk_limits", {})),
+        }
+        contract = {**body, "id": fingerprint(body)}
+    else:
+        contract = describe(p)
     coverage = evidence.get("signal_coverage", {})
     excluded = [
         {"symbol": r.get("symbol", ""), "reason": r.get("reason", "Unavailable price window")}
@@ -340,6 +431,31 @@ def _review_ready(store, owner, identifier):
             "budget", {"proposals": 408, "max_simulations": 512}
         ),
     }
+    if state.get("flow") is not None:
+        plan["flow"] = flow
+        plan["baseline_settings"] = deepcopy(p["strategies"])
+    if replay:
+        plan.update(
+            objective={
+                "id": "exact_replay",
+                "label": "Replay all supplied signals",
+                "reason": "Calculate the reviewed settings exactly once; no AI or parameter search.",
+            },
+            engine={
+                "id": p["engine"],
+                "label": p["engine"],
+                "reason": "Run the selected engine with the exact reviewed settings.",
+            },
+            tests=["One exact native backtest", "Native affordability and risk checks"],
+            budget={"proposals": 1, "max_simulations": 1},
+        )
+    if "flow" in state:
+        plan["controller_revision"] = "research-controller-v2"
+        plan["model_allowance"] = {
+            "normal_planning": 12,
+            "known_rejection_corrections": 2,
+            "total": 24,
+        }
     plan["id"] = fingerprint(plan)
     with store.sessions.begin() as db:
         service.write_guard(db)
@@ -380,7 +496,7 @@ def start(store, owner, identifier, data):
         row, state = _owned(db, owner, identifier)
         parent = library._owned(db, owner, identifier)
         repeated = (
-            row.phase in ("researching", "finalizing", "complete", "none")
+            row.phase in ("researching", "finalizing", "awaiting_approval", "complete", "none")
             and state.get("start_request") == data["request_id"]
         )
         if repeated:
@@ -414,14 +530,17 @@ def start(store, owner, identifier, data):
     prepared_job_artifact = prepared_job.result_artifact
     if prepared.get("inputs_artifact") != plan["inputs_artifact"]:
         raise ValueError("Prepared data changed; review the current plan")
-    try:
-        model = builder.resolve_model()
-    finally:
-        agent_db.db_session.remove()
+    replay = _flow(plan.get("flow"))["intent"] == "replay"
+    model = None
+    if not replay:
+        try:
+            model = builder.resolve_model()
+        finally:
+            agent_db.db_session.remove()
     evidence = resolve_inputs(store, owner, library.portfolio_payload(draft))
     spec = validate_submission(
         evidence,
-        "portfolio_optimize",
+        "portfolio_backtest" if replay else "portfolio_optimize",
         {"portfolio": evidence["portfolio"], "versions": evidence["versions"]},
     )
     approved_inputs = service.read_artifact(store, plan["inputs_artifact"])
@@ -458,11 +577,14 @@ def start(store, owner, identifier, data):
             job_id=job_id,
             start_request=data["request_id"],
             approved_plan=deepcopy(plan),
-            model_id=model.id,
-            model_name=model.litellm_id,
             notification_channels=notification_channels,
             error=None,
         )
+        if model is not None:
+            current.update(model_id=model.id, model_name=model.litellm_id)
+        else:
+            current.pop("model_id", None)
+            current.pop("model_name", None)
         _put(row, current, "researching")
         notifications.register(db, owner, identifier, data["request_id"], notification_channels)
 
@@ -511,6 +633,10 @@ def _decision_display(store, owner, current, decision, proposal):
 
     experiment = proposal.get("experiment", proposal.get("playbook", {}))
     item = {**decision, **proposal, **experiment}
+    if decision.get("stop_review") is not None:
+        # Preserve partial-review progress on this exact decision. A later
+        # completed aggregate must not make an earlier review look like a stop.
+        item["stop_review"] = deepcopy(decision["stop_review"])
     if not proposal:
         return item
     item["settings_change"] = {"status": "proposed", "rows": []}
@@ -583,6 +709,8 @@ def status(store, owner, identifier):
                 "result": None,
                 "can_start": False,
                 "error": None,
+                "flow": _flow(),
+                "pending_approval": None,
             }
         elif row.owner != owner:
             raise LookupError("Research journey not found")
@@ -607,12 +735,16 @@ def status(store, owner, identifier):
             "stage": receipt.get("counts", {}).get("stage", "Researching"),
             "activity": receipt.get("activity"),
         }
-    decisions = []
+    decisions = deepcopy(state.get("planning_decisions", []))
+    stopping = None
+    stop_review = None
     if state.get("supervisor_id"):
         current = supervisor.status(
             store, owner, state["supervisor_id"], conversation_id="journey:" + identifier
         )
-        decisions = [
+        stopping = deepcopy(current.get("stopping"))
+        stop_review = deepcopy(current.get("automation", {}).get("stop_review"))
+        decisions += [
             _decision_display(store, owner, current, d, proposal)
             for d in current.get("automation", {}).get("decisions", [])
             for proposal in [
@@ -652,16 +784,52 @@ def status(store, owner, identifier):
         "run": run,
         "decisions": decisions,
         "result": state.get("result"),
+        "stopping": stopping,
+        "stop_review": stop_review,
         "can_start": phase == "review"
         and bool(state.get("plan"))
         and revision == state["plan"]["revision"],
         "error": state.get("error"),
         "notification_channels": state.get("notification_channels", []),
         "notifications": notification_status,
+        "flow": _flow(state.get("flow") or state.get("approved_plan", {}).get("flow")),
+        "pending_approval": state.get("pending_approval"),
     }
 
 
+def approve_plan(store, owner, identifier, data):
+    from services.research_hands_off import resolve_approval
+
+    library._object(data, {"revision", "approval_id", "decision"}, "research approval")
+    if data.get("decision") not in ("approve", "reject"):
+        raise ValueError("Choose approve or reject for this research proposal")
+    if not isinstance(data.get("approval_id"), str) or not re.fullmatch(
+        r"[a-f0-9]{64}", data["approval_id"]
+    ):
+        raise ValueError("Choose the current research approval")
+    with store.sessions() as db:
+        row, state = _owned(db, owner, identifier)
+        library._revision(library._owned(db, owner, identifier), data.get("revision"))
+        pending = state.get("pending_approval")
+        repeated = (
+            pending is None
+            and state.get("approval_decisions", {}).get(data["approval_id"]) == data["decision"]
+        )
+        if not repeated and (
+            row.phase != "awaiting_approval"
+            or not pending
+            or pending.get("id") != data.get("approval_id")
+            or pending.get("job_id") != state.get("job_id")
+        ):
+            raise ValueError("This research approval is stale; review the current request")
+    resolve_approval(store, owner, identifier, data)
+    return _response(store, owner, identifier)
+
+
 def _finish(store, owner, identifier, result, *, accepted=False):
+    replay = result.get("kind") == "replay"
+    if replay and accepted:
+        raise ValueError("An exact replay cannot be labelled a validated research winner")
     actual_inputs = None
     if result.get("job_id"):
         job = service.get_job(store, owner, result["job_id"])
@@ -670,11 +838,24 @@ def _finish(store, owner, identifier, result, *, accepted=False):
     with store.sessions.begin() as db:
         service.write_guard(db)
         row, state = _owned(db, owner, identifier)
+        user_stopped = (
+            not accepted
+            and not replay
+            and any(v == "reject" for v in state.get("approval_decisions", {}).values())
+        )
+        if user_stopped:
+            result = {**result, "kind": "stopped"}
         state.update(
             result={
                 **result,
                 "accepted": accepted,
-                "headline": "Historically validated research result" if accepted else NO_RESULT,
+                "headline": "Exact replay saved"
+                if replay
+                else (
+                    "You stopped research"
+                    if user_stopped
+                    else ("Historically validated research result" if accepted else NO_RESULT)
+                ),
             },
             error=None,
         )
@@ -684,14 +865,22 @@ def _finish(store, owner, identifier, result, *, accepted=False):
             "inputs_artifact": actual_inputs or plan.get("inputs_artifact"),
             "prepared_inputs_artifact": plan.get("inputs_artifact"),
             "contract_id": plan.get("contract", {}).get("id"),
-            "outcome": "validated" if accepted else "rejected",
-            "reasons": [] if accepted else [NO_RESULT],
+            "outcome": "replay"
+            if replay
+            else ("stopped" if user_stopped else ("validated" if accepted else "rejected")),
+            "reasons": []
+            if accepted or replay
+            else (
+                [result.get("stopping_reason", "You stopped research")]
+                if user_stopped
+                else [NO_RESULT]
+            ),
             "updated_at": time.time(),
         }
         state["history"] = [
             r for r in state.get("history", []) if r.get("job_id") != record["job_id"]
         ][-23:] + [record]
-        _put(row, state, "complete" if accepted else "none")
+        _put(row, state, "complete" if accepted or replay else "none")
 
 
 def _link(store, owner, identifier, job_id):
@@ -782,6 +971,7 @@ def _advance(store, owner, identifier):
                     "after": report.get("summary", {}),
                     "verification": _reopen_native(store, owner, job.id),
                     "stopping_reason": current.get("stopping_reason"),
+                    "stopping": deepcopy(current.get("stopping")),
                 },
             )
         return True
@@ -809,7 +999,61 @@ def _advance(store, owner, identifier):
         return True
     bundle = service.read_artifact(store, job.result_artifact)
     report = bundle["result"]
+    if _flow(state.get("approved_plan", {}).get("flow"))["intent"] == "replay":
+        if bundle.get("kind") != "portfolio_backtest" or report.get("automatic_research"):
+            raise ValueError("An exact replay must retain one native backtest without optimization")
+        _finish(
+            store,
+            owner,
+            identifier,
+            {
+                "kind": "replay",
+                "job_id": job.id,
+                "experiment_id": identifier,
+                "before": {},
+                "after": report["summary"],
+                "verification": _reopen_native(store, owner, job.id),
+            },
+        )
+        return True
     findings = report.get("automatic_research", {})
+    if report.get("hands_off_planning"):
+        with store.sessions.begin() as db:
+            row, fresh = _owned(db, owner, identifier)
+            for decision in fresh.get("planning_decisions", []):
+                if not decision.get("planning"):
+                    continue
+                record = next(
+                    (
+                        r
+                        for r in report["hands_off_planning"]["records"]
+                        if r.get("plan", {}).get("id") == decision["planning"]["id"]
+                    ),
+                    {},
+                )
+                decision["settings_change"] = {
+                    "status": "tested"
+                    if decision["planning"]["action"] == "search"
+                    and record.get("tested_proposals", 0)
+                    else "proposed",
+                    "rows": [],
+                }
+            _put(row, fresh)
+    if findings.get("hands_off_stopped"):
+        _finish(
+            store,
+            owner,
+            identifier,
+            {
+                "job_id": job.id,
+                "experiment_id": identifier,
+                "before": findings.get("baseline", {}),
+                "after": report["summary"],
+                "verification": _reopen_native(store, owner, job.id),
+                "stopping_reason": report["hands_off_planning"]["stop_reason"],
+            },
+        )
+        return True
     if findings.get("operating_validation", {}).get("historically_validated"):
         return _save_search_result(store, owner, identifier, state, job, bundle)
     plan = state["approved_plan"]
@@ -823,12 +1067,17 @@ def _advance(store, owner, identifier):
         max_experiments=supervisor.ADAPTIVE_EXPERIMENT_LIMIT
         if adaptive
         else supervisor.CONCRETE_EXPERIMENT_LIMIT,
-        max_model_calls=supervisor.ADAPTIVE_EXPERIMENT_LIMIT if adaptive else 3,
+        max_model_calls=_continuation_model_budget(report, adaptive=adaptive),
         model_id=state["model_id"],
         research_context={
             "experiment_id": identifier,
             "inputs_artifact": bundle["inputs_artifact"],
             "contract": plan["contract"],
+            **(
+                {"flow": plan["flow"], "baseline_settings": plan["baseline_settings"]}
+                if "flow" in plan
+                else {}
+            ),
         },
         experiment_policy=supervisor.EXPERIMENT_POLICY,
         continuation_policy=supervisor.ADAPTIVE_POLICY if adaptive else None,

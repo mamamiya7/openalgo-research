@@ -154,7 +154,7 @@ def normalize_draft(store, owner, raw):
         portfolio.get("capital"), (int, float)
     ):
         raise ValueError("Draft capital must be a number")
-    if portfolio.get("engine") not in ("vectorbt", "nautilus"):
+    if portfolio.get("engine") not in ("vectorbt", "nautilus", "openalgo"):
         raise ValueError("Choose a supported portfolio engine")
     if type(result.get("optimizing")) is not bool or type(result.get("equalWeights")) is not bool:
         raise ValueError("Draft mode and allocation choice must be booleans")
@@ -341,6 +341,7 @@ def portfolio_payload(draft):
             # evidence/exact replay bypass this builder and keep their original
             # frozen research policy and recipe.
             intent_policy = automatic.get("intent_policy")
+            planning_policy = automatic.get("planning_policy")
             automatic = {
                 "version": automatic["version"],
                 "history_policy": "available_history",
@@ -350,6 +351,8 @@ def portfolio_payload(draft):
             }
             if intent_policy == "fixed-signals-v1":
                 automatic["intent_policy"] = intent_policy
+                if planning_policy == "hands-off-fixed-signals-v1":
+                    automatic["planning_policy"] = planning_policy
         portfolio["automatic_research"] = automatic
         for strategy in portfolio["strategies"]:
             strategy["search"] = {}

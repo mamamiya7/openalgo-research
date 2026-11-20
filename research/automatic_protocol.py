@@ -125,6 +125,7 @@ def normalize_auto(raw, strategies=None, engine="vectorbt"):
             "decision_policy",
             "action_policy",
             "intent_policy",
+            "planning_policy",
         }
         or raw["version"]
         not in (VERSION, CONDITION_VERSION, STABILITY_VERSION, *HYPOTHESIS_VERSIONS)
@@ -135,6 +136,15 @@ def normalize_auto(raw, strategies=None, engine="vectorbt"):
     if raw["version"] in (CONDITION_VERSION, *HYPOTHESIS_VERSIONS) and engine != "vectorbt":
         raise ValueError("Automatic entry-condition research currently needs VectorBT")
     result = {"version": raw["version"]}
+    if "planning_policy" in raw:
+        if (
+            raw["version"] != ALLOCATION_VERSION
+            or raw.get("intent_policy") != "fixed-signals-v1"
+            or raw.get("decision_policy") != "automatic_decision_v1"
+            or raw["planning_policy"] != "hands-off-fixed-signals-v1"
+        ):
+            raise ValueError("Hands-off planning requires fixed-signal VectorBT research")
+        result["planning_policy"] = raw["planning_policy"]
     if "intent_policy" in raw:
         if raw["version"] != ALLOCATION_VERSION or raw["intent_policy"] != "fixed-signals-v1":
             raise ValueError("Choose the supported fixed-signal research intent")
@@ -858,6 +868,13 @@ def compile_recipe(evidence):
             "objective": "robust_improvement",
             "risk_limits_id": fingerprint(portfolio["risk_limits"]),
         }
+        if portfolio["automatic_research"].get("planning_policy"):
+            payload["hands_off_planning"] = {
+                "version": "hands-off-fixed-signals-v1",
+                "max_model_calls": 12,
+                "programme": "mandatory_screening_then_two_refinement_blocks",
+                "budget": {"proposals": 408, "max_simulations": 512},
+            }
         payload["scope"] = "Trading execution of unchanged supplied scanner signals"
         definitions = {row["id"]: row for row in portfolio["strategies"]}
         for item in payload["timing_research"]["strategies"]:

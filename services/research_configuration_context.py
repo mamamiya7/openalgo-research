@@ -33,7 +33,7 @@ def difference(before, after, path=()):
     )
 
 
-def build(current_settings, history, options):
+def build(current_settings, history, options, *, max_options=8, include_closest=True):
     """One complete base plus lossless patches, not disconnected axis values.
 
     Every identity is the exact native settings identity; semantic-equivalence
@@ -41,7 +41,9 @@ def build(current_settings, history, options):
     """
     if not isinstance(current_settings, list) or not 1 <= len(current_settings) <= 8:
         raise ValueError("Decision comparisons require complete current settings")
-    if len(history) > 24 or len(options) > 8:
+    if type(max_options) is not int or not 1 <= max_options <= 200:
+        raise ValueError("Configuration comparison exceeds its retained bound")
+    if len(history) > 24 or len(options) > max_options:
         raise ValueError("Configuration comparison exceeds its retained bound")
     base_id = settings_identity(current_settings)
     configurations = {base_id: {"settings": deepcopy(current_settings)}}
@@ -67,13 +69,17 @@ def build(current_settings, history, options):
     candidates = []
     for option in options:
         settings = option["settings"]
-        closest = sorted(
-            (
-                (len(difference(record["settings"], settings)), index, record)
-                for index, record in enumerate(history)
-            ),
-            key=lambda item: (item[0], item[1]),
-        )[:2]
+        closest = (
+            sorted(
+                (
+                    (len(difference(record["settings"], settings)), index, record)
+                    for index, record in enumerate(history)
+                ),
+                key=lambda item: (item[0], item[1]),
+            )[:2]
+            if include_closest
+            else []
+        )
         candidates.append(
             {
                 "candidate_id": option["id"],

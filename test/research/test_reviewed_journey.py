@@ -14,6 +14,7 @@ from database.research_db import (
     ResearchExperiment,
     ResearchJob,
     ResearchJourney,
+    ResearchLibraryJob,
     ResearchPreparation,
     ResearchWorker,
 )
@@ -21,6 +22,28 @@ from research.report_contract import fingerprint
 from services import research_journey as journey
 from services import research_library as library
 from services import scanner_research_service as service
+
+
+@pytest.mark.parametrize(
+    "adaptive,spent,expected", [(False, 4, 3), (False, 12, 3), (True, 4, 20), (True, 12, 12)]
+)
+def test_initial_planning_uses_global_allowance_not_strict_continuation_phase_cap(
+    adaptive, spent, expected
+):
+    assert (
+        journey._continuation_model_budget(
+            {"hands_off_planning": {"calls_spent": spent}}, adaptive=adaptive
+        )
+        == expected
+    )
+
+
+@pytest.mark.parametrize("spent", [-1, 13, True, "2"])
+def test_initial_planning_cannot_invent_available_model_calls(spent):
+    with pytest.raises(ValueError, match="planning allowance"):
+        journey._continuation_model_budget(
+            {"hands_off_planning": {"calls_spent": spent}}, adaptive=False
+        )
 
 
 @pytest.fixture
@@ -70,6 +93,63 @@ def test_preparation_produces_editable_plan_without_starting_calculations(ready)
     assert state["plan"]["budget"] == {"proposals": 408, "max_simulations": 512}
     with store.sessions() as db:
         assert db.query(ResearchJob).count() == 0
+
+
+@pytest.mark.parametrize("failure", [None, "provider", "changed_model"])
+def test_hands_off_planner_uses_approved_job_model_and_releases_session(
+    ready, monkeypatch, failure
+):
+    from database import agent_db
+    from services.agent import builder, research_planning
+    from services.research_hands_off import planner_for
+
+    store, view = ready
+    identifier, job_id = view["experiment"]["id"], "h" * 32
+    with store.sessions.begin() as db:
+        db.add(
+            ResearchLibraryJob(
+                experiment_id=identifier, job_id=job_id, role="run", created_at=time.time()
+            )
+        )
+        row, state = journey._owned(db, OWNER, identifier)
+        state.update(job_id=job_id, model_id=7, model_name="configured/model")
+        journey._put(row, state, "researching")
+    cleanup, requests = [], []
+    monkeypatch.setattr(agent_db.db_session, "remove", lambda: cleanup.append(True))
+    monkeypatch.setattr(
+        builder,
+        "resolve_model",
+        lambda model_id: SimpleNamespace(
+            litellm_id="other/model" if failure == "changed_model" else "configured/model"
+        ),
+    )
+    plan = {
+        k: k for k in ("version", "hypothesis", "reason", "expected_evidence", "stop_rule", "id")
+    }
+    plan.update(action="defer", method=None, domains={})
+
+    def select(evidence, model_id):
+        requests.append((evidence, model_id))
+        if failure == "provider":
+            raise ValueError("bounded provider failure")
+        return deepcopy(plan)
+
+    monkeypatch.setattr(research_planning, "select_plan", select)
+    callback = planner_for(store, OWNER, job_id)
+    if failure:
+        with pytest.raises(ValueError, match="provider failure|model changed"):
+            callback({"development": "observed"})
+    else:
+        assert callback({"development": "observed"}) == plan
+    assert cleanup == [True]
+    assert len(requests) == (0 if failure == "changed_model" else 1)
+    with store.sessions() as db:
+        state = json.loads(db.get(ResearchJourney, identifier).state)
+    assert len(state.get("planning_decisions", [])) == (0 if failure else 1)
+    if not failure:
+        assert state["planning_decisions"][0]["remedy"] == "defer"
+        assert state["planning_decisions"][0]["settings_change"]["status"] == "proposed"
+        assert requests[0][1] == 7
 
 
 def test_start_rejects_missing_or_stale_reviewed_plan(ready):
@@ -165,8 +245,11 @@ def test_replaced_preparation_refreshes_review_and_waits_for_current_data(
     with store.sessions.begin() as db:
         db.add(
             ResearchPreparation(
-                experiment_id=identifier, owner=OWNER, job_id=replacement_id,
-                binding="b" * 64, revision=state["revision"],
+                experiment_id=identifier,
+                owner=OWNER,
+                job_id=replacement_id,
+                binding="b" * 64,
+                revision=state["revision"],
             )
         )
     original_prepared = journey._prepared
@@ -174,8 +257,11 @@ def test_replaced_preparation_refreshes_review_and_waits_for_current_data(
 
     def current_prepared(*args):
         progress, evidence, identity = original_prepared(*args)
-        progress.update(job_id=replacement_id, ready=finished[0],
-                        status="completed" if finished[0] else "running")
+        progress.update(
+            job_id=replacement_id,
+            ready=finished[0],
+            status="completed" if finished[0] else "running",
+        )
         return progress, evidence if finished[0] else None, "f" * 64 if finished[0] else None
 
     def no_acquisition(*args, **kwargs):
@@ -196,10 +282,16 @@ def test_replaced_preparation_refreshes_review_and_waits_for_current_data(
     assert refreshed["plan"]["id"] != state["plan"]["id"]
     assert refreshed["plan"]["budget"] == state["plan"]["budget"]
     with pytest.raises(ValueError, match="Review"):
-        journey.start(store, OWNER, identifier, {
-            "revision": state["revision"], "plan_id": state["plan"]["id"],
-            "request_id": "superseded-preparation-plan",
-        })
+        journey.start(
+            store,
+            OWNER,
+            identifier,
+            {
+                "revision": state["revision"],
+                "plan_id": state["plan"]["id"],
+                "request_id": "superseded-preparation-plan",
+            },
+        )
     with store.sessions() as db:
         assert db.query(ResearchJob).count() == 0
 
@@ -214,10 +306,15 @@ def test_preparation_replacement_cannot_reset_admitted_or_finished_journey(
         row = db.get(ResearchJourney, identifier)
         row.phase = phase
         frozen = row.state
-        db.add(ResearchPreparation(
-            experiment_id=identifier, owner=OWNER, job_id="q" * 32,
-            binding="b" * 64, revision=state["revision"],
-        ))
+        db.add(
+            ResearchPreparation(
+                experiment_id=identifier,
+                owner=OWNER,
+                job_id="q" * 32,
+                binding="b" * 64,
+                revision=state["revision"],
+            )
+        )
 
     def no_acquisition(*args, **kwargs):
         raise AssertionError("An admitted or finished journey must not be prepared again")
@@ -234,10 +331,15 @@ def test_review_refresh_rejects_another_owners_preparation(ready):
     store, state = ready
     identifier = state["experiment"]["id"]
     with store.sessions.begin() as db:
-        db.add(ResearchPreparation(
-            experiment_id=identifier, owner="another-owner", job_id="q" * 32,
-            binding="b" * 64, revision=state["revision"],
-        ))
+        db.add(
+            ResearchPreparation(
+                experiment_id=identifier,
+                owner="another-owner",
+                job_id="q" * 32,
+                binding="b" * 64,
+                revision=state["revision"],
+            )
+        )
     with pytest.raises(LookupError, match="preparation"):
         journey.prepare(store, OWNER, identifier, {"revision": state["revision"]})
     with store.sessions() as db:
@@ -275,14 +377,30 @@ def test_review_http_does_not_launch_and_unknown_fields_cannot_widen_plan(app, c
 
 
 @pytest.mark.parametrize("channels", [[], ["slack"]])
+@pytest.mark.parametrize("replay", [False, True])
 def test_start_pins_exact_reviewed_snapshot_and_retry_does_not_reset_work(
-    ready, monkeypatch, channels
+    ready, monkeypatch, channels, replay
 ):
     from services import research_notifications, research_portfolio
     from services.agent import builder
 
     store, state = ready
     identifier = state["experiment"]["id"]
+    if replay:
+        state = journey.edit_plan(
+            store,
+            OWNER,
+            identifier,
+            {
+                "revision": state["revision"],
+                "flow": {
+                    "version": "research-user-flow-v1",
+                    "intent": "replay",
+                    "involvement": "hands_on",
+                    "adjustable": [],
+                },
+            },
+        )
     evidence = research_portfolio.resolve_inputs(
         store, OWNER, library.portfolio_payload(state["experiment"]["draft"])
     )
@@ -293,9 +411,12 @@ def test_start_pins_exact_reviewed_snapshot_and_retry_does_not_reset_work(
     monkeypatch.setattr(
         research_portfolio, "validate_prepared_inputs", lambda s, e, p: validated.append((e, p))
     )
-    monkeypatch.setattr(
-        builder, "resolve_model", lambda: SimpleNamespace(id=1, litellm_id="chatgpt/test")
-    )
+
+    def resolve_model():
+        assert not replay, "An exact replay must never resolve a model"
+        return SimpleNamespace(id=1, litellm_id="chatgpt/test")
+
+    monkeypatch.setattr(builder, "resolve_model", resolve_model)
     source_id = state["experiment"]["draft"]["portfolio"]["strategies"][0]["source_id"]
     with store.sessions.begin() as db:
         row = db.get(ResearchJourney, identifier)
@@ -340,6 +461,11 @@ def test_start_pins_exact_reviewed_snapshot_and_retry_does_not_reset_work(
     with store.sessions() as db:
         checkpoint = db.get(ResearchExperiment, job_id).checkpoint
         assert db.query(ResearchJob).count() == 2
+        approved = json.loads(db.get(ResearchJourney, identifier).state)
+        assert approved["approved_plan"]["flow"] == started["flow"]
+        if replay:
+            assert "model_id" not in approved
+            assert db.get(ResearchExperiment, job_id).kind == "portfolio_backtest"
     receipt = service.read_artifact(store, checkpoint)
     assert receipt["state"]["inputs_artifact"] == inputs_id
     with store.sessions() as db:

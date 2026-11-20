@@ -75,6 +75,8 @@ def describe(portfolio):
             "temporal_stability",
         ],
     }
+    if portfolio.get("automatic_research", {}).get("planning_policy"):
+        body["planning_policy"] = portfolio["automatic_research"]["planning_policy"]
     return {**body, "id": fingerprint(body)}
 
 

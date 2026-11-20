@@ -1,10 +1,10 @@
 {
   "name": "OpenAlgo Research",
-  "version": "0.1.0-preview.38",
+  "version": "0.1.0-preview.39",
   "format": "openalgo-research-distribution-v1",
   "delivery": "native-openalgo-distribution",
-  "openalgo_version": "2.0.3.3",
-  "upstream_baseline": "be6c3bbe4887a615d66eeafe9dbf3b1294f29bc0",
+  "openalgo_version": "2.0.3.4",
+  "upstream_baseline": "9c850e5c745ad8e7f9f8b779c6e4ccc327e18c5a",
   "python": "3.12",
   "packages": {
     "vectorbt": "0.28.5",
@@ -21,7 +21,8 @@
   "portfolio_adapters": {
     "vectorbt": "vectorbt-portfolio-adapter-v1",
     "optuna": "openalgo-optuna-portfolio-v1",
-    "nautilus": "nautilus-portfolio-adapter-v2"
+    "nautilus": "nautilus-portfolio-adapter-v2",
+    "openalgo": "openalgo-portfolio-adapter-v1"
   },
   "side_runtime": {
     "path": "research/runtimes/nautilus",

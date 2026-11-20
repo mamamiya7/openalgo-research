@@ -7,7 +7,7 @@ from copy import deepcopy
 from types import SimpleNamespace
 
 import pytest
-from test_feedback_replan import stopped  # noqa: F401
+from test_feedback_replan import concrete_option, stopped  # noqa: F401
 from test_research_supervisor import CONVERSATION, OWNER, ROOT, complete, ledger  # noqa: F401
 
 from database.research_db import ResearchSupervisor, ResearchWorker
@@ -60,9 +60,11 @@ def blocked(stopped, monkeypatch):
         return {
             "options": [
                 {
-                    "id": ("f" if recovery else "d") * 64,
-                    "remedy": "funding_and_size" if recovery else "lower_turnover",
-                    "settings": settings,
+                    **concrete_option(
+                        current["source_result_artifact"],
+                        "funding_and_size" if recovery else "lower_turnover",
+                        settings,
+                    ),
                     "change": {"axis": "funding" if recovery else "trailing_choice"},
                     "reason": "Native feasibility counts require repair"
                     if recovery
@@ -82,7 +84,11 @@ def blocked(stopped, monkeypatch):
         "lower_turnover",
         "Recorded exit mechanism",
         conversation_id=CONVERSATION,
-        candidate_id="d" * 64,
+        candidate_id=next(
+            option["id"]
+            for option in read(fixture, plan)["experiment_options"]
+            if option["remedy"] == "lower_turnover"
+        ),
     )
     pending = supervisor.advance(fixture.store, OWNER, plan["id"], conversation_id=CONVERSATION)
     job_id = pending["proposals"][-1]["job_id"]
@@ -146,15 +152,23 @@ def test_explicit_resume_migrates_an_old_stopped_block_without_resetting_work(bl
 
     fixture, plan, _, record = blocked
     supervisor.advance(fixture.store, OWNER, plan["id"], conversation_id=CONVERSATION)
+
     def old_controller_state(state):
         state.pop("blocked_recovery", None)
         state.update(status="stopped", stopping_reason="Old generic exhaustion message")
+
     change(fixture, plan, old_controller_state)
     with fixture.store.sessions.begin() as db:
         db.get(ResearchDecisionJob, plan["id"]).phase = "stopped"
     before = read(fixture, plan)
-    resumed = supervisor.replan(fixture.store, OWNER, plan["id"], conversation_id=CONVERSATION,
-                                request_id="confirmed-old-block-resume", continuation_policy=supervisor.ADAPTIVE_POLICY)
+    resumed = supervisor.replan(
+        fixture.store,
+        OWNER,
+        plan["id"],
+        conversation_id=CONVERSATION,
+        request_id="confirmed-old-block-resume",
+        continuation_policy=supervisor.ADAPTIVE_POLICY,
+    )
     assert resumed["blocked_recovery"] == record
     assert resumed["feasibility_only"] is True and resumed["automatic_phase"] == "queued"
     assert [o["remedy"] for o in resumed["experiment_options"]] == ["funding_and_size"]
@@ -179,7 +193,7 @@ def test_blocked_native_attempt_preserves_checked_seed_and_all_debits(blocked):
     with fixture.store.sessions() as db:
         saved = json.loads(db.get(ResearchSupervisor, plan["id"]).state)
     assert saved.get("latest_seed_job_id", ROOT) == ROOT
-    assert "latest_conclusion" not in saved
+    assert saved.get("latest_conclusion") is None
     assert [row["remedy"] for row in result["experiment_options"]] == ["funding_and_size"]
 
 
@@ -237,11 +251,17 @@ def test_incomplete_job_cannot_supply_a_recovery_or_performance_seed(blocked, mo
         lambda *a: pytest.fail("An incomplete job cannot be diagnosed as checked feasibility"),
     )
     result = supervisor.advance(fixture.store, OWNER, plan["id"], conversation_id=CONVERSATION)
-    assert result["status"] == "stopped"
+    assert result["status"] == "awaiting_plan"
     assert not result.get("blocked_recovery")
     assert result["seed_job_id"] == ROOT
-    assert "Native attempt blocked" in result["stopping_reason"]
-    assert "No supported unspent" not in result["stopping_reason"]
+    assert result["experiment_options"]  # Earlier checked branches remain reviewable.
+    assert all(option["origin_job_id"] != job_id for option in result["experiment_options"])
+    unavailable = next(
+        branch for branch in result["experiment_frontier"]["branches"] if branch["job_id"] == job_id
+    )
+    assert unavailable["source_eligibility"] == "incomplete_native_attempt"
+    assert unavailable["settings_id"] is None
+    assert unavailable["scorecard"]["eligible"] is False
 
 
 def test_explicit_model_stop_is_not_revived_by_a_feasibility_branch(blocked, monkeypatch):
@@ -280,8 +300,9 @@ def test_exhausted_repair_reports_actual_constraints_and_remaining_budget(blocke
     result = supervisor.resume_frontier(
         fixture.store, OWNER, plan["id"], conversation_id=CONVERSATION
     )
-    assert "percentage_policy=41" in result["continuation_stop_reason"]
-    assert "blocked setup was not validated" in result["continuation_stop_reason"]
+    assert result["blocked_recovery"]["unresolved_constraints"] == {"percentage_policy": 41}
+    assert "bounded catalogue is exhausted" in result["continuation_stop_reason"]
+    assert result["accepted_job_id"] is None
     assert result["remaining_accounts"] == 94
     assert result["proposals"][-1]["outcome"] == "blocked"
 
@@ -297,12 +318,28 @@ def test_exhausted_repair_can_return_to_a_fully_checked_branch_without_new_budge
         id=checked_job_id, owner=OWNER, status="queued", result_artifact=None
     )
     complete(fixture, plan, checked_job_id)
-    previous_catalogue = supervisor._experiment_catalog
 
     def exhausted_repair(report, recipe, current):
         if report.get("supervisor_validation", {}).get("outcome") == "blocked":
             return {"options": [], "feedback": {}, "unavailable": []}
-        return previous_catalogue(report, recipe, current)
+        if report.get("supervisor_validation", {}).get("outcome") != "rejected":
+            return {"options": [], "feedback": {}, "unavailable": []}
+        settings = deepcopy(report["strategies"])
+        settings[0]["config"]["hold_sessions"] = 3
+        return {
+            "options": [
+                concrete_option(
+                    current["source_result_artifact"],
+                    "temporal_stability",
+                    settings,
+                    change={"axis": "hold_sessions", "to": 3},
+                    expected_effect="A supported earlier boundary may change execution",
+                    reason="An untested complete checked-branch alternative remains",
+                )
+            ],
+            "feedback": {},
+            "unavailable": [],
+        }
 
     monkeypatch.setattr(supervisor, "_experiment_catalog", exhausted_repair)
     before = read(fixture, plan)
@@ -310,10 +347,11 @@ def test_exhausted_repair_can_return_to_a_fully_checked_branch_without_new_budge
         fixture.store, OWNER, plan["id"], conversation_id=CONVERSATION
     )
     assert before["seed_job_id"] == blocked_job_id
-    assert result["seed_job_id"] == checked_job_id
-    assert result["status"] == "awaiting_plan" and not result.get("blocked_recovery")
+    assert result["seed_job_id"] == blocked_job_id
+    assert result["status"] == "awaiting_plan" and result.get("blocked_recovery")
+    assert {option["origin_job_id"] for option in result["experiment_options"]} == {checked_job_id}
     assert result["remaining_accounts"] == before["remaining_accounts"] == 94
     assert result["automation"]["calls_spent"] == before["automation"]["calls_spent"]
     assert result["proposals"][-1]["outcome"] == "blocked"
-    assert result["latest_conclusion"]["outcome"] == "rejected"
-    assert result["frontier_transitions"][-1]["attempts_already_spent"] == 418
+    assert result.get("latest_conclusion") is None
+    assert not result.get("frontier_transitions")

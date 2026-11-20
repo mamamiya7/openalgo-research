@@ -9,6 +9,7 @@ import json
 import re
 import time
 import uuid
+from collections import Counter, defaultdict
 from copy import deepcopy
 
 from sqlalchemy import func, select
@@ -20,7 +21,7 @@ from services import scanner_research_service as service
 VERSION = "research-supervisor-v1"
 REMEDIES = ("funding_and_size", "lower_turnover", "reduce_concentration", "temporal_stability")
 MAX_LEDGER_BYTES = 131072
-DECISION_CATALOG_VERSION = "executable-development-remedies-v3"
+DECISION_CATALOG_VERSION = "executable-development-remedies-v5"
 EXPERIMENT_POLICY = "evidence-candidates-v1"
 CONCRETE_EXPERIMENT_LIMIT = 4  # one native feasibility repair + three bounded model choices
 ADAPTIVE_POLICY = "adaptive-feedback-v1"
@@ -213,7 +214,153 @@ def reserve_account(store, owner, supervisor_id, proposal_id):
         _put(row, state)
 
 
-def _diagnosis(report):
+def _exclusion_request(row):
+    return fingerprint(
+        {
+            "strategy_id": row.get("strategy_id"),
+            "symbol": row.get("symbol"),
+            "date": row.get("signal_date", row.get("date")),
+            "row": row.get("source_row", row.get("row")),
+        }
+    )
+
+
+def _frozen_exclusions(store, bundle):
+    """Planning-only proof from exact frozen preparation, never account evidence."""
+    identifier = bundle.get("inputs_artifact")
+    if not isinstance(identifier, str) or not re.fullmatch(r"[a-f0-9]{64}", identifier):
+        return None
+    try:
+        inputs = service.read_artifact(store, identifier)
+    except (ValueError, LookupError, KeyError):
+        return None
+    coverage, signals = inputs.get("signal_coverage", {}), inputs.get("signals", [])
+    excluded = coverage.get("exclusions")
+    if (
+        coverage.get("policy_version") != "portfolio-fixed-price-cohort-v1"
+        or not isinstance(signals, list)
+        or not isinstance(excluded, list)
+        or len(excluded) > 512
+        or type(coverage.get("excluded_signals")) is not int
+        or coverage["excluded_signals"] != len(excluded)
+        or type(coverage.get("eligible_signals")) is not int
+        or type(coverage.get("pending_signals")) is not int
+        or min(coverage["eligible_signals"], coverage["pending_signals"]) < 0
+        or coverage["eligible_signals"] + coverage["pending_signals"] + len(excluded)
+        != len(signals)
+    ):
+        return None
+    groups = defaultdict(list)
+    for signal in signals:
+        if not isinstance(signal, dict):
+            return None
+        groups[(signal.get("strategy_id"), signal.get("symbol"), signal.get("date"))].append(signal)
+    requested = Counter()
+    reasons = {}
+    for row in excluded:
+        if not isinstance(row, dict) or not isinstance(row.get("reason"), str) or not row["reason"]:
+            return None
+        key = (row.get("strategy_id"), row.get("symbol"), row.get("date"))
+        requested[key] += 1
+        if key in reasons and reasons[key] != row["reason"]:
+            return None
+        reasons[key] = row["reason"]
+    entries = []
+    for key, count in requested.items():
+        source = groups.get(key, [])
+        if len(source) != count or any(type(row.get("row")) is not int for row in source):
+            return None
+        entries.extend(
+            {"request_id": _exclusion_request(row), "reason_id": fingerprint(reasons[key])}
+            for row in source
+        )
+    if len({r["request_id"] for r in entries}) != len(entries):
+        return None
+    body = {
+        "version": "frozen-preparation-exclusions-v1",
+        "inputs_artifact": identifier,
+        "source_signal_count": len(signals),
+        "excluded_signals": len(excluded),
+        "entries": sorted(entries, key=lambda row: row["request_id"]),
+    }
+    return {**body, "id": fingerprint(body)}
+
+
+def required_evidence(report, counts, *, exclusions=None):
+    """Do not confuse frozen source exclusions with missing execution evidence."""
+    keys = (
+        "unavailable_sizing_intent",
+        "unexplained_execution_limit",
+        "evidence_gap_requests",
+        "unavailable_evidence",
+    )
+    required = {key: counts.get(key, 0) for key in keys}
+    if any(type(value) is not int or value < 0 for value in required.values()):
+        return {
+            "missing_required": True,
+            "proven_preexcluded_requests": 0,
+            "required_counts": required,
+            "unknown_excluded_requests": 0,
+        }
+    proven = {}
+    if (
+        isinstance(exclusions, dict)
+        and exclusions.get("version") == "frozen-preparation-exclusions-v1"
+        and exclusions.get("id") == fingerprint({k: v for k, v in exclusions.items() if k != "id"})
+        and isinstance(exclusions.get("entries"), list)
+        and len(exclusions["entries"]) == exclusions.get("excluded_signals")
+        and type(exclusions.get("excluded_signals")) is int
+        and 0 <= exclusions["excluded_signals"] <= 512
+        and type(exclusions.get("source_signal_count")) is int
+        and exclusions["source_signal_count"] >= exclusions["excluded_signals"]
+        and isinstance(exclusions.get("inputs_artifact"), str)
+        and re.fullmatch(r"[a-f0-9]{64}", exclusions["inputs_artifact"])
+        and all(
+            isinstance(row, dict)
+            and set(row) == {"request_id", "reason_id"}
+            and all(
+                isinstance(value, str) and re.fullmatch(r"[a-f0-9]{64}", value)
+                for value in row.values()
+            )
+            for row in exclusions["entries"]
+        )
+        and len({row["request_id"] for row in exclusions["entries"]}) == len(exclusions["entries"])
+    ):
+        proven = {r["request_id"]: r["reason_id"] for r in exclusions["entries"]}
+    matched, unknown = set(), 0
+    for row in report.get("ledger", []):
+        if row.get("status") != "excluded":
+            continue
+        reason = str(row.get("reason") or "")
+        if reason.lower().startswith(
+            (
+                "joint entry condition not met: ",
+                "stock condition not met: ",
+                "entry condition not met: ",
+                "maximum holding window crosses the ",
+            )
+        ):
+            continue
+        identity = _exclusion_request(row)
+        if (
+            identity in proven
+            and proven[identity] == fingerprint(reason)
+            and identity not in matched
+        ):
+            matched.add(identity)
+        else:
+            unknown += 1
+    for key in ("evidence_gap_requests", "unavailable_evidence"):
+        required[key] = max(0, required[key] - len(matched))
+    return {
+        "missing_required": bool(unknown or any(required.values())),
+        "proven_preexcluded_requests": len(matched),
+        "required_counts": required,
+        "unknown_excluded_requests": unknown,
+    }
+
+
+def _diagnosis(report, *, exclusions=None):
     findings = report.get("automatic_research", {})
     validation = report.get("supervisor_validation", {}).get(
         "operating_validation", findings.get("operating_validation", {})
@@ -232,15 +379,8 @@ def _diagnosis(report):
     if blocked:
         feasibility = report.get("supervisor_validation", {}).get("feasibility", {})
         counts = feasibility.get("counts") or {"unavailable_evidence": 1}
-    missing = any(
-        counts.get(k, 0)
-        for k in (
-            "unavailable_sizing_intent",
-            "unexplained_execution_limit",
-            "evidence_gap_requests",
-            "unavailable_evidence",
-        )
-    )
+    evidence = required_evidence(report, counts, exclusions=exclusions)
+    missing = evidence["missing_required"]
     routes = []
     if any(
         counts.get(k, 0)
@@ -251,6 +391,7 @@ def _diagnosis(report):
         return {
             "permitted_remedies": [] if missing else routes,
             "missing_evidence": missing,
+            "evidence_status": evidence,
             "fixed_limits": {k: counts.get(k, 0) for k in ("position_limit", "liquidity_limit")},
             "feasibility_only": True,
         }
@@ -269,13 +410,14 @@ def _diagnosis(report):
     return {
         "permitted_remedies": [] if missing else routes,
         "missing_evidence": missing,
+        "evidence_status": evidence,
         "fixed_limits": {k: counts.get(k, 0) for k in ("position_limit", "liquidity_limit")},
     }
 
 
-def _available_diagnosis(report, recipe):
+def _available_diagnosis(report, recipe, *, exclusions=None):
     """Advertise only executable frozen remedies, without observing new outcomes."""
-    diagnosis = _diagnosis(report)
+    diagnosis = _diagnosis(report, exclusions=exclusions)
     # A robust-improvement goal is broader than repairing a failed gate. A
     # recorded native cost pair can justify one development-only cost-reduction
     # hypothesis even when both accounts remain profitable. Passing checks stay
@@ -327,11 +469,14 @@ def _research_context(store, owner, job, bundle, report, supplied):
     from database.research_db import ResearchLibraryExperiment, ResearchLibraryJob
     from services import research_memory, research_playbook
 
-    if not isinstance(supplied, dict) or set(supplied) != {
-        "experiment_id",
-        "inputs_artifact",
-        "contract",
-    }:
+    if not isinstance(supplied, dict) or set(supplied) not in (
+        {
+            "experiment_id",
+            "inputs_artifact",
+            "contract",
+        },
+        {"experiment_id", "inputs_artifact", "contract", "flow", "baseline_settings"},
+    ):
         raise ValueError("Research continuation needs the exact reviewed study context")
     with store.sessions() as db:
         experiment = db.get(ResearchLibraryExperiment, supplied["experiment_id"])
@@ -341,6 +486,27 @@ def _research_context(store, owner, job, bundle, report, supplied):
     if supplied["inputs_artifact"] != bundle.get("inputs_artifact"):
         raise ValueError("Reviewed research observations changed")
     inputs = service.read_artifact(store, bundle["inputs_artifact"])
+    if "flow" in supplied:
+        from database.research_db import ResearchJourney
+        from research.user_flow import normalize, permitted
+
+        with store.sessions() as db:
+            reviewed = db.get(ResearchJourney, supplied["experiment_id"])
+            approved = json.loads(reviewed.state) if reviewed and reviewed.owner == owner else {}
+        if (
+            approved.get("job_id") != job.id
+            or approved.get("approved_plan", {}).get("flow") != supplied["flow"]
+            or approved.get("approved_plan", {}).get("baseline_settings")
+            != supplied["baseline_settings"]
+        ):
+            raise ValueError("Research permissions do not match the approved plan")
+        if (
+            normalize(supplied["flow"]) != supplied["flow"]
+            or supplied["baseline_settings"] != inputs["portfolio"]["strategies"]
+        ):
+            raise ValueError("Reviewed research permissions or original settings changed")
+        if not permitted(report["strategies"], supplied["baseline_settings"], supplied["flow"]):
+            raise ValueError("The research result changed a fixed user setting")
     if supplied["contract"] != research_playbook.describe(inputs["portfolio"]):
         raise ValueError("Reviewed research objective or constraints changed")
     research_playbook.validate_settings(supplied["contract"], report["strategies"])
@@ -351,8 +517,8 @@ def _research_context(store, owner, job, bundle, report, supplied):
     return context, memory
 
 
-def _reviewed_diagnosis(report, recipe, context, memory):
-    diagnosis = _available_diagnosis(report, recipe)
+def _reviewed_diagnosis(report, recipe, context, memory, *, exclusions=None):
+    diagnosis = _available_diagnosis(report, recipe, exclusions=exclusions)
     if not context:
         return diagnosis
     from services import research_memory, research_playbook
@@ -403,6 +569,7 @@ def open_supervisor(
     if not isinstance(request_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{8,128}", request_id):
         raise ValueError("Supply a stable research request identity")
     job, bundle, report, recipe = _parent(store, owner, job_id)
+    exclusions = _frozen_exclusions(store, bundle)
     context, memory = _research_context(store, owner, job, bundle, report, research_context)
     if continuation_policy not in (None, ADAPTIVE_POLICY) or (
         continuation_policy
@@ -459,10 +626,15 @@ def open_supervisor(
                 "proposals": [],
                 "status": "planning",
                 "validation_mode": recipe["validation_mode"],
-                "diagnosis": _reviewed_diagnosis(report, recipe, context, memory),
+                "diagnosis": _reviewed_diagnosis(
+                    report, recipe, context, memory, exclusions=exclusions
+                ),
                 "capital_policy_version": "research-capital-planning-v8",
                 "decision_catalog_version": DECISION_CATALOG_VERSION,
                 "experiment_policy": experiment_policy,
+                "failure_diagnosis_version": "research-failure-diagnosis-v1"
+                if experiment_policy == EXPERIMENT_POLICY
+                else None,
                 "continuation_policy": continuation_policy,
                 "accepted_job_id": None,
                 "saved_result": None,
@@ -471,6 +643,8 @@ def open_supervisor(
             }
             if context:
                 state.update(research_context=context, study_memory=memory)
+            if exclusions is not None:
+                state["frozen_exclusions"] = exclusions
             if experiment_policy == EXPERIMENT_POLICY:
                 catalog = _experiment_catalog(
                     report, recipe, {**state, "source_result_artifact": job.result_artifact}
@@ -506,7 +680,7 @@ def status(store, owner, supervisor_id, *, conversation_id):
         job_id, artifact = row.root_job_id, row.root_artifact
         automatic_job = db.get(ResearchDecisionJob, supervisor_id)
         automatic_phase = automatic_job.phase if automatic_job is not None else None
-    job, _, root_report, recipe = _parent(store, owner, job_id)
+    job, root_bundle, root_report, recipe = _parent(store, owner, job_id)
     if job.result_artifact != artifact:
         raise ValueError("The authorized saved study changed")
     planning_seed, planning_artifact = _planning_source(state, job_id, artifact)
@@ -533,6 +707,9 @@ def status(store, owner, supervisor_id, *, conversation_id):
             else "Queue evidence-supported remedies, then advance once; the worker validates and saves the first accepted result"
         ),
     }
+    exclusions = state.get("frozen_exclusions") or _frozen_exclusions(store, root_bundle)
+    if exclusions is not None:
+        result["frozen_exclusions"] = exclusions
     if state.get("experiment_policy") == EXPERIMENT_POLICY:
         seed_id = result["seed_job_id"]
         report = root_report
@@ -547,8 +724,37 @@ def status(store, owner, supervisor_id, *, conversation_id):
             if state.get("blocked_recovery"):
                 report = planning_report(store, owner, seed, report)
                 result["feasibility_only"] = True
-                result["diagnosis"] = _diagnosis(report)
-        catalog = _experiment_catalog(report, recipe, result)
+                result["diagnosis"] = _diagnosis(report, exclusions=exclusions)
+        result["diagnosis"] = _reviewed_diagnosis(
+            report,
+            recipe,
+            result.get("research_context"),
+            result.get("study_memory"),
+            exclusions=exclusions,
+        )
+        frontier = (
+            state.get("continuation_policy") == ADAPTIVE_POLICY
+            and state["validation_mode"] == "exploratory_only"
+        )
+        catalog = (
+            _frontier_catalog(store, owner, supervisor_id, result, job, root_report, recipe)
+            if frontier
+            else _experiment_catalog(report, recipe, result)
+        )
+        if frontier:
+            result["experiment_frontier"] = {
+                key: catalog[key]
+                for key in ("version", "id", "branches", "unavailable", "feedback", "stop_reason")
+            }
+            result["diagnosis"] = {
+                **result["diagnosis"],
+                "scope": "verified_development_frontier",
+                "active_branch_missing_evidence": result["diagnosis"]["missing_evidence"],
+                "missing_evidence": not bool(catalog["options"])
+                and all(
+                    branch.get("missing_required_evidence", False) for branch in catalog["branches"]
+                ),
+            }
         if state.get("continuation_policy") == ADAPTIVE_POLICY:
             supported = catalog["options"]
             catalog["options"] = [
@@ -641,16 +847,238 @@ def _experiment_catalog(report, recipe, current):
         current["proposals"],
         source_artifact=current["source_result_artifact"],
         memory=current.get("study_memory"),
+        research_context=current.get("research_context"),
+        evidence_status=_diagnosis(report, exclusions=current.get("frozen_exclusions"))[
+            "evidence_status"
+        ],
     )
-    if current.get("diagnosis", {}).get("missing_evidence"):
+    evidence = _diagnosis(report, exclusions=current.get("frozen_exclusions"))["evidence_status"]
+    catalog["feedback"]["evidence_status"] = evidence
+    if evidence["missing_required"]:
         catalog["options"] = []
+        counts = ", ".join(
+            f"{key}={value}" for key, value in evidence["required_counts"].items() if value
+        )
+        catalog["stop_reason"] = (
+            "Required execution or sizing evidence is unavailable"
+            + (f" ({counts})" if counts else " for unmatched excluded requests")
+            + "; no new setup was validated. Frozen source exclusions remain excluded."
+        )
+        return catalog
     elif recipe.get("validation_mode") != "exploratory_only":
+        before = len(catalog["options"])
         catalog["options"] = [o for o in catalog["options"] if o["remedy"] == "funding_and_size"]
+        if before and not catalog["options"]:
+            catalog["stop_reason"] = (
+                "The frozen validation programme permits funding repairs only; later outcomes cannot select another performance candidate."
+            )
     contract = current.get("research_context", {}).get("contract")
     if contract:
         for option in catalog["options"]:
             validate_settings(contract, option["settings"])
+    authority = current.get("research_context", {})
+    if authority.get("flow"):
+        from research.user_flow import permitted
+
+        before = len(catalog["options"])
+        catalog["options"] = [
+            o
+            for o in catalog["options"]
+            if permitted(o["settings"], authority["baseline_settings"], authority["flow"])
+        ]
+        filtered = before - len(catalog["options"])
+        filtered += sum(
+            row.get("reason_code") == "fixed_settings" for row in catalog.get("unavailable", [])
+        )
+        if filtered and not catalog["options"]:
+            catalog["stop_reason"] = (
+                "No remaining supported experiment respects your fixed settings; no new setup was validated."
+            )
     return catalog
+
+
+def _checked_branch(
+    store,
+    owner,
+    supervisor_id,
+    current,
+    root,
+    root_report,
+    job_id,
+    artifact=None,
+    *,
+    allow_no_effect=False,
+):
+    """Read one immutable same-supervisor branch; blocked results expose feasibility only."""
+    if job_id == root.id:
+        if root.owner != owner or (artifact is not None and artifact != root.result_artifact):
+            raise ValueError("The original branch artifact changed")
+        return root, root_report, None, root_report
+    prior = next((p for p in current["proposals"] if p.get("job_id") == job_id), None)
+    if prior is None or prior.get("outcome") not in ("rejected", "blocked"):
+        raise ValueError("Only completed checked branches may supply a frontier experiment")
+    job = service.get_job(store, owner, job_id)
+    if (
+        job.status != "completed"
+        or job.owner != owner
+        or not job.result_artifact
+        or (artifact is not None and job.result_artifact != artifact)
+    ):
+        raise ValueError("The checked branch artifact changed")
+    report = service.read_artifact(store, job.result_artifact)["result"]
+    conclusion = _verified_conclusion(report, supervisor_id, prior["id"], root.id, store, owner)
+    if conclusion["outcome"] != prior["outcome"]:
+        raise ValueError("The checked branch outcome changed")
+    if not allow_no_effect and (
+        conclusion.get("no_effect", {}).get("status") == "unchanged"
+        or prior.get("no_effect", {}).get("status") == "unchanged"
+    ):
+        raise ValueError("A no-effect probe is not a fully checked planning source")
+    planning = (
+        planning_report(store, owner, job, report) if conclusion["outcome"] == "blocked" else report
+    )
+    return job, report, conclusion, planning
+
+
+def _frontier_catalog(store, owner, supervisor_id, current, root, root_report, recipe):
+    from services.research_frontier import build
+    from services.research_validation_scorecard import build as scorecard
+
+    prior = [
+        p
+        for p in current["proposals"]
+        if p.get("outcome") in ("rejected", "blocked") and p.get("job_id")
+    ]
+    if len(prior) > ADAPTIVE_EXPERIMENT_LIMIT:
+        raise ValueError("The checked branch history exceeds its frozen bound")
+    branches, incomplete = [], []
+    for job_id in dict.fromkeys([root.id, *(p["job_id"] for p in prior)]):
+        previous = next((p for p in prior if p.get("job_id") == job_id), None)
+        if previous is not None and previous["outcome"] == "blocked":
+            attempt = service.get_job(store, owner, job_id)
+            if attempt.owner != owner:
+                raise ValueError("The incomplete branch owner changed")
+            if attempt.status in ("failed", "cancelled"):
+                incomplete.append(
+                    {
+                        "job_id": job_id,
+                        "result_artifact": attempt.result_artifact,
+                        "settings_id": None,
+                        "source_eligibility": "incomplete_native_attempt",
+                        "native_status": attempt.status,
+                        "available_options": 0,
+                        "scorecard": {"eligible": False, "scope": "incomplete_native_attempt"},
+                        "reason_code": "incomplete_native_attempt",
+                        "stop_reason": "The native attempt did not complete a verified report; it cannot supply a checked configuration or new experiment.",
+                    }
+                )
+                continue
+        job, report, conclusion, planning = _checked_branch(
+            store, owner, supervisor_id, current, root, root_report, job_id, allow_no_effect=True
+        )
+        branch_state = {
+            **current,
+            "seed_job_id": job.id,
+            "source_result_artifact": job.result_artifact,
+            "diagnosis": _reviewed_diagnosis(
+                planning,
+                recipe,
+                current.get("research_context"),
+                current.get("study_memory"),
+                exclusions=current.get("frozen_exclusions"),
+            ),
+        }
+        previous = next((p for p in current["proposals"] if p.get("job_id") == job.id), {})
+        probe_only = (
+            conclusion and conclusion.get("no_effect", {}).get("status") == "unchanged"
+        ) or previous.get("no_effect", {}).get("status") == "unchanged"
+        catalog = (
+            {
+                "options": [],
+                "unavailable": [
+                    {
+                        "reason_code": "no_effect_probe_only",
+                        "reason": "This one-account no-effect probe did not complete native validation and cannot become a checked planning source",
+                    }
+                ],
+                "feedback": {},
+                "stop_reason": "No-effect probe only; continue from its fully checked origin.",
+            }
+            if probe_only
+            else _experiment_catalog(planning, recipe, branch_state)
+        )
+        card = scorecard(report)
+        if probe_only:
+            card = {**card, "source_eligibility": "no_effect_probe_only"}
+        elif conclusion and conclusion["outcome"] == "blocked":
+            card = {**card, "source_eligibility": "feasibility_only"}
+            feasibility = planning.get("supervisor_validation", {}).get("feasibility")
+            if (
+                isinstance(feasibility, dict)
+                and feasibility.get("version") == "research-feasibility-v1"
+                and feasibility.get("scope") == "feasibility_only"
+                and feasibility.get("source_settings_id") == settings_identity(report["strategies"])
+                and isinstance(feasibility.get("counts"), dict)
+                and len(feasibility["counts"]) <= 24
+                and all(
+                    type(count) is int and count >= 0 for count in feasibility["counts"].values()
+                )
+                and isinstance(feasibility.get("unresolved_constraints"), dict)
+                and len(feasibility["unresolved_constraints"]) <= 24
+                and all(
+                    feasibility["counts"].get(key) == count and type(count) is int and count >= 0
+                    for key, count in feasibility["unresolved_constraints"].items()
+                )
+            ):
+                card["feasibility"] = {
+                    key: deepcopy(feasibility[key])
+                    for key in (
+                        "version",
+                        "scope",
+                        "source_settings_id",
+                        "counts",
+                        "unresolved_constraints",
+                    )
+                }
+            else:
+                card["feasibility_unavailable"] = True
+        branches.append(
+            {
+                "job_id": job.id,
+                "result_artifact": job.result_artifact,
+                "report": {
+                    "strategies": report["strategies"],
+                    "portfolio": {
+                        "engine": report.get("portfolio", {}).get("engine", recipe.get("engine"))
+                    },
+                },
+                "catalog": catalog,
+                "scorecard": card,
+                "missing_required_evidence": branch_state["diagnosis"]["missing_evidence"],
+            }
+        )
+    frontier = build(
+        branches,
+        remaining_accounts=current["remaining_accounts"],
+        validation_mode=current["validation_mode"],
+    )
+    if incomplete:
+        frontier["branches"].extend(incomplete)
+        frontier["unavailable"].extend(
+            {
+                "origin_job_id": item["job_id"],
+                "reason_code": item["reason_code"],
+                "reason": item["stop_reason"],
+                "native_status": item["native_status"],
+            }
+            for item in incomplete
+        )
+        frontier["feedback"]["incomplete_native_attempts"] = len(incomplete)
+        frontier["feedback"]["coverage"] = (
+            "All completed checked branches and supported catalogues; failed/cancelled attempts remain explicitly unavailable history, not tested configurations."
+        )
+        frontier["id"] = fingerprint({key: value for key, value in frontier.items() if key != "id"})
+    return frontier
 
 
 def _concrete_option(current, remedy, candidate_id):
@@ -674,6 +1102,10 @@ def resume_frontier(store, owner, supervisor_id, *, conversation_id):
     completed settings remain excluded globally, including across branches.
     """
     current = status(store, owner, supervisor_id, conversation_id=conversation_id)
+    if current.get("experiment_frontier"):
+        # The complete checked frontier is already offered to the model. A
+        # background read cannot select a branch or revoke its stop decision.
+        return current
     if (
         current.get("continuation_policy") != ADAPTIVE_POLICY
         or current["validation_mode"] != "exploratory_only"
@@ -726,7 +1158,11 @@ def resume_frontier(store, owner, supervisor_id, *, conversation_id):
             else _verified_conclusion(report, supervisor_id, prior["id"], root.id, store, owner)
         )
         diagnosis = _reviewed_diagnosis(
-            report, recipe, current.get("research_context"), current.get("study_memory")
+            report,
+            recipe,
+            current.get("research_context"),
+            current.get("study_memory"),
+            exclusions=current.get("frozen_exclusions"),
         )
         planning = {
             **current,
@@ -806,6 +1242,7 @@ def resume_frontier(store, owner, supervisor_id, *, conversation_id):
         )
         saved.pop("blocked_recovery", None)
         saved.pop("stopping_reason", None)
+        saved.pop("stopping", None)
         if operation.phase == "stopped":
             operation.phase, operation.claim_token, operation.claimed_at = "queued", None, None
         _put(row, saved)
@@ -824,6 +1261,123 @@ def resume_frontier(store, owner, supervisor_id, *, conversation_id):
             if journey.phase == "none":
                 journey_state.update(result=None, error=None)
                 research_journey._put(journey, journey_state, "researching")
+    return status(store, owner, supervisor_id, conversation_id=conversation_id)
+
+
+def resume_frontier_review(store, owner, supervisor_id, *, conversation_id, request_id):
+    """Explicitly resume this same stopped grant, preserving every spent allowance."""
+    from database.research_db import ResearchJourney
+
+    if not isinstance(request_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{8,128}", request_id):
+        raise ValueError("Frontier review needs a stable explicitly confirmed request identity")
+    current = status(store, owner, supervisor_id, conversation_id=conversation_id)
+    if any(review["request_id"] == request_id for review in current.get("frontier_reviews", [])):
+        return current
+    automation = current.get("automation", {})
+    if (
+        current["status"] != "stopped"
+        or current.get("experiment_policy") != EXPERIMENT_POLICY
+        or current.get("continuation_policy") != ADAPTIVE_POLICY
+        or current["validation_mode"] != "exploratory_only"
+        or not current.get("research_context")
+        or not current.get("experiment_frontier", {}).get("feedback", {}).get("complete")
+        or not current.get("experiment_options")
+        or any(not proposal.get("outcome") for proposal in current["proposals"])
+        or len(current["proposals"]) >= current["max_experiments"]
+        or current["lost_accounts"] >= 64
+        or type(automation.get("calls_spent")) is not int
+        or type(automation.get("max_model_calls")) is not int
+        or not 0
+        <= automation["calls_spent"]
+        < automation["max_model_calls"]
+        <= ADAPTIVE_EXPERIMENT_LIMIT
+    ):
+        raise ValueError(
+            "This stopped grant has no affordable checked-frontier experiment within its remaining authority"
+        )
+    with store.sessions.begin() as db:
+        service.write_guard(db)
+        row, saved = _owned(db, owner, supervisor_id, conversation_id)
+        if any(review["request_id"] == request_id for review in saved.get("frontier_reviews", [])):
+            return status(store, owner, supervisor_id, conversation_id=conversation_id)
+        if (
+            saved["status"] != "stopped"
+            or saved["proposals"] != current["proposals"]
+            or saved.get("automation") != current.get("automation")
+        ):
+            raise ValueError("Research changed before the explicit frontier review")
+        reviews = saved.setdefault("frontier_reviews", [])
+        if len(reviews) >= ADAPTIVE_EXPERIMENT_LIMIT:
+            raise ValueError("The retained explicit frontier-review history is full")
+        operation = db.get(ResearchDecisionJob, supervisor_id)
+        if (
+            operation is None
+            or operation.owner != owner
+            or operation.phase not in ("stopped", "completed")
+        ):
+            raise ValueError("Wait for the current decision operation before explicitly resuming")
+        reviews.append(
+            {
+                "request_id": request_id,
+                "catalog_version": DECISION_CATALOG_VERSION,
+                "frontier_id": current["experiment_frontier"]["id"],
+                "prior_stop_decision": deepcopy(saved.get("stop_decision")),
+                "prior_stopping_reason": saved.get("stopping_reason"),
+                "prior_stopping": deepcopy(saved.get("stopping")),
+                "prior_decision_phase": operation.phase,
+                "original_attempts": saved["original_attempts"],
+                "attempts_already_spent": 512 - _remaining(saved),
+                "remaining_accounts": _remaining(saved),
+                "proposal_count": len(saved["proposals"]),
+                "model_calls_already_spent": saved["automation"]["calls_spent"],
+                "maximum_model_calls": saved["automation"]["max_model_calls"],
+                "created_at": time.time(),
+            }
+        )
+        prior_stop = saved.get("stop_decision")
+        if prior_stop:
+            for index in range(len(saved["automation"]["decisions"]) - 1, -1, -1):
+                decision = saved["automation"]["decisions"][index]
+                if (
+                    decision.get("remedy") == "stop"
+                    and not decision.get("superseded_by_review")
+                    and all(
+                        decision.get(key) == prior_stop.get(key)
+                        for key in ("selection", "reason", "seed_artifact")
+                    )
+                ):
+                    reviews[-1]["prior_model_stop"] = deepcopy(decision)
+                    reviews[-1]["superseded_stop_index"] = index
+                    decision["superseded_by_review"] = request_id
+                    break
+        saved.update(
+            status="awaiting_plan",
+            decision_catalog_version=DECISION_CATALOG_VERSION,
+            failure_diagnosis_version="research-failure-diagnosis-v1",
+            diagnosis=current["diagnosis"],
+        )
+        saved.pop("stop_decision", None)
+        saved.pop("stopping_reason", None)
+        saved.pop("stopping", None)
+        saved.pop("continuation_stop_reason", None)
+        saved["automation"].pop("attention", None)
+        operation.phase, operation.claim_token, operation.claimed_at = "queued", None, None
+        operation.updated_at = time.time()
+        _put(row, saved)
+        context = saved["research_context"]
+        journey = db.get(ResearchJourney, context.get("experiment_id"))
+        if journey is None or journey.owner != owner:
+            raise ValueError("The owned saved-study journey is unavailable")
+        if journey is not None:
+            from services import research_journey
+
+            journey_state = json.loads(journey.state)
+            if journey_state.get("supervisor_id") != supervisor_id:
+                raise ValueError("The study's active research grant changed")
+            reviews[-1]["prior_journey_result"] = deepcopy(journey_state.get("result"))
+            journey_state.update(result=None, error=None)
+            research_journey._put(journey, journey_state, "researching")
+            _put(row, saved)
     return status(store, owner, supervisor_id, conversation_id=conversation_id)
 
 
@@ -903,7 +1457,7 @@ def replan(store, owner, supervisor_id, *, conversation_id, request_id, continua
         planning.update(
             source_result_artifact=recovery["artifact"],
             blocked_recovery=recovery,
-            diagnosis=_diagnosis(report),
+            diagnosis=_diagnosis(report, exclusions=current.get("frozen_exclusions")),
         )
     catalog = _experiment_catalog(report, recipe, planning)
     if adaptive:
@@ -917,7 +1471,9 @@ def replan(store, owner, supervisor_id, *, conversation_id, request_id, continua
             **current,
             "source_result_artifact": checked_source,
             "study_memory": memory,
-            "diagnosis": _reviewed_diagnosis(checked_report, recipe, context, memory),
+            "diagnosis": _reviewed_diagnosis(
+                checked_report, recipe, context, memory, exclusions=current.get("frozen_exclusions")
+            ),
         }
         catalog = _experiment_catalog(checked_report, recipe, fallback)
         catalog["options"] = [
@@ -953,6 +1509,7 @@ def replan(store, owner, supervisor_id, *, conversation_id, request_id, continua
                 saved["max_experiments"] = ADAPTIVE_EXPERIMENT_LIMIT
                 saved["automation"]["max_model_calls"] = ADAPTIVE_EXPERIMENT_LIMIT
             saved["experiment_policy"] = EXPERIMENT_POLICY
+            saved["failure_diagnosis_version"] = "research-failure-diagnosis-v1"
             if recovery:
                 saved["blocked_recovery"] = recovery
             else:
@@ -962,6 +1519,7 @@ def replan(store, owner, supervisor_id, *, conversation_id, request_id, continua
                 dict.fromkeys(o["remedy"] for o in catalog["options"])
             )
             saved.update(status="awaiting_plan")
+            prior_stopping = saved.pop("stopping", None)
             saved.pop("stopping_reason", None)
             saved.pop("stop_decision", None)
             saved["automation"].pop("attention", None)
@@ -975,6 +1533,7 @@ def replan(store, owner, supervisor_id, *, conversation_id, request_id, continua
                     "maximum": saved["max_experiments"],
                     "attempts_already_spent": 512 - current["remaining_accounts"],
                     "model_calls_already_spent": saved["automation"]["calls_spent"],
+                    "prior_stopping": prior_stopping,
                     "reason": "Explicitly confirmed automatic feedback-driven continuation on the same frozen evidence"
                     if adaptive
                     else "Explicitly confirmed feedback-driven research on the same frozen evidence",
@@ -1049,7 +1608,17 @@ def _settings_for(report, recipe, remedy):
     return settings
 
 
-def propose(store, owner, supervisor_id, remedy, rationale, *, conversation_id, candidate_id=None):
+def propose(
+    store,
+    owner,
+    supervisor_id,
+    remedy,
+    rationale,
+    *,
+    conversation_id,
+    candidate_id=None,
+    diagnosis=None,
+):
     if (
         remedy not in REMEDIES
         or not isinstance(rationale, str)
@@ -1057,52 +1626,94 @@ def propose(store, owner, supervisor_id, remedy, rationale, *, conversation_id, 
     ):
         raise ValueError("Choose a registered research remedy and a short evidence-based reason")
     current = status(store, owner, supervisor_id, conversation_id=conversation_id)
-    _, _, report, recipe = _parent(store, owner, current["root_job_id"])
-    if current["seed_job_id"] != current["root_job_id"]:
-        seed = service.get_job(store, owner, current["seed_job_id"])
-        if seed.status != "completed" or seed.result_artifact != current["source_result_artifact"]:
-            raise ValueError("The verified development seed changed")
-        report = service.read_artifact(store, seed.result_artifact)["result"]
-        _verified_conclusion(
-            report,
-            supervisor_id,
-            next(p["id"] for p in current["proposals"] if p.get("job_id") == seed.id),
-            current["root_job_id"],
-            store,
-            owner,
+    if diagnosis is not None:
+        from services import research_failure_diagnosis
+
+        diagnosis = research_failure_diagnosis.validate(
+            {key: diagnosis[key] for key in research_failure_diagnosis.RAW_FIELDS},
+            current,
+            candidate_id,
         )
+    root, _, root_report, recipe = _parent(store, owner, current["root_job_id"])
+    option = None
+    if current.get("experiment_policy") == EXPERIMENT_POLICY:
+        option = _concrete_option(current, remedy, candidate_id)
+    origin_job_id = (
+        option.get("origin_job_id", current["seed_job_id"]) if option else current["seed_job_id"]
+    )
+    origin_artifact = (
+        option.get("origin_result_artifact", current["source_result_artifact"])
+        if option
+        else current["source_result_artifact"]
+    )
+    seed, native_report, origin_conclusion, report = _checked_branch(
+        store, owner, supervisor_id, current, root, root_report, origin_job_id, origin_artifact
+    )
+    origin_diagnosis = _reviewed_diagnosis(
+        report,
+        recipe,
+        current.get("research_context"),
+        current.get("study_memory"),
+        exclusions=current.get("frozen_exclusions"),
+    )
     if recipe["validation_mode"] != "exploratory_only" and remedy != "funding_and_size":
         raise ValueError(
             "Later results have already been exposed; do not use them to select another performance candidate"
         )
     if remedy not in current["diagnosis"]["permitted_remedies"]:
         raise ValueError("Saved native evidence does not support that remedy")
-    option = None
-    if current.get("experiment_policy") == EXPERIMENT_POLICY:
-        option = _concrete_option(current, remedy, candidate_id)
+    if option:
+        rebound = _experiment_catalog(
+            report,
+            recipe,
+            {**current, "source_result_artifact": origin_artifact, "diagnosis": origin_diagnosis},
+        )
+        verified_option = _concrete_option(
+            {"experiment_options": rebound["options"]}, remedy, candidate_id
+        )
+        if verified_option["settings"] != option["settings"]:
+            raise ValueError("The selected origin's complete experiment settings changed")
         settings = deepcopy(option["settings"])
     else:
         if candidate_id is not None:
             raise ValueError("This saved plan does not authorize concrete candidate selection")
         settings = _settings_for(report, recipe, remedy)
-    if current.get("blocked_recovery") and (
+    origin_blocked = origin_conclusion and origin_conclusion["outcome"] == "blocked"
+    if origin_blocked and (
         remedy != "funding_and_size" or recipe["validation_mode"] != "exploratory_only"
     ):
         raise ValueError(
             "A blocked account permits only native feasibility repair, not performance selection"
         )
+    origin_recovery = (
+        _recovery_record(
+            store,
+            owner,
+            seed,
+            native_report,
+            next(p for p in current["proposals"] if p.get("job_id") == origin_job_id),
+        )
+        if origin_blocked
+        else None
+    )
     if current.get("research_context"):
         from services import research_memory, research_playbook
 
         contract = current["research_context"]["contract"]
         research_playbook.validate_settings(contract, settings)
+        if current["research_context"].get("flow"):
+            from research.user_flow import permitted
+
+            authority = current["research_context"]
+            if not permitted(settings, authority["baseline_settings"], authority["flow"]):
+                raise ValueError("This experiment changes a fixed user setting")
         if research_memory.matching(current["study_memory"], remedy, settings, contract["id"]):
             raise ValueError("The same observations and settings already failed this experiment")
     maximum = validation_reserve(remedy, recipe["validation_mode"])
     value = {
         "remedy": remedy,
         "settings": settings,
-        "source_result_artifact": current.get("source_result_artifact"),
+        "source_result_artifact": origin_artifact,
         **(
             {"capital_policy_version": current["capital_policy_version"]}
             if current.get("capital_policy_version")
@@ -1113,16 +1724,17 @@ def propose(store, owner, supervisor_id, remedy, rationale, *, conversation_id, 
     with store.sessions.begin() as db:
         service.write_guard(db)
         row, state = _owned(db, owner, supervisor_id, conversation_id)
+        previous = next((p for p in state["proposals"] if p["id"] == proposal_id), None)
+        if previous is not None:
+            return {"proposal": previous, "reused": True}
         if (
             _planning_source(state, current["root_job_id"], current["source_result_artifact"])[0]
             != current["seed_job_id"]
+            or state["proposals"] != current["proposals"]
         ):
             raise ValueError(
                 "Development evidence changed while the proposal was being prepared; read status again"
             )
-        previous = next((p for p in state["proposals"] if p["id"] == proposal_id), None)
-        if previous is not None:
-            return {"proposal": previous, "reused": True}
         if (
             state["status"] in ("accepted", "saved", "stopped")
             or len(state["proposals"]) >= state["max_experiments"]
@@ -1142,8 +1754,9 @@ def propose(store, owner, supervisor_id, remedy, rationale, *, conversation_id, 
             "reserved_accounts": maximum,
             "spent": 0,
             "completed": 0,
-            "seed_job_id": current["seed_job_id"],
-            "source_result_artifact": current["source_result_artifact"],
+            "seed_job_id": origin_job_id,
+            "source_job_id": origin_job_id,
+            "source_result_artifact": origin_artifact,
             "job_id": None,
             "outcome": None,
             **(
@@ -1155,13 +1768,38 @@ def propose(store, owner, supervisor_id, remedy, rationale, *, conversation_id, 
         if state.get("research_context"):
             from services.research_playbook import experiment
 
-            item["experiment"] = experiment(remedy, state["diagnosis"], rationale.strip())
+            item["experiment"] = experiment(remedy, origin_diagnosis, rationale.strip())
+        if diagnosis is not None:
+            item["decision_diagnosis"] = deepcopy(diagnosis)
         if option:
             item["candidate"] = {k: v for k, v in option.items() if k != "settings"}
             item["experiment_policy"] = EXPERIMENT_POLICY
             item["experiment"].update(
                 change=option["change"], expected_evidence=option["expected_effect"]
             )
+        if option and option.get("origin_job_id"):
+            if origin_artifact != current["source_result_artifact"]:
+                state.setdefault("frontier_transitions", []).append(
+                    {
+                        "from": current["source_result_artifact"],
+                        "to": origin_artifact,
+                        "origin_job_id": origin_job_id,
+                        "candidate_id": candidate_id,
+                        "after_proposals": len(state["proposals"]),
+                        "attempts_already_spent": 512 - _remaining(state),
+                        "reason": "The model selected this immutable checked-branch option from the complete frontier; no outcome was accepted by changing branches.",
+                    }
+                )
+            state.update(
+                latest_seed_job_id=origin_job_id,
+                latest_source_result_artifact=origin_artifact,
+                diagnosis=origin_diagnosis,
+                latest_conclusion=origin_conclusion,
+            )
+            if origin_blocked:
+                state["blocked_recovery"] = origin_recovery
+            else:
+                state.pop("blocked_recovery", None)
         state["proposals"].append(item)
         _put(row, state)
     return {"proposal": item, "reused": False}
@@ -1243,6 +1881,16 @@ def advance(store, owner, supervisor_id, *, conversation_id):
             validate_settings(
                 current["research_context"]["contract"], completed_report["strategies"]
             )
+            if current["research_context"].get("flow"):
+                from research.user_flow import permitted
+
+                authority = current["research_context"]
+                if not permitted(
+                    completed_report["strategies"],
+                    authority["baseline_settings"],
+                    authority["flow"],
+                ):
+                    raise ValueError("The completed experiment changed a fixed user setting")
         retain_stronger_seed = False
         if (
             completed_report is not None
@@ -1264,6 +1912,8 @@ def advance(store, owner, supervisor_id, *, conversation_id):
         with store.sessions.begin() as db:
             service.write_guard(db)
             row, state = _owned(db, owner, supervisor_id, conversation_id)
+            if current.get("frozen_exclusions") is not None:
+                state["frozen_exclusions"] = deepcopy(current["frozen_exclusions"])
             item = next(p for p in state["proposals"] if p["id"] == pending["id"])
             if item.get("outcome") or state["status"] in ("accepted", "saved", "stopped"):
                 return {"id": supervisor_id, "supervisor_id": supervisor_id, **state}
@@ -1322,15 +1972,23 @@ def advance(store, owner, supervisor_id, *, conversation_id):
                             _parent(store, owner, current["root_job_id"])[3],
                             state.get("research_context"),
                             state.get("study_memory"),
+                            exclusions=state.get("frozen_exclusions"),
                         )
                         if state.get("capital_policy_version")
-                        else _diagnosis(completed_report)
+                        else _diagnosis(completed_report, exclusions=state.get("frozen_exclusions"))
                     )
                     state["latest_conclusion"] = conclusion
                     state["latest_seed_job_id"] = job.id
                     state["latest_source_result_artifact"] = job.result_artifact
                     state.pop("blocked_recovery", None)
-                if state["diagnosis"]["missing_evidence"] or _lost(state) >= 64:
+                frontier_review = (
+                    state.get("continuation_policy") == ADAPTIVE_POLICY
+                    and state.get("experiment_policy") == EXPERIMENT_POLICY
+                    and state["validation_mode"] == "exploratory_only"
+                )
+                if (state["diagnosis"]["missing_evidence"] and not frontier_review) or _lost(
+                    state
+                ) >= 64:
                     state["status"] = "stopped"
                     state["stopping_reason"] = (
                         "Missing saved evidence or the original interrupted-account ceiling prevents continuation"
@@ -1345,7 +2003,12 @@ def advance(store, owner, supervisor_id, *, conversation_id):
                             or state.get("experiment_policy") == EXPERIMENT_POLICY
                         )
                         and _lost(state) < 64
-                        and (item["outcome"] == "rejected" or blocked_recovery is not None)
+                        and (
+                            item["outcome"] == "rejected"
+                            or blocked_recovery is not None
+                            or frontier_review
+                            and item["outcome"] == "blocked"
+                        )
                         else "stopped"
                     )
                     if state["status"] == "stopped":

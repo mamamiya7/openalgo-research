@@ -9,8 +9,26 @@ import pytest
 from test_research_supervisor import CONVERSATION, OWNER, ROOT, ledger
 
 from database.research_db import ResearchDecisionJob, ResearchSupervisor
+from research.report_contract import fingerprint, settings_identity
 from services import research_automation as auto
 from services import research_supervisor as supervisor
+from services.research_experiments import VERSION as CATALOG_VERSION
+
+
+def concrete_option(source_artifact, remedy, settings, **details):
+    return {
+        "id": fingerprint(
+            {
+                "version": CATALOG_VERSION,
+                "source_artifact": source_artifact,
+                "remedy": remedy,
+                "settings_id": settings_identity(settings),
+            }
+        ),
+        "remedy": remedy,
+        "settings": deepcopy(settings),
+        **details,
+    }
 
 
 @pytest.fixture
@@ -31,10 +49,9 @@ def stopped(ledger, monkeypatch):
         model_id=1,
     )
     settings = deepcopy(ledger.report["strategies"])
+    candidate_settings = deepcopy(settings)
+    candidate_settings[0]["config"]["hold_sessions"] = 3
     option = {
-        "id": "c" * 64,
-        "remedy": "temporal_stability",
-        "settings": settings,
         "change": {"hold_sessions": 3},
         "expected_effect": "A recorded long trade may change",
         "reason": "Recorded horizon intersected",
@@ -42,7 +59,17 @@ def stopped(ledger, monkeypatch):
     monkeypatch.setattr(
         supervisor,
         "_experiment_catalog",
-        lambda *a: {"options": [deepcopy(option)], "feedback": {"prior_no_effect": True}},
+        lambda *a: {
+            "options": [
+                concrete_option(
+                    a[2]["source_result_artifact"],
+                    "temporal_stability",
+                    candidate_settings,
+                    **option,
+                )
+            ],
+            "feedback": {"prior_no_effect": True},
+        },
     )
     monkeypatch.setattr(research_memory, "read", lambda *a, **k: {"entries": []})
     with ledger.store.sessions.begin() as db:
@@ -120,7 +147,7 @@ def test_new_policy_has_one_native_and_three_model_slots_without_relaxing_legacy
     monkeypatch.setattr(
         supervisor,
         "_reviewed_diagnosis",
-        lambda *a: {"permitted_remedies": [], "missing_evidence": False},
+        lambda *a, **kw: {"permitted_remedies": [], "missing_evidence": False},
     )
     monkeypatch.setattr(
         supervisor,

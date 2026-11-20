@@ -181,12 +181,14 @@ def _journey_references(connection, tables):
                 "complete",
                 "none",
                 "needs_action",
+                "awaiting_approval",
             )
             or state.get("version") != VERSION
         ):
             raise ValueError("Research journey metadata no longer matches its study")
         if state.get("job_id") and jobs.get(state["job_id"]) != owner:
             raise ValueError("Research journey references a missing owned job")
+        roots.update(_planning_references(state))
         history = state.get("history", [])
         if not isinstance(history, list) or len(history) > 24:
             raise ValueError("Research journey memory exceeds its supported bound")
@@ -1667,6 +1669,7 @@ def _input_references(value):
     while pending:
         item = pending.pop()
         if isinstance(item, dict):
+            yield from _planning_references(item)
             for key, child in item.items():
                 if key in ("inputs_artifact", "parent_result_artifact", "reference_artifact"):
                     if not isinstance(child, str) or not re.fullmatch(r"[a-f0-9]{64}", child):
@@ -1676,6 +1679,100 @@ def _input_references(value):
                     pending.append(child)
         elif isinstance(item, list):
             pending.extend(child for child in item if isinstance(child, (dict, list)))
+
+
+def _planning_references(item):
+    """Retain only the explicitly versioned AI-feedback/recovery artifact links."""
+    from research.report_contract import fingerprint
+
+    def digest(value):
+        if not isinstance(value, str) or not re.fullmatch(r"[a-f0-9]{64}", value):
+            raise ValueError("Invalid typed planning checkpoint reference")
+        return value
+
+    def job(value):
+        if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", value):
+            raise ValueError("Invalid planning reference job identity")
+
+    def boundary(value):
+        if not isinstance(value, str) or not re.fullmatch(
+            r"(?:fit[123]|search|search_seed[12]):(?:[0-9]|[1-5][0-9]|6[0-7])", value
+        ):
+            raise ValueError("Invalid planning reference boundary")
+
+    def annex(value):
+        from research.planning_recovery import VERSION, verify
+
+        if not isinstance(value, dict) or value.get("version") != VERSION:
+            raise ValueError("Unsupported planning recovery reference")
+        verify(value)
+        return digest(value["authorization"]["checkpoint_id"])
+
+    def controller(value):
+        if (
+            not isinstance(value, dict)
+            or value.get("version") != "research-controller-v2"
+            or set(value)
+            not in (
+                {"version", "job_id", "plan_id", "id"},
+                {"version", "job_id", "plan_id", "id", "known_rejection"},
+            )
+            or value.get("id") != fingerprint({k: v for k, v in value.items() if k != "id"})
+        ):
+            raise ValueError("The typed controller reference changed")
+        job(value["job_id"])
+        digest(value["plan_id"])
+        known = value.get("known_rejection")
+        if known is None:
+            return None
+        if not isinstance(known, dict) or set(known) != {
+            "boundary_key",
+            "checkpoint_id",
+            "request_id",
+            "error",
+        }:
+            raise ValueError("Invalid controller rejection reference")
+        boundary(known["boundary_key"])
+        digest(known["request_id"])
+        if not isinstance(known["error"], str) or not 1 <= len(known["error"]) <= 240:
+            raise ValueError("Invalid controller rejection reason")
+        return digest(known["checkpoint_id"])
+
+    references = item.get("planning_feedback_refs")
+    if references is not None:
+        if not isinstance(references, dict) or len(references) > 12:
+            raise ValueError("Planning feedback references exceed the twelve-boundary allowance")
+        for key, reference in references.items():
+            boundary(key)
+            # Direct callers can have no durable reference when feedback fits
+            # inline. A missing pointer never becomes a guessed artifact root.
+            if reference is None:
+                continue
+            if not isinstance(reference, dict) or set(reference) != {"checkpoint", "job_id"}:
+                raise ValueError("Invalid planning feedback checkpoint descriptor")
+            job(reference["job_id"])
+            yield digest(reference["checkpoint"])
+    if item.get("planning_recovery") is not None:
+        yield annex(item["planning_recovery"])
+    if item.get("version") == "hands-off-fixed-signals-v1" and item.get("recovery") is not None:
+        yield annex(item["recovery"])
+    if item.get("controller_update") is not None:
+        reference = controller(item["controller_update"])
+        if reference is not None:
+            yield reference
+    if item.get("controller_v2") is not None:
+        value = item["controller_v2"]
+        if not isinstance(value, dict) or "authority" not in value:
+            raise ValueError("Invalid saved controller reference")
+        reference = controller(value["authority"])
+        if reference is not None:
+            yield reference
+    if item.get("version") == "planning-recovery-v2":
+        yield annex(item)
+    elif item.get("version") == "research-controller-v2":
+        reference = controller(item)
+        if reference is not None:
+            yield reference
 
 
 def _closure(store, roots, refresh=lambda: None):

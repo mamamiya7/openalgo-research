@@ -144,6 +144,144 @@ def _native(report):
     return validation, operating, decision, design, checks, prefixes, periods, policies
 
 
+def _initial_feedback(report, unavailable):
+    """Expose sealed search challenges without comparing them to a full child check.
+
+    Search-prefix diagnostics are not the separate complete operating programme.
+    They may inform the next hypothesis, never make the root rankable/accepted.
+    """
+    from research.automatic_decision import descriptor
+    from research.report_contract import settings_identity
+
+    if not isinstance(report, dict) or "supervisor_validation" in report:
+        raise ValueError("Not an initial search report")
+    findings = report.get("automatic_research", {})
+    recipe = findings.get("recipe", {})
+    policy = descriptor()
+    decision = findings.get("decision", {})
+    if (
+        findings.get("version") != "automatic-hypotheses-v16"
+        or recipe.get("version") != "automatic-hypotheses-v16"
+        or recipe.get("validation_mode") != "exploratory_only"
+        or recipe.get("automatic_decision") != policy
+        or recipe.get("id") != fingerprint({k: v for k, v in recipe.items() if k != "id"})
+        or decision.get("version") != policy["version"]
+        or decision.get("policy_id") != policy["id"]
+        or decision.get("id") != fingerprint({k: v for k, v in decision.items() if k != "id"})
+        or decision.get("independently_validated") is not False
+        or findings.get("independently_validated") is not False
+        or findings.get("final") is not None
+        or decision.get("selected_config_id") != settings_identity(report.get("strategies"))
+        or findings.get("selected_config_id") != decision.get("selected_config_id")
+        or any(not _number(report.get("summary", {}).get(k)) for k in SUMMARY_FIELDS[:4])
+    ):
+        raise ValueError("Initial search challenge evidence is unavailable or changed")
+    checks = decision.get("checks")
+    if not isinstance(checks, list) or len(checks) not in (0, 2):
+        raise ValueError("Both recorded initial challenges are required")
+    if not checks:
+        if decision.get("historical_candidate") is not False or not decision.get("reasons"):
+            raise ValueError("Missing initial candidate admission measurements")
+        return {
+            **unavailable,
+            "feedback_available": True,
+            "evidence_kind": "initial_search_admission",
+            "summary": _summary(report["summary"]),
+            "checks": [
+                {
+                    "key": "initial_candidate_support",
+                    "passed": False,
+                    "facts": {"historical_candidate": False, "challenges_run": False},
+                    "thresholds": {},
+                    "reasons": _reasons(decision["reasons"]),
+                }
+            ],
+            "failed_gate_keys": ["initial_candidate_support"],
+            "source": {
+                "selected_config_id": decision["selected_config_id"],
+                "decision_id": decision["id"],
+                "recipe_id": recipe["id"],
+            },
+            "unavailable_reason": "Initial candidate failed admission; cost and neighbor challenges were not run and remain unknown",
+        }
+    checks = {r["kind"]: r for r in checks if isinstance(r, dict) and "kind" in r}
+    if set(checks) != {"higher_costs", "neighboring_settings"} or any(
+        type(r.get("passed")) is not bool for r in checks.values()
+    ):
+        raise ValueError("Initial challenge measurements are incomplete")
+    cost, neighbor = checks["higher_costs"], checks["neighboring_settings"]
+    tested, passing = neighbor.get("tested"), neighbor.get("passing")
+    if (
+        type(tested) is not int
+        or not 1 <= tested <= 4
+        or type(passing) is not int
+        or not 0 <= passing <= tested
+        or not _number(neighbor.get("median_return_edge_pct"))
+        or not _number(cost.get("summary", {}).get("net_return_pct"))
+    ):
+        raise ValueError("Initial challenge outcomes are incomplete")
+    rows = [
+        {
+            "key": "higher_costs",
+            "passed": cost["passed"],
+            "facts": _summary(cost["summary"]),
+            "thresholds": {
+                "maximum_drawdown_pct": policy["maximum_drawdown_pct"],
+                "positive_net_return_required": True,
+                "matched_baseline_improvement_required": True,
+            },
+            "reasons": _reasons(cost.get("reasons")),
+        },
+        {
+            "key": "neighboring_settings",
+            "passed": neighbor["passed"],
+            "facts": {k: neighbor[k] for k in ("tested", "passing", "median_return_edge_pct")},
+            "thresholds": {
+                k: policy[k]
+                for k in (
+                    "minimum_neighbors",
+                    "minimum_neighbor_pass_fraction",
+                    "minimum_neighbor_median_return_edge_fraction",
+                )
+            },
+            "reasons": _reasons(decision.get("reasons")) if not neighbor["passed"] else [],
+        },
+    ]
+    operating = findings.get("operating_validation")
+    if operating is not None:
+        if (
+            not isinstance(operating, dict)
+            or operating.get("version") != "research-operating-validation-v1"
+            or operating.get("id") != fingerprint({k: v for k, v in operating.items() if k != "id"})
+            or operating.get("independently_validated") is not False
+            or operating.get("outcome") not in ("blocked", "rejected", "validated")
+        ):
+            raise ValueError("Initial operating evidence changed")
+        rows.append(
+            {
+                "key": "operating_capacity",
+                "passed": operating["outcome"] == "validated",
+                "facts": {"outcome": operating["outcome"], "capital": operating.get("capital")},
+                "thresholds": {},
+                "reasons": _reasons(operating.get("reasons")),
+            }
+        )
+    return {
+        **unavailable,
+        "feedback_available": True,
+        "evidence_kind": "initial_search_challenges",
+        "summary": _summary(report["summary"]),
+        "checks": rows,
+        "failed_gate_keys": [r["key"] for r in rows if not r["passed"]],
+        "source": {
+            "selected_config_id": decision["selected_config_id"],
+            "decision_id": decision["id"],
+            "recipe_id": recipe["id"],
+        },
+        "unavailable_reason": "Recorded search challenges inform hypotheses; full child validation is required for branch comparison and acceptance",
+    }
+
+
 def build(report):
     """Summarize only completed exploratory checks; preserve every gate result."""
     unavailable = {
@@ -160,6 +298,10 @@ def build(report):
             report
         )
     except (ValueError, TypeError, KeyError, AttributeError):
+        try:
+            return _initial_feedback(report, unavailable)
+        except (ValueError, TypeError, KeyError, AttributeError):
+            pass
         return {
             **unavailable,
             "unavailable_reason": "Completed exploratory native measurements unavailable",
@@ -244,6 +386,8 @@ def build(report):
     return {
         **unavailable,
         "eligible": True,
+        "feedback_available": True,
+        "evidence_kind": "complete_operating_validation",
         "summary": _summary(report["summary"]),
         "checks": rows,
         "failed_gate_keys": failed,

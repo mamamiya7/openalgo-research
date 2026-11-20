@@ -672,3 +672,142 @@ def test_bad_source_filter_or_unbounded_history_is_rejected(case):
     case[0]["automatic_stock_condition"]["hypothesis"]["id"] = "new_filter"
     with pytest.raises(ValueError, match="original"):
         catalog(case)
+
+
+def neighboring_only(case):
+    report, recipe, proposals = case
+    report["portfolio"] = {"engine": "vectorbt"}
+    report["automatic_design"].update(qualified=True, largest_symbol_positive_profit_fraction=0.4)
+    decision = report["supervisor_validation"]["operating_validation"]["decision"]
+    decision["checks"] = [
+        {"kind": "neighboring_settings", "passed": False, "passing": 2, "tested": 4}
+    ]
+    decision["prefix_diagnostics"] = []
+    for row in report["ledger"]:
+        row["fees"] = 0
+    proposals.clear()
+    recipe["execution_research"]["strategies"][0]["original"]["order_size_pct"] = 1.5
+    recipe["execution_research"]["strategies"][0]["portfolio_choices"] = [
+        {"id": "original", "fraction": 1.0, "sizing": "allocation"},
+        {"id": "allocation_75", "fraction": 0.75, "sizing": "allocation"},
+        {"id": "allocation_50", "fraction": 0.5, "sizing": "allocation"},
+        {"id": "stop_risk", "fraction": 1.0, "sizing": "stop_risk", "risk_budget_fraction": 0.5},
+        {
+            "id": "stop_risk_50",
+            "fraction": 1.0,
+            "sizing": "stop_risk",
+            "risk_budget_fraction": 0.25,
+        },
+    ]
+    return case
+
+
+def test_neighboring_failure_generates_material_registered_options_with_complete_atr_policy(case):
+    neighboring_only(case)
+    selected = case[0]["strategies"][0]
+    selected["execution_policy"].update(
+        exit_mode="atr",
+        atr_period=14,
+        atr_stop_multiple=1,
+        atr_target_multiple=2,
+        allocation_mode="active_prior60_cluster_inverse_vol",
+        entry_priority="reversed_source",
+    )
+    before = deepcopy(case)
+    output = catalog(case)
+    assert output["options"]
+    assert {o["change"]["axis"] for o in output["options"]} == {
+        "hold_sessions",
+        "trailing_choice",
+        "order_size_pct",
+    }
+    assert {
+        o["change"]["to"] for o in output["options"] if o["change"]["axis"] == "hold_sessions"
+    } == {23, 35}
+    assert {
+        o["change"]["to"] for o in output["options"] if o["change"]["axis"] == "order_size_pct"
+    } == {0.75, 1.125}
+    for option in output["options"]:
+        assert option["remedy"] == "temporal_stability"
+        assert "Only 2 of 4 neighboring settings passed" in option["reason"]
+        assert option["expected_effect"].startswith("Prediction, not a result:")
+        assert option["settings"][0]["execution_policy"] == selected["execution_policy"]
+        assert (
+            option["settings"][0]["config"]["initial_capital"]
+            == selected["config"]["initial_capital"]
+        )
+        assert option["settings"][0]["config"]["cost_bps"] == selected["config"]["cost_bps"]
+    assert case == before
+
+
+def test_neighboring_options_respect_user_locks_before_filling_catalog_quota(case):
+    from research.user_flow import normalize, permitted
+
+    neighboring_only(case)
+    authority = {"baseline_settings": deepcopy(case[0]["strategies"]), "flow": normalize()}
+    authority["flow"]["adjustable"] = ["order_size_pct"]
+    output = catalog(case, research_context=authority)
+    assert len(output["options"]) == 2
+    assert all(o["change"]["axis"] == "order_size_pct" for o in output["options"])
+    assert all(
+        permitted(o["settings"], authority["baseline_settings"], authority["flow"])
+        for o in output["options"]
+    )
+    authority["flow"]["adjustable"] = []
+    assert catalog(case, research_context=authority)["options"] == []
+
+
+def test_neighboring_options_exclude_equivalent_failed_atr_configs_but_not_all_holding_values(case):
+    neighboring_only(case)
+    case[0]["strategies"][0]["execution_policy"].update(
+        exit_mode="atr", atr_period=14, atr_stop_multiple=1, atr_target_multiple=2
+    )
+    first = next(o for o in catalog(case)["options"] if o["change"].get("to") == 23)
+    equivalent = deepcopy(first["settings"])
+    equivalent[0]["config"]["stop_pct"] = 22.5  # inactive for the selected ATR branch
+    case[2].append({"remedy": first["remedy"], "settings": equivalent, "outcome": "rejected"})
+    output = catalog(case)
+    assert not any(o["settings"] == first["settings"] for o in output["options"])
+    assert any(o["change"].get("to") == 35 for o in output["options"])
+    assert len(
+        {configuration_identity(o["settings"], engine="vectorbt") for o in output["options"]}
+    ) == len(output["options"])
+
+
+def test_neighboring_stop_risk_variation_changes_only_registered_target_not_hard_limits(case):
+    neighboring_only(case)
+    selected = case[0]["strategies"][0]
+    selected["execution_policy"].update(sizing="stop_risk", risk_budget_fraction=0.5)
+    options = catalog(case)["options"]
+    sized = [o for o in options if o["change"]["axis"] == "risk_budget_fraction"]
+    assert len(sized) == 1
+    assert sized[0]["settings"][0]["execution_policy"]["risk_budget_fraction"] == 0.25
+    assert (
+        sized[0]["settings"][0]["execution_policy"]["risk_limits"]
+        == selected["execution_policy"]["risk_limits"]
+    )
+    assert (
+        sized[0]["settings"][0]["config"]["order_size_pct"] == selected["config"]["order_size_pct"]
+    )
+
+
+def test_neighboring_catalog_does_not_invent_unregistered_ticket_choices(case):
+    neighboring_only(case)
+    case[1]["execution_research"]["strategies"][0]["portfolio_choices"] = [
+        {"id": "made_up", "fraction": 0.2, "sizing": "allocation"}
+    ]
+    assert not any(o["change"]["axis"] == "order_size_pct" for o in catalog(case)["options"])
+
+
+def test_failed_robustness_is_prioritized_when_cost_stress_already_passed(case):
+    neighboring_only(case)
+    decision = case[0]["supervisor_validation"]["operating_validation"]["decision"]
+    decision["checks"].append(
+        {"kind": "higher_costs", "passed": True, "summary": {"net_return_pct": 1.8}}
+    )
+    for trade in case[0]["ledger"]:
+        trade["fees"] = 10
+    options = catalog(case)["options"]
+    assert options
+    assert all(option["remedy"] == "temporal_stability" for option in options)
+    assert all("Only 2 of 4 neighboring settings passed" in option["reason"] for option in options)

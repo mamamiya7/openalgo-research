@@ -569,6 +569,15 @@ def _prepare_prices(
             _save_receipt(receipts_dir, item["receipt"])
     plan = contract.price_plan(evidence["portfolio"], evidence["strategies"], calendar)
     interval = plan["interval"]
+    if evidence["portfolio"]["engine"] == "openalgo":
+        from research.connectors.openalgo_portfolio import validate_signal_windows
+
+        if interval != "D":
+            raise ValueError("OpenAlgo preview supports daily untimed NSE cash signals only")
+        validate_signal_windows(
+            contract.requirement_strategies(evidence["portfolio"], evidence["strategies"]),
+            calendar["sessions"],
+        )
     if evidence["portfolio"].get("automatic_research"):
         # Reject insufficient chronology before spending broker requests. The
         # final recipe is frozen again with the actual admitted prices below.
@@ -665,6 +674,17 @@ def _prepare_prices(
         from services.research_instruments import prepare_nautilus_instruments
 
         prepared = prepare_nautilus_instruments(prepared)
+    if evidence["portfolio"]["engine"] == "openalgo":
+        from research.connectors.openalgo_portfolio import validate
+        from research.portfolio import requirement_strategies
+        from services.research_instruments import prepare_nautilus_instruments
+
+        prepared = prepare_nautilus_instruments(prepared, engine="openalgo")
+        validate(
+            requirement_strategies(prepared["portfolio"], prepared["strategies"]),
+            prepared["snapshot"],
+            prepared["portfolio"]["capital"],
+        )
     # Acquisition and coverage admission have finished; calculations now use
     # this retained snapshot, never the changing Historify archive.
     return {**prepared, "frozen_prices": True}
@@ -1211,12 +1231,30 @@ def run(
     # changing a previously frozen mandate, recipe or candidate identity.
     retained_evidence = evidence
     evidence = {**evidence, "frozen_prices": True}
+    if portfolio["engine"] == "openalgo":
+        from research.connectors.openalgo_portfolio import validate as validate_openalgo
+        from research.portfolio import requirement_strategies
+
+        # Frozen/resumed input paths must pass the same maximum-window admission
+        # before a search scores any candidate. Never cherry-pick shorter trials.
+        validate_openalgo(
+            requirement_strategies(portfolio, evidence["strategies"]),
+            evidence["snapshot"],
+            portfolio["capital"],
+        )
     if portfolio["engine"] == "nautilus":
         from research.connectors.nautilus_runtime import evaluate
+    elif portfolio["engine"] == "openalgo":
+        from research.connectors.openalgo_runtime import evaluate
     else:
         from research.connectors.vectorbt_portfolio import evaluate
 
     if portfolio.get("automatic_research"):
+        planner_options = {}
+        if portfolio.get("automatic_research", {}).get("planning_policy"):
+            from services.research_hands_off import planner_for
+
+            planner_options["planning"] = planner_for(store, owner, job_id)
         development_writer = None
         research_mandate = None
         batch_runtime = False
@@ -1320,7 +1358,18 @@ def run(
                     binding={
                         "inputs_artifact": inputs_id,
                         "search_identity": fingerprint(
-                            {"recipe": evidence["automatic_recipe"], "stock": stock}
+                            {
+                                "recipe": evidence["automatic_recipe"],
+                                "stock": stock,
+                                **(
+                                    {"user_flow": planner_options["planning"].research_flow}
+                                    if getattr(
+                                        planner_options.get("planning"), "research_flow", None
+                                    )
+                                    is not None
+                                    else {}
+                                ),
+                            }
                         ),
                     },
                     max_evaluations=policy_for_version(version)["max_simulations"],
@@ -1405,6 +1454,7 @@ def run(
             observe=observe,
             boundary=boundary,
             defer_study_analysis=defer_study_analysis,
+            **planner_options,
             **({"reserve_attempt": checkpoint.reserve_attempt} if batch_runtime else {}),
             **(
                 {

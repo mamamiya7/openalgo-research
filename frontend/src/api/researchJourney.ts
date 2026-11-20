@@ -8,6 +8,21 @@ export interface JourneySettings {
   hold_sessions: number
   stop_pct: number
   target_pct: number
+  trailing_pct?: number
+  allocation_pct?: number
+}
+export interface JourneyFlow {
+  version: 'research-user-flow-v1'
+  intent: 'replay' | 'improve'
+  involvement: 'hands_off' | 'guided' | 'hands_on'
+  adjustable: Array<'capital' | 'order_size_pct' | 'hold_sessions' | 'stop_pct' | 'target_pct' | 'trailing_pct' | 'allocation_pct'>
+}
+export interface JourneyStrategySettings {
+  id?: string
+  name?: string
+  allocation_pct: number
+  config: Record<string, unknown>
+  execution_policy?: Record<string, unknown>
 }
 export interface JourneyPlan {
   id: string
@@ -25,9 +40,31 @@ export interface JourneyPlan {
     excluded: Array<{ symbol: string; reason: string }>
   }
   settings: JourneySettings
+  baseline_settings?: JourneyStrategySettings[]
   tests: string[]
   estimate: { seconds: number | null; label: string }
   memory: { considered: number; retest_reason?: string }
+  budget?: { proposals: number; max_simulations: number }
+  contract?: { signal_policy?: string; planning_policy?: string }
+  flow?: JourneyFlow
+}
+export interface JourneyStopReview {
+  option_ids: string[]
+  reviews: Array<{ option: number; evidence_ref: string; reason: string }>
+  complete: boolean
+  unreviewed_options: number[]
+}
+export interface JourneyStopping {
+  kind: string
+  decision_source: string
+  reason: string
+  model_budget_exhausted: boolean
+  model_calls_spent: number
+  model_call_limit: number
+  native_accounts_remaining: number
+  option_count: number
+  unreviewed_option_ids: string[]
+  stop_review?: JourneyStopReview | null
 }
 export interface JourneyDecision {
   remedy: string
@@ -35,9 +72,35 @@ export interface JourneyDecision {
   problem?: string
   expected_evidence?: string
   outcome?: string | null
-  no_effect?: { status: string } | null
+  no_effect?: { status: string; kind?: string } | null
+  diagnosis?: {
+    target_ref: string
+    cause: string
+    prediction: string
+    falsifier: string
+    version?: 'research-failure-diagnosis-v1'
+    context_key?: string
+    candidate_id?: string
+    origin_job_id?: string
+  } | null
   selection?: string
   reasons?: string[]
+  stop_review?: JourneyStopReview | null
+  stop_review_rejected?: {
+    evidence_id: string
+    source_result_artifact: string
+    reason?: string
+  } | null
+  planning?: {
+    version: 'hands-off-plan-v1'
+    action: 'search' | 'defer' | 'stop'
+    method: 'holding_and_exits' | 'sizing_and_allocation' | 'joint_trading' | null
+    hypothesis: string
+    reason: string
+    expected_evidence: string
+    stop_rule: string
+    domains: Record<string, Record<string, { min: number; max: number; step: number }>>
+  }
   change?: {
     axis: string
     from?: number | string | boolean | null
@@ -45,7 +108,7 @@ export interface JourneyDecision {
     current_capital?: number
   }
   settings_change?: {
-    status: 'proposed' | 'verified' | 'blocked' | 'unavailable'
+    status: 'proposed' | 'tested' | 'verified' | 'blocked' | 'unavailable'
     rows: Array<{
       strategy_id?: string | null
       strategy: string
@@ -63,12 +126,23 @@ export interface JourneyState {
     | 'queued'
     | 'researching'
     | 'finalizing'
+    | 'awaiting_approval'
     | 'complete'
     | 'none'
     | 'needs_action'
   revision: number
   preparation: PreparationStatus
   plan: JourneyPlan | null
+  flow?: JourneyFlow
+  pending_approval?: {
+    id: string
+    kind: 'search' | 'defer' | 'stop' | 'continuation'
+    reason: string
+    hypothesis?: string
+    domains?: NonNullable<JourneyDecision['planning']>['domains']
+    settings?: JourneyStrategySettings[]
+    job_id: string
+  } | null
   run: {
     job_id: string
     status: string
@@ -87,8 +161,10 @@ export interface JourneyState {
     job_id: string
     experiment_id: string
     accepted: boolean
+    kind?: 'replay' | 'research' | 'stopped'
     headline: string
     stopping_reason?: string
+    stopping?: JourneyStopping | null
     before?: Record<string, unknown>
     after?: Record<string, unknown>
     choice_id?: string
@@ -101,6 +177,7 @@ export interface JourneyState {
 export type JourneyPlanUpdate = JourneySettings & {
   revision: number
   style: JourneyPlan['style']
+  flow?: JourneyFlow
 }
 const path = (id: string) =>
   `/scanner-research/api/library/experiments/${encodeURIComponent(id)}/journey`
@@ -130,5 +207,12 @@ export const researchJourney = {
     signal?: AbortSignal
   ): Promise<JourneyState> {
     return (await webClient.post(`${path(id)}/start`, data, { ...options, signal })).data
+  },
+  async approve(
+    id: string,
+    data: { revision: number; approval_id: string; decision: 'approve' | 'reject' },
+    signal?: AbortSignal
+  ): Promise<JourneyState> {
+    return (await webClient.post(`${path(id)}/approve`, data, { ...options, signal })).data
   },
 }

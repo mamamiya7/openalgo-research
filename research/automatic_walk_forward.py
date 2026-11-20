@@ -2,11 +2,12 @@
 
 Each fit has an independent seeded sampler. Only its training account scores are
 told to it; its winner is frozen before the next-window account is calculated.
-There is no downloaded data, model service or alternative accounting engine here.
+Opted-in journeys admit bounded planner callbacks at existing refinement blocks;
+this runner owns neither provider clients nor data downloading.
 """
 
 import hashlib
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 from contextlib import nullcontext
 from copy import deepcopy
 from math import prod
@@ -464,6 +465,7 @@ def run(
     read_evaluation=None,
     calibration_seed_plan=None,
     reserve_attempt=None,
+    planning=None,
 ):
     cancelled()
     if boundary:
@@ -515,7 +517,10 @@ def run(
             else nullcontext()
         ) as prepared_execution,
     ):
-        return _run(
+        from research.hands_off_runtime import run_guard
+
+        return run_guard(
+            _run,
             evidence,
             prepared_gate=prepared,
             prepared_portfolio=prepared_portfolio,
@@ -537,6 +542,7 @@ def run(
             calibration_seed_plan=calibration_seed_plan,
             reserve_attempt=reserve_attempt,
             prepared_calculations=prepared_calculations,
+            planning=planning,
         )
 
 
@@ -563,12 +569,15 @@ def _run(
     calibration_seed_plan=None,
     reserve_attempt=None,
     prepared_calculations=None,
+    planning=None,
 ):
     import optuna
 
     if optuna.__version__ != TESTED_OPTUNA_VERSION:
         raise ValueError(f"Walk-forward research requires tested Optuna {TESTED_OPTUNA_VERSION}")
     recipe = compile_recipe(evidence)
+    if recipe.get("hands_off_planning") and planning is None:
+        raise ValueError("This hands-off programme requires its approved configured AI planner")
     if recipe["version"] != version or evidence.get("automatic_recipe") != recipe:
         raise ValueError("The frozen walk-forward recipe changed")
     stock = evidence.get("automatic_stock_market_context")
@@ -579,6 +588,12 @@ def _run(
     ):
         raise ValueError("Walk-forward research needs its exact saved stock and market context")
     binding_inputs = {"recipe": recipe, "stock": stock}
+    user_flow = getattr(planning, "research_flow", None)
+    if user_flow is not None:
+        from research.user_flow import normalize
+
+        user_flow = normalize(user_flow)
+        binding_inputs["user_flow"] = user_flow
     if calibration_seed_plan is not None:
         from research.procedure_seed_calibration import verify_seed_plan
 
@@ -711,6 +726,19 @@ def _run(
         _validate_state(state, version=version)
         if state["binding"] != binding or state["optimizer"] != optimizer:
             raise ValueError("The walk-forward checkpoint belongs to different frozen inputs")
+    controller = getattr(planning, "controller_update", None)
+    if controller is not None:
+        previous = state.get("controller_v2")
+        if previous is None:
+            state["controller_v2"] = {
+                "authority": deepcopy(controller),
+                "dedup_from": {
+                    name: len(state["fits"].get(name, {}).get("trials", []))
+                    for name in fit_names(version)
+                },
+            }
+        elif previous["authority"] != controller:
+            raise ValueError("The authorized controller amendment changed")
     windows, gates = OrderedDict(), OrderedDict()
     opportunity_bases = {}
     capital = evidence["portfolio"]["capital"]
@@ -757,7 +785,9 @@ def _run(
                             {
                                 "completed": state["simulations"],
                                 "total": max_simulations,
-                                "stage": "optimization",
+                                "stage": "ai_planning"
+                                if state.get("hands_off_planning", {}).get("active")
+                                else "optimization",
                             },
                         )
                         return
@@ -771,7 +801,13 @@ def _run(
             snapshot["checkpoint_id"] = state["checkpoint_id"]
         checkpoint(
             snapshot,
-            {"completed": state["simulations"], "total": max_simulations, "stage": "optimization"},
+            {
+                "completed": state["simulations"],
+                "total": max_simulations,
+                "stage": "ai_planning"
+                if state.get("hands_off_planning", {}).get("active")
+                else "optimization",
+            },
         )
 
     def window(period):
@@ -1125,6 +1161,35 @@ def _run(
                     else {}
                 ),
             }
+            if recipe.get("hands_off_planning"):
+                ledger = report["ledger"]
+                days = window(period)["snapshot"]["sessions"]
+                indices = {d: i for i, d in enumerate(days)}
+                lengths = [
+                    indices[r["exit_date"]] - indices[r["entry_date"]]
+                    for r in ledger
+                    if r.get("status") == "closed"
+                    and r.get("entry_date") in indices
+                    and r.get("exit_date") in indices
+                ]
+                row["research_diagnostics"] = {
+                    "exit_outcomes": dict(
+                        Counter(
+                            str(r.get("outcome")) for r in ledger if r.get("status") == "closed"
+                        )
+                    ),
+                    "skipped_reasons": dict(
+                        Counter(
+                            str(r.get("reason")) for r in ledger if r.get("status") == "skipped"
+                        ).most_common(16)
+                    ),
+                    "maximum_observed_holding_sessions": max(lengths, default=None),
+                    "max_open_positions": max(
+                        (p.get("open_positions", 0) for p in report["equity_curve"]), default=0
+                    ),
+                    "complete_signal_count_in_fit": len(window(period)["signals"]),
+                    "scope": "Observed native training ledger only; no unobserved counterfactual effects",
+                }
             if key in state["evaluations"] and state["evaluations"][key] != row:
                 raise ValueError(
                     "The selected walk-forward account did not reproduce its recorded evidence"
@@ -1186,39 +1251,167 @@ def _run(
         for params in screening:
             study.enqueue_trial(params)
         seen = set()
+        seen_effective = set()
         for index in range(proposals_per_fit):
             control()
-            trial = study.ask()
-            hypothesis = by_id[trial.suggest_categorical("hypothesis", list(by_id))]
-            params = {"hypothesis": hypothesis["id"]}
-            for name, domain in axes.items():
-                params[name] = (
-                    trial.suggest_categorical(name, domain["choices"])
-                    if domain.get("type") == "categorical"
-                    else trial.suggest_int(
-                        name, int(domain["min"]), int(domain["max"]), step=int(domain["step"])
-                    )
-                    if name.rsplit(".", 1)[-1] in ("hold_sessions", "hold_minutes")
-                    else trial.suggest_float(
-                        name, domain["min"], domain["max"], step=domain["step"]
-                    )
-                )
-            proposed = _candidate(base, params)
-            proposed = trailing_choices(proposed, params, recipe["trailing_research"])
-            proposed = timing_choices(proposed, params, recipe["timing_research"])
-            if version in (
-                EXECUTION_VERSION,
-                PRIORITY_VERSION,
-                TURNOVER_VERSION,
-                CAPACITY_VERSION,
-                SENSITIVITY_VERSION,
-                SEED_VERSION,
-                ALLOCATION_VERSION,
-            ):
-                from research.execution_search import apply_choices
+            refinement = None
+            if recipe.get("hands_off_planning"):
+                from research.hands_off_runtime import HandsOffStopped, trace
+                from research.hands_off_runtime import refinement as plan_refinement
 
-                proposed = apply_choices(proposed, params, recipe["execution_research"])
-            settings = context.markers(_settings(proposed), hypothesis, stock["id"])
+                refinement = plan_refinement(
+                    state,
+                    current,
+                    fit_name=fit_name,
+                    index=index,
+                    screening=len(screening),
+                    total=proposals_per_fit,
+                    axes=axes,
+                    baseline=baseline,
+                    reference=reference,
+                    signal_id=fingerprint(evidence["signals"]),
+                    style=recipe["execution_intent"]["style"],
+                    risk_limits=evidence["portfolio"]["risk_limits"],
+                    source_facts={
+                        "signals": len(evidence["signals"]),
+                        "signal_dates": len({s["date"] for s in evidence["signals"]}),
+                        "stocks": len({s["symbol"] for s in evidence["signals"]}),
+                        "coverage": {
+                            key: evidence.get("signal_coverage", {}).get(key)
+                            for key in ("eligible_signals", "excluded_signals", "pending_signals")
+                        },
+                        "scope": "Frozen source identities and dates only; no later outcomes",
+                    },
+                    callback=planning,
+                    user_flow=user_flow,
+                    persist=persist,
+                    cancelled=control,
+                )
+                if refinement and (
+                    refinement["plan"]["action"] == "stop" or refinement.get("user_rejected")
+                ):
+                    measured(
+                        baseline,
+                        none,
+                        "search",
+                        report_slot="hands_off_stop_report",
+                        reconstruct=state.get("hands_off_stop_report") is None,
+                    )
+                    stopped = deepcopy(state["hands_off_stop_report"])
+                    stopped["hands_off_planning"] = trace(
+                        state,
+                        stopped="You stopped research before the proposed experiment; no settings were validated."
+                        if refinement.get("user_rejected")
+                        else refinement["plan"]["reason"],
+                    )
+                    stopped["automatic_research"] = {
+                        "recipe": deepcopy(recipe),
+                        "baseline": stopped["summary"],
+                        "hands_off_stopped": True,
+                        "historically_validated": False,
+                        "execution": {
+                            "attempts": state["attempts"],
+                            "simulations": state["simulations"],
+                        },
+                    }
+                    raise HandsOffStopped(stopped)
+                if refinement and refinement["plan"]["action"] == "defer":
+                    refinement = None
+
+            def sample(trial, selected=refinement):
+                hypothesis = by_id[trial.suggest_categorical("hypothesis", list(by_id))]
+                params = {"hypothesis": hypothesis["id"]}
+                for name, original_domain in axes.items():
+                    domain = original_domain
+                    if selected:
+                        sid, field = name.rsplit(".", 1)
+                        selected_domain = selected["plan"]["domains"].get(sid, {}).get(field)
+                        if selected_domain is None:
+                            params[name] = selected["anchor_params"][name]
+                            continue
+                        domain = selected_domain
+                    params[name] = (
+                        trial.suggest_categorical(name, domain["choices"])
+                        if domain.get("type") == "categorical"
+                        else trial.suggest_int(
+                            name, int(domain["min"]), int(domain["max"]), step=int(domain["step"])
+                        )
+                        if name.rsplit(".", 1)[-1] in ("hold_sessions", "hold_minutes")
+                        else trial.suggest_float(
+                            name, domain["min"], domain["max"], step=domain["step"]
+                        )
+                    )
+                return params
+
+            def build(params):
+                hypothesis = by_id[params["hypothesis"]]
+                proposed = _candidate(base, params)
+                proposed = trailing_choices(proposed, params, recipe["trailing_research"])
+                proposed = timing_choices(proposed, params, recipe["timing_research"])
+                if version in (
+                    EXECUTION_VERSION,
+                    PRIORITY_VERSION,
+                    TURNOVER_VERSION,
+                    CAPACITY_VERSION,
+                    SENSITIVITY_VERSION,
+                    SEED_VERSION,
+                    ALLOCATION_VERSION,
+                ):
+                    from research.execution_search import apply_choices
+
+                    proposed = apply_choices(proposed, params, recipe["execution_research"])
+                settings = context.markers(_settings(proposed), hypothesis, stock["id"])
+                if user_flow is not None:
+                    from research.user_flow import enforce
+
+                    settings = enforce(settings, baseline, user_flow)
+                return settings
+
+            generation = {}
+            if controller and index >= max(
+                len(screening), state["controller_v2"]["dedup_from"][fit_name]
+            ):
+                from research.unique_proposals import draw
+
+                domain = (
+                    {
+                        f"{sid}.{axis}": spec
+                        for sid, fields in refinement["plan"]["domains"].items()
+                        for axis, spec in fields.items()
+                    }
+                    if refinement
+                    else axes
+                )
+                fixed = {
+                    **(refinement["anchor_params"] if refinement else {}),
+                    "hypothesis": "none",
+                }
+                trial, params, settings, generation = draw(
+                    study,
+                    sample=sample,
+                    build=build,
+                    seen=seen_effective,
+                    domains=domain,
+                    fixed=fixed,
+                    seed=f"{fit_name}:{index}",
+                    broaden=(lambda t: sample(t, None), axes, {"hypothesis": "none"})
+                    if refinement
+                    else None,
+                )
+                if generation.get("generation_reason") and index >= len(current["trials"]):
+                    observer = getattr(planning, "report_controller_event", None)
+                    if observer:
+                        observer(
+                            f"{fit_name}:{refinement['index'] if refinement else index}:native-continuation",
+                            "The AI range has been fully tested; Optuna is continuing with unseen settings from the reviewed native search."
+                            if generation.get("ai_domain_exhausted")
+                            else "Bounded proposal generation could not find another unseen AI-range configuration; Optuna is continuing with unseen settings from the reviewed native search. Exhaustion is not claimed.",
+                        )
+            else:
+                trial = study.ask()
+                params = sample(trial)
+                settings = build(params)
+            hypothesis = by_id[params["hypothesis"]]
             config_id = settings_identity(settings)
             record = {
                 "number": index,
@@ -1227,6 +1420,7 @@ def _run(
                 "state": "complete",
                 "reused": config_id in seen,
                 "phase": "family_screening" if index < len(screening) else "joint_refinement",
+                **generation,
             }
             if index < len(current["trials"]):
                 old = current["trials"][index]
@@ -1333,6 +1527,10 @@ def _run(
                     trial.set_constraint(name, value)
             study.tell(trial, score)
             seen.add(config_id)
+            if controller:
+                from research.unique_proposals import effective_identity
+
+                seen_effective.add(effective_identity(settings))
         rows = sorted(
             current["candidates"].values(), key=lambda row: (-row["score"], row["config_id"])
         )
@@ -1450,6 +1648,15 @@ def _run(
             ),
             max_accounts=recipe["budget"]["max_capital_planning_accounts"],
             version=capital_version,
+            **(
+                {
+                    "permissions": {
+                        key: key in user_flow["adjustable"] for key in ("capital", "order_size_pct")
+                    }
+                }
+                if user_flow and not {"capital", "order_size_pct"}.issubset(user_flow["adjustable"])
+                else {}
+            ),
             **(
                 {
                     "request_prices": request_prices(
@@ -1781,7 +1988,9 @@ def _run(
             defer_study_analysis=defer_study_analysis,
             design_assessment=design_assessment,
         )
-        return with_decision(result)
+        from research.hands_off_runtime import attach_result
+
+        return attach_result(with_decision(result), state)
 
     for fold in recipe["walk_forward"]["folds"]:
         winner, _ = fit(fold["fit_period"])
@@ -2430,4 +2639,6 @@ def _run(
     result = (
         _historical_result(result) if recipe.get("validation_mode") == "historical_only" else result
     )
-    return with_decision(result)
+    from research.hands_off_runtime import attach_result
+
+    return attach_result(with_decision(result), state)

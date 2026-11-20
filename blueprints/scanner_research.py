@@ -838,6 +838,13 @@ def library_journey_start(experiment_id):
     return jsonify(journey.start(store(), session["user"], experiment_id, library_body())), 202
 
 
+@scanner_research_bp.post("/library/experiments/<experiment_id>/journey/approve")
+def library_journey_approve(experiment_id):
+    if current_app.config.get("RESEARCH_PREVIEW"):
+        raise ValueError("Open the installed app to approve a research proposal.")
+    return jsonify(journey.approve_plan(store(), session["user"], experiment_id, library_body()))
+
+
 @scanner_research_bp.post("/library/experiments/from-job")
 def library_from_job():
     data = library_body()

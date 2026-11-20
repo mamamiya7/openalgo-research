@@ -73,6 +73,11 @@ jobs:
           enable-cache: true
       - run: uv sync --frozen --extra research
       - run: uv run --no-sync python tools/research_check.py
+      - name: Optional OpenAlgo Rust SDK and small saved-account contracts
+        if: matrix.slice_index == 0
+        run: |
+          uv run --no-sync python tools/install_openalgo_backtest.py
+          uv run --no-sync pytest test/research/test_openalgo_portfolio.py test/research/test_openalgo_workflow.py -q
       - name: Engine, native data, saved evidence and lifecycle regressions
         run: uv run --no-sync python tools/research_test_slice.py --index ${{ matrix.slice_index }} --count ${{ matrix.slice_count }} --junit-xml .agent-native/ci-results/research.xml
       - name: Host upgrade migrations, shutdown and chart data contracts

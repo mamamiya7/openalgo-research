@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { portfolioEngineName } from '@/lib/researchEngines'
 import { useAuthStore } from '@/stores/authStore'
 import {
   AutomaticResearchFindings,
@@ -516,9 +517,7 @@ function PortfolioReport({
       <div className="space-y-1 border-b pb-4 text-sm">
         <p>Shared starting cash: {money(summary.initial_capital)}</p>
         <p className="text-muted-foreground">
-          {(result.execution?.engine ?? result.portfolio?.engine) === 'nautilus'
-            ? 'NautilusTrader'
-            : 'VectorBT'}
+          {portfolioEngineName(result.execution?.engine ?? result.portfolio?.engine)}
           {result.execution?.engine_version ? ` ${result.execution.engine_version}` : ''}
           {experiment ? ` · Optuna ${experiment.optimizer.version}` : ''}
         </p>
@@ -546,10 +545,7 @@ function PortfolioReport({
                 'Portfolio result')}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {(result.execution?.engine ?? result.portfolio?.engine) === 'nautilus'
-              ? 'NautilusTrader'
-              : 'VectorBT'}{' '}
-            ·{' '}
+            {portfolioEngineName(result.execution?.engine ?? result.portfolio?.engine)} ·{' '}
             {(result.source?.interval ?? result.execution?.interval) === '1m'
               ? 'Minute candles'
               : 'Daily candles'}
@@ -722,9 +718,7 @@ function PortfolioReport({
           <div>
             <dt>Engine</dt>
             <dd>
-              {(result.execution?.engine ?? result.portfolio?.engine) === 'nautilus'
-                ? 'NautilusTrader'
-                : 'VectorBT'}{' '}
+              {portfolioEngineName(result.execution?.engine ?? result.portfolio?.engine)}{' '}
               {result.execution?.engine_version ?? ''}
             </dd>
           </div>

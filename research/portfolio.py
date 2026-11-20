@@ -82,7 +82,7 @@ def normalize(raw):
     ):
         raise ValueError("Starting capital must be between 1 and 1,000,000,000")
     engine = raw.get("engine", "vectorbt")
-    if engine not in ("vectorbt", "nautilus"):
+    if engine not in ("vectorbt", "nautilus", "openalgo"):
         raise ValueError("Choose an installed portfolio engine")
     rows = raw.get("strategies")
     if not isinstance(rows, list) or not 1 <= len(rows) <= MAX_STRATEGIES:
@@ -132,6 +132,10 @@ def normalize(raw):
             from research.connectors.nautilus_portfolio import validate_config as native_config
 
             native_config(config)
+        if engine == "openalgo":
+            from research.connectors.openalgo_portfolio import validate_config as openalgo_config
+
+            openalgo_config(config)
         if (
             config["modes"] != ["Bypass"]
             or config["entry_priority"] != "csv"
@@ -147,6 +151,10 @@ def normalize(raw):
         search = row.get("search", {})
         if not isinstance(search, dict):
             raise ValueError("Strategy search settings must be an object")
+        if engine == "openalgo" and set(search) & {"trailing_pct", "hold_minutes"}:
+            raise ValueError(
+                "OpenAlgo preview cannot search trailing stops or minute holding periods"
+            )
         strategies.append(
             {
                 "id": identifier,
@@ -566,6 +574,13 @@ def execution_versions(portfolio, recorded=None):
         runtime = runtime_status()
         if not runtime["available"]:
             raise ValueError(runtime["reason"])
+    if engine == "openalgo":
+        from research.connectors.openalgo_portfolio import ADAPTER_VERSION, POLICY_VERSION
+        from research.connectors.openalgo_runtime import status as openalgo_status
+
+        runtime = openalgo_status()
+        if not runtime["available"]:
+            raise ValueError(runtime["reason"])
     versions = {
         "engine": engine,
         "adapter_version": ADAPTER_VERSION,
@@ -594,7 +609,7 @@ def execution_versions(portfolio, recorded=None):
             "version", "research-entry-conditions-v1"
         )
     for name in (engine, "optuna") if portfolio.get("optimization") else (engine,):
-        if name == "nautilus":
+        if name in ("nautilus", "openalgo"):
             versions["engine_version"] = runtime["tested_version"]
             continue
         status = package_status(name)
@@ -716,6 +731,7 @@ def execution_versions(portfolio, recorded=None):
 
 def capabilities():
     from research.connectors.nautilus_runtime import status
+    from research.connectors.openalgo_runtime import status as openalgo_status
     from research.connectors.registry import package_status
 
     return {
@@ -740,6 +756,21 @@ def capabilities():
                 "shared_cash": True,
                 "trailing_stops": False,
                 "slippage_bps": [0],
+            },
+            {
+                "id": "openalgo",
+                "name": "OpenAlgo Rust (preview)",
+                **openalgo_status(),
+                "intervals": ["D"],
+                "markets": ["NSE"],
+                "account": "long_cash",
+                "shared_cash": True,
+                "independent_overlaps": False,
+                "trailing_stops": False,
+                "slippage_bps": [0],
+                "cost_model": "zerodha_dated_CNC",
+                "holding_exit": "opening_of_entry_session_plus_hold_sessions",
+                "automatic_research": False,
             },
         ],
         "optimizers": [{"id": "optuna", **package_status("optuna"), "samplers": ["tpe", "grid"]}],

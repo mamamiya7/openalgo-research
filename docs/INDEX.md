@@ -47,6 +47,8 @@ need → drill into the specific file. Don't load everything at once.
 | Feature | Entry point |
 |---|---|
 | Native Scanner Research development | [research/BRIEF.md](research/BRIEF.md) · [research/STATUS.md](research/STATUS.md) · [research/SYSTEM_MAP.md](research/SYSTEM_MAP.md) · [research/CONNECTORS.md](research/CONNECTORS.md) · [research/JOURNEYS.md](research/JOURNEYS.md) · [research/EXECUTION_STATUS.md](research/EXECUTION_STATUS.md) |
+| Optional OpenAlgo Rust research engine, supported signals and numerical differences | [research/OPENALGO_ENGINE.md](research/OPENALGO_ENGINE.md) |
+| Integrated scan intents, AI control, bounded feedback loop and phased delivery | [research/INTEGRATED_AI_RESEARCH_PLAN.md](research/INTEGRATED_AI_RESEARCH_PLAN.md) |
 | Complete trader journeys, study library, navigation and asset-aware design | [research/PRODUCT_JOURNEY_MAP.md](research/PRODUCT_JOURNEY_MAP.md) · [research/ASSET_PROFILES.md](research/ASSET_PROFILES.md) · [visual map](research/trader-journey-map.html) |
 | Integrated Research delivery plan: reconciled whole-product backlog, all 34 journeys, dependencies, assets and release acceptance | [research/DELIVERY_PLAN.md](research/DELIVERY_PLAN.md) |
 | Research workflow refinement: import, automatic progress, actionable recovery, decisive findings, saved setup reuse and trader inspection | [research/WORKFLOW_REFINEMENT_20261011.md](research/WORKFLOW_REFINEMENT_20261011.md) |

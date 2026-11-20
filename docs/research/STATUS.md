@@ -1,5 +1,393 @@
 # OpenAlgo Research status
 
+## Preview.39 publication — 20 November 2026
+
+The tested decision-loop and OpenAlgo 2.0.3.4 integration are packaged as
+preview.39. Validation, search allowances and historical saved studies retain
+their contracts. [Release scope and qualification](releases/0.1.0-preview.39.md).
+The public release records the exact new GitHub build and installation checks.
+
+## OpenAlgo 2.0.3.4 host update — 20 November 2026
+
+Integrated the latest official release (`9c850e5c7`), retaining the diagnosed
+decision loop, all search allowances, validation and saved evidence. Charts
+advance to 2.7.3; scheduling, latency reporting, Nuvama support and patched
+dependencies follow upstream. Focused backend checks, research/chart UI checks
+and the combined production build pass. No full scanner or new search ran.
+See [scope, qualification and limits](UPSTREAM_UPDATE_20261120.md).
+
+## Diagnosed tests and repeated-failure screening — 18 November 2026
+
+New automatic experiments require an origin-bound failed check, supported cause,
+measurable prediction and falsifier. Actual native outcomes are fed back against
+that hypothesis. Feasibility repairs are distinguished from performance passes;
+matching normal cash trades at different capital are disclosed as observations,
+not proof of equivalent stress or risk behavior.
+
+The worker checks prior owned, sealed validation checkpoints across branches.
+If a normal match leads to the same audited mandatory higher-cost failure under
+the identical frozen baseline, three charged accounts establish an early
+rejection. The other eleven checks are explicitly unrun; no acceptance or full
+scenario equivalence is claimed. Different capital, stress results, constraints,
+missing proof or a meaningful change retain the unchanged complete programme.
+
+Real five-stock/68-signal historical-prefix replay reproduced the wider-trail
+repeat and rejected it in3 rather than14 accounts. Connected ChatGPT then gave
+three structured hypotheses, distinguished a blocked setup from performance
+failure, requested funding/sizing recovery, and selected a different exit test.
+Funding used15 accounts and the different exit point used the full14. Neither
+passed performance validation. The qualification was saved and reopened exactly
+with no new calculations; it ended at its small-case scope, not exhaustion or an
+AI assertion that no options remained. Source studies were not modified.
+
+The replay retained443 historical accounts and16 total model reservations,
+finishing at476/512 accounts and19/24 reservations. Search408, native acceptance,
+full admission reserves,600 response tokens and64,000 prompt characters remain
+unchanged. Lossless repeated-fact/identifier references preserve the complete
+review within the existing allowance. Diagnosis and early-rejection reasons are
+visible in the existing decision details. No full scanner or initial search ran.
+Retain ignored `.agent-native/diagnostic-loop/` as current qualification evidence
+until the next qualification supersedes it; immutable inputs use hardlinks and
+no dependency environment or dataset was copied.
+
+## Option-by-option stop review — 15 November 2026
+
+A checked-frontier model stop now requires a separate explanation and a recorded
+failed-check or feasibility reference for every remaining option. Reviews bind
+to the exact sealed frontier and complete candidate identities. Up to six are
+reviewed per unchanged 600-token completion; partial reviews persist and use
+only remaining calls in the existing grant. A fresh execution guard verifies
+complete coverage before any model stop is recorded. Stale, duplicate, generic
+copied, missing or unbound reviews cannot authorize a stop.
+
+Saved stopping metadata separates model judgment, model-call exhaustion, native
+validation-budget exhaustion and incomplete review. Simultaneous model judgment
+and exhaustion are recorded independently. The UI displays the cause, remaining
+unreviewed options and each skip explanation; saving/reopening retains the audit.
+The existing 24-call/512-account limits, full native validation and search budget
+are unchanged. Existing stopped studies are not silently resumed or relabeled.
+
+A separate connected ChatGPT decision-only qualification used the exact saved
+five-stock/68-signal evidence. The old blanket stop was rejected. ChatGPT chose
+funding/ticket-size recovery for the distinct 0.25-risk-budget configuration
+instead of endorsing that stop. This was one new qualification completion, with
+no financial calculation or claim the proposed configuration passes. The source
+study remains at 24/24 reservations and 476/512 accounts. Small isolated metadata
+cases verify full and partial reviews, last-call causes, invalid-stop rejection,
+unchanged allowances, and exact saving/reopening. No full scanner run occurred.
+
+## Complete checked-branch decisions accepted — 15 November 2026
+
+The adaptive controller now offers the union of supported experiments from the
+original account and every verified rejected/blocked branch. Each choice carries
+its immutable source artifact and complete capital, sizing and exit settings.
+Equivalent configurations, no-effect probes, missing required evidence, failed
+attempts without a verified report and insufficient full-validation reserves
+remain explicitly unavailable. A stop is not overridden automatically; explicit
+same-study review retains every proposal, spent account and charged model call.
+
+The model receives all branch scorecards, complete configuration comparisons and
+exclusion reasons before choosing or stopping. Identical repeated structured
+facts are represented once with lossless references if needed to fit the same
+64,000-character allowance. No options or validation measurements are truncated;
+an incomplete/oversized review requires attention without a provider debit.
+
+Actual connected ChatGPT resumed the same five-stock/68-signal saved case with
+70 accounts and seven calls remaining. Its first review included ten choices
+across four branches. It tried risk fraction 0.50→0.25; trailing 3.12→4.69 and
+3.12→10.97 with native funding/sizing repairs; then trailing disabled at the
+original capital/sizing. Four attempts were blocked by operating checks; the
+two repaired configurations completed unchanged native validation and failed.
+The final review covered ten branches and nine remaining options. ChatGPT
+explicitly stopped after explaining persistent cost, neighboring-setting and
+prefix failures and why the remaining mechanisms lacked support. None passed.
+
+This continuation used seven real model calls (including its explicit stop) and
+34 native accounts: 24/24 total model reservations and 476/512 native accounts,
+with all prior usage retained. Saving and exact reopening matched without a new
+job, provider call or calculation. No initial search, price acquisition or full
+scanner run was started; the existing 147-stock result remains untouched.
+Acceptance evidence reuses `.agent-native/post-validation/` and its existing
+environment/store; no dependency environment or source copy was created.
+
+## Post-validation feedback loop accepted — 15 November 2026
+
+Initial-search scorecards now expose their sealed failed checks and thresholds
+to the configured model. They remain ineligible for ranking against complete
+child validation. Failed neighboring-setting robustness supplies concrete,
+supported holding, trailing and sizing experiments. A pinned model chooses
+among them, including funding repairs after measured failures; every changed
+configuration still receives the original native validation programme.
+
+Frozen preparation exclusions require exact signal/reason identity proof before
+they are distinguished from missing execution/sizing evidence. Excluded rows,
+native counts and financial receipts are unchanged. Unknown required gaps stop
+with their own reason; an empty catalogue is no longer automatically blamed on
+user locks. Catalogue upgrades preserve budgets and recorded stop decisions.
+
+Actual connected ChatGPT completed a post-validation-only acceptance on the
+existing real five-stock/68-signal saved case: funding/sizing, trailing disabled,
+then holding 71→23 sessions. Each native validation rejected the changed setup;
+the model received those failed checks and then explicitly stopped, explaining
+the strongest near miss and why the remaining 83-session option lacked a useful
+new mechanism. Four model calls and 43 native accounts were added to the
+retained 13 reservations/399 accounts: 17/24 model reservations and 442/512
+accounts overall, leaving seven calls and 70 accounts unused. Saving and exact
+reopening matched with no new calculation. No initial search or scanner run was
+started. The old full 147-stock result was not resumed or recalculated.
+
+Acceptance uses isolated metadata under ignored `.agent-native/post-validation/`
+and immutable artifact hardlinks to the existing small control, with zero copied
+artifact bytes, live databases or dependency environments. Retain this current
+decision-loop evidence until the next qualification supersedes it. Checks passed:
+140 decision/feedback regressions, 130 validation/storage/budget checks, and
+48 final evidence/stop-preservation guards (overlapping coverage).
+
+## Controller recovery accepted — 15 November 2026
+
+Installed controller v2 locally over preview.38. The same failed 147-stock job
+resumed from its saved checkpoint; no new scanner capture or price acquisition
+was requested. The original 351 proposal records remained byte-for-byte equal.
+All 57 remaining proposals had distinct effective configurations (11 AI-domain,
+46 explicitly attributed to the reviewed native domains). The full programme
+finished at 408 proposals and 175/512 native accounts. Model accounting retained
+12 normal reservations plus one charged correction within the global 24-call
+allowance. The original compiler rejection is an explicitly attested legacy
+event; its missing response body and stream receipt are not fabricated.
+
+Actual connected ChatGPT repaired the rejected grid, testing 22/46/70-session
+holding periods with 15/30/45-percent stops. Its following decision identified
+the losing tighter-stop results and proposed two untested wider stops. Every
+completed configuration and core outcome is now included in bounded prefix-only
+feedback; indexed configuration and metric schemas preserve exact values.
+Duplicate sampler suggestions are pruned before admission, with unseen approved
+native settings used when the smaller AI grid is exhausted. Validation and
+scientific controls are unchanged.
+
+The saved result honestly reports that no tested setup passed validation:
+neighbor robustness supported only two of four challenges. Capacity variants
+also remained constrained by fixed position limits; no funding recommendation
+was promoted. Saving and exact reopening matched with zero new calculations.
+Two isolated small controls (scripted model replies, real native engines) also
+completed 408 proposals each, recovered a rejected response, and saved/reopened
+both a historically passing synthetic case and a real-data no-pass case.
+
+Regression suites passed: 124 controller/journey checks, 80 focused recovery and
+feedback checks, 67 budget/resource checks, and 97 storage/retention checks
+(overlapping coverage, not a unique-test count). Retention now follows exact
+feedback/recovery checkpoint dependencies and fails closed on damaged evidence.
+Private receipts and the two current small saved controls remain under ignored
+`.agent-native/recovery-v2/`; retain them until the next controller qualification
+supersedes them. No dependency environment or source-directory copy was created.
+
+## Full-scale installed-app acceptance — failed, 15 November 2026
+
+User-authorized fresh hands-off run of the existing full Chartink import used
+147 stocks and1,879 dated signals (2 March–23 October2026). This was not a fresh
+Chartink browser capture. Native preparation reused19,807 candles, downloaded
+1,917 missing candles and disclosed four signal exclusions for unavailable
+ICICIPRULI prices. Preparation took854.3s (14m14s).
+
+The reviewed408-proposal/512-account programme started in signed-in Chrome.
+Leaving and reopening the study preserved the same active run. ChatGPT proposed
+meaningful holding and stop tests, including22/34/46/58-session caps to address
+position congestion. The run then failed after351/408 proposals and108 completed
+native simulations. Ten plans compiled; the eleventh reserved model response
+proposed a value outside the frozen search grid. The compiler correctly rejected
+it. Automatic recovery then mislabeled the known rejection as an interrupted
+call and could not continue. Research until failure took590.94s (9m51s); elapsed
+preparation-to-failure including review was1497.04s (24m57s).
+
+No completed result artifact was created, and final validation, capital/trade-size
+selection, saving and reopening were not verified on this full cohort. The
+failed checkpoint and all debits remain intact; no budget was reset and no
+second scanner run was launched. Existing saved choices were preserved.
+
+Read-only checkpoint review also confirmed a decision-feedback defect. One AI
+block completed28 proposals but only three distinct configurations, reusing
+25 results. Their measured returns were worse than the anchor, and all other
+controls matched. Those outcomes were omitted from the next model context,
+which included top performers and a completion count. The model therefore
+lacked its own failed-test outcomes and explicitly deferred. The progress bar
+also restarted between preparation stages and hid the concrete feature work.
+
+The full-scale flow is not yet qualified. Next work must distinguish completed
+invalid proposals from uncertain provider calls, provide measured outcomes for
+each prior hypothesis, avoid equivalent tests, and improve preparation/progress.
+Use this preserved evidence and small cases for repairs rather than another
+full scanner rerun. Private compact proof is under ignored
+`.agent-native/unified-flow/full-scanner.json` and `full-scan-feedback.json`.
+No source/runtime changes were made during this acceptance run; only this
+qualification record was added afterward.
+
+## Unified replay and research controls — 15 November 2026
+
+The shared reviewed flow now supports exact replay and improvement of unchanged
+scan signals. Hands-on runs the chosen settings exactly; guided pauses before
+each new AI/native recovery experiment; hands-off continues automatically.
+Seven per-field permissions control capital, ticket size, holding, stop, target,
+trailing and allocation. Related sizing/ATR controls and native funding recovery
+respect locks, while financial validation and diagnostic perturbations remain
+unchanged. Replay saves an unqualified backtest, a user stop saves its actual
+reason, and accepted automatic research still requires the native financial
+gates. There is no new subset-research or automatic optional-engine routing.
+
+Fresh native-worker qualification used only the existing small saved cohorts:
+
+| Mode | Evidence | Saving and reopening |
+|---|---|---|
+| Hands-on | Real five-stock/68-signal cohort; one exact backtest, zero model calls and no optimization | Saved as replay, never as a validated winner; exact reopen |
+| Guided | Same real cohort; actual ChatGPT proposed holding 23/35 sessions with other selected fields fixed; approved first block, stopped at the second proposal |39 proposals before explicit user stop, original408/512 allowance retained; exact reopen and no new jobs |
+| Hands-off | Synthetic three-stock/90-signal control; actual configured model at12 checkpoints, all408 proposals and unchanged512-account allowance | Automatically selected a native passing result, saved and reopened; synthetic engineering evidence only |
+
+Reopening forbade model construction, VectorBT and Optuna entry points. Saved
+hashes matched and no case created a new financial account or job. No full
+scanner, new broker download or live trading occurred. The new permission binding
+initially disagreed with the development evidence writer; both research cases
+stopped before planning. The writer was corrected and the same frozen-input
+checkpoints resumed, preserving failed-attempt charges. No saved financial
+evidence was edited or validation weakened.
+
+Checks passed:78 focused native search/recovery/journey regressions;59 permission,
+approval and journey checks;9 reviewed-authority/user-stop checks;45 UI checks;
+TypeScript, lint, frontend build and source compatibility. These suites overlap.
+Safe pause, stale/duplicate approvals, crash-after-resume, zero-provider plan
+replay, continuation parking and locked funding/ATR semantics have targeted
+regressions. Database sessions and model streams close on success/failure;
+approval history and planning metadata are bounded. No new dependency environment
+or full source/release copy was created. Private proof and installation manifests
+are under ignored `.agent-native/unified-flow/`.
+
+Installed locally over preview.38:112 reviewed files updated and73 obsolete
+frontend assets removed. The launcher reports the web app and research worker
+ready, and signed-in Chrome loaded the Research library. File installation
+preserved `.env`, application databases and research databases byte-for-byte.
+The installed base release remains preview.38. This is a local patch,
+not a newly published GitHub/website release; installation completion is recorded
+in `.agent-native/unified-flow/installed.json` and the installed
+`LOCAL_PATCH_MANIFEST.json`. Existing configuration, databases and saved research
+matched before and after file installation. Superseded failure logs were removed;
+the three small saved-case stores, exact receipts and active launcher logs remain.
+The previous blocked dependency
+junction cleanup remains manual; no bypass was attempted.
+
+## Hands-off fixed-signal AI loop — development, 15 November 2026
+
+New reviewed journeys now preserve the imported scan cohort while researching
+supported trading settings. The configured model plans numeric domains inside
+the existing six-fit Optuna/VectorBT programme, receives measured training-only
+feedback, and can search, explicitly defer to approved native domains, or stop.
+The compiler locks source identities, style, costs, engine and hard risk limits.
+The 408-proposal/512-account allowance and native financial checks are unchanged;
+planning is not another search campaign. Twelve initial model reservations and
+the later continuation share a bounded 24-call allowance. Strict continuation
+keeps its existing three-call phase cap. Existing unmarked saved runs retain
+their prior programme. This checkpoint was initially source-only and was later
+included in the unified local patch above; it is not a published release. Subset
+filtering and automatic optional-engine routing remain pending.
+
+Two small native-worker journeys used the actual configured
+`chatgpt/gpt-6.1-sol`, reviewed Start, saved observations and real Optuna/VectorBT:
+
+| Case | Search and AI evidence | Saved outcome |
+|---|---|---|
+| Real, five stocks / 68 signals | All 408 proposals; 12 initial planning calls, six search plans covering 173 proposal slots; three later model decisions | None passed validation; exact rejection and report reopened |
+| Synthetic control, three stocks / 90 signals | All 408 proposals; 12 initial planning calls, two search plans covering 56 proposal slots | Native accepted selection saved and reopened; engineering control only |
+
+The real AI tested holding caps of 23/35/47 sessions and stop distances of
+22.5/33.75/45%. After the stop tests left admissions at 22, it changed mechanism
+to shorter holdings targeting measured position congestion. Later continuation
+tested funding/sizing, turnover and temporal remedies. Its stop identified
+neighbor support of only 1/4 and failed improvement in all three historical
+prefixes; shortening to 23 sessions worsened support to 0/4. No winner was forced.
+The synthetic control's acceptance is not evidence of a profitable market edge.
+Existing available-history admission determines applicable checks; this batch
+does not manufacture a longer history or independent final holdout.
+
+An initial integration defect required an exact original-control screening row
+that the native categorical screens did not guarantee. The fix chooses an actual
+screened, supported anchor while preserving source/style/capital/cost/risk locks.
+The same real study resumed its checkpoint; failed attempts stayed charged.
+Separate reopening checks forbade provider/model building and Optuna/VectorBT
+calculation entry points: hashes matched and neither case created a new job or
+financial account. No scanner run, new broker request or live trading occurred.
+
+Validation: 84 existing search/recovery/resource/save regressions; 62 planner,
+provider and reviewed-journey checks; 19 focused runtime checks; and 11 focused
+binding/model-budget checks passed. These sets overlap. The 34 journey UI checks,
+TypeScript, focused lint and source compatibility check also passed. Provider
+streams and scoped database sessions close on success and failure; planning
+metadata and reservations are bounded. Existing strategy atexit logging emitted
+closed-stream messages after successful pytest exit; no test failed.
+
+Private receipts, actual model traces and the two small saved stores are retained
+under ignored `.agent-native/hands-off-flow/` for this candidate's review and
+recovery. Reused dependencies/environments avoid new installations. Superseded
+diagnostic logs were removed; saved results and their referenced artifacts remain.
+The previously blocked dependency-junction cleanup is still manual and pending
+under the existing reviewed helper; it was not retried by another mechanism.
+
+## Integrated AI research plan and bounded capability proof — 15 November 2026
+
+The [integrated implementation plan](INTEGRATED_AI_RESEARCH_PLAN.md) separates
+research intent from involvement, preserves imported signals and fixed risk
+boundaries, and defines a versioned hypothesis/compiler/search/feedback contract.
+It includes causal subset research, the existing 408/512 programme, durable
+authority and exact saving. The wider intent/involvement matrix, subset research
+and automatic optional-engine routing remain proposed; the fixed-signal slice
+was subsequently implemented and qualified above.
+
+A fresh engineering probe used the configured `chatgpt/gpt-6.1-sol` through the
+native decision adapter, two real saved signals and five sessions. With capital
+100000 and 1% tickets, VectorBT could not fund either entry. The model selected
+an offered 674000-capital experiment, preserving tickets, source signals, exits
+and costs. The second real VectorBT account entered and closed both signals.
+Unchanged native automatic-design admission rejected sample, date coverage and
+stock concentration. The actual second model response read that feedback and
+stopped: the remaining holding alternatives could not repair those failures.
+The model selected a supplied amount; it did not independently estimate it.
+
+Two actual provider calls and two financial accounts were used; no fallback
+decision, model-response substitution, broker request or scanner run occurred.
+Reports and model trace reopened exactly with provider/calculation entry points
+forbidden and zero new accounts. Only the bounded capability harness was tested:
+its small action catalogue/dispatcher is not the production durable worker or
+the proposed full research compiler. Optuna and the optional engines were not
+selected or exercised in this fresh model loop. Mandatory admission failed, so
+full financial validation and profitable-strategy qualification are not claimed.
+The production budget and checks were not changed. Existing native funding
+decisions remain distinct from this actual model choice. Private evidence is
+under ignored `.agent-native/ai-loop-proof/`; the existing model connection was
+used in place, with read-only model metadata and credential mirroring disabled
+only in the probe so no credential or live database was copied or modified.
+
+## Optional OpenAlgo engine — development, 15 November 2026
+
+An explicit OpenAlgo Rust preview connector uses isolated SDK 2.2.0 without
+upgrading the main SDK 2.0.5 or changing VectorBT automatic research. Daily
+disjoint signal windows, native charges, explicit opening holding exits, shared
+cash and saved account evidence have focused qualification. Overlapping repeated
+signals and unsupported settings fail closed; no signals are merged or discarded
+to fit the engine. Existing 408/512 research and financial gates are unchanged.
+See [supported scope and differences](OPENALGO_ENGINE.md). This source addition
+is not included in the published preview.38 ZIP.
+
+Small real saved-data qualification used one stock, two signals and five frozen
+sessions. Both engines retained the same entry quantities and prices; differing
+holding exits and charge policies fully explained the account difference.
+VectorBT kept overlapping signals independent; the optional engine refused them
+before calculation. Three reports and the rejection reopened with exact saved
+hashes while financial calculation entry points were forbidden. No broker calls,
+downloads or scanner runs occurred; the original saved database was unchanged.
+Focused Windows checks passed: 121 backend regressions, then 19 final optional
+engine/workflow checks, and 142 frontend checks. These sets overlap and are not
+additive. TypeScript, lint and source/runtime compatibility checks passed.
+Temporary worker directories were removed and the disposable SDK probe was
+deleted. The small qualification store and optional SDK are retained. A temporary
+frontend dependency junction still awaits manual cleanup after automatic approval
+blocked its removal; the reviewed helper defaults to preview. Shared dependencies
+were preserved. Private comparison evidence and the helper remain ignored.
+
 ## Preview.38 distribution — 14 November 2026
 
 Preview.38 packages the tested browser plan-refresh fix below. It refreshes a

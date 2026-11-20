@@ -7,7 +7,7 @@ from copy import deepcopy
 from types import SimpleNamespace
 
 import pytest
-from test_feedback_replan import stopped  # noqa: F401
+from test_feedback_replan import concrete_option, stopped  # noqa: F401
 from test_research_supervisor import CONVERSATION, OWNER, complete, ledger  # noqa: F401
 
 from database.research_db import ResearchDecisionJob, ResearchSupervisor, ResearchWorker
@@ -150,13 +150,17 @@ def test_only_fully_affordable_native_checks_are_advertised(stopped, monkeypatch
     fixture, plan = stopped
     resume(fixture, plan)
     settings = deepcopy(fixture.report["strategies"])
+    performance_settings = deepcopy(settings)
+    performance_settings[0]["config"]["hold_sessions"] = 3
     monkeypatch.setattr(
         supervisor,
         "_experiment_catalog",
         lambda *a: {
             "options": [
-                {"id": "f" * 64, "remedy": "funding_and_size", "settings": settings},
-                {"id": "c" * 64, "remedy": "temporal_stability", "settings": settings},
+                concrete_option(a[2]["source_result_artifact"], "funding_and_size", settings),
+                concrete_option(
+                    a[2]["source_result_artifact"], "temporal_stability", performance_settings
+                ),
             ],
             "feedback": {},
         },
@@ -193,7 +197,8 @@ def test_evidence_exhaustion_has_a_different_reason_from_budget_exhaustion(stopp
     result = current(fixture, plan)
     assert result["remaining_accounts"] == 95
     assert result["experiment_options"] == []
-    assert "No untested effect-relevant setting remains" in result["continuation_stop_reason"]
+    assert "No untried supported experiment" in result["continuation_stop_reason"]
+    assert result["experiment_frontier"]["feedback"]["complete"] is True
     assert "cannot fund" not in result["continuation_stop_reason"]
     assert not fixture.submissions
 
@@ -213,6 +218,62 @@ def enable_worker(fixture, monkeypatch):
             ],
         },
     )
+
+
+def provide_diagnosis_evidence(fixture):
+    """Seal the existing tiny report's explicit failed challenges for the new chooser."""
+    from research.automatic_decision import descriptor
+    from research.report_contract import fingerprint, settings_identity
+
+    report = fixture.report
+    report["summary"].update(net_return_pct=1.0, max_drawdown_pct=1.0, closed_trades=35)
+    findings = report["automatic_research"]
+    recipe = findings["recipe"]
+    policy = descriptor()
+    recipe["automatic_decision"] = policy
+    recipe["id"] = fingerprint({k: v for k, v in recipe.items() if k != "id"})
+    selected = settings_identity(report["strategies"])
+    recorded = findings["decision"]
+    recorded.update(
+        version=policy["version"],
+        policy_id=policy["id"],
+        independently_validated=False,
+        selected_config_id=selected,
+        checks=[
+            {"kind": "higher_costs", "passed": False, "summary": {"net_return_pct": 0.5}},
+            {
+                "kind": "neighboring_settings",
+                "passed": False,
+                "tested": 4,
+                "passing": 0,
+                "median_return_edge_pct": -1.0,
+            },
+        ],
+    )
+    recorded["id"] = fingerprint({k: v for k, v in recorded.items() if k != "id"})
+    findings.update(
+        version="automatic-hypotheses-v16",
+        independently_validated=False,
+        final=None,
+        selected_config_id=selected,
+    )
+
+
+def diagnosed_choice(fixture, plan, evidence, candidate):
+    from services import research_failure_diagnosis as failure
+
+    saved = current(fixture, plan)
+    evidence["experiment_frontier"] = deepcopy(saved["experiment_frontier"])
+    evidence["failure_diagnosis_version"] = failure.VERSION
+    evidence["failure_diagnosis_context"] = failure.context(evidence)
+    allowed = evidence["failure_diagnosis_context"]["options"][candidate["id"]]
+    assert allowed["allowed_targets"] and allowed["allowed_causes"]
+    return {
+        "target_ref": allowed["allowed_targets"][0],
+        "cause": allowed["allowed_causes"][0],
+        "prediction": "The registered holding boundary may release occupied capacity and improve the recorded failed cost comparison.",
+        "falsifier": "If the selected trades or failed cost comparison do not change, this holding mechanism has no demonstrated repair effect.",
+    }
 
 
 def test_affordability_stop_does_not_spend_another_model_call(stopped, monkeypatch):
@@ -237,7 +298,7 @@ def test_affordability_stop_does_not_spend_another_model_call(stopped, monkeypat
     assert not fixture.submissions
 
 
-def test_justified_model_stop_is_respected_despite_remaining_registered_options(
+def test_blanket_model_stop_needs_option_reviews_despite_remaining_registered_options(
     stopped, monkeypatch
 ):
     fixture, plan = stopped
@@ -270,18 +331,94 @@ def test_justified_model_stop_is_respected_despite_remaining_registered_options(
     assert result["automation"]["calls_spent"] == 2
     assert result["remaining_accounts"] == before["remaining_accounts"]
     assert result["proposals"] == before["proposals"]
-    assert result["stopping_reason"] == reason
-    assert result["stop_decision"] == {
-        "selection": "model",
-        "reason": reason,
-        "seed_artifact": before["source_result_artifact"],
-    }
+    assert "no model stop was accepted" in result["stopping_reason"]
+    assert result["stopping"]["kind"] == "stop_review_incomplete"
+    assert result["stopping"]["decision_source"] == "controller"
+    assert not result.get("stop_decision")
     assert result["automation"]["decisions"][-1]["remedy"] == "stop"
-    assert not result["automation"].get("attention")
+    assert (
+        result["automation"]["decisions"][-1]["stop_review_rejected"]["evidence_id"]
+        == result["automation"]["decisions"][-1]["evidence_context"]["id"]
+    )
+    assert result["automation"].get("attention")
     assert not automation.run_one(fixture.store, "adaptive-worker", choose=choose)
     assert len(decisions) == 1
     assert current(fixture, plan)["automation"]["calls_spent"] == 2
     assert not fixture.submissions
+
+    # Explicitly resuming must not replay the rejected intent or refund it.
+    # This legacy stop-only fixture began with an empty contract. An executable
+    # next experiment needs a genuine sealed contract over its existing settings.
+    from services import research_playbook
+    from services.agent import research_decision
+
+    settings = fixture.report["strategies"]
+    provide_diagnosis_evidence(fixture)
+    original_catalogue = supervisor._experiment_catalog
+
+    def with_axis(*args):
+        catalogue = original_catalogue(*args)
+        for option in catalogue["options"]:
+            option["change"] = {
+                "axis": "hold_sessions",
+                "to": option["settings"][0]["config"]["hold_sessions"],
+            }
+        return catalogue
+
+    monkeypatch.setattr(supervisor, "_experiment_catalog", with_axis)
+    contract = research_playbook.describe(
+        {
+            "engine": "vectorbt",
+            "strategies": settings,
+            "risk_limits": settings[0]["execution_policy"]["risk_limits"],
+            "automatic_research": {"intent_policy": research_playbook.INTENT_POLICY},
+        }
+    )
+    change(fixture, plan, lambda saved: saved["research_context"].update(contract=contract))
+    resumed = supervisor.replan(
+        fixture.store,
+        OWNER,
+        plan["id"],
+        conversation_id=CONVERSATION,
+        request_id="explicit-resume-after-incomplete-stop",
+        continuation_policy=POLICY,
+    )
+    assert resumed["automation"]["calls_spent"] == 2
+    assert resumed["automation"]["max_model_calls"] == result["automation"]["max_model_calls"]
+    selections = []
+    execution_errors = []
+    execute = research_decision.execute_plan
+
+    def traced_execute(*args, **kwargs):
+        try:
+            return execute(*args, **kwargs)
+        except Exception as error:
+            execution_errors.append((type(error).__name__, str(error)))
+            raise
+
+    monkeypatch.setattr(research_decision, "execute_plan", traced_execute)
+
+    def choose_next(evidence, _model_id):
+        option = evidence["experiment_options"][0]
+        selections.append(option["id"])
+        return {
+            "remedy": option["remedy"],
+            "candidate_id": option["id"],
+            "reason": "Test the remaining registered holding change with unchanged validation",
+            "diagnosis": diagnosed_choice(fixture, plan, evidence, option),
+            "selection": "model",
+            "provider_called": True,
+        }
+
+    assert automation.run_one(fixture.store, "adaptive-worker", choose=choose_next)
+    recovered = current(fixture, plan)
+    assert len(selections) == len(fixture.submissions) == 1, execution_errors
+    assert recovered["automation"]["calls_spent"] == 3
+    assert recovered["automation"]["decisions"][-2]["stop_review_rejected"]
+    assert recovered["automation"]["decisions"][-1]["candidate_id"] == selections[0]
+    assert recovered["proposals"][-1]["decision_diagnosis"]["candidate_id"] == selections[0]
+    assert not automation.run_one(fixture.store, "adaptive-worker", choose=choose_next)
+    assert len(selections) == 1
 
 
 @pytest.mark.parametrize(
@@ -328,7 +465,11 @@ def test_model_safety_limit_is_reported_separately_from_native_budget(stopped, m
     assert result["status"] == result["automatic_phase"] == "stopped"
     assert result["remaining_accounts"] == 95
     assert result["automation"]["calls_spent"] == 24
-    assert "24-call model safety limit" in result["stopping_reason"]
+    assert "AI call budget exhausted (24/24)" in result["stopping_reason"]
+    assert "not a ChatGPT conclusion" in result["stopping_reason"]
+    assert result["stopping"]["kind"] == "model_budget_exhausted"
+    assert result["stopping"]["decision_source"] == "controller"
+    assert result["stopping"]["model_budget_exhausted"] is True
     assert "95" in result["stopping_reason"]
     assert not result["automation"].get("attention")
     assert not fixture.submissions
@@ -341,12 +482,19 @@ def test_rejected_native_result_automatically_tests_a_different_registered_chang
 
     fixture, plan = stopped
     resume(fixture, plan)
-    # This isolates durable orchestration. Native contract/account validation
-    # remains covered by the program's separate financial-invariant fixtures.
-    monkeypatch.setattr(research_playbook, "validate_settings", lambda *a: None)
+    provide_diagnosis_evidence(fixture)
+    settings = fixture.report["strategies"]
+    contract = research_playbook.describe(
+        {
+            "engine": "vectorbt",
+            "strategies": settings,
+            "risk_limits": settings[0]["execution_policy"]["risk_limits"],
+            "automatic_research": {"intent_policy": research_playbook.INTENT_POLICY},
+        }
+    )
 
     def normalize(state):
-        state["research_context"]["contract"]["id"] = "fixed-test-contract"
+        state["research_context"]["contract"] = contract
         for proposal in state["proposals"]:
             proposal.setdefault("job_id", None)
 
@@ -355,16 +503,19 @@ def test_rejected_native_result_automatically_tests_a_different_registered_chang
     def catalogue(report, recipe, saved):
         used = {p.get("candidate", {}).get("id") for p in saved["proposals"] if p.get("outcome")}
         options = []
-        for candidate_id, holding in [("c" * 64, 3), ("d" * 64, 5)]:
-            if candidate_id in used:
-                continue
+        for holding in (3, 5):
             settings = deepcopy(fixture.report["strategies"])
             settings[0]["config"]["hold_sessions"] = holding
+            if holding == 5:
+                settings[0]["config"]["target_pct"] = 15
+            option = concrete_option(
+                saved["source_result_artifact"], "temporal_stability", settings
+            )
+            if option["id"] in used:
+                continue
             options.append(
                 {
-                    "id": candidate_id,
-                    "remedy": "temporal_stability",
-                    "settings": settings,
+                    **option,
                     "change": {"axis": "hold_sessions", "to": holding},
                     "expected_effect": "A different observed holding boundary may alter execution",
                     "reason": "The previous cost check failed; this registered boundary is untested",
@@ -387,12 +538,16 @@ def test_rejected_native_result_automatically_tests_a_different_registered_chang
             "remedy": candidate["remedy"],
             "candidate_id": candidate["id"],
             "reason": candidate["reason"],
+            "diagnosis": diagnosed_choice(fixture, plan, evidence, candidate),
             "provider_called": True,
         }
 
     assert automation.run_one(fixture.store, "adaptive-worker", choose=choose)
     first = current(fixture, plan)
     assert first["status"] == "running" and len(fixture.submissions) == 1
+    assert (
+        first["proposals"][-1]["decision_diagnosis"]["version"] == "research-failure-diagnosis-v1"
+    )
     first_job = first["proposals"][-1]["job_id"]
     change(fixture, plan, lambda state: state["proposals"][-1].update(spent=14, completed=14))
     complete(fixture, plan, first_job)
@@ -402,7 +557,8 @@ def test_rejected_native_result_automatically_tests_a_different_registered_chang
     after = current(fixture, plan)
     assert after["proposals"][-2]["outcome"] == "rejected"
     assert after["proposals"][-2]["reasons"] == ["Cost challenge failed"]
-    assert choices == ["c" * 64, "d" * 64]
+    assert len(choices) == len(set(choices)) == 2
+    assert choices == [p["candidate"]["id"] for p in after["proposals"][-2:]]
     assert after["status"] == "running" and len(fixture.submissions) == 2
     assert after["automation"]["calls_spent"] == 3
     assert after["original_attempts"] == 400
@@ -410,6 +566,10 @@ def test_rejected_native_result_automatically_tests_a_different_registered_chang
     assert len(after["replans"]) == 1
     assert after["proposals"][-2]["settings"][0]["config"]["hold_sessions"] == 3
     assert after["proposals"][-1]["settings"][0]["config"]["hold_sessions"] == 5
+    assert all(
+        p["decision_diagnosis"]["candidate_id"] == p["candidate"]["id"]
+        for p in after["proposals"][-2:]
+    )
 
 
 @pytest.fixture
@@ -450,7 +610,7 @@ def checked_branches(stopped, monkeypatch):
     monkeypatch.setattr(
         supervisor,
         "_reviewed_diagnosis",
-        lambda *a: {"missing_evidence": False, "permitted_remedies": ["temporal_stability"]},
+        lambda *a, **k: {"missing_evidence": False, "permitted_remedies": ["temporal_stability"]},
     )
 
     def catalogue(report, recipe, saved):
@@ -458,11 +618,12 @@ def checked_branches(stopped, monkeypatch):
         if report["strategies"][0]["config"]["hold_sessions"] == 7:
             settings = deepcopy(report["strategies"])
             settings[0]["config"]["hold_sessions"] = 5
+            settings[0]["config"]["target_pct"] = 15
             options.append(
                 {
-                    "id": "e" * 64,
-                    "remedy": "temporal_stability",
-                    "settings": settings,
+                    **concrete_option(
+                        saved["source_result_artifact"], "temporal_stability", settings
+                    ),
                     "change": {"axis": "hold_sessions", "from": 7, "to": 5},
                     "expected_effect": "A separate registered holding boundary may change execution",
                     "reason": "An untested sibling remains after the most recent branch exhausted",
@@ -474,22 +635,28 @@ def checked_branches(stopped, monkeypatch):
     return fixture, plan, first_job, last_job
 
 
-def test_frontier_returns_to_an_earlier_checked_seed_without_new_calculation(checked_branches):
+def test_frontier_exposes_earlier_checked_options_without_automatically_selecting_a_seed(
+    checked_branches,
+):
     fixture, plan, first_job, last_job = checked_branches
     before = current(fixture, plan)
-    assert before["experiment_options"] == [] and before["seed_job_id"] == last_job
+    assert before["seed_job_id"] == last_job
+    assert {option["origin_job_id"] for option in before["experiment_options"]} == {first_job}
     result = supervisor.resume_frontier(
         fixture.store, OWNER, plan["id"], conversation_id=CONVERSATION
     )
-    assert result["seed_job_id"] == first_job
-    assert result["source_result_artifact"] == fixture.jobs[first_job].result_artifact
-    assert result["status"] == "awaiting_plan" and result["automatic_phase"] == "queued"
-    assert result["experiment_options"][0]["id"] == "e" * 64
+    assert result["seed_job_id"] == last_job
+    assert result["source_result_artifact"] == before["source_result_artifact"]
+    assert result["status"] == result["automatic_phase"] == "stopped"
+    assert (
+        result["experiment_options"][0]["origin_result_artifact"]
+        == fixture.jobs[first_job].result_artifact
+    )
     assert result["remaining_accounts"] == before["remaining_accounts"] == 82
     assert result["original_attempts"] == before["original_attempts"] == 400
     assert result["proposals"] == before["proposals"]
     assert result["automation"] == before["automation"]
-    assert len(result["frontier_transitions"]) == 1
+    assert not result.get("frontier_transitions")
     assert not fixture.submissions
 
 

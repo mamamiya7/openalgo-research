@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { researchDefaults } from '@/lib/researchDraft'
+import { portfolioEngineName } from '@/lib/researchEngines'
 import { ChartinkConnect } from './ChartinkConnect'
 import { ChartinkSource } from './ChartinkSource'
 import { ChosenEntryConditions } from './ChosenEntryConditions'
@@ -152,6 +153,8 @@ function availableHistoryResearch(
 // New v16 submissions use the available-history policy without changing rules.
 export function selectPortfolioRun(draft: PortfolioDraft, optimizing: boolean): PortfolioDraft {
   if (!optimizing) return { ...draft, optimizing }
+  if (draft.portfolio.engine === 'openalgo' && !draft.portfolio.automatic_research)
+    return applySuggestedSearch({ ...draft, optimizing }, true)
   if (
     draft.portfolio.strategies.some(
       (row) =>
@@ -493,13 +496,48 @@ export function portfolioEngineIssue(
 ): string | null {
   const engine = capabilities?.engines.find((item) => item.id === draft.portfolio.engine)
   if (capabilities && !engine?.available)
-    return `${draft.portfolio.engine === 'nautilus' ? 'NautilusTrader' : 'VectorBT'} is unavailable in this installation.`
+    return `${portfolioEngineName(draft.portfolio.engine)} is unavailable in this installation.${engine?.reason ? ` ${engine.reason}` : ''}`
   if (
     capabilities &&
     draft.optimizing &&
     !capabilities.optimizers.some((item) => item.id === 'optuna' && item.available)
   )
     return 'Optuna is unavailable in this installation.'
+  if (draft.portfolio.engine === 'openalgo') {
+    if (draft.optimizing && draft.portfolio.automatic_research)
+      return 'Automatic research needs VectorBT. OpenAlgo Rust preview supports fixed backtests and Custom search.'
+    if (
+      draft.portfolio.risk_limits ||
+      draft.portfolio.entry_conditions ||
+      draft.portfolio.strategies.some((row) => row.execution_policy || row.entry_condition)
+    )
+      return 'These saved execution limits and entry conditions need VectorBT. Choose VectorBT to keep these rules.'
+    if (
+      draft.portfolio.strategies.some((row) => {
+        const config = row.config
+        return (
+          config.trade_horizon === 'intraday' ||
+          config.hold_minutes != null ||
+          config.entry_time != null ||
+          config.exit_time != null ||
+          draft.sources[row.source_id]?.provenance?.interval === '1m'
+        )
+      })
+    )
+      return 'OpenAlgo Rust preview supports daily NSE cash signals only. Choose VectorBT to keep timed execution.'
+    if (
+      draft.portfolio.strategies.some(
+        (row) =>
+          row.config.cost_bps !== 0 || row.config.slippage_bps !== 0 || row.config.trailing_enabled
+      )
+    )
+      return 'OpenAlgo Rust uses native Indian charges for Zerodha delivery. Set extra costs and slippage to 0 and turn off trailing protection, or keep VectorBT.'
+    if (
+      Number.isFinite(draft.portfolio.capital) &&
+      Math.abs(draft.portfolio.capital * 100 - Math.round(draft.portfolio.capital * 100)) > 0.000001
+    )
+      return 'OpenAlgo Rust requires starting cash with at most two decimal places.'
+  }
   if (draft.portfolio.engine === 'nautilus') {
     if (
       draft.portfolio.risk_limits ||
@@ -583,8 +621,9 @@ export function PortfolioBuilder({
   const disabled = busy || uploading
   const engineIssue = portfolioEngineIssue(draft, capabilities)
   const engines =
-    capabilities?.engines.filter((engine) => engine.available || engine.id === portfolio.engine) ??
-    []
+    capabilities?.engines.filter(
+      (engine) => engine.available || engine.id === portfolio.engine || engine.id === 'openalgo'
+    ) ?? []
   return (
     <form
       className="space-y-7"
@@ -888,7 +927,8 @@ export function PortfolioBuilder({
                   aria-pressed={automatic === enabled}
                   disabled={
                     enabled &&
-                    (Boolean(portfolio.entry_conditions) ||
+                    (portfolio.engine === 'openalgo' ||
+                      Boolean(portfolio.entry_conditions) ||
                       portfolio.strategies.some(
                         (row) =>
                           row.execution_policy &&
@@ -899,18 +939,20 @@ export function PortfolioBuilder({
                       ))
                   }
                   title={
-                    enabled &&
-                    (portfolio.entry_conditions ||
-                      portfolio.strategies.some(
-                        (row) =>
-                          row.execution_policy &&
-                          (row.execution_policy.exit_mode === 'atr' ||
-                            row.execution_policy.sizing === 'stop_risk' ||
-                            (row.execution_policy.entry_priority != null &&
-                              row.execution_policy.entry_priority !== 'source'))
-                      ))
-                      ? 'Use Custom search to preserve this setup’s selected entry and execution rules.'
-                      : undefined
+                    enabled && portfolio.engine === 'openalgo'
+                      ? 'Automatic research needs VectorBT. Use Custom search with OpenAlgo Rust preview.'
+                      : enabled &&
+                          (portfolio.entry_conditions ||
+                            portfolio.strategies.some(
+                              (row) =>
+                                row.execution_policy &&
+                                (row.execution_policy.exit_mode === 'atr' ||
+                                  row.execution_policy.sizing === 'stop_risk' ||
+                                  (row.execution_policy.entry_priority != null &&
+                                    row.execution_policy.entry_priority !== 'source'))
+                            ))
+                        ? 'Use Custom search to preserve this setup’s selected entry and execution rules.'
+                        : undefined
                   }
                   onClick={() => {
                     if (enabled && automatic) return
@@ -1606,7 +1648,7 @@ export function PortfolioBuilder({
                   </select>
                 </div>
               )}
-              {(engines.length > 1 || portfolio.engine === 'nautilus') && (
+              {(engines.length > 1 || portfolio.engine !== 'vectorbt') && (
                 <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="portfolio-engine">Backtest engine</Label>
                   <select
@@ -1627,13 +1669,28 @@ export function PortfolioBuilder({
                     ))}
                     {!engines.some((engine) => engine.id === portfolio.engine) && (
                       <option value={portfolio.engine}>
-                        {portfolio.engine === 'nautilus' ? 'NautilusTrader' : 'VectorBT'}
+                        {portfolioEngineName(portfolio.engine)}
                       </option>
                     )}
                   </select>
                   {portfolio.engine === 'nautilus' && (
                     <p className="text-xs text-muted-foreground">
                       A different fill model; results can differ.
+                    </p>
+                  )}
+                  {portfolio.engine === 'openalgo' && (
+                    <p className="text-xs text-muted-foreground">
+                      Preview for daily NSE cash signals with dated Zerodha delivery charges.
+                      Holding-period exits fill at the opening; VectorBT uses the closing. Repeated
+                      signals are supported only when their holding windows do not overlap.
+                      Unsupported settings are blocked.
+                    </p>
+                  )}
+                  {capabilities?.engines.find(
+                    (engine) => engine.id === 'openalgo' && !engine.available
+                  )?.reason && (
+                    <p className="text-xs text-muted-foreground">
+                      {capabilities.engines.find((engine) => engine.id === 'openalgo')?.reason}
                     </p>
                   )}
                 </div>

@@ -630,6 +630,7 @@ def selected_account_plan(
     version=SELECTED_VERSION,
     request_prices=None,
     request_risks=None,
+    permissions=None,
 ):
     """Freeze all account/size variants before reading native capacity outcomes.
 
@@ -638,6 +639,28 @@ def selected_account_plan(
     policy. ATR stops cannot be inferred from prices; native execution remains the
     authority for their risk capacity.
     """
+    if permissions is not None:
+        if (
+            not isinstance(permissions, dict)
+            or set(permissions) != {"capital", "order_size_pct"}
+            or any(type(v) is not bool for v in permissions.values())
+        ):
+            raise ValueError("Invalid reviewed capital and sizing permissions")
+        original = selected_account_plan(
+            selected,
+            capital,
+            entry_prices,
+            max_accounts=max_accounts,
+            version=version,
+            request_prices=request_prices,
+            request_risks=request_risks,
+        )
+        return _seal(
+            {
+                **{k: v for k, v in original.items() if k != "id"},
+                "user_permissions": deepcopy(permissions),
+            }
+        )
     capacity_policy = selected_account_descriptor(version)
     if version in (CLOSED_LOOP_VERSION, FEASIBLE_VERSION, CAUSAL_VERSION, ATR_VERSION):
         return _closed_loop_plan(
@@ -937,6 +960,7 @@ def _validate_selected_plan(value):
         version=value["version"],
         request_prices=value.get("request_prices"),
         request_risks=value.get("request_risks"),
+        permissions=value.get("user_permissions"),
     ):
         raise ValueError("The selected account plan differs from its declared policy")
 
@@ -1332,6 +1356,13 @@ def _selected_sequence(value, receipts):
             raise ValueError("Selected account sufficiency changed")
         tried.add(next_index)
         next_index = _selected_route(value, receipt, tried=tried)
+        permissions = value.get("user_permissions")
+        if next_index is not None and permissions:
+            option = value["options"][next_index]
+            if (not permissions["capital"] and option["capital"] != value["original_capital"]) or (
+                not permissions["order_size_pct"] and option["size_multiplier"] != 1
+            ):
+                next_index = None
     return next_index
 
 

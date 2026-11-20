@@ -16,6 +16,7 @@ export type PortfolioAxis =
   | 'order_size_pct'
   | 'allocation_pct'
 export type PortfolioRange = { min: number; max: number; step: number }
+export type PortfolioEngine = 'vectorbt' | 'nautilus' | 'openalgo'
 export interface PortfolioRiskLimits {
   version: 'research-risk-limits-v1' | 'research-risk-limits-v2' | 'research-risk-limits-v3'
   max_daily_buy_turnover_pct?: number
@@ -52,7 +53,7 @@ export interface ExecutionPolicy {
 export interface PortfolioCapabilities {
   max_strategies: number
   engines: Array<{
-    id: 'vectorbt' | 'nautilus'
+    id: PortfolioEngine
     name: string
     available: boolean
     reason?: string
@@ -389,7 +390,7 @@ export interface PortfolioRequest {
   version: 'research-portfolio-v1'
   name: string
   capital: number
-  engine: 'vectorbt' | 'nautilus'
+  engine: PortfolioEngine
   strategies: PortfolioStrategy[]
   risk_limits?: PortfolioRiskLimits
   automatic_research?: {

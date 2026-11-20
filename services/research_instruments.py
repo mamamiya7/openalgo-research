@@ -34,7 +34,7 @@ def native_instruments(symbols, *, allow_missing=False):
     return result
 
 
-def prepare_nautilus_instruments(evidence):
+def prepare_nautilus_instruments(evidence, *, engine="nautilus"):
     """Freeze available native specifications before trial selection, with exact gaps."""
     from research.connectors.nautilus_portfolio import (
         INSTRUMENT_ELIGIBILITY_VERSION,
@@ -44,6 +44,11 @@ def prepare_nautilus_instruments(evidence):
     from research.connectors.vectorbt_portfolio import _deadline, _schedule
     from research.portfolio import requirement_strategies
     from research.portfolio_coverage import prepare
+
+    if engine == "openalgo":
+        from research.connectors.openalgo_portfolio import INSTRUMENT_ELIGIBILITY_VERSION
+    elif engine != "nautilus":
+        raise ValueError("Choose a supported instrument eligibility policy")
 
     snapshot = evidence["snapshot"]
     minute = snapshot["provenance"]["interval"] == "1m"
@@ -57,9 +62,7 @@ def prepare_nautilus_instruments(evidence):
         (row["id"], i): entry
         for row in evidence["strategies"]
         for i, signal in enumerate(row["signals"])
-        if (
-            entry := _schedule(signal, snapshot, configs[row["id"]], timeline, index, minute)[0]
-        )
+        if (entry := _schedule(signal, snapshot, configs[row["id"]], timeline, index, minute)[0])
         >= 0
     }
     symbols = {
@@ -74,7 +77,7 @@ def prepare_nautilus_instruments(evidence):
     missing = symbols - set(instruments)
     if scheduled and not instruments:
         raise ValueError(
-            "OpenAlgo has no trading specifications for these symbols. Refresh master contracts before using NautilusTrader."
+            "OpenAlgo has no trading specifications for these symbols. Refresh master contracts before using this engine."
         )
     strategies, exclusions = [], []
     for row in evidence["strategies"]:
@@ -92,7 +95,9 @@ def prepare_nautilus_instruments(evidence):
                     for key in timeline[entry : last + 1]:
                         bar = snapshot["bars"].get(symbol, {}).get(key)
                         if bar is not None:
-                            reason = incompatible_price_reason(symbol, key, bar, instruments[symbol])
+                            reason = incompatible_price_reason(
+                                symbol, key, bar, instruments[symbol]
+                            )
                             if reason:
                                 break
                 if reason:

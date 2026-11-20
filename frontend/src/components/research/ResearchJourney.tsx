@@ -3,9 +3,13 @@ import { useEffect, useRef, useState } from 'react'
 import { type AlertChannel, alertsApi } from '@/api/alerts'
 import {
   type JourneyDecision,
+  type JourneyFlow,
   type JourneyPlan,
   type JourneyPlanUpdate,
   type JourneyState,
+  type JourneyStopping,
+  type JourneyStopReview,
+  type JourneyStrategySettings,
   researchJourney,
 } from '@/api/researchJourney'
 import { Button } from '@/components/ui/button'
@@ -35,6 +39,7 @@ const phaseLabel: Record<JourneyState['phase'], string> = {
   queued: 'Research queued',
   researching: 'Research in progress',
   finalizing: 'Saving and verifying the result',
+  awaiting_approval: 'Review the next research step',
   complete: 'Best passing result saved',
   none: noneMessage,
   needs_action: 'Research needs your attention',
@@ -45,6 +50,58 @@ const remedyLabel: Record<string, string> = {
   temporal_stability: 'Check consistency over time',
   reduce_concentration: 'Check allocation',
   stop: 'Finish research',
+}
+function decisionTitle(decision: JourneyDecision) {
+  if (decision.stop_review_rejected) return 'Stop review rejected'
+  if (decision.remedy === 'stop' && decision.stop_review?.complete === false) return 'Reviewing remaining options'
+  if (decision.planning?.action === 'search') return 'Research trading settings'
+  if (decision.planning?.action === 'defer') return 'Review the approved search'
+  if (decision.planning?.action === 'stop') return 'Finish research'
+  return remedyLabel[decision.remedy] ?? decision.remedy
+}
+function StopReviewReasons({ review }: { review: JourneyStopReview }) {
+  if (!review.reviews.length) return null
+  return (
+    <details className="text-xs">
+      <summary className="cursor-pointer">Why each option was skipped ({review.reviews.length})</summary>
+      <ol className="mt-2 max-h-64 space-y-3 overflow-auto">
+        {review.reviews.map((row) => {
+          const candidate = review.option_ids[row.option - 1]
+          return (
+            <li key={row.option}>
+              <p className="font-medium">
+                Option {row.option}{candidate && <> · <code title={candidate}>{candidate.slice(0, 12)}</code></>}
+              </p>
+              <p>{row.reason}</p>
+              <p className="text-muted-foreground">Recorded evidence: {row.evidence_ref}</p>
+            </li>
+          )
+        })}
+      </ol>
+    </details>
+  )
+}
+function StopExplanation({ stopping }: { stopping: JourneyStopping }) {
+  const modelStop = stopping.kind === 'model_stop'
+  const budgetStop = stopping.kind === 'model_budget_exhausted'
+  const unreviewed = stopping.unreviewed_option_ids.length
+  return (
+    <section aria-label="Why research stopped" className="space-y-2">
+      <p className="font-medium">
+        {modelStop ? 'ChatGPT decided to stop' : budgetStop ? 'AI call limit reached' : stopping.kind === 'stop_review_incomplete' ? 'Stop review incomplete' : 'Research stopped'}
+      </p>
+      <p>{stopping.reason}</p>
+      {modelStop && stopping.model_budget_exhausted && (
+        <p className="text-xs text-muted-foreground">
+          The AI call allowance for this stage is also fully used ({stopping.model_calls_spent}/{stopping.model_call_limit}). The recorded stop decision came from ChatGPT.
+        </p>
+      )}
+      {unreviewed > 0 && (
+        <p className="text-xs">{number(unreviewed)} remaining {unreviewed === 1 ? 'option has' : 'options have'} no completed skip review. They were not ruled out.</p>
+      )}
+      {stopping.stop_review && <StopReviewReasons review={stopping.stop_review} />}
+    </section>
+  )
 }
 const settingLabel: Record<string, string> = {
   capital: 'Capital',
@@ -62,6 +119,8 @@ const settingLabel: Record<string, string> = {
   exit_mode: 'Exit method',
   atr_stop_multiple: 'ATR stop multiple',
   atr_target_multiple: 'ATR target multiple',
+  atr_period: 'ATR period',
+  sizing: 'Sizing method',
 }
 function settingValue(field: string, value: number | string | boolean | null | undefined) {
   if (value == null) return 'Not set'
@@ -77,15 +136,54 @@ function settingValue(field: string, value: number | string | boolean | null | u
     atr: 'ATR exits',
     atr_2_4: 'ATR exits (2× stop / 4× target)',
     original: 'Original allocation',
+    allocation: 'Allocation sizing',
+    stop_risk: 'Stop-risk sizing',
     active_prior60_cluster_inverse_vol: 'Prior-data cluster and volatility weights',
   }
   return labels[value] ?? value.replaceAll('_', ' ')
 }
+function ProposedSettings({ settings }: { settings: JourneyStrategySettings[] }) {
+  return (
+    <section aria-label="Proposed next settings" className="space-y-2 text-xs">
+      <p className="font-medium">Proposed settings · not tested or validated yet</p>
+      {settings.map((strategy, index) => {
+        const fields = {
+          capital: strategy.config.initial_capital,
+          allocation_pct: strategy.allocation_pct,
+          order_size_pct: strategy.config.order_size_pct,
+          hold_sessions: strategy.config.hold_sessions,
+          hold_minutes: strategy.config.hold_minutes,
+          stop_pct: strategy.config.stop_pct,
+          target_pct: strategy.config.target_pct,
+          trailing_enabled: strategy.config.trailing_enabled,
+          trailing_pct: strategy.config.trailing_pct,
+          exit_mode: strategy.execution_policy?.exit_mode,
+          sizing: strategy.execution_policy?.sizing,
+          allocation_mode: strategy.execution_policy?.allocation_mode,
+          atr_period: strategy.execution_policy?.atr_period,
+          atr_stop_multiple: strategy.execution_policy?.atr_stop_multiple,
+          atr_target_multiple: strategy.execution_policy?.atr_target_multiple,
+        }
+        return (
+          <div key={strategy.id ?? index} className="space-y-1 rounded-md bg-muted/40 p-3">
+            <p className="font-medium">{strategy.name ?? strategy.id ?? `Strategy ${index + 1}`}</p>
+            {Object.entries(fields).map(([key, setting]) =>
+              typeof setting === 'number' || typeof setting === 'string' || typeof setting === 'boolean'
+                ? <p key={key}>{settingLabel[key]}: {settingValue(key, setting)}</p>
+                : null
+            )}
+          </div>
+        )
+      })}
+    </section>
+  )
+}
 function DecisionSettings({ decision }: { decision: JourneyDecision }) {
+  if (decision.planning && decision.planning.action !== 'search') return null
   const actual = decision.settings_change
   if (actual?.status === 'verified') {
     return (
-      <div className="mt-2 space-y-1 text-xs" aria-label="Verified tested settings">
+      <section className="mt-2 space-y-1 text-xs" aria-label="Verified tested settings">
         <p className="font-medium">Tested settings · verified saved report</p>
         {actual.rows.length ? (
           actual.rows.map((row) => (
@@ -95,7 +193,7 @@ function DecisionSettings({ decision }: { decision: JourneyDecision }) {
             </p>
           ))
         ) : <p>No setting values changed.</p>}
-      </div>
+      </section>
     )
   }
   const change = decision.change
@@ -115,11 +213,84 @@ function DecisionSettings({ decision }: { decision: JourneyDecision }) {
       {actual?.status === 'unavailable' && (
         <p>Saved settings could not be verified. Proposed values are not confirmed results.</p>
       )}
+      {actual?.status === 'tested' && (
+        <p>Optuna ran within the planned ranges. Exact selected settings are not verified here.</p>
+      )}
     </div>
   )
 }
+function DecisionPlan({ decision }: { decision: JourneyDecision }) {
+  const planning = decision.planning
+  if (!planning) return null
+  const methods = {
+    holding_and_exits: 'Holding and exits',
+    sizing_and_allocation: 'Trade size and allocation',
+    joint_trading: 'Coupled trading settings',
+  } as const
+  const verified = decision.settings_change?.status === 'verified'
+  const tested = verified || decision.settings_change?.status === 'tested'
+  const status = decision.stop_review_rejected
+    ? 'Stop review rejected'
+    : decision.stop_review?.complete === false
+    ? 'Reviewing remaining options'
+    : planning.action === 'stop'
+    ? decision.selection === 'model' ? 'AI stopped research' : 'Research stopped'
+    : planning.action === 'defer'
+      ? 'Continue approved search'
+      : decision.outcome === 'blocked'
+      ? 'Search blocked; no validated result'
+      : verified && decision.outcome === 'validated'
+        ? 'Tested search; native validation passed'
+        : verified && decision.outcome === 'rejected'
+          ? 'Tested search; validation did not pass'
+          : tested && decision.outcome === 'rejected'
+            ? 'Search executed; validation did not pass'
+            : tested
+              ? 'Search executed; acceptance not confirmed'
+              : 'Planned search; results not verified yet'
+  return (
+    <section aria-label="AI research plan" className="mt-2 space-y-2 text-xs">
+      <p className="font-medium">{status}</p>
+      {planning.action === 'defer' && (
+        <p>No new AI parameter ranges were applied. The existing approved Optuna programme continues.</p>
+      )}
+      {planning.method && <p>Research direction: {methods[planning.method]}</p>}
+      {planning.hypothesis && <p>Hypothesis: {planning.hypothesis}</p>}
+      {!!Object.keys(planning.domains).length && (
+        <details>
+          <summary className="cursor-pointer text-muted-foreground">Planned Optuna ranges</summary>
+          <ul className="mt-2 space-y-1">
+            {Object.entries(planning.domains).flatMap(([strategy, axes]) =>
+              Object.entries(axes).map(([field, range]) => (
+                <li key={`${strategy}-${field}`}>
+                  {strategy} · {settingLabel[field] ?? field.replaceAll('_', ' ')}:{' '}
+                  {settingValue(field, range.min)} – {settingValue(field, range.max)}
+                  {' '}(step {settingValue(field, range.step)})
+                </li>
+              ))
+            )}
+          </ul>
+        </details>
+      )}
+      {planning.expected_evidence && <p>Expected evidence: {planning.expected_evidence}</p>}
+      {planning.stop_rule && <p>Stop rule: {planning.stop_rule}</p>}
+    </section>
+  )
+}
 function editable(plan: JourneyPlan): JourneyPlanUpdate {
-  return { revision: plan.revision, style: plan.style, ...plan.settings }
+  const single = plan.baseline_settings?.length === 1 ? plan.baseline_settings[0] : null
+  return {
+    revision: plan.revision, style: plan.style,
+    ...(single && typeof single.config.trailing_pct === 'number' ? { trailing_pct: single.config.trailing_pct } : {}),
+    ...(single ? { allocation_pct: single.allocation_pct } : {}),
+    ...plan.settings, ...(plan.flow ? { flow: plan.flow } : {}),
+  }
+}
+const adjustableFields: JourneyFlow['adjustable'] = [
+  'capital', 'order_size_pct', 'hold_sessions', 'stop_pct', 'target_pct', 'trailing_pct', 'allocation_pct',
+]
+function defaultFlow(): JourneyFlow {
+  return { version: 'research-user-flow-v1', intent: 'improve', involvement: 'hands_off', adjustable: [...adjustableFields] }
 }
 
 /** A reviewed plan starts work; mounting and polling only prepare/read it. */
@@ -139,7 +310,7 @@ export function ResearchJourney({
   const [value, setValue] = useState<JourneyState | null>(null)
   const [form, setForm] = useState<JourneyPlanUpdate | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [pending, setPending] = useState<'save' | 'start' | null>(null)
+  const [pending, setPending] = useState<'save' | 'start' | 'approve' | 'reject' | null>(null)
   const [retry, setRetry] = useState(0)
   const [alertChannels, setAlertChannels] = useState<AlertChannel[]>([])
   const [alertsLoaded, setAlertsLoaded] = useState(false)
@@ -153,6 +324,7 @@ export function ResearchJourney({
   saved.current = onSaved
   result.current = onResult
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Changing study resets its optional notification consent even when enabled is unchanged.
   useEffect(() => {
     setNotificationChannels([])
     setAlertChannels([])
@@ -217,7 +389,7 @@ export function ResearchJourney({
 
   useEffect(() => () => action.current?.abort(), [])
   useEffect(() => {
-    if (value?.phase !== 'complete' || !value.result?.accepted || !value.result.job_id) return
+    if (value?.phase !== 'complete' || (!value.result?.accepted && value.result?.kind !== 'replay') || !value.result.job_id) return
     const id = value.result.job_id
     if (opened.current === id) return
     opened.current = id
@@ -229,8 +401,39 @@ export function ResearchJourney({
   const plan = value?.plan
   const changed = !!plan && !!form && JSON.stringify(form) !== JSON.stringify(editable(plan))
   const running = ['queued', 'researching', 'finalizing'].includes(value?.phase ?? '')
+  const awaitingApproval = value?.phase === 'awaiting_approval'
+  const flow = form?.flow ?? plan?.flow ?? value?.flow ?? defaultFlow()
+  const replay = flow.intent === 'replay'
+  const savedReplay = value?.result?.kind === 'replay'
+  const savedStopped = value?.result?.kind === 'stopped'
   const stale = !enabled || (!!plan && plan.revision !== revision)
-  const canEdit = !!plan && !!form && !running && !pending && enabled
+  const canEdit = !!plan && !!form && value?.phase === 'review' && !pending && enabled
+  const changeFlow = (next: Partial<JourneyFlow>) => setForm((current) => {
+    if (!current) return current
+    const updated = { ...(current.flow ?? plan?.flow ?? defaultFlow()), ...next }
+    if (updated.involvement === 'hands_on') updated.intent = 'replay'
+    return { ...current, flow: updated }
+  })
+  const approve = async (decision: 'approve' | 'reject') => {
+    if (!enabled || !awaitingApproval || !value?.pending_approval || action.current) return
+    const controller = new AbortController()
+    action.current = controller
+    setPending(decision)
+    try {
+      const next = await researchJourney.approve(experimentId, {
+        revision: value.revision, approval_id: value.pending_approval.id, decision,
+      }, controller.signal)
+      if (controller.signal.aborted) return
+      accept(next)
+      await saved.current?.(next)
+      if (!controller.signal.aborted) setRetry((attempt) => attempt + 1)
+    } catch (cause) {
+      if (!controller.signal.aborted) setError(researchError(cause))
+    } finally {
+      if (!controller.signal.aborted) setPending(null)
+      if (action.current === controller) action.current = null
+    }
+  }
   const start = async () => {
     if (!plan || !value?.can_start || changed || stale || action.current) return
     const controller = new AbortController()
@@ -284,7 +487,7 @@ export function ResearchJourney({
       <Input
         id={`journey-${experimentId}-${key}`}
         type="number"
-        min={key === 'capital' || key === 'hold_sessions' ? 1 : 0.01}
+        min={key === 'capital' || key === 'hold_sessions' ? 1 : key === 'trailing_pct' ? 0 : 0.01}
         step={step}
         value={form?.[key] ?? ''}
         disabled={!canEdit}
@@ -296,9 +499,10 @@ export function ResearchJourney({
     </div>
   )
   const latest = value?.decisions?.at(-1)
+  const aiPlanning = value?.run?.stage === 'ai_planning'
   const progress = running ? value?.run?.progress : value?.preparation?.progress
   const step =
-    value?.phase === 'preparing' || !value ? 0 : value.phase === 'review' ? 1 : running ? 2 : 3
+    value?.phase === 'preparing' || !value ? 0 : value.phase === 'review' ? 1 : running || awaitingApproval ? 2 : 3
 
   return (
     <section
@@ -311,7 +515,7 @@ export function ResearchJourney({
             Automatic research
           </p>
           <h2 className="mt-1 text-xl font-semibold" aria-live="polite">
-            {value ? phaseLabel[value.phase] : 'Preparing your research plan'}
+            {savedStopped ? 'You stopped research' : savedReplay && value?.phase === 'complete' ? 'Saved backtest' : value ? phaseLabel[value.phase] : 'Preparing your research plan'}
           </h2>
         </div>
         <ol
@@ -354,6 +558,88 @@ export function ResearchJourney({
           Save your setup changes to refresh this plan before starting.
         </output>
       )}
+      {plan && value?.phase === 'review' && (
+        <section aria-label="Research goal" className="space-y-2 text-sm">
+          <p className="font-medium">{replay ? 'Replay all scan signals with exact settings' : 'Keep all scan signals and find better trading settings'}</p>
+          <fieldset disabled={!canEdit} className="space-y-2 rounded-lg border p-3">
+            <legend className="px-1 font-medium">What do you want to find out?</legend>
+            {(['improve', 'replay'] as const).map((intent) => (
+              <label key={intent} className="flex items-center gap-2">
+                <input type="radio" name={`journey-${experimentId}-intent`} checked={flow.intent === intent}
+                  onChange={() => changeFlow({ intent, ...(intent === 'improve' && flow.involvement === 'hands_on' ? { involvement: 'hands_off' } : {}) })} />
+                {intent === 'improve' ? 'Improve trading settings — keep all scan signals' : 'Replay exact settings'}
+              </label>
+            ))}
+            <p className="text-xs text-muted-foreground">Selecting a smaller set of stocks is not available in this flow.</p>
+          </fieldset>
+          <fieldset disabled={!canEdit} className="space-y-2 rounded-lg border p-3">
+            <legend className="px-1 font-medium">How involved do you want to be?</legend>
+            {([
+              ['hands_off', 'Hands off', 'Review once. AI runs the approved research and explains its decisions.'],
+              ['guided', 'Guided', 'Review each proposed next step before research continues.'],
+              ['hands_on', 'Hands on', 'Choose exact settings yourself. Switches to replay; AI makes no changes.'],
+            ] as const).map(([mode, label, explanation]) => (
+              <label key={mode} className="flex items-start gap-2">
+                <input type="radio" name={`journey-${experimentId}-involvement`} checked={flow.involvement === mode}
+                  onChange={() => changeFlow({ involvement: mode })} className="mt-1" />
+                <span>{label}<span className="block text-xs text-muted-foreground">{explanation}</span></span>
+              </label>
+            ))}
+          </fieldset>
+          {!replay && (
+            <fieldset disabled={!canEdit} className="space-y-2 rounded-lg border p-3">
+              <legend className="px-1 font-medium">What may AI adjust?</legend>
+              <p className="text-xs text-muted-foreground">Unchecked settings stay fixed at your reviewed values.</p>
+              <p className="text-xs text-muted-foreground">Keep fixed applies to researched and selected settings; validation still tests nearby settings.</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {adjustableFields.map((key) => (
+                  <label key={key} className="flex items-center gap-2">
+                    <input type="checkbox" checked={flow.adjustable.includes(key)} onChange={({ target: { checked } }) => changeFlow({
+                      adjustable: checked ? adjustableFields.filter((field) => field === key || flow.adjustable.includes(field)) : flow.adjustable.filter((field) => field !== key),
+                    })} />
+                    {settingLabel[key]} · {flow.adjustable.includes(key) ? 'AI may adjust' : 'Keep fixed'}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
+          <p className="text-muted-foreground">
+            {replay ? 'Run your exact reviewed settings once. AI does not search or change settings, and this backtest is not a validated research recommendation.' : <>
+              Review the starting settings, then start once. Research continues in the background;
+              changes and their results are explained here. Original signals, trading style and risk
+              limits stay fixed after Start.
+            </>}
+          </p>
+          {!replay && plan.contract?.planning_policy === 'hands-off-fixed-signals-v1' && (
+            <p className="text-muted-foreground">
+              AI proposes hypotheses and permitted search ranges, then uses measured feedback to
+              choose a meaningful next test or explain why research stops.
+            </p>
+          )}
+          {replay ? <p className="text-xs text-muted-foreground">Replay allowance: one exact account calculation. No optimization search.</p> : plan.budget && (
+            <p className="text-xs text-muted-foreground">
+              Research allowance: up to {number(plan.budget.proposals)} proposals within{' '}
+              {number(plan.budget.max_simulations)} total account calculations, including validation.
+            </p>
+          )}
+        </section>
+      )}
+      {awaitingApproval && value?.pending_approval && (
+        <section aria-label="Review proposed research step" className="space-y-3 rounded-lg border p-4 text-sm">
+          <p className="font-medium">Research is paused for your review</p>
+          <p>{value.pending_approval.reason}</p>
+          {value.pending_approval.hypothesis && <p>Hypothesis: {value.pending_approval.hypothesis}</p>}
+          <p className="text-xs text-muted-foreground">This is a proposal. Approval permits the next step; it does not mean the settings passed validation.</p>
+          {value.pending_approval.domains && Object.entries(value.pending_approval.domains).flatMap(([strategy, axes]) => Object.entries(axes).map(([key, range]) => (
+            <p key={`${strategy}-${key}`} className="text-xs">Proposed {strategy} · {settingLabel[key] ?? key}: {settingValue(key, range.min)} – {settingValue(key, range.max)} (step {settingValue(key, range.step)})</p>
+          )))}
+          {!!value.pending_approval.settings?.length && <ProposedSettings settings={value.pending_approval.settings} />}
+          <div className="flex gap-2">
+            <Button disabled={!enabled || !!pending} onClick={() => void approve('approve')}>{pending === 'approve' ? 'Continuing…' : 'Approve next step'}</Button>
+            <Button variant="outline" disabled={!enabled || !!pending} onClick={() => void approve('reject')}>{pending === 'reject' ? 'Stopping…' : 'Stop research'}</Button>
+          </div>
+        </section>
+      )}
       {(running || value?.phase === 'preparing' || !value) && (
         <section aria-live="polite" className="space-y-3 rounded-lg bg-muted/40 p-4">
           <div className="flex items-start justify-between gap-3 text-sm">
@@ -362,8 +648,10 @@ export function ResearchJourney({
                 {value?.phase === 'finalizing'
                   ? 'Verifying, saving and reopening the chosen result'
                   : running
-                    ? latest
-                      ? (remedyLabel[latest.remedy] ?? latest.remedy)
+                    ? aiPlanning
+                      ? 'AI planning the next experiment'
+                      : latest
+                      ? decisionTitle(latest)
                       : value?.run?.stage || 'Testing the reviewed setup'
                     : 'Checking signals and available price history'}
               </p>
@@ -371,7 +659,9 @@ export function ResearchJourney({
                 {value?.phase === 'finalizing'
                   ? 'Verifying the chosen settings, then saving and reopening the exact result.'
                   : running
-                    ? latest?.reason ||
+                    ? aiPlanning
+                      ? 'Reviewing development results and permitted changes. Proposed settings still need testing and validation.'
+                      : latest?.reason ||
                       'Research continues in the background. You can leave this page and return later.'
                     : 'Usable stocks will continue; exclusions will be listed in your plan.'}
               </p>
@@ -388,7 +678,7 @@ export function ResearchJourney({
           />
         </section>
       )}
-      {plan && form && !running && value?.phase !== 'none' && value?.phase !== 'complete' && (
+      {plan && form && value?.phase === 'review' && (
         <div className="grid gap-4 md:grid-cols-2">
           <article className="space-y-3 rounded-lg border p-4">
             <h3 className="flex items-center gap-2 text-sm font-medium">
@@ -434,7 +724,7 @@ export function ResearchJourney({
           <article className="space-y-3 rounded-lg border p-4">
             <h3 className="flex items-center gap-2 text-sm font-medium">
               <Settings2 className="size-4" />
-              Suggested settings
+              {replay ? 'Exact settings' : 'Suggested settings'}
             </h3>
             <div className="space-y-1.5">
               <Label htmlFor={`journey-${experimentId}-style`} className="text-xs">
@@ -470,22 +760,39 @@ export function ResearchJourney({
                   field('hold_sessions', 'Maximum holding sessions', 1)}
                 {field('stop_pct', 'Stop loss (%)', 0.1)}
                 {field('target_pct', 'Profit target (%)', 0.1)}
+                {form.trailing_pct !== undefined && field('trailing_pct', 'Trailing distance (%)', 0.1)}
+                {form.allocation_pct !== undefined && field('allocation_pct', 'Allocation (%)', 0.1)}
               </div>
             </details>
+            {!!plan.baseline_settings?.length && (
+              <details className="text-sm">
+                <summary className="cursor-pointer text-muted-foreground">Stored settings by strategy</summary>
+                <p className="mt-2 text-xs text-muted-foreground">Current saved values before your plan edits. Unchanged per-strategy settings are retained.</p>
+                {plan.baseline_settings.map((strategy, index) => (
+                  <div key={strategy.id ?? index} className="mt-2 space-y-1 text-xs">
+                    <p className="font-medium">{strategy.name ?? strategy.id ?? `Strategy ${index + 1}`}</p>
+                    <p>Allocation: {settingValue('allocation_pct', strategy.allocation_pct)}</p>
+                    {adjustableFields.filter((key) => key !== 'capital' && key !== 'allocation_pct').map((key) => {
+                      const stored = strategy.config[key]
+                      return typeof stored === 'number' ? <p key={key}>{settingLabel[key]}: {settingValue(key, stored)}</p> : null
+                    })}
+                  </div>
+                ))}
+              </details>
+            )}
             <p className="text-xs text-muted-foreground">
-              Your trading style and risk limits stay fixed. Research may adjust other trading
-              settings and explain why.
+              {replay ? 'Every run uses these exact settings. AI changes are disabled.' : 'Your trading style and risk limits stay fixed. Research may adjust only the settings you allow and explain why.'}
             </p>
           </article>
           <article className="space-y-3 rounded-lg border p-4">
             <h3 className="flex items-center gap-2 text-sm font-medium">
               <FlaskConical className="size-4" />
-              What will be tested
+              {replay ? 'What will be replayed' : 'What will be tested'}
             </h3>
-            <p className="text-sm font-medium">{plan.objective.label}</p>
-            <p className="text-xs text-muted-foreground">{plan.objective.reason}</p>
+            <p className="text-sm font-medium">{replay ? 'All usable scan signals with your exact settings' : plan.objective.label}</p>
+            <p className="text-xs text-muted-foreground">{replay ? 'One backtest with data and accounting checks. It does not select or validate an optimized setup.' : plan.objective.reason}</p>
             <ul className="space-y-1.5 text-sm">
-              {plan.tests.map((test) => (
+              {(replay ? ['Signal and price-data checks', 'Exact settings and account calculations', 'Save and verify the same result on reopen'] : plan.tests).map((test) => (
                 <li key={test} className="flex gap-2">
                   <Check className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
                   {test}
@@ -558,30 +865,36 @@ export function ResearchJourney({
       {value?.phase === 'none' && (
         <div className="space-y-2 rounded-lg bg-muted/40 p-4 text-sm">
           <p>
-            Research is saved with its tested results and exclusion reasons. Your previous saved
-            setup is retained.
+            {savedStopped ? 'Your stop decision and the research completed so far are saved. No further tests were started, and no new setup is accepted.' : <>
+              Research is saved with its tested results and exclusion reasons. Your previous saved
+              setup is retained.
+            </>}
           </p>
-          {value.result?.stopping_reason && <p>Stopped because: {value.result.stopping_reason}</p>}
+          {value.result?.stopping
+            ? <StopExplanation stopping={value.result.stopping} />
+            : value.result?.stopping_reason && <p>Stopped because: {value.result.stopping_reason}</p>}
         </div>
       )}
       {value?.phase === 'complete' && value.result && (
         <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
           <div>
-            <p className="text-xs text-muted-foreground">Starting setup P&L</p>
-            <p className="mt-1 text-xl font-semibold">{money(value.result.before?.net_pnl)}</p>
+            <p className="text-xs text-muted-foreground">{savedReplay ? 'Backtest P&L' : 'Starting setup P&L'}</p>
+            <p className="mt-1 text-xl font-semibold">{money(savedReplay ? value.result.after?.net_pnl : value.result.before?.net_pnl)}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Selected setup P&L</p>
-            <p className="mt-1 text-xl font-semibold">{money(value.result.after?.net_pnl)}</p>
+            {savedReplay ? <p className="text-xs text-muted-foreground">Exact-settings backtest saved. No optimized setup or validation pass is claimed.</p> : <>
+              <p className="text-xs text-muted-foreground">Selected setup P&L</p>
+              <p className="mt-1 text-xl font-semibold">{money(value.result.after?.net_pnl)}</p>
+            </>}
           </div>
-          {value.result.verification?.matched &&
-            value.result.verification.new_calculations === 0 && (
-              <p className="col-span-2 text-xs text-muted-foreground">
-                Saved result verified on reopen. No new calculations.
-              </p>
-            )}
         </div>
       )}
+      {(value?.phase === 'complete' || value?.phase === 'none') &&
+        value.result?.verification?.matched && value.result.verification.new_calculations === 0 && (
+          <p className="text-xs text-muted-foreground">
+            Saved result verified on reopen. No new calculations.
+          </p>
+        )}
       {value?.decisions?.length ? (
         <details className="text-sm">
           <summary className="cursor-pointer">
@@ -591,12 +904,14 @@ export function ResearchJourney({
             {value.decisions.map((decision, index) => (
               <li key={`${decision.remedy}-${index}`}>
                 <p className="font-medium">
-                  {remedyLabel[decision.remedy] ?? decision.remedy}
-                  {decision.no_effect?.status === 'unchanged'
+                  {decisionTitle(decision)}
+                  {!decision.planning && (decision.no_effect?.kind === 'repeated_failed_gate'
+                    ? ' · Repeated failed check; remaining checks skipped'
+                    : decision.no_effect?.status === 'unchanged'
                     ? ' · No change; further checks skipped'
                     : decision.outcome
                       ? ` · ${decision.outcome}`
-                      : ''}
+                      : '')}
                 </p>
                 {decision.selection && (
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -605,15 +920,24 @@ export function ResearchJourney({
                       : 'Chosen by a controller fallback'}
                   </p>
                 )}
+                <DecisionPlan decision={decision} />
                 <DecisionSettings decision={decision} />
                 <p className="mt-1 text-xs text-muted-foreground">{decision.reason}</p>
+                {decision.diagnosis && (
+                  <section aria-label="Testable hypothesis" className="mt-2 space-y-1 text-xs">
+                    <p className="font-medium">Testable hypothesis</p>
+                    <p>Expected change: {decision.diagnosis.prediction}</p>
+                    <p>Would disconfirm: {decision.diagnosis.falsifier}</p>
+                  </section>
+                )}
+                {decision.stop_review && <StopReviewReasons review={decision.stop_review} />}
                 {[...new Set(decision.reasons ?? [])].filter((reason) => reason !== decision.reason).length > 0 && (
-                  <div className="mt-2 space-y-1 text-xs" aria-label="Native validation findings">
+                  <section className="mt-2 space-y-1 text-xs" aria-label="Native validation findings">
                     <p className="font-medium">Native validation</p>
                     {[...new Set(decision.reasons ?? [])].filter((reason) => reason !== decision.reason).map((reason) => <p key={reason}>{reason}</p>)}
-                  </div>
+                  </section>
                 )}
-                {decision.expected_evidence && (
+                {decision.expected_evidence && decision.expected_evidence !== decision.planning?.expected_evidence && (
                   <p className="mt-1 text-xs text-muted-foreground">
                     Expected: {decision.expected_evidence}
                   </p>
@@ -637,16 +961,16 @@ export function ResearchJourney({
           )}
           {value?.result?.job_id && (
             <Button variant="outline" onClick={() => void result.current?.(value.result!.job_id)}>
-              {value.result.accepted ? 'View saved result' : 'View tested report'}
+              {savedReplay ? 'View saved backtest' : value.result.accepted ? 'View saved result' : 'View tested report'}
             </Button>
           )}
-          {(!value || !terminal.has(value.phase)) && !running && (
+          {(!value || !terminal.has(value.phase)) && !running && !awaitingApproval && (
             <Button
               onClick={() => void start()}
               disabled={!value?.can_start || changed || stale || !!pending || !plan}
             >
               <Play className="mr-2 size-4" />
-              {pending === 'start' ? 'Starting…' : 'Start research'}
+              {pending === 'start' ? 'Starting…' : replay ? 'Run exact backtest' : 'Start research'}
             </Button>
           )}
         </div>

@@ -77,11 +77,22 @@ def start(
                 state["status"] == "stopped"
                 and not state["proposals"]
                 and existing["calls_spent"] == 0
+                and not existing.get("decisions")
+                and not state.get("stop_decision")
                 and state.get("decision_catalog_version") != supervisor.DECISION_CATALOG_VERSION
             ):
-                _, _, report, recipe = supervisor._parent(store, owner, job_id)
+                _, bundle, report, recipe = supervisor._parent(store, owner, job_id)
+                exclusions = state.get("frozen_exclusions") or supervisor._frozen_exclusions(
+                    store, bundle
+                )
+                if exclusions is not None:
+                    state["frozen_exclusions"] = exclusions
                 state["diagnosis"] = supervisor._reviewed_diagnosis(
-                    report, recipe, state.get("research_context"), state.get("study_memory")
+                    report,
+                    recipe,
+                    state.get("research_context"),
+                    state.get("study_memory"),
+                    exclusions=exclusions,
                 )
                 state["decision_catalog_version"] = supervisor.DECISION_CATALOG_VERSION
                 if state["diagnosis"]["permitted_remedies"]:
@@ -127,8 +138,68 @@ def start(
     return supervisor.status(store, owner, current["id"], conversation_id=conversation_id)
 
 
+def _controller_stop_kind(current):
+    """Classify the server's constraint evidence without attributing it to AI."""
+    if not current.get("experiment_options") and any(
+        item.get("reason_code") == "full_validation_budget"
+        for item in current.get("experiment_frontier", {}).get("unavailable", [])
+    ):
+        return "native_budget_exhausted"
+    if current.get("diagnosis", {}).get("missing_evidence"):
+        return "evidence_unavailable"
+    return "catalogue_exhausted" if current.get("continuation_stop_reason") else "controller_stop"
+
+
+def _stopping(current, kind, reason, *, review=None):
+    """Keep the cause of stopping separate from coincident allowance exhaustion."""
+    automatic = current.get("automation", {})
+    reviewed = review or automatic.get("stop_review")
+    if reviewed and reviewed.get("frontier_id") != current.get("experiment_frontier", {}).get("id"):
+        reviewed = None
+    options = current.get("experiment_options", [])
+    remaining = current.get("remaining_accounts")
+    calls, limit = automatic.get("calls_spent"), automatic.get("max_model_calls")
+    return {
+        "version": "research-stopping-v1",
+        "kind": kind,
+        "decision_source": "model" if kind == "model_stop" else "controller",
+        "reason": reason[:1000],
+        "model_calls_spent": calls,
+        "model_call_limit": limit,
+        "model_budget_exhausted": type(calls) is int and type(limit) is int and calls >= limit,
+        "native_accounts_remaining": remaining,
+        "native_account_limit": 512,
+        "frontier_id": current.get("experiment_frontier", {}).get("id"),
+        "option_count": len(options),
+        "budget_blocked_option_ids": [
+            item["candidate_id"]
+            for item in current.get("experiment_frontier", {}).get("unavailable", [])
+            if item.get("reason_code") == "full_validation_budget" and item.get("candidate_id")
+        ],
+        "stop_review": deepcopy(reviewed),
+        "unreviewed_option_ids": (
+            [reviewed["option_ids"][index - 1] for index in reviewed["unreviewed_options"]]
+            if reviewed
+            else [option["id"] for option in options]
+        ),
+    }
+
+
 def _write_job(
-    store, identifier, claim, *, phase, decision=None, stop=None, reopened=None, attention=True
+    store,
+    identifier,
+    claim,
+    *,
+    phase,
+    decision=None,
+    stop=None,
+    reopened=None,
+    attention=True,
+    stopping=None,
+    confirmed_stop=False,
+    stop_choice=None,
+    rejected_stop=None,
+    rejected_diagnosis=None,
 ):
     with store.sessions.begin() as db:
         supervisor.service.write_guard(db)
@@ -137,14 +208,56 @@ def _write_job(
             raise ValueError("Automatic research continuation lost its claim")
         row = db.get(ResearchSupervisor, identifier)
         state = json.loads(row.state)
+        rejected_choice = rejected_stop or rejected_diagnosis
+        if rejected_choice:
+            evidence_id = rejected_choice.get("evidence_context", {}).get("id")
+            source = rejected_choice.get("seed_artifact")
+            if evidence_id and source:
+                for prior in reversed(state["automation"]["decisions"]):
+                    if prior.get("evidence_context", {}).get("id") == evidence_id and all(
+                        prior.get(key) == rejected_choice.get(key)
+                        for key in (
+                            "remedy",
+                            "seed_artifact",
+                            "candidate_id",
+                            "reason",
+                            "selection",
+                        )
+                    ):
+                        prior["stop_review_rejected" if rejected_stop else "diagnosis_rejected"] = {
+                            "evidence_id": evidence_id,
+                            "source_result_artifact": source,
+                            "reason": "Fresh checked-branch validation did not accept this decision intent",
+                        }
+                        break
         if decision is not None:
             state["automation"]["decisions"].append(deepcopy(decision))
-            if decision["remedy"] == "stop":
-                state["stop_decision"] = {
-                    k: decision.get(k) for k in ("selection", "reason", "seed_artifact")
-                }
+            review = decision.get("stop_review")
+            if review:
+                state["automation"]["stop_review"] = deepcopy(review)
+        if confirmed_stop:
+            if not stop_choice or stop_choice.get("remedy") != "stop":
+                raise ValueError("Only an executed explicit stop may confirm a stop decision")
+            state["stop_decision"] = {
+                k: stop_choice.get(k)
+                for k in ("selection", "reason", "seed_artifact", "stop_review")
+            }
         if stop and state["status"] not in ("accepted", "saved"):
             state.update(status="stopped", stopping_reason=stop[:1000])
+            state["stopping"] = (
+                deepcopy(stopping)
+                if stopping
+                else _stopping(state, "error" if attention else "controller_stop", stop)
+            )
+            # A provider call may have been reserved since the status snapshot.
+            # The durable reservation, not a pre-call view, owns these facts.
+            policy = state.get("automation", {})
+            calls, limit = policy.get("calls_spent"), policy.get("max_model_calls")
+            state["stopping"].update(
+                model_calls_spent=calls,
+                model_call_limit=limit,
+                model_budget_exhausted=type(calls) is int and type(limit) is int and calls >= limit,
+            )
         if stop and attention:
             state["automation"]["attention"] = stop[:1000]
         elif stop:
@@ -190,6 +303,14 @@ def _evidence(store, owner, current):
         from services.research_validation_scorecard import build as validation_scorecard
 
         history = []
+        learning_observations = []
+        from services import research_learning_feedback
+
+        frontier = current.get("experiment_frontier")
+        all_branches = frontier and frontier.get("version") == "research-checked-frontier-v1"
+        frontier_jobs = (
+            {branch["job_id"] for branch in frontier["branches"]} if all_branches else set()
+        )
         retained_proposals = current["proposals"][-24:]
         detailed_ids = {p["id"] for p in retained_proposals[-8:]}
         for proposal in retained_proposals:
@@ -203,8 +324,21 @@ def _evidence(store, owner, current):
                     ]
                     # Funding requests can differ from the actual operating point.
                     settings = native["strategies"]
+                    learning_observations.append(
+                        research_learning_feedback.summarize(
+                            native,
+                            job_id=proposal["job_id"],
+                            origin_job_id=proposal.get("seed_job_id"),
+                            diagnosis=proposal.get("decision_diagnosis"),
+                        )
+                    )
                     if proposal["id"] in detailed_ids:
-                        facts["validation_scorecard"] = validation_scorecard(native)
+                        if proposal["job_id"] in frontier_jobs:
+                            facts["validation_scorecard_ref"] = {
+                                "frontier_branch_job_id": proposal["job_id"]
+                            }
+                        else:
+                            facts["validation_scorecard"] = validation_scorecard(native)
                     economic = (
                         _economic_execution(native)
                         if proposal.get("outcome") != "blocked"
@@ -232,10 +366,33 @@ def _evidence(store, owner, current):
                 }
             )
         evidence["configuration_context"] = build(
-            report["strategies"], history, current["experiment_options"]
+            report["strategies"],
+            history,
+            current["experiment_options"],
+            max_options=200 if all_branches else 8,
+            include_closest=not all_branches,
         )
+        evidence["economic_feedback"] = research_learning_feedback.build(
+            learning_observations,
+            branch_cards={
+                branch["job_id"]: branch.get("scorecard", {})
+                for branch in (frontier or {}).get("branches", [])
+            },
+        )
+        if all_branches:
+            evidence["experiment_frontier"] = deepcopy(frontier)
         evidence["experiment_options"] = [
-            {k: v for k, v in o.items() if k != "settings"} for o in current["experiment_options"]
+            {
+                k: v
+                for k, v in o.items()
+                if k
+                not in (
+                    ("settings", "effective_configuration_id", "origin_refs")
+                    if all_branches
+                    else ("settings",)
+                )
+            }
+            for o in current["experiment_options"]
         ]
         evidence["experiment_feedback"] = current["experiment_feedback"]
         evidence["continuation_stop_reason"] = current.get("continuation_stop_reason")
@@ -264,6 +421,15 @@ def _evidence(store, owner, current):
             )
         }
         evidence["validation_scorecard"] = validation_scorecard(report)
+        card = evidence["validation_scorecard"]
+        evidence["post_validation_feedback"] = {
+            "version": "research-post-validation-feedback-v1",
+            "source_result_artifact": current["source_result_artifact"],
+            "measurements_available": card.get("feedback_available", card.get("eligible", False)),
+            "failed_gate_keys": card.get("failed_gate_keys", []),
+            "excluded_data": deepcopy(current.get("diagnosis", {}).get("evidence_status", {})),
+            "choice_policy": "The pinned model chooses supported next experiments after failed checks; unchanged native validation alone accepts",
+        }
         if current.get("feasibility_only"):
             evidence["current_account"] = {
                 "initial_capital": report["summary"]["initial_capital"],
@@ -292,6 +458,24 @@ def _evidence(store, owner, current):
         }
     if current.get("experiment_policy") == supervisor.EXPERIMENT_POLICY:
         evidence.pop("experiments", None)
+    from services.research_stop_review import context as stop_review_context
+
+    evidence["decision_budget"] = {
+        "model_calls_spent": current.get("automation", {}).get("calls_spent", 0),
+        "model_call_limit": current.get("automation", {}).get("max_model_calls", 0),
+        "native_accounts_remaining": current["remaining_accounts"],
+        "native_account_limit": 512,
+    }
+    review = stop_review_context(evidence, current.get("automation", {}).get("stop_review"))
+    if review:
+        evidence["stop_review_context"] = review
+    if current.get("failure_diagnosis_version"):
+        from services import research_failure_diagnosis
+
+        evidence["failure_diagnosis_version"] = current["failure_diagnosis_version"]
+        diagnosis_context = research_failure_diagnosis.context(evidence)
+        if diagnosis_context:
+            evidence["failure_diagnosis_context"] = diagnosis_context
     return evidence
 
 
@@ -355,6 +539,11 @@ def _run_one(store, worker_token, *, stop_requested=None, choose=None):
                 old_claim,
                 phase="stopped",
                 stop="The model decision was interrupted; its allowance remains consumed",
+                stopping=_stopping(
+                    current,
+                    "interrupted",
+                    "The model decision was interrupted; its allowance remains consumed",
+                ),
             )
             return True
         if current["status"] == "running":
@@ -393,7 +582,19 @@ def _run_one(store, worker_token, *, stop_requested=None, choose=None):
                 _write_job(store, identifier, claim, phase="completed", reopened=verification)
                 return True
             if current["status"] == "stopped":
-                _write_job(store, identifier, claim, phase="stopped")
+                if not current.get("stopping"):
+                    reason = current.get("stopping_reason", "The controller stopped this research")
+                    _write_job(
+                        store,
+                        identifier,
+                        claim,
+                        phase="stopped",
+                        stop=reason,
+                        attention=False,
+                        stopping=_stopping(current, _controller_stop_kind(current), reason),
+                    )
+                else:
+                    _write_job(store, identifier, claim, phase="stopped")
                 return True
             # Recover a durable proposal or decision without a new model call.
             unfinished = next((p for p in current["proposals"] if not p.get("outcome")), None)
@@ -417,6 +618,11 @@ def _run_one(store, worker_token, *, stop_requested=None, choose=None):
                     phase="stopped",
                     stop=refreshed["continuation_stop_reason"],
                     attention=False,
+                    stopping=_stopping(
+                        refreshed,
+                        _controller_stop_kind(refreshed),
+                        refreshed["continuation_stop_reason"],
+                    ),
                 )
                 return True
             automatic = current["automation"]
@@ -424,7 +630,11 @@ def _run_one(store, worker_token, *, stop_requested=None, choose=None):
                 (
                     d
                     for d in automatic["decisions"]
-                    if d.get("seed_artifact") == current["source_result_artifact"]
+                    if not d.get("superseded_by_review")
+                    and not d.get("stop_review_rejected")
+                    and not d.get("diagnosis_rejected")
+                    and not (d.get("stop_review") and not d["stop_review"]["complete"])
+                    and d.get("seed_artifact") == current["source_result_artifact"]
                     and not any(
                         p.get("outcome")
                         and (
@@ -439,21 +649,43 @@ def _run_one(store, worker_token, *, stop_requested=None, choose=None):
             )
             evidence = _evidence(store, owner, current)
             if decision is None:
-                decision = None if choose else planner.native_decision(evidence)
+                feedback = evidence.get("post_validation_feedback", {})
+                model_choice = bool(
+                    automatic.get("model_id")
+                    and (
+                        feedback.get("measurements_available")
+                        and feedback.get("failed_gate_keys")
+                        or any(
+                            branch.get("scorecard", {}).get("failed_gate_keys")
+                            for branch in evidence.get("experiment_frontier", {}).get(
+                                "branches", []
+                            )
+                        )
+                    )
+                    and current.get("experiment_options")
+                )
+                decision = None if choose or model_choice else planner.native_decision(evidence)
                 if decision is None:
-                    if (
-                        current.get("continuation_policy") == supervisor.ADAPTIVE_POLICY
-                        and automatic["calls_spent"] >= automatic["max_model_calls"]
-                    ):
+                    if automatic["calls_spent"] >= automatic["max_model_calls"]:
+                        reason = (
+                            f"AI call budget exhausted ({automatic['calls_spent']}/{automatic['max_model_calls']}); "
+                            f"{current['remaining_accounts']} of512 native accounts remain. "
+                            "This is a budget stop, not a ChatGPT conclusion that no meaningful test remains. "
+                            "Untested settings were not validated."
+                        )
                         _write_job(
                             store,
                             identifier,
                             claim,
                             phase="stopped",
                             attention=False,
-                            stop=f"The {automatic['max_model_calls']}-call model safety limit is exhausted; {current['remaining_accounts']} of512 native accounts remain. Untested settings were not validated.",
+                            stop=reason,
+                            stopping=_stopping(current, "model_budget_exhausted", reason),
                         )
                         return True
+                    # Never debit a model call for an oversized/incomplete
+                    # frontier which the provider has not received.
+                    planner.prepare_evidence(evidence)
                     with store.sessions.begin() as db:
                         supervisor.service.write_guard(db)
                         row, state = supervisor._owned(db, owner, identifier, conversation)
@@ -483,19 +715,37 @@ def _run_one(store, worker_token, *, stop_requested=None, choose=None):
                     decision = (choose or planner.select_decision)(evidence, automatic["model_id"])
                 # Persist the selected action BEFORE submission. Crashes after
                 # this write replay only deterministic idempotent operations.
-                planner.validate_decision(
-                    {
-                        k: decision[k]
-                        for k in (
-                            "remedy",
-                            "reason",
-                            *(["candidate_id"] if "experiment_options" in evidence else []),
-                        )
-                    },
+                verified = planner.validate_decision(
+                    planner.decision_value(decision, concrete="experiment_options" in evidence),
                     evidence,
                 )
-                decision = {**decision, "seed_artifact": current["source_result_artifact"]}
+                from research.report_contract import fingerprint
+
+                decision = {
+                    **decision,
+                    **verified,
+                    "seed_artifact": current["source_result_artifact"],
+                    "evidence_context": {
+                        "id": fingerprint(evidence),
+                        "failed_gate_keys": evidence.get("validation_scorecard", {}).get(
+                            "failed_gate_keys", []
+                        ),
+                        "measurements_available": evidence.get("post_validation_feedback", {}).get(
+                            "measurements_available", False
+                        ),
+                        "frontier_id": evidence.get("experiment_frontier", {}).get("id"),
+                        "frontier_branches": len(
+                            evidence.get("experiment_frontier", {}).get("branches", [])
+                        ),
+                        "frontier_options": len(evidence.get("experiment_options", [])),
+                    },
+                }
                 _write_job(store, identifier, claim, phase="applying", decision=decision)
+            if decision.get("stop_review") and not decision["stop_review"]["complete"]:
+                # These are charged partial opinions, not permission to stop.
+                # Continue only within the existing frozen model allowance.
+                _write_job(store, identifier, claim, phase="waiting")
+                return True
             if stop_requested and stop_requested():
                 _write_job(
                     store,
@@ -503,24 +753,104 @@ def _run_one(store, worker_token, *, stop_requested=None, choose=None):
                     claim,
                     phase="cancelled",
                     stop="Research continuation cancelled",
+                    stopping=_stopping(current, "cancelled", "Research continuation cancelled"),
+                )
+                return True
+            from services.research_hands_off import continuation_gate
+
+            approval = continuation_gate(store, owner, identifier, current, decision)
+            if approval is None:
+                return True
+            if approval == "reject":
+                _write_job(
+                    store,
+                    identifier,
+                    claim,
+                    phase="stopped",
+                    stop="You stopped research before the proposed experiment; no new settings were validated.",
+                    attention=False,
+                    stopping=_stopping(
+                        current,
+                        "user_stop",
+                        "You stopped research before the proposed experiment; no new settings were validated.",
+                    ),
                 )
                 return True
             result = planner.execute_plan(
                 store, owner, identifier, conversation_id=conversation, decision=decision
             )
             if result.get("explicit_stop"):
+                refreshed = supervisor.status(
+                    store, owner, identifier, conversation_id=conversation
+                )
+                kind = "model_stop" if decision.get("selection") == "model" else "controller_stop"
+                reason = (
+                    "ChatGPT decided to stop after reviewing each remaining option: "
+                    + decision["reason"]
+                    if kind == "model_stop" and decision.get("stop_review")
+                    else decision["reason"]
+                )
                 _write_job(
                     store,
                     identifier,
                     claim,
                     phase="stopped",
-                    stop=decision["reason"],
+                    stop=reason,
                     attention=False,
+                    stopping=_stopping(
+                        refreshed, kind, decision["reason"], review=decision.get("stop_review")
+                    ),
+                    confirmed_stop=True,
+                    stop_choice=decision,
                 )
             else:
                 _write_job(store, identifier, claim, phase="waiting")
             return True
         except Exception as error:
+            from services.research_failure_diagnosis import InvalidFailureDiagnosis
+            from services.research_stop_review import IncompleteStopReview
+
+            if isinstance(error, InvalidFailureDiagnosis):
+                refreshed = supervisor.status(
+                    store, owner, identifier, conversation_id=conversation
+                )
+                reason = "The research diagnosis was incomplete or stale; no new experiment was authorized. The reserved model call remains charged."
+                _write_job(
+                    store,
+                    identifier,
+                    claim,
+                    phase="stopped",
+                    stop=reason,
+                    stopping=_stopping(refreshed, "diagnosis_incomplete", reason),
+                    rejected_diagnosis=decision,
+                )
+                return True
+
+            if isinstance(error, IncompleteStopReview):
+                refreshed = supervisor.status(
+                    store, owner, identifier, conversation_id=conversation
+                )
+                reason = "ChatGPT's stop review was incomplete or invalid; unreviewed options remain and no model stop was accepted. The call remains charged."
+                _write_job(
+                    store,
+                    identifier,
+                    claim,
+                    phase="stopped",
+                    stop=reason,
+                    stopping=_stopping(refreshed, "stop_review_incomplete", reason),
+                    rejected_stop=decision,
+                )
+                return True
+            if isinstance(error, planner.DecisionEvidenceTooLarge):
+                _write_job(
+                    store,
+                    identifier,
+                    claim,
+                    phase="stopped",
+                    stop=str(error) + "; saved budgets and unreviewed alternatives are retained",
+                    stopping=_stopping(current, "stop_review_incomplete", str(error)),
+                )
+                return True
             if isinstance(error, planner.DecisionAuthenticationExpired):
                 with store.sessions.begin() as db:
                     supervisor.service.write_guard(db)

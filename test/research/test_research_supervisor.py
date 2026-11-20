@@ -1,5 +1,6 @@
 """Small saved-metadata tests for durable research authority and worker continuation."""
 
+import json
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from threading import Lock
@@ -183,8 +184,12 @@ def mutate(fixture, plan, callback):
 
 
 def complete(fixture, plan, job_id, *, accepted=False):
-    current = supervisor.status(fixture.store, OWNER, plan["id"], conversation_id=CONVERSATION)
-    item = next(p for p in current["proposals"] if p["job_id"] == job_id)
+    # Construct the sealed result before advertising this fixture's job as
+    # completed. A status read here would inspect a deliberately half-built
+    # saved branch and correctly reject its not-yet-created report.
+    with fixture.store.sessions() as db:
+        saved = json.loads(db.get(ResearchSupervisor, plan["id"]).state)
+    item = next(p for p in saved["proposals"] if p["job_id"] == job_id)
     native = {
         "strategies": deepcopy(item["settings"]),
         "summary": {"initial_capital": 100000},

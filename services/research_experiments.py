@@ -11,7 +11,7 @@ from datetime import datetime
 from decimal import Decimal
 from math import isfinite
 
-from research.execution_search import EXECUTION_CHOICES
+from research.execution_search import CAPITAL_CHOICES, EXECUTION_CHOICES, PORTFOLIO_CHOICES
 from research.report_contract import fingerprint, settings_identity
 
 VERSION = "research-evidence-experiments-v1"
@@ -240,7 +240,7 @@ def _exit_evidence(report, settings):
     return result
 
 
-def _same_boundary(base, candidate):
+def _same_boundary(base, candidate, *, allow_order_size=False):
     if len(base) != len(candidate):
         return False
     for before, after in zip(base, candidate, strict=True):
@@ -254,7 +254,7 @@ def _same_boundary(base, candidate):
             first.get(key) != second.get(key)
             for key in (
                 "initial_capital",
-                "order_size_pct",
+                *(() if allow_order_size else ("order_size_pct",)),
                 "trade_horizon",
                 "entry_time",
                 "exit_time",
@@ -313,7 +313,16 @@ def _no_effect_directions(proposals, base, exits, source_artifact):
     return suppressed, observations[:8]
 
 
-def build(report, recipe, proposals, *, source_artifact, memory=None):
+def build(
+    report,
+    recipe,
+    proposals,
+    *,
+    source_artifact,
+    memory=None,
+    research_context=None,
+    evidence_status=None,
+):
     """Offer at most eight concrete, immutable-source-bound native experiments.
 
     ``memory`` is the bounded same-study snapshot, whose ``same_inputs`` flag is
@@ -388,8 +397,26 @@ def build(report, recipe, proposals, *, source_artifact, memory=None):
     )
     if not isfinite(fees) or fees < 0:
         raise ValueError("Native fee evidence is invalid")
-    cost_hypothesis = fees > 0 and bool(cost_rows) and ("higher_costs" in kinds or cost_drag)
+    cost_hypothesis = (
+        fees > 0
+        and bool(cost_rows)
+        and ("higher_costs" in kinds or cost_drag)
+        and not ("neighboring_settings" in kinds and "higher_costs" not in kinds)
+    )
     temporal_hypothesis = "temporal_stability" in kinds or "sample_and_distribution" in kinds
+    robustness_check = next(
+        (
+            check
+            for check in _decision(report)[0].get("checks", [])
+            if check.get("kind") == "neighboring_settings" and check.get("passed") is False
+        ),
+        None,
+    )
+    robustness_reason = "The native neighboring-settings check failed; compare a materially different supported setting and repeat every unchanged validation check"
+    if robustness_check and all(
+        type(robustness_check.get(key)) is int for key in ("passing", "tested")
+    ):
+        robustness_reason = f"Only {robustness_check['passing']} of {robustness_check['tested']} neighboring settings passed; the selected account is sensitive to settings, so test a distinct supported configuration before repeating every unchanged validation check"
     feedback = {
         "failed_checks": failures,
         "native_fees": fees,
@@ -412,15 +439,40 @@ def build(report, recipe, proposals, *, source_artifact, memory=None):
     unavailable, options, seen = [], [], {settings_identity(base), *negative}
     equivalent_seen = {configuration_identity(base, engine=engine), *equivalent_negative}
 
-    def add(remedy, candidate, change, expected_effect, reason, *, native_funding=False):
+    def add(
+        remedy,
+        candidate,
+        change,
+        expected_effect,
+        reason,
+        *,
+        native_funding=False,
+        allow_order_size=False,
+    ):
         identifier = settings_identity(candidate)
         effective = configuration_identity(candidate, engine=engine)
         if ((identifier in seen or effective in equivalent_seen) and not native_funding) or len(
             options
         ) >= MAX_OPTIONS:
             return
-        if not _same_boundary(base, candidate):
+        if not _same_boundary(base, candidate, allow_order_size=allow_order_size):
             raise ValueError("An experiment changed fixed signals, style, funds or risk limits")
+        if research_context and research_context.get("flow"):
+            from research.user_flow import permitted
+
+            if not permitted(
+                candidate, research_context["baseline_settings"], research_context["flow"]
+            ):
+                unavailable.append(
+                    {
+                        "method": remedy,
+                        "reason_code": "fixed_settings",
+                        "strategy_id": change.get("strategy_id"),
+                        "axis": change.get("axis"),
+                        "reason": "This concrete experiment would change a setting fixed by the reviewed user permissions",
+                    }
+                )
+                return
         seen.add(identifier)
         equivalent_seen.add(effective)
         body = {
@@ -499,15 +551,11 @@ def build(report, recipe, proposals, *, source_artifact, memory=None):
         for key in ("cash_shortfall", "whole_share_affordability", "percentage_policy")
         if counts.get(key, 0)
     }
-    missing = any(
-        counts.get(key, 0)
-        for key in (
-            "unavailable_sizing_intent",
-            "unexplained_execution_limit",
-            "evidence_gap_requests",
-            "unavailable_evidence",
-        )
-    )
+    if evidence_status is None:
+        from services.research_supervisor import required_evidence
+
+        evidence_status = required_evidence(report, counts)
+    missing = bool(evidence_status["missing_required"])
     if repairable and not missing and not funding_tried:
         add(
             "funding_and_size",
@@ -674,7 +722,7 @@ def build(report, recipe, proposals, *, source_artifact, memory=None):
                             "to": value,
                         },
                         f"Changing the registered trailing state may delay some of {fact['exit_outcomes']['trailing_stop']} trailing exits; losses, holding occupancy and total costs can also increase",
-                        "Higher-cost evidence failed or records cost drag, and trailing stops are an observed dominant exit mechanism; this is a hypothesis requiring unchanged validation",
+                        "Higher-cost evidence failed or records cost drag, and trailing stops are an observed exit mechanism; this is a hypothesis requiring unchanged validation",
                     )
             if (
                 cfg.get("target_pct") is not None
@@ -742,6 +790,122 @@ def build(report, recipe, proposals, *, source_artifact, memory=None):
                 "reason": "No recorded fee and higher-cost evidence supports changing exits for a cost hypothesis",
             }
         )
+    if robustness_check:
+        for index, row in enumerate(base):
+            cfg, fact = row["config"], exits[row["id"]]
+            axis, current = fact["axis"], cfg.get(fact["axis"])
+            if fact["complete"] and type(current) in (int, float):
+                points = [
+                    point
+                    for point in _grid(domains.get(row["id"], {}).get(axis))
+                    if point.is_integer()
+                    and point < current
+                    and any(held > point for held in fact["durations"])
+                ]
+                for point in list(dict.fromkeys([points[0], points[-1]])) if points else []:
+                    candidate = deepcopy(base)
+                    candidate[index]["config"][axis] = int(point)
+                    add(
+                        "temporal_stability",
+                        candidate,
+                        {"strategy_id": row["id"], "axis": axis, "from": current, "to": int(point)},
+                        "The legal holding cap intersects observed exits and may change occupancy and sensitivity; its complete native account and nearby-setting checks must be measured",
+                        robustness_reason,
+                    )
+            if cfg.get("trailing_enabled") and fact["exit_outcomes"].get("trailing_stop", 0):
+                choices = sorted(
+                    {
+                        value
+                        for value in trailing.get(row["id"], [])
+                        if type(value) in (int, float)
+                        and isfinite(value)
+                        and value >= 0
+                        and value != cfg["trailing_pct"]
+                    }
+                )
+                positive = [value for value in choices if value > 0]
+                points = list(dict.fromkeys([positive[0], positive[-1]])) if positive else []
+                if 0 in choices:
+                    points.append(0)
+                for point in points:
+                    candidate = deepcopy(base)
+                    candidate[index]["config"].update(
+                        trailing_enabled=point > 0, trailing_pct=float(point)
+                    )
+                    add(
+                        "temporal_stability",
+                        candidate,
+                        {
+                            "strategy_id": row["id"],
+                            "axis": "trailing_choice",
+                            "from": cfg["trailing_pct"],
+                            "to": point,
+                        },
+                        "A materially different registered trailing state may change recorded trailing exits and remaining stop risk; repeat the full native robustness programme without changing its pass criteria",
+                        robustness_reason,
+                    )
+            definition = definitions.get(row["id"], {})
+            branches = [
+                choice
+                for choice in definition.get("portfolio_choices", [])
+                if choice in (*CAPITAL_CHOICES, *PORTFOLIO_CHOICES)
+            ]
+            if row["execution_policy"].get("sizing") == "allocation":
+                reference_ticket = definition.get("original", {}).get("order_size_pct")
+                if type(reference_ticket) in (int, float) and isfinite(reference_ticket):
+                    tickets = sorted(
+                        {
+                            reference_ticket * choice["fraction"]
+                            for choice in branches
+                            if choice.get("sizing") == "allocation"
+                            and 0 < choice["fraction"] < 1
+                            and 0.01
+                            <= reference_ticket * choice["fraction"]
+                            < cfg["order_size_pct"]
+                        }
+                    )
+                    for ticket in tickets[:2]:
+                        candidate = deepcopy(base)
+                        candidate[index]["config"]["order_size_pct"] = ticket
+                        add(
+                            "temporal_stability",
+                            candidate,
+                            {
+                                "strategy_id": row["id"],
+                                "axis": "order_size_pct",
+                                "from": cfg["order_size_pct"],
+                                "to": ticket,
+                            },
+                            "A smaller registered allocation ticket may change whole-share fills, simultaneous exposure and setting sensitivity; unchanged native affordability and robustness checks remain mandatory",
+                            robustness_reason,
+                            allow_order_size=True,
+                        )
+            elif row["execution_policy"].get("sizing") == "stop_risk":
+                current_risk = row["execution_policy"].get("risk_budget_fraction")
+                fractions = sorted(
+                    {
+                        choice["risk_budget_fraction"]
+                        for choice in branches
+                        if choice.get("sizing") == "stop_risk"
+                        and type(current_risk) in (int, float)
+                        and 0 < choice["risk_budget_fraction"] < current_risk
+                    }
+                )
+                for fraction in fractions[:2]:
+                    candidate = deepcopy(base)
+                    candidate[index]["execution_policy"]["risk_budget_fraction"] = fraction
+                    add(
+                        "temporal_stability",
+                        candidate,
+                        {
+                            "strategy_id": row["id"],
+                            "axis": "risk_budget_fraction",
+                            "from": current_risk,
+                            "to": fraction,
+                        },
+                        "A smaller registered fraction of the unchanged trade-risk ceiling may change exposure and complete-account sensitivity; the risk ceiling and every native validation threshold stay fixed",
+                        robustness_reason,
+                    )
     return {
         "version": VERSION,
         "feedback": feedback,

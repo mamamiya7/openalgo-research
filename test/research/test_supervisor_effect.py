@@ -189,7 +189,9 @@ def test_probe_is_charged_and_reopens_without_challenges_or_recalculation(tmp_pa
         "recipe": recipe,
         "counts": {"attempts_reserved": 2, "simulations": 2},
     }
-    root = SimpleNamespace(id="a" * 32, result_artifact="b" * 64)
+    root = SimpleNamespace(
+        id="a" * 32, result_artifact="b" * 64, owner="small-owner", status="completed"
+    )
     original = {"portfolio": {"engine": "vectorbt", "capital": 100000}, "versions": {}}
     monkeypatch.setattr(
         supervisor,
