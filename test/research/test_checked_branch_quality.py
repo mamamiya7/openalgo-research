@@ -6,12 +6,13 @@ from types import SimpleNamespace
 
 from test_adaptive_continuation import change, checked_branches, current
 from test_feedback_replan import stopped
-from test_research_supervisor import CONVERSATION, OWNER, complete, ledger
+from test_research_supervisor import CONVERSATION, OWNER, ROOT, complete, ledger
 from test_validation_scorecard import native, reject
 
 from research.report_contract import fingerprint, settings_identity
 from services import research_automation as automation
 from services import research_supervisor as supervisor
+from services.research_validation_scorecard import dominates
 
 
 def measured(fixture, job_id, template):
@@ -57,7 +58,9 @@ def third(fixture, plan, *, pending=False):
     return job_id
 
 
-def test_frontier_prefers_older_strict_gate_improvement_without_extra_accounts(checked_branches, native):
+def test_frontier_exposes_older_strict_gate_improvement_without_selecting_or_spending(
+    checked_branches, native
+):
     fixture, plan, first, last = checked_branches
     recent = third(fixture, plan)
     measured(fixture, first, reject(native))
@@ -68,10 +71,29 @@ def test_frontier_prefers_older_strict_gate_improvement_without_extra_accounts(c
     measured(fixture, recent, reject(native, cost=True, prefix=True, design=True))
     before = current(fixture, plan)
     after = supervisor.resume_frontier(fixture.store, OWNER, plan["id"], conversation_id=CONVERSATION)
-    assert after["seed_job_id"] == first
+    # The complete frontier leaves branch choice to the model. Reading it must
+    # not silently replace the selected seed, even when an older branch has
+    # stronger complete development checks.
+    assert after["seed_job_id"] == before["seed_job_id"] == last
+    assert after["source_result_artifact"] == before["source_result_artifact"]
     assert after["remaining_accounts"] == before["remaining_accounts"]
     assert after["proposals"] == before["proposals"]
-    assert after["frontier_transitions"][-1]["validation_scorecard"]["eligible"]
+    assert after["automation"] == before["automation"]
+    assert not after.get("frontier_transitions")
+    cards = {
+        branch["job_id"]: branch["scorecard"]
+        for branch in after["experiment_frontier"]["branches"]
+    }
+    assert cards[first]["eligible"] and cards[recent]["eligible"]
+    assert cards[first]["evidence_count"] == cards[recent]["evidence_count"] == 13
+    assert dominates(cards[first], cards[recent])
+    assert not cards[ROOT]["eligible"]
+    assert {first, recent} <= {
+        origin["job_id"]
+        for option in after["experiment_options"]
+        for origin in option["origin_refs"]
+    }
+    assert not after.get("accepted_job_id")
 
 
 def test_worse_new_result_does_not_displace_stronger_checked_seed(checked_branches, native):
@@ -100,8 +122,20 @@ def test_model_receives_recorded_neighbor_counts_not_just_rejected_label(checked
     change(fixture, plan, lambda state: state.update(experiment_policy=supervisor.EXPERIMENT_POLICY))
     value = automation._evidence(fixture.store, OWNER, current(fixture, plan))
     entry = value["configuration_context"]["previous"][0]
-    card = entry["validation_scorecard"]
+    # The bounded model context stores each complete scorecard once in the
+    # frontier. History must point to the exact branch rather than replace the
+    # measured checks with the rejected label or duplicate their payload.
+    assert entry["validation_scorecard_ref"] == {"frontier_branch_job_id": first}
+    assert "validation_scorecard" not in entry
+    branch = next(
+        branch
+        for branch in value["experiment_frontier"]["branches"]
+        if branch["job_id"] == first
+    )
+    assert branch["result_artifact"] == fixture.jobs[first].result_artifact
+    card = branch["scorecard"]
     assert card["eligible"] and card["independently_validated"] is False
+    assert card["evidence_count"] == 13
     neighbors = next(row for row in card["checks"] if row["key"] == "neighboring_settings")
     assert neighbors["facts"]["passing"] == 2 and neighbors["facts"]["tested"] == 4
     assert neighbors["thresholds"]["minimum_neighbor_pass_fraction"] == .75

@@ -764,7 +764,9 @@ def status(store, owner, supervisor_id, *, conversation_id):
                 <= result["remaining_accounts"]
             ]
             if not catalog["options"]:
-                result["continuation_stop_reason"] = catalog.get("stop_reason") or (
+                result["continuation_stop_reason"] = _structural_sample_stop(
+                    recipe, result.get("research_context")
+                ) or catalog.get("stop_reason") or (
                     f"The remaining {result['remaining_accounts']} of512 accounts cannot fund the complete "
                     f"{min(validation_reserve(o['remedy'], state['validation_mode']) for o in supported)}-account "
                     "validation of any supported next change; validation was not reduced"

@@ -88,7 +88,7 @@ def test_initial_stopped_grant_persists_specific_cause(ledger, monkeypatch):
     recipe=sealed({**original, **{k:v for k,v in recipe.items() if k!='id'}})
     ledger.report['automatic_research']['recipe']=recipe
     monkeypatch.setattr(supervisor, '_research_context', lambda *a: (context, {'entries':[]}))
-    monkeypatch.setattr(supervisor, '_reviewed_diagnosis', lambda *a: {'permitted_remedies':['lower_turnover'], 'missing_evidence':False})
+    monkeypatch.setattr(supervisor, '_reviewed_diagnosis', lambda *a, exclusions=None: {'permitted_remedies':['lower_turnover'], 'missing_evidence':False})
     current=supervisor.open_supervisor(ledger.store,OWNER,ROOT,conversation_id=CONVERSATION,
         request_id='specific_structural_stop',research_context=context,
         experiment_policy=supervisor.EXPERIMENT_POLICY,continuation_policy=supervisor.ADAPTIVE_POLICY)
