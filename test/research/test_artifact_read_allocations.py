@@ -5,12 +5,22 @@ import gzip
 import hashlib
 import json
 import tracemalloc
+from pathlib import Path
 from types import SimpleNamespace
 
 import psutil
 import pytest
 
 from services import scanner_research_service as service
+
+
+def artifact_open_files(process, root):
+    boundary = root.resolve()
+    return {
+        str(Path(entry.path).resolve())
+        for entry in process.open_files()
+        if Path(entry.path).resolve().is_relative_to(boundary)
+    }
 
 
 def physical(tmp_path, value, *, compressed=True, digest=None):
@@ -78,6 +88,7 @@ def test_repeated_default_reads_release_handles_and_use_payload_sized_memory(
         exercise()
     gc.collect()
     before_handles = handles()
+    assert not artifact_open_files(process, store.root)
     tracemalloc.start()
     try:
         initial = tracemalloc.get_traced_memory()[0]
@@ -91,8 +102,20 @@ def test_repeated_default_reads_release_handles_and_use_payload_sized_memory(
         record_property("handles_after", after_handles)
         record_property("retained_bytes", retained - initial)
         record_property("peak_bytes", peak)
-        assert after_handles == before_handles
+        # Other process resources may close while these reads run. No positive
+        # handle growth is allowed, and artifact files must all be closed.
+        assert after_handles <= before_handles
+        assert not artifact_open_files(process, store.root)
         assert retained - initial < 256 * 1024
         assert peak < 2 * 1024 * 1024
     finally:
         tracemalloc.stop()
+
+
+def test_artifact_handle_probe_detects_a_deliberately_open_file(tmp_path):
+    _, _, path = physical(tmp_path, {"probe": "owned handle"})
+    process = psutil.Process()
+    assert not artifact_open_files(process, tmp_path)
+    with path.open("rb"):
+        assert str(path.resolve()) in artifact_open_files(process, tmp_path)
+    assert not artifact_open_files(process, tmp_path)
