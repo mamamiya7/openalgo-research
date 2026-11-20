@@ -1,0 +1,68 @@
+name: Research artifact resource recheck
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  artifact-resources:
+    name: Artifact resources (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    env:
+      PYTHON_DOTENV_DISABLED: '1'
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Verify unchanged application and complete test inventory
+        shell: python
+        run: |
+          import json
+          import subprocess
+          from pathlib import Path
+
+          baseline = '4d67826e0064316c49e618c388e99ab8b7fdc0ad'
+          allowed = {
+              'test/research/test_artifact_read_allocations.py',
+              '.github/workflows/research-artifact-recheck.yml',
+          }
+          def git(*args):
+              return subprocess.check_output(['git', *args]).decode().strip()
+          changed = set(git('diff', '--name-only', baseline, 'HEAD').splitlines())
+          if changed - allowed:
+              raise ValueError('Application or unrelated source changed; run full qualification')
+          def inventory(ref):
+              return {p for p in git('ls-tree', '-r', '--name-only', ref).splitlines()
+                      if p.startswith('test/research/') and Path(p).name.startswith('test_')}
+          if inventory(baseline) != inventory('HEAD'):
+              raise ValueError('Test-module inventory changed; run full qualification')
+          receipt = Path('.agent-native/resource-recheck')
+          receipt.mkdir(parents=True, exist_ok=True)
+          (receipt / 'source.json').write_text(json.dumps({
+              'scope': 'Artifact handles and memory only; combine with baseline full run',
+              'full_run': 44675538007, 'baseline': baseline,
+              'source': git('rev-parse', 'HEAD'), 'runtime_unchanged': True,
+              'test_inventory_unchanged': True, 'changed_files': sorted(changed),
+          }, indent=2), encoding='utf-8')
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.12'
+          enable-cache: true
+      - run: uv sync --frozen --extra research
+      - name: Exact artifact boundaries, owned handles and unchanged memory limits
+        run: uv run --no-sync pytest test/research/test_artifact_read_allocations.py -q --junitxml=.agent-native/resource-recheck/tests.xml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: resource-recheck-${{ matrix.os }}
+          path: .agent-native/resource-recheck/
+          if-no-files-found: error
+          retention-days: 14
