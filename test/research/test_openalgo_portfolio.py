@@ -148,7 +148,10 @@ def test_nonoverlapping_repeated_signals_keep_distinct_source_rows():
 
 
 @native
+@pytest.mark.timeout(180)
 def test_opening_exit_difference_is_explicit_against_vectorbt():
+    # A fresh Windows runner compiles VectorBT's account kernels on this test.
+    # Allow that one-time startup; keep every execution/price assertion below.
     from research.connectors.vectorbt_portfolio import evaluate
 
     prices = snapshot()

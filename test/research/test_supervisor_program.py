@@ -26,7 +26,7 @@ from services import research_supervisor_program as program
 from services import scanner_research_service as service
 
 
-@pytest.mark.timeout(60)
+@pytest.mark.timeout(180)
 def test_native_saved_parent_to_bounded_remedy_and_exact_checkpoint_resume(
     acting, tmp_path, monkeypatch
 ):
